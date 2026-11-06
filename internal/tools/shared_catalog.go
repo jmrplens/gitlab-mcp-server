@@ -269,7 +269,7 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 // cannot read it either, and the two filtered surfaces make the same split.
 //
 // What GitLab refuses to an OAuth access token on every way is left out for a
-// credential known to be one, after the scopes, as the other two surfaces
+// credential known to be one, beside the scopes, as the other two surfaces
 // leave it out (issue 1238): a tool it could never run is not listed.
 //
 //gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
@@ -297,7 +297,9 @@ func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConf
 		if cfg.ReadAPIOnly {
 			scoped = scoped.FilterReachableWith(finegrained.ClassicReadAPI)
 		}
-		scoped, _ = narrowForCredentialKind(scoped, cfg)
+		// What either narrowing removed is not recorded, so their order
+		// decides nothing here.
+		scoped, _ = narrowForCredentialKind(scoped, cfg, WithheldActions{})
 		return scoped, WithheldActions{ExcludedByName: excluded}, nil
 	})
 	if err != nil {

@@ -174,12 +174,18 @@ type createdServerKey struct {
 	// readAPIOnly belongs in the key because it changes which actions are
 	// registered and what the surface says about the ones it withheld, so a
 	// cache that ignored it handed one test the other's surface.
-	readAPIOnly     bool
-	safeMode        bool
-	metaParamSchema string
-	rateLimitRPS    float64
-	rateLimitBurst  int
-	clientCompat    bool
+	readAPIOnly bool
+	// oauthCredential and personalTokensRefused belong in it for the same
+	// reason: the first withholds what GitLab refuses an OAuth access token,
+	// and the second words the answer to a call for one (AUT-009), so a cache
+	// that ignored either handed a test another configuration's answer.
+	oauthCredential       bool
+	personalTokensRefused bool
+	safeMode              bool
+	metaParamSchema       string
+	rateLimitRPS          float64
+	rateLimitBurst        int
+	clientCompat          bool
 	// descriptionSubs keeps the cache honest for tests that set the
 	// substitution env var: createServer reads it at build time, so two
 	// builds under different values are different servers.
@@ -237,19 +243,21 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		return createServerWithin(t, client, cfg)
 	}
 	key := createdServerKey{
-		toolSurface:       cfg.ToolSurface,
-		capabilitySurface: cfg.CapabilitySurface,
-		tier:              cfg.Tier,
-		tierExplicit:      cfg.TierExplicit,
-		readOnly:          cfg.ReadOnly,
-		readAPIOnly:       cfg.ReadAPIOnly,
-		safeMode:          cfg.SafeMode,
-		metaParamSchema:   cfg.MetaParamSchema,
-		rateLimitRPS:      cfg.RateLimitRPS,
-		rateLimitBurst:    cfg.RateLimitBurst,
-		clientCompat:      clientcompat.Enabled(),
-		descriptionSubs:   os.Getenv(gatewaycompat.EnvVar),
-		language:          config.EffectiveLanguage(cfg.Language),
+		toolSurface:           cfg.ToolSurface,
+		capabilitySurface:     cfg.CapabilitySurface,
+		tier:                  cfg.Tier,
+		tierExplicit:          cfg.TierExplicit,
+		readOnly:              cfg.ReadOnly,
+		readAPIOnly:           cfg.ReadAPIOnly,
+		oauthCredential:       cfg.OAuthCredential,
+		personalTokensRefused: cfg.PersonalTokensRefused,
+		safeMode:              cfg.SafeMode,
+		metaParamSchema:       cfg.MetaParamSchema,
+		rateLimitRPS:          cfg.RateLimitRPS,
+		rateLimitBurst:        cfg.RateLimitBurst,
+		clientCompat:          clientcompat.Enabled(),
+		descriptionSubs:       os.Getenv(gatewaycompat.EnvVar),
+		language:              config.EffectiveLanguage(cfg.Language),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()

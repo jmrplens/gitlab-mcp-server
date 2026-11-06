@@ -394,12 +394,15 @@ func WithTierWithheld(byTier []actioncatalog.TierWithheld, tier edition.Tier, pi
 // WithCredentialKindWithheld tells the registry which action keys were
 // filtered out because GitLab refuses them to the session's kind of
 // credential, an OAuth access token, on every way whatever its scopes (issue
-// 1238). A call for one is answered that it exists and needs a personal
-// access token, rather than as unknown, and a cross-link to one is published
-// like any withheld action's.
-func WithCredentialKindWithheld(byCredentialKind []string) RegistryOption {
+// 1238), each with the scopes the credential lacks for it besides, and
+// whether the deployment refuses every personal access token. A call for one
+// is answered that it exists and needs a personal access token carrying
+// those scopes, or on a deployment that refuses one that only the operator
+// can provide it, rather than as unknown, and a cross-link to one is
+// published like any withheld action's.
+func WithCredentialKindWithheld(byCredentialKind []actioncatalog.ScopeWithheld, personalTokensRefused bool) RegistryOption {
 	return func(r *Registry) {
-		r.withheld.RecordCredentialKind(byCredentialKind)
+		r.withheld.RecordCredentialKind(byCredentialKind, personalTokensRefused)
 	}
 }
 

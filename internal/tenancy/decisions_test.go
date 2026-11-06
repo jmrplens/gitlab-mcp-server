@@ -1761,7 +1761,11 @@ func rowPins() map[string]rowPin {
 			},
 			{methods: "tools/list", channel: Absent, answer: WidenScope},
 		}},
-		"AUT-009": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, pinNarrowed(Reauthorize)},
+		"AUT-009": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, append(pinNarrowed(Reauthorize),
+			// The answer on a deployment whose door refuses every personal
+			// access token (ADM-004's pin).
+			refusalPin{methods: "tools/call", channel: Withheld, answer: AskOperator},
+		)},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{

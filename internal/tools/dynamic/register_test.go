@@ -10304,17 +10304,29 @@ func TestExecute_TierPrunedParam_IsToldApartFromAnUnknownOne(t *testing.T) {
 // TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken pins the
 // answer to a call for an action GitLab refuses to an OAuth access token on
 // every way (issue 1238): it exists, the credential in use is an OAuth token,
-// and the way out is a personal access token, which the caller can use; a
+// and the way out is a personal access token, which the caller can use, or
+// the operator on a deployment that refuses every personal access token; a
 // cross-link to it is published like any withheld action's.
 func TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken(t *testing.T) {
-	registry := newCatalogRegistry(narrowedCatalog(t), WithCredentialKindWithheld([]string{"project.hook_add"}))
-	text := executeText(t, registry, "project.hook_add")
 	const want = `gitlab_execute_action: action "project.hook_add" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token`
-	if !strings.HasPrefix(text, want) || strings.Contains(text, "unknown action") {
-		t.Errorf("Execute() error text = %q, want it to begin %q", text, want)
-	}
-	if spelling, published := registry.publishableRelatedAction("project.hook_add"); !published || spelling != "project.hook_add" {
-		t.Errorf("publishableRelatedAction() = %q, %t, want the link kept", spelling, published)
+	for _, tc := range []struct {
+		name    string
+		refused bool
+		wayOut  string
+	}{
+		{name: "a deployment admitting personal access tokens", wayOut: "Authenticate with a personal access token"},
+		{name: "a deployment refusing them", refused: true, wayOut: "Ask the operator for a deployment that admits personal access tokens"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newCatalogRegistry(narrowedCatalog(t), WithCredentialKindWithheld([]actioncatalog.ScopeWithheld{{ID: "project.hook_add"}}, tc.refused))
+			text := executeText(t, registry, "project.hook_add")
+			if !strings.HasPrefix(text, want) || !strings.Contains(text, tc.wayOut) || strings.Contains(text, "unknown action") {
+				t.Errorf("Execute() error text = %q, want it to begin %q and say %q", text, want, tc.wayOut)
+			}
+			if spelling, published := registry.publishableRelatedAction("project.hook_add"); !published || spelling != "project.hook_add" {
+				t.Errorf("publishableRelatedAction() = %q, %t, want the link kept", spelling, published)
+			}
+		})
 	}
 }
 

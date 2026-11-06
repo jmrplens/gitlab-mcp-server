@@ -2788,7 +2788,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
 			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator),
 			dynamictools.WithTierWithheld(withheld.ByTier, cfg.Tier, cfg.TierExplicit),
-			dynamictools.WithCredentialKindWithheld(withheld.ByCredentialKind))
+			dynamictools.WithCredentialKindWithheld(withheld.ByCredentialKind, cfg.PersonalTokensRefused))
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: actionCatalog.ActionMaps(),
 			surfaceCatalog:   actionCatalog,
@@ -2820,7 +2820,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		withheld := &actioncatalog.Withheld{}
 		withheld.RecordActions(metaWithheld.ByTokenScope, metaWithheld.ByOperator)
 		withheld.RecordTier(metaWithheld.ByTier, cfg.Tier, cfg.TierExplicit)
-		withheld.RecordCredentialKind(metaWithheld.ByCredentialKind)
+		withheld.RecordCredentialKind(metaWithheld.ByCredentialKind, cfg.PersonalTokensRefused)
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
 		gitlabtools.RegisterMetaStandaloneToolsFor(server, client, gitlabtools.MetaActionCalls(filteredCatalog))
 		return serverSurfaceRegistration{

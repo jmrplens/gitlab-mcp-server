@@ -276,13 +276,17 @@ GitLab refuses an OAuth access token on a few routes whatever scopes it carries,
 | `access.token_project_rotate_self`  | `405`: only a project access token, a bot's personal access token, can rotate itself  |
 | `model_registry.download`           | `401`: the ML model package files authenticate a personal access token or a job token |
 
-They are missing from the listing on every surface, and a call naming one is answered with the cause rather than as unknown, here on the default surface:
+They are missing from the listing on every surface. A call naming one is answered with the cause rather than as unknown on the default surface, through `gitlab_execute_action`, and on the meta surface through `gitlab_access`, which keeps its other actions:
 
 ```text
 gitlab_execute_action: action "access.token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.
 ```
 
-`access.token_personal_get` stays served: given `token_id` it reads that token, which GitLab serves an OAuth token, and without it, the way it reads the calling token, GitLab's `400` comes back with a hint to pass the id. A personal access token sent as `Authorization: Bearer` is served all of them, in OAuth mode as everywhere else, and a token whose kind GitLab described neither way is served everything.
+The way out it names follows the credential and the deployment. An OAuth token carrying `read_api` is told the personal access token must carry `api`, since reauthorizing the OAuth token with `api` would get another OAuth token, which GitLab refuses the same way. A deployment that sets `--oauth-client-uid` refuses every personal access token at its door, so no credential it admits can run these actions, and the answer asks the operator for a deployment that admits personal access tokens instead.
+
+On the individual surface their tools are not registered, and on the meta surface neither is `gitlab_model_registry`, whose one action is `model_registry.download`: a call naming one of those tools is answered `unknown tool`, as a call naming any tool the server does not serve is.
+
+`access.token_personal_get` stays served: given `token_id` it reads that token, which GitLab serves an OAuth token, and without it, the way it reads the calling token, GitLab's `400` comes back with a hint to pass the id. A personal access token sent as `Authorization: Bearer` is served all of them, in OAuth mode as everywhere else, on a deployment that admits one, and a token whose kind GitLab described neither way is served everything.
 
 ## Token lifetimes and the identity cache
 

@@ -45,16 +45,27 @@ type Withheld struct {
 	tierKnown  bool
 	// byCredentialKind names the actions GitLab refuses to the session's
 	// kind of credential whatever its scopes, an OAuth access token's
-	// (issue 1238). The caller can resolve it, by authenticating with a
-	// personal access token, which the answer says.
-	byCredentialKind map[string]struct{}
+	// (issue 1238), each with the scopes the credential lacks for it besides,
+	// which a personal access token would have to carry. The caller can
+	// resolve it, by authenticating with such a token, which the answer says,
+	// unless personalTokensRefused records that the deployment refuses every
+	// personal access token at its door (--oauth-client-uid, ADM-004), where
+	// no credential it admits can run the action and the answer asks the
+	// operator instead.
+	byCredentialKind      map[string]ScopeWithheld
+	personalTokensRefused bool
 }
 
 // RecordCredentialKind records the actions GitLab refuses to an OAuth access
 // token on every way, which the session's credential is (register row
-// AUT-009). It replaces what an earlier call recorded.
-func (w *Withheld) RecordCredentialKind(byCredentialKind []string) {
-	w.byCredentialKind = withheldKeySet(byCredentialKind)
+// AUT-009), each with the scopes the credential lacks for it besides, and
+// whether the deployment refuses every personal access token, the one
+// credential GitLab serves them to. It replaces what an earlier call
+// recorded. An entry naming no scope lacks none: a personal access token
+// carrying what the OAuth token carries runs it.
+func (w *Withheld) RecordCredentialKind(byCredentialKind []ScopeWithheld, personalTokensRefused bool) {
+	w.byCredentialKind = withheldKinds(byCredentialKind)
+	w.personalTokensRefused = personalTokensRefused
 }
 
 // RecordActions records the actions filtered out of the catalog before it was
@@ -139,13 +150,38 @@ func (w *Withheld) Message(toolName, action, key string) (string, bool) {
 	if _, ok := w.byOperator[key]; ok {
 		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
 	}
-	if _, ok := w.byCredentialKind[key]; ok {
-		return fmt.Sprintf("%s: action %q exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.", toolName, action), true
+	if withheld, ok := w.byCredentialKind[key]; ok {
+		return w.credentialKindMessage(toolName, action, withheld), true
 	}
 	if withheld, ok := w.byTier[key]; ok {
 		return w.tierWithheldMessage(toolName, action, withheld), true
 	}
 	return "", false
+}
+
+// credentialKindMessage explains an action GitLab refuses to an OAuth access
+// token whatever its scopes (issue 1238, register row AUT-009). The way out
+// is the one credential GitLab serves it to, a personal access token sent as
+// the Bearer token, and the answer names the scopes that token must carry
+// when the credential in use lacks them, since sending the caller to
+// reauthorize the OAuth token for a scope would only reach this answer again.
+//
+// A deployment that pins the OAuth applications it admits refuses every
+// personal access token at its door (--oauth-client-uid, register row
+// ADM-004), so nothing the caller can authenticate with runs the action
+// there, and the answer asks the operator: it used to send the caller to a
+// personal access token, which the door then refused with 401.
+func (w *Withheld) credentialKindMessage(toolName, action string, withheld ScopeWithheld) string {
+	cause := fmt.Sprintf("%s: action %q exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it.", toolName, action)
+	if w.personalTokensRefused {
+		return cause + " This deployment admits only the OAuth applications its operator named, which refuses every personal access token, so no credential it admits can run the action. Ask the operator for a deployment that admits personal access tokens; do not report the capability as missing."
+	}
+	missing := withheld.Missing()
+	if len(missing) == 0 {
+		return cause + " Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing."
+	}
+	scopes, _ := scopeWords(missing)
+	return cause + " Authenticate with a personal access token carrying " + scopes + ", sent as the Bearer token, to use it, since " + scopeCauses(withheld) + "; do not report the capability as missing."
 }
 
 // tierWithheldMessage explains an action the instance's licensing tier
@@ -261,6 +297,24 @@ func withheldScopes(withheld []ScopeWithheld) map[string]ScopeWithheld {
 		scopes[key] = entry
 	}
 	return scopes
+}
+
+// withheldKinds indexes the actions the credential's kind withheld by key,
+// each with the scopes the credential lacks for it besides. Unlike
+// [withheldScopes] it names no scope for an entry naming none: the kind is
+// the cause there, and an entry lacks a scope only when the scope steps say
+// so.
+func withheldKinds(withheld []ScopeWithheld) map[string]ScopeWithheld {
+	if len(withheld) == 0 {
+		return nil
+	}
+	kinds := make(map[string]ScopeWithheld, len(withheld))
+	for _, entry := range withheld {
+		if key := withheldKey(entry.ID); key != "" {
+			kinds[key] = entry
+		}
+	}
+	return kinds
 }
 
 // withheldKeySet indexes a list of keys. A key that is blank or only spaces is

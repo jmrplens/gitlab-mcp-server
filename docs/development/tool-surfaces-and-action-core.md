@@ -262,7 +262,15 @@ row AUT-009; the routes are marked in the generated table from
 `cmd/gen_action_grants`' declarations), and writes the one sentence every
 surface answers with
 (`Withheld.Message`); `tools.WithheldActions` carries the lists out of the
-catalog builders. The dynamic registry answers from it in execute. The meta
+catalog builders. `FilterActionCatalog` files an action the credential kind
+withholds under the kind whatever scope the credential lacks besides: the
+kind step runs after read-only mode and before the `read_api` reach step, and
+the admin_mode group step files such an action under the kind too, each entry
+carrying the scopes the personal access token must hold, since reauthorizing
+an OAuth token only yields another one GitLab refuses. Where the deployment's
+door refuses every personal access token (`ServerConfig.PersonalTokensRefused`,
+OAuth mode with `--oauth-client-uid`, register row ADM-004) the answer asks
+the operator instead. The dynamic registry answers from it in execute. The meta
 surface answers from it too (issue 1282), and before the SDK refuses the
 action as a value outside the tool's enum: `SharedMetaCatalog` records
 `ByTier` beside the filter's lists, `tools.MetaActionKeys` maps each meta

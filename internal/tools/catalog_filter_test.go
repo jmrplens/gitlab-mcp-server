@@ -9,6 +9,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"reflect"
@@ -214,7 +215,7 @@ func TestFilterActionCatalog_OAuthCredential_WithholdsWhatNoWayRunsByItsKind(t *
 			if _, served := filtered.Action(actioncatalog.ActionID(id)); served {
 				t.Errorf("an OAuth session is served %s, which GitLab refuses to it on every way", id)
 			}
-			if !slices.Contains(withheld.ByCredentialKind, id) {
+			if !slices.Contains(scopeWithheldIDs(withheld.ByCredentialKind), id) {
 				t.Errorf("ByCredentialKind = %v, want %s filed under the credential's kind", withheld.ByCredentialKind, id)
 			}
 		})
@@ -229,8 +230,94 @@ func TestFilterActionCatalog_OAuthCredential_WithholdsWhatNoWayRunsByItsKind(t *
 	}
 
 	_, readOnly := mustFilterCatalog(t, freeCatalogWithMCP(t), &config.ServerConfig{Tier: edition.Free, OAuthCredential: true, ReadOnly: true})
-	if slices.Contains(readOnly.ByCredentialKind, "access.token_personal_rotate_self") || !slices.Contains(readOnly.ByOperator, "access.token_personal_rotate_self") {
+	if slices.Contains(scopeWithheldIDs(readOnly.ByCredentialKind), "access.token_personal_rotate_self") || !slices.Contains(readOnly.ByOperator, "access.token_personal_rotate_self") {
 		t.Errorf("a read-only deployment filed a self rotation under the credential's kind %v rather than the operator", readOnly.ByCredentialKind)
+	}
+}
+
+// TestFilterActionCatalog_OAuthReadAPI_FilesWhatTheKindRefusesUnderTheKind
+// pins the order of the kind and reach steps for an OAuth access token
+// carrying read_api and not api: a self rotation, which needs api and which
+// GitLab refuses an OAuth token whatever its scopes, is filed under the
+// credential's kind with api named as what the personal access token must
+// carry, and never under the token's scope, whose answer would send the
+// caller to reauthorize an OAuth token that GitLab would refuse again. A
+// read GitLab refuses read_api that any token kind runs stays the scope's.
+func TestFilterActionCatalog_OAuthReadAPI_FilesWhatTheKindRefusesUnderTheKind(t *testing.T) {
+	t.Parallel()
+	cfg := readAPIConfig()
+	cfg.Tier = edition.Free
+	cfg.OAuthCredential = true
+	_, withheld := mustFilterCatalog(t, freeCatalogWithMCP(t), cfg)
+	for _, id := range []string{"access.token_personal_rotate_self", "access.token_group_rotate_self", "access.token_project_rotate_self"} {
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			if slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), id) {
+				t.Errorf("%s is filed under the token's scope, whose answer is to reauthorize an OAuth token GitLab refuses it", id)
+			}
+			entry, filed := scopeEntry(withheld.ByCredentialKind, id)
+			if !filed || !slices.Equal(entry.Missing(), []string{"api"}) {
+				t.Errorf("ByCredentialKind entry for %s = %+v (filed %t), want it naming api for the personal access token", id, entry, filed)
+			}
+		})
+	}
+	if entry, filed := scopeEntry(withheld.ByCredentialKind, "access.token_personal_revoke_self"); !filed || len(entry.Missing()) != 0 {
+		t.Errorf("access.token_personal_revoke_self, which read_api reaches, is filed %t lacking %v, want the kind alone", filed, entry.Missing())
+	}
+	if _, ok := scopeMissing(withheld.ByTokenScope, "template.lint"); !ok {
+		t.Error("template.lint, a read GitLab refuses read_api from any token kind, is not withheld by the token's scope")
+	}
+}
+
+// TestNarrowForReading_RunsReadOnlyThenTheReadAPIReach pins the two steps the
+// dynamic surface applies again once the standalone utilities joined its
+// catalog, in FilterActionCatalog's order: a write is filed under the
+// operator, a read GitLab refuses read_api under the token's scope, what the
+// record already held is kept, and a read both serve stays.
+func TestNarrowForReading_RunsReadOnlyThenTheReadAPIReach(t *testing.T) {
+	t.Parallel()
+	cfg := readAPIConfig()
+	cfg.ReadOnly = true
+	narrowed, withheld := NarrowForReading(freeCatalogWithMCP(t), cfg, WithheldActions{ByOperator: []string{"already.withheld"}})
+	if !slices.Contains(withheld.ByOperator, withheldWriteAction) || !slices.Contains(withheld.ByOperator, "already.withheld") {
+		t.Errorf("ByOperator = %v, want %s added to what it held", withheld.ByOperator, withheldWriteAction)
+	}
+	if _, ok := scopeMissing(withheld.ByTokenScope, "template.lint"); !ok {
+		t.Error("template.lint, a read GitLab refuses read_api, is not withheld by the token's scope")
+	}
+	if _, ok := narrowed.Action("issue.list"); !ok {
+		t.Error("issue.list is not served")
+	}
+}
+
+// TestFilterActionCatalog_GroupStep_FilesWhatTheKindRefusesUnderTheKind pins
+// the group step's share of the same order: for an OAuth access token without
+// admin_mode, an action of an admin_mode group that GitLab refuses an OAuth
+// token is filed under the credential's kind with admin_mode named as what
+// the personal access token must carry, while the group's other action stays
+// the scope's, since reauthorizing with admin_mode is what runs it. No such
+// action is in the catalog today, so the group is built here.
+func TestFilterActionCatalog_GroupStep_FilesWhatTheKindRefusesUnderTheKind(t *testing.T) {
+	t.Parallel()
+	route := toolutil.Route(func(context.Context, map[string]any) (any, error) { return "ran", nil })
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_admin", BaseDomain: "access", SurfaceKind: actioncatalog.SurfaceKindMetaGroup})
+	group.SetAction(actioncatalog.Action{Name: "token_personal_rotate_self", Route: route})
+	group.SetAction(actioncatalog.Action{Name: "token_personal_get", Route: route, ReadOnly: true})
+	catalog := actioncatalog.NewCatalog()
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{OAuthCredential: true, TokenScopes: []string{"api"}})
+	entry, filed := scopeEntry(withheld.ByCredentialKind, "access.token_personal_rotate_self")
+	if !filed || !slices.Equal(entry.ByServer, []string{"admin_mode"}) || len(entry.ByGitLab) != 0 {
+		t.Errorf("ByCredentialKind entry = %+v (filed %t), want the rotation under the kind lacking admin_mode for this server", entry, filed)
+	}
+	if slices.Contains(scopeWithheldIDs(withheld.ByTokenScope), "access.token_personal_rotate_self") {
+		t.Error("the rotation is filed under the token's scope too")
+	}
+	if missing, ok := scopeMissing(withheld.ByTokenScope, "access.token_personal_get"); !ok || !slices.Equal(missing, []string{"admin_mode"}) {
+		t.Errorf("access.token_personal_get is withheld by scope %t lacking %v, want admin_mode", ok, missing)
 	}
 }
 

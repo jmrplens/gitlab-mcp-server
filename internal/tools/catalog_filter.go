@@ -47,10 +47,12 @@ type WithheldActions struct {
 	// ByCredentialKind are the actions GitLab refuses to an OAuth access
 	// token on every way, whatever scopes it carries, which the session's
 	// credential is known to be ([config.ServerConfig] OAuthCredential,
-	// issue 1238). The caller can act on it, by authenticating with a
-	// personal access token, so the answer says so rather than ask the
-	// operator.
-	ByCredentialKind []string
+	// issue 1238), each with the scopes the credential lacks for it besides,
+	// as ByTokenScope names them. The caller can act on it, by authenticating
+	// with a personal access token carrying those scopes, so the answer says
+	// so rather than ask the operator, unless the deployment refuses every
+	// personal access token ([config.ServerConfig] PersonalTokensRefused).
+	ByCredentialKind []actioncatalog.ScopeWithheld
 	// ExcludedByName are the actions --exclude-tools removed. They are kept
 	// apart from the two above and never reach the dynamic registry's
 	// withheld lists: a withheld action is one the model is told about so it
@@ -64,11 +66,11 @@ type WithheldActions struct {
 // FilterActionCatalog applies a deployment's narrowing to a catalog, in the
 // order that keeps the causes apart: the operator's exclusions first, then the
 // scopes the credential's catalog groups demand (admin_mode), then read-only
-// mode, then the API scope a credential carrying read_api and not api reaches
-// (ADR-0026), then what GitLab refuses to an OAuth access token whatever its
-// scopes, for a credential known to be one (issue 1238), then safe-mode
-// previews. The returned bookkeeping names what the scope, read-only, reach
-// and credential-kind steps removed.
+// mode, then what GitLab refuses to an OAuth access token whatever its
+// scopes, for a credential known to be one (issue 1238), then the API scope a
+// credential carrying read_api and not api reaches (ADR-0026), then safe-mode
+// previews. The returned bookkeeping names what the scope, read-only,
+// credential-kind and reach steps removed.
 //
 // Read-only mode runs before the reach step so that an action both would
 // remove is reported as the operator's: a write in a read-only deployment is
@@ -78,6 +80,16 @@ type WithheldActions struct {
 // group step runs before both and removes writes too, so a write it removes
 // from a read-only deployment is filed under the operator for the same
 // reason, whatever scope the credential lacks besides.
+//
+// The credential-kind step runs before the reach step, and the group step
+// files what it removes under the kind too, for the same reason one step
+// further: reauthorizing an OAuth token for a scope yields another OAuth
+// token, which GitLab refuses the action as well, so an action the kind
+// withholds is the kind's whatever scope the credential lacks besides, and
+// the answer names those scopes as what the personal access token must
+// carry. It used to run last, and an OAuth read_api session asking for a
+// self rotation was sent to reauthorize with api, only to be told after it
+// had that an OAuth token could never run the action.
 func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, WithheldActions, error) {
 	var withheld WithheldActions
 	// Tools the operator excluded by name are not "withheld": the point of the
@@ -93,9 +105,10 @@ func FilterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 	if err != nil {
 		return nil, WithheldActions{}, err
 	}
-	withheld.ByTokenScope, withheld.ByOperator = groupScopeWithheld(filtered, scoped, cfg)
-	filtered, withheld = NarrowForReading(scoped, cfg, withheld)
-	filtered, withheld.ByCredentialKind = narrowForCredentialKind(filtered, cfg)
+	withheld.ByTokenScope, withheld.ByOperator, withheld.ByCredentialKind = groupScopeWithheld(filtered, scoped, cfg)
+	filtered, withheld = narrowForReadOnly(scoped, cfg, withheld)
+	filtered, withheld = narrowForCredentialKind(filtered, cfg, withheld)
+	filtered, withheld = narrowForReadAPI(filtered, cfg, withheld)
 	if cfg.SafeMode {
 		// Same granularity argument: dispatcher tools cover reads and writes
 		// alike, so safe mode is applied per action in the catalog rather than
@@ -182,50 +195,75 @@ func warnExclusionsNamingNothing(unmatched []string) {
 // than as unknown. Both steps keep what they already kept, so the actions the
 // first pass narrowed are not filed twice.
 func NarrowForReading(catalog *actioncatalog.Catalog, cfg *config.ServerConfig, withheld WithheldActions) (*actioncatalog.Catalog, WithheldActions) {
-	if cfg.ReadOnly {
-		// Filter at action granularity, not group granularity: a domain that
-		// mixes reads and writes must keep its read actions reachable instead
-		// of disappearing with them.
-		readable := catalog.FilterReadOnlyActions()
-		withheld.ByOperator = append(withheld.ByOperator, RemovedActionKeys(catalog, readable)...)
-		catalog = readable
+	catalog, withheld = narrowForReadOnly(catalog, cfg, withheld)
+	return narrowForReadAPI(catalog, cfg, withheld)
+}
+
+// narrowForReadOnly is the read-only half of [NarrowForReading]: in a
+// read-only deployment it keeps the actions the catalog classifies as reads
+// and files the rest under the operator.
+func narrowForReadOnly(catalog *actioncatalog.Catalog, cfg *config.ServerConfig, withheld WithheldActions) (*actioncatalog.Catalog, WithheldActions) {
+	if !cfg.ReadOnly {
+		return catalog, withheld
 	}
-	if cfg.ReadAPIOnly {
-		reachable := catalog.FilterReachableWith(finegrained.ClassicReadAPI)
-		withheld.ByTokenScope = append(withheld.ByTokenScope, scopeWithheld(catalog, reachable, cfg)...)
-		catalog = reachable
+	// Filter at action granularity, not group granularity: a domain that
+	// mixes reads and writes must keep its read actions reachable instead of
+	// disappearing with them.
+	readable := catalog.FilterReadOnlyActions()
+	withheld.ByOperator = append(withheld.ByOperator, RemovedActionKeys(catalog, readable)...)
+	return readable, withheld
+}
+
+// narrowForReadAPI is the reach half of [NarrowForReading]: for a credential
+// carrying read_api and not api it keeps the actions GitLab accepts from
+// read_api and files the rest under the token's scope.
+func narrowForReadAPI(catalog *actioncatalog.Catalog, cfg *config.ServerConfig, withheld WithheldActions) (*actioncatalog.Catalog, WithheldActions) {
+	if !cfg.ReadAPIOnly {
+		return catalog, withheld
 	}
-	return catalog, withheld
+	reachable := catalog.FilterReachableWith(finegrained.ClassicReadAPI)
+	withheld.ByTokenScope = append(withheld.ByTokenScope, scopeWithheld(catalog, reachable, cfg)...)
+	return reachable, withheld
 }
 
 // narrowForCredentialKind removes, for a credential known to be an OAuth
 // access token, the actions GitLab refuses to one on every way whatever its
-// scopes ([actioncatalog.Action.OAuthRefused]), and names every key of each
-// (issue 1238, register row AUT-009). It runs after the operator's and the
-// scopes' narrowings, so an action one of them removed is filed under it, and
-// any other credential, one whose kind nothing described among them, is
-// served everything.
-func narrowForCredentialKind(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (served *actioncatalog.Catalog, withheld []string) {
+// scopes ([actioncatalog.Action.OAuthRefused]), and adds every key of each to
+// withheld, with the scopes the credential lacks for it besides (issue 1238,
+// register row AUT-009). It runs after the operator's narrowings, so an
+// action one of them removed is filed under it, and before the read_api
+// reach step, so an action both would remove is filed under the kind
+// ([FilterActionCatalog] says why). Any other credential, one whose kind
+// nothing described among them, is served everything.
+func narrowForCredentialKind(catalog *actioncatalog.Catalog, cfg *config.ServerConfig, withheld WithheldActions) (*actioncatalog.Catalog, WithheldActions) {
 	if !cfg.OAuthCredential {
-		return catalog, nil
+		return catalog, withheld
 	}
-	served = catalog.FilterServedToOAuth()
-	return served, RemovedActionKeys(catalog, served)
+	served := catalog.FilterServedToOAuth()
+	for _, action := range removedActions(catalog, served) {
+		withheld.ByCredentialKind = append(withheld.ByCredentialKind, actionScopeWithheld(action, cfg)...)
+	}
+	return served, withheld
 }
 
 // groupScopeWithheld files what the group step of [FilterActionCatalog]
 // removed: under the operator every write of a read-only deployment, which
-// read-only mode would withhold whatever the credential carried, and the rest
+// read-only mode would withhold whatever the credential carried, under the
+// credential's kind every action GitLab refuses to an OAuth access token the
+// credential is known to be, which no scope would let it run, and the rest
 // under the token's scope as [scopeWithheld] files it.
-func groupScopeWithheld(before, after *actioncatalog.Catalog, cfg *config.ServerConfig) (byScope []actioncatalog.ScopeWithheld, byOperator []string) {
+func groupScopeWithheld(before, after *actioncatalog.Catalog, cfg *config.ServerConfig) (byScope []actioncatalog.ScopeWithheld, byOperator []string, byKind []actioncatalog.ScopeWithheld) {
 	for _, action := range removedActions(before, after) {
-		if cfg.ReadOnly && !action.ReadOnly {
+		switch {
+		case cfg.ReadOnly && !action.ReadOnly:
 			byOperator = append(byOperator, actionKeys(action)...)
-			continue
+		case cfg.OAuthCredential && action.OAuthRefused():
+			byKind = append(byKind, actionScopeWithheld(action, cfg)...)
+		default:
+			byScope = append(byScope, actionScopeWithheld(action, cfg)...)
 		}
-		byScope = append(byScope, actionScopeWithheld(action, cfg)...)
 	}
-	return byScope, byOperator
+	return byScope, byOperator, byKind
 }
 
 // scopeWithheld lists, as [RemovedActionKeys] does, every key of an action a

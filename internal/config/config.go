@@ -443,12 +443,20 @@ type ServerConfig struct {
 	// nothing described leaves it unset: an unknown kind is served
 	// everything.
 	OAuthCredential bool
-	SafeMode        bool
-	ExcludeTools    []string
-	TokenScopes     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	MetaParamSchema string
+	// PersonalTokensRefused records that the deployment's door refuses every
+	// personal access token: OAuth mode with OAuthClientUIDs pinned, since a
+	// personal access token belongs to no application (register row
+	// ADM-004). The actions OAuthCredential withholds are served only to a
+	// personal access token, so where it is set the answer to one asks the
+	// operator rather than send the caller to a token the door refuses with
+	// 401. It is the deployment's, so every entry of one carries the same.
+	PersonalTokensRefused bool
+	SafeMode              bool
+	ExcludeTools          []string
+	TokenScopes           []string
+	RateLimitRPS          float64
+	RateLimitBurst        int
+	MetaParamSchema       string
 	// Stateless mirrors Config.Stateless. It reaches the server because a
 	// sessionless transport cannot carry a server-initiated notification
 	// outside an open request, which decides whether the legacy
@@ -473,13 +481,17 @@ func (c *Config) ServerConfig() *ServerConfig {
 		Tier:              c.Tier,
 		TierExplicit:      c.TierExplicit,
 		ReadOnly:          c.ReadOnly,
-		SafeMode:          c.SafeMode,
-		ExcludeTools:      slices.Clone(c.ExcludeTools),
-		RateLimitRPS:      c.RateLimitRPS,
-		RateLimitBurst:    c.RateLimitBurst,
-		MetaParamSchema:   c.MetaParamSchema,
-		Stateless:         c.Stateless,
-		Language:          c.Language,
+		// Only the OAuth verifier reads the pin, so on a legacy deployment,
+		// whose door admits personal access tokens whatever it names, it
+		// refuses nothing.
+		PersonalTokensRefused: c.AuthMode == AuthModeOAuth && len(c.OAuthClientUIDs) > 0,
+		SafeMode:              c.SafeMode,
+		ExcludeTools:          slices.Clone(c.ExcludeTools),
+		RateLimitRPS:          c.RateLimitRPS,
+		RateLimitBurst:        c.RateLimitBurst,
+		MetaParamSchema:       c.MetaParamSchema,
+		Stateless:             c.Stateless,
+		Language:              c.Language,
 	}
 }
 
