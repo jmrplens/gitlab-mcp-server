@@ -274,7 +274,9 @@ the action argument of a call to a registered meta tool, and when the group
 does not route it and the record holds it, answers with the cause, labeled for
 the call's revision and counted as an unknown action. It runs inside the rate
 limiter and the fine-grained call check and before the argument limit, waits
-for the readiness gate like the fine-grained check, and hands the same answer
+for the readiness gate like the fine-grained check, gives way to the refusal a
+gate holds for a stdio token below the admission minimum (register row
+ADM-001), as both checks do, and hands the same answer
 to the meta dispatcher through `toolutil.WithWithheldAnswer`, which
 `validateMetaToolInput` consults before it calls an action unknown. Two
 answers stay as they were: an action the operator excluded by name is never

@@ -29,15 +29,18 @@ func metaCall(id int, tool, action, params string) request {
 }
 
 // TestMetaWithheld_EachCauseIsAnsweredAsOnTheDynamicSurface calls, on the meta
-// surface of a Free instance, an action the tier withholds and one read-only
-// mode withholds, from tools the session still lists, and checks the answer
-// says the action exists and gives its cause in the dynamic surface's words
-// rather than the enum's refusal.
+// surface of a Free instance, an action the tier withholds, one the token's
+// scope withholds and one read-only mode withholds, from tools the session
+// still lists, and checks the answer says the action exists and gives its
+// cause in the dynamic surface's words rather than the enum's refusal. The
+// scope case runs against an instance that reports the client's token as a
+// read_api one, which the pool entry it is served from is narrowed by.
 func TestMetaWithheld_EachCauseIsAnsweredAsOnTheDynamicSurface(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 	cases := []struct {
 		name   string
 		flags  []string
+		scopes []string
 		tool   string
 		action string
 		params string
@@ -54,6 +57,11 @@ func TestMetaWithheld_EachCauseIsAnsweredAsOnTheDynamicSurface(t *testing.T) {
 			want: []string{`gitlab_project: action \"approval_config_get\" exists but is not available`, "this instance's tier was detected as GitLab Free"},
 		},
 		{
+			name: "the token's scope", scopes: []string{"read_api"},
+			tool: "gitlab_issue", action: "create", params: `{"project_id":"42","title":"never created"}`,
+			want: []string{`gitlab_issue: action \"create\" exists but is not available to this session`, "Reauthorize with the api scope"},
+		},
+		{
 			name: "the operator's read-only mode", flags: []string{"--read-only"},
 			tool: "gitlab_issue", action: "create", params: `{"project_id":"42","title":"never created"}`,
 			want: []string{`gitlab_issue: action \"create\" exists but is not available`, "this deployment is configured to withhold it", "Ask the operator"},
@@ -61,7 +69,11 @@ func TestMetaWithheld_EachCauseIsAnsweredAsOnTheDynamicSurface(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv := startServer(t, map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"}, append([]string{"--gitlab-url=" + gitlab.url}, tc.flags...)...)
+			url := gitlab.url
+			if tc.scopes != nil {
+				url = startScopedFakeGitLab(t, map[string][]string{privacyClientToken: tc.scopes}).url
+			}
+			srv := startServer(t, map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"}, append([]string{"--gitlab-url=" + url}, tc.flags...)...)
 			got := srv.do(t, metaCall(1, tc.tool, tc.action, tc.params)).body
 			for _, want := range tc.want {
 				if !strings.Contains(got, want) {

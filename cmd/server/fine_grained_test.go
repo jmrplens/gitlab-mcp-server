@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -407,6 +408,52 @@ func TestCreateServer_Meta_WithheldActionIsAnsweredWithItsCauseAndSpendsItsToken
 	}
 	if text := callText(t, session, "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "1"}}); !strings.Contains(text, "rate limit exceeded") {
 		t.Errorf("third call = %q, want it refused for the rate: the two withheld calls should have spent the bucket", text)
+	}
+}
+
+// TestCreateServer_Meta_AStoredRefusal_IsAnsweredBeforeTheWithheldCause
+// verifies that a gate holding the below-minimum refusal answers a call with
+// it on a connection the gate holds, even a meta call naming an action the
+// narrowing would explain: a stdio process that learned after registration
+// that its token is below the admission minimum refuses every catalog method
+// (register row ADM-001), and the call checks, which run outside the gate, do
+// not answer for the session first. The same call on a connection the gate
+// does not hold, which the gate never refuses, is still answered with the
+// cause, so the refusal is what made the difference.
+func TestCreateServer_Meta_AStoredRefusal_IsAnsweredBeforeTheWithheldCause(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Free, TierExplicit: true}
+	shell, err := newServerShell(t.Context(), client, cfg)
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	if err = shell.register(t.Context()); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	shell.gate.markRefused(stdioBelowMinimumRefusal())
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := shell.server.Connect(withReadinessGate(t.Context()), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	gated, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = gated.Close() })
+
+	arguments := map[string]any{"action": "approval_config_get", "params": map[string]any{"project_id": "1"}}
+	_, err = gated.CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_project", Arguments: arguments})
+	var refusal *jsonrpc.Error
+	if !errors.As(err, &refusal) || refusal.Code != errCodeForbidden || refusal.Message != stdioBelowMinimumMessage {
+		t.Errorf("gated call error = %v, want the -40300 refusal naming the minimum", err)
+	}
+
+	const cause = `gitlab_project: action "approval_config_get" exists but is not available`
+	if text := callText(t, newInMemorySession(t, shell.server), "gitlab_project", arguments); !strings.HasPrefix(text, cause) {
+		t.Errorf("ungated call = %q, want it to begin %q", text, cause)
 	}
 }
 
