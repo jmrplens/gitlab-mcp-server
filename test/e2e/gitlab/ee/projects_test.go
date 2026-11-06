@@ -81,7 +81,8 @@ func TestTargetBranchRules_Lifecycle_CreatesListsAndDeletes(t *testing.T) {
 // because the reserved key travels differently on each. project.update reaches
 // the same settings through the project route, so the pair is made there too:
 // repointing the overwriting mirror unconfirmed must be refused and leave its
-// source alone, and arming it with confirm must go through.
+// source alone, clearing the flag must go through unasked, and arming it again
+// with confirm must go through.
 //
 // Replaces: TestMeta_ProjectMirroring
 func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
@@ -133,9 +134,19 @@ func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
 			e.T.Errorf("get answered %+v after the refused update, want the mirror of %s kept", kept, upstream.Path)
 		}
 
-		// Re-sending the overwrite through project.update goes through with confirm.
-		// mirror travels beside the flag because GitLab refuses an update
-		// whose only param is the flag (docs/development/upstream-bugs.md).
+		// Clearing the overwrite through project.update asks nothing, and it
+		// leaves the confirmed update below a flag to change rather than one
+		// it could leave as it found it. mirror travels beside the flag
+		// because GitLab refuses an update whose only param is the flag
+		// (docs/development/upstream-bugs.md).
+		cleared := harness.Do[projects.Output](s, actionProjectUpdate, map[string]any{
+			"project_id": project.IDParam(), "mirror": true, "mirror_overwrites_diverged_branches": false,
+		})
+		if !cleared.Mirror || cleared.MirrorOverwritesDivergedBranches {
+			e.T.Errorf("update answered mirror=%v, mirror_overwrites_diverged_branches=%v after clearing, want the mirror on and the flag off", cleared.Mirror, cleared.MirrorOverwritesDivergedBranches)
+		}
+
+		// Arming the overwrite again through project.update goes through with confirm.
 		updated := harness.Do[projects.Output](s, actionProjectUpdate, map[string]any{
 			"project_id": project.IDParam(), "mirror": true, "mirror_overwrites_diverged_branches": true, "confirm": true,
 		})
