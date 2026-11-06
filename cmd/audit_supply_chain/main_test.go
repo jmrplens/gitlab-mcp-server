@@ -3217,7 +3217,7 @@ func TestRun_CleanRepository_PrintsTheSuccessLine(t *testing.T) {
 	}
 	want := "supply-chain audit passed: pinned actions, locked release jobs, " +
 		"stated cooldowns, current security policy, signature-verifying installers, declared scripts, " +
-		"written release notes, a blocking dependency scan\n"
+		"written release notes, a blocking dependency scan, conditions on the events that trigger them\n"
 	if stdout.String() != want {
 		t.Errorf("run() stdout = %q, want %q", stdout.String(), want)
 	}

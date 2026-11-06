@@ -4,7 +4,7 @@
 // Command audit_supply_chain audits the release supply chain's configuration
 // invariants.
 //
-// Eight properties, each of which was false at some point and each of which is
+// Nine properties, each of which was false at some point and each of which is
 // invisible to every other gate in this repository:
 //
 //  1. Every uses: in .github/workflows is pinned to a 40-character commit SHA,
@@ -211,6 +211,18 @@
 //     that sets nothing aside, so the review date and staleness are the
 //     scan's to enforce: this rule fails no entry because its day has
 //     passed, and its bound only ever relaxes as the days go by.
+//  9. A workflow's conditions name the events that trigger it, and a workflow
+//     triggered by pull_request_target checks out nothing (triggers.go). A job
+//     or step if: comparing github.event_name with an event the on: key does
+//     not name never holds, so the branch it guards is skipped and the run
+//     still succeeds: assignment ran on pull_request, where a fork's token is
+//     read-only, and answered 403 on every outside contribution (issue 1762),
+//     and moving it to pull_request_target with the old condition left in
+//     place would have assigned nothing and reported green. Such a workflow
+//     runs with a write token and the repository's secrets on a fork's pull
+//     request, so the event payload is all it reads; actions/checkout at any
+//     reference is a finding there, the base branch included, since no
+//     workflow here needs one and the rule reads no ref.
 //
 // Rules 1 and 2 do not stop at a uses: line. The action a step names is
 // opened and its steps are judged as though the workflow had written them: a

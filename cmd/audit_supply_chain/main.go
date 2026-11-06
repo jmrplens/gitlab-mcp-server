@@ -1154,6 +1154,7 @@ func auditWorkflows(root string, declared tables, store *actionStore) ([]string,
 		problems = append(problems, checkPinnedUses(file.path, file.text)...)
 		if file.doc != nil {
 			problems = append(problems, auditor.checkWorkflowJobs(file.path, file.doc, file.jobOrder)...)
+			problems = append(problems, checkTriggers(file.path, file.doc)...)
 		}
 	}
 	problems = append(problems, auditor.tableProblems()...)
@@ -1401,7 +1402,7 @@ func run(args []string, stdout, stderr io.Writer, declared tables) int {
 	}
 	fmt.Fprint(stdout, "supply-chain audit passed: pinned actions, locked release jobs, "+
 		"stated cooldowns, current security policy, signature-verifying installers, declared scripts, "+
-		"written release notes, a blocking dependency scan\n")
+		"written release notes, a blocking dependency scan, conditions on the events that trigger them\n")
 	return 0
 }
 
