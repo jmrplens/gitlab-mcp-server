@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -38,11 +39,11 @@ const notMirroredHint = "not mirrored"
 //
 // Two actions can leave a project in that state, and both are judged here by
 // the one rule: project.pull_mirror_configure, through PUT
-// /projects/:id/mirror/pull, and project.update, which sends the same three
-// settings to PUT /projects/:id under the names that route gives them, mirror
-// for enabled and import_url for url. [UpdateInput.pullMirrorSettings]
-// restates an update in the dedicated route's terms, so neither action is a
-// way around the question the other asks.
+// /projects/:id/mirror/pull, and project.update, which sends the same settings
+// to PUT /projects/:id, the switch and the source under the names that route
+// gives them, mirror for enabled and import_url for url.
+// [UpdateInput.pullMirrorSettings] restates an update in the dedicated route's
+// terms, so neither action is a way around the question the other asks.
 //
 // Configuring a pull mirror is not destructive by itself, and is deliberately
 // not classified as such: GitLab stops updating any branch that has diverged
@@ -56,12 +57,18 @@ const notMirroredHint = "not mirrored"
 // The guard therefore fires on the state rather than on the action: it asks
 // when this call would leave the project pulling from its source with the
 // overwrite armed, and when it is this call that arms or re-aims it, by setting
-// the flag, by enabling the mirror, or by pointing it at another URL. Editing
-// an unrelated setting on a mirror that already overwrites asks nothing, and
-// neither does sending it the URL it already pulls from, since
-// a prompt raised by every edit is a prompt a caller learns to pass through;
-// disabling the mirror or clearing the flag asks nothing either, because both
-// are the remedy.
+// the flag, by enabling the mirror, by pointing it at another URL, or by
+// letting it pull branches it skipped. GitLab replaces a diverged branch only
+// among the ones the mirror does not skip, which only_mirror_protected_branches
+// and mirror_branch_regex decide (Gitlab::Repositories::Mirror::BranchSkipFilter,
+// applied in Projects::UpdateMirrorService#update_branches before
+// handle_diverged_branch), so widening that filter aims the overwrite at
+// branches it did not reach, as [branchFilter] describes. Editing an unrelated
+// setting on a mirror that already overwrites asks nothing, and neither does
+// sending it the URL it already pulls from or a filter that reaches no branch
+// it did not reach, since a prompt raised by every edit is a prompt a caller
+// learns to pass through; disabling the mirror or clearing the flag asks
+// nothing either, because both are the remedy.
 //
 // The one exception is a call that sets the flag while it leaves the mirror
 // off, which is asked although nothing is overwritten yet (issue 1752). A call
@@ -90,12 +97,12 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 	if toolutil.IsYOLOMode() || toolutil.ExplicitConfirmFromRequest(req) {
 		return nil
 	}
-	asks, leftOff := overwritesAfterCall(ctx, client, input)
-	if !asks {
+	ask, branches := overwritesAfterCall(ctx, client, input)
+	if ask == askNothing {
 		return nil
 	}
 
-	question := pullMirrorQuestion(input, leftOff)
+	question := pullMirrorQuestion(input, ask, branches)
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
@@ -127,15 +134,17 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 // sentence when the client cannot ask. A call that names no URL keeps the
 // source the project has, which the question names in the person's language
 // rather than reveals; one that names a URL is asked about that URL as the
-// caller wrote it, redacted. A call that leaves the mirror off, which leftOff
-// reports as [overwritesAfterCall] found it, is asked whether to store the
-// overwrite for when the mirror is turned on, since nothing is pulled before
-// that.
+// caller wrote it, redacted. ask is the question [overwritesAfterCall] chose.
+// A call that leaves the mirror off is asked whether to store the overwrite
+// for when the mirror is turned on, since nothing is pulled before that. A
+// call that only widens the branches a mirror that overwrites pulls is asked
+// about those branches, which are what changes, named as branches, the filter
+// the mirror pulls through after the call.
 //
-// Each of the four is written out in full because the catalog audit reads a
+// Each of the six is written out in full because the catalog audit reads a
 // question's key and the placeholders it fills from the call that renders it.
-func pullMirrorQuestion(input ConfigurePullMirrorInput, leftOff bool) i18n.Message {
-	if leftOff {
+func pullMirrorQuestion(input ConfigurePullMirrorInput, ask mirrorAsk, branches branchFilter) i18n.Message {
+	if ask == askOverwriteWhileOff {
 		if input.URL == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
 				i18n.S("project", string(input.ProjectID)),
@@ -143,6 +152,18 @@ func pullMirrorQuestion(input ConfigurePullMirrorInput, leftOff bool) i18n.Messa
 		}
 		return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
 			i18n.S("project", string(input.ProjectID)),
+			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+	}
+	if ask == askWidening {
+		if input.URL == "" {
+			return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
+				i18n.S("project", string(input.ProjectID)),
+				i18n.M("branches", branchesPulled(branches)),
+				i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
+		}
+		return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
+			i18n.S("project", string(input.ProjectID)),
+			i18n.M("branches", branchesPulled(branches)),
 			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
 	}
 	if input.URL == "" {
@@ -163,22 +184,109 @@ func pullMirrorQuestion(input ConfigurePullMirrorInput, leftOff bool) i18n.Messa
 // dedicated route's own handler in GitLab maps its enabled and url onto exactly
 // those two project attributes (pull_mirror_update_attributes in
 // ee/lib/api/project_mirror.rb), so the two calls write the same columns. The
-// update's other mirror settings cannot arm the overwrite and are left out.
+// branch filter, only_mirror_protected_branches and mirror_branch_regex, has
+// the same name on both routes, and both assign it the same way, as
+// [branchFilter.after] says. The update's other mirror settings, the trigger
+// of builds and the mirror user, change neither which branches are pulled nor
+// whether they are overwritten, and are left out.
 func (input UpdateInput) pullMirrorSettings() ConfigurePullMirrorInput {
 	return ConfigurePullMirrorInput{
 		ProjectID:                        input.ProjectID,
 		Enabled:                          input.Mirror,
 		URL:                              input.ImportURL,
 		MirrorOverwritesDivergedBranches: input.MirrorOverwritesDivergedBranches,
+		OnlyMirrorProtectedBranches:      input.OnlyMirrorProtectedBranches,
+		MirrorBranchRegex:                input.MirrorBranchRegex,
 	}
 }
 
 // armsOverwrite reports whether this call could put the project into the
-// overwriting state, which is what makes reading the current configuration
-// worth a round trip: it sets the flag, enables the mirror, or aims it
-// somewhere else.
+// overwriting state, or widen the branches it reaches, which is what makes
+// reading the current configuration worth a round trip: it sets the flag,
+// enables the mirror, aims it somewhere else, or sends the branch filter.
+// Which of the filter's changes widen it takes the read to say.
 func armsOverwrite(input ConfigurePullMirrorInput) bool {
-	return isTrue(input.MirrorOverwritesDivergedBranches) || isTrue(input.Enabled) || input.URL != ""
+	return isTrue(input.MirrorOverwritesDivergedBranches) || isTrue(input.Enabled) || input.URL != "" ||
+		input.OnlyMirrorProtectedBranches != nil || input.MirrorBranchRegex != ""
+}
+
+// mirrorAsk is the question, if any, [overwritesAfterCall] decides a call is
+// asked, which [pullMirrorQuestion] renders.
+type mirrorAsk uint8
+
+const (
+	// askNothing lets the call through.
+	askNothing mirrorAsk = iota
+	// askOverwrite asks about a call that leaves the mirror pulling with the
+	// overwrite armed, and is the call that arms or re-aims it.
+	askOverwrite
+	// askOverwriteWhileOff asks about a call that stores the overwrite on a
+	// mirror it leaves off.
+	askOverwriteWhileOff
+	// askWidening asks about a call that changes nothing of a mirror that
+	// overwrites but the branches it pulls, and lets it pull ones it skipped.
+	askWidening
+)
+
+// branchFilter is the part of a pull mirror's configuration that decides which
+// of the source's branches it pulls, and so which ones its overwrite reaches.
+// GitLab skips an unprotected branch while protectedOnly is set, and a branch
+// whose name regex does not match while regex is not empty
+// (Gitlab::Repositories::Mirror::BranchSkipFilter), and replaces a diverged
+// branch only among the ones it does not skip. The zero value pulls every
+// branch.
+type branchFilter struct {
+	protectedOnly bool
+	regex         string
+}
+
+// after returns the filter GitLab holds once input is applied to current.
+//
+// A regex the call sends turns protected-only off, and protected-only sent
+// true clears the regex: both routes assign the pair that way
+// (Repositories::PullMirrors::Attributes#allowed for the dedicated one and
+// EE::Projects::UpdateService#mirror_branch_setting for the project update),
+// so GitLab never holds both. Protected-only sent false leaves the regex as it
+// is. Both routes refuse a call that sends the two together, so a regex winning
+// here only decides the question asked before that refusal.
+func (current branchFilter) after(input ConfigurePullMirrorInput) branchFilter {
+	if input.MirrorBranchRegex != "" {
+		return branchFilter{regex: input.MirrorBranchRegex}
+	}
+	if isTrue(input.OnlyMirrorProtectedBranches) {
+		return branchFilter{protectedOnly: true}
+	}
+	if input.OnlyMirrorProtectedBranches != nil {
+		return branchFilter{regex: current.regex}
+	}
+	return current
+}
+
+// widenedBy reports whether a mirror pulling through current would pull a
+// branch it skips once it pulls through next.
+//
+// A filter that passes every branch cannot be widened, and one left as it is
+// widens nothing. Any other change counts as widening, although some narrow in
+// practice: whether a regex matches more than another, or than the protected
+// branches, turns on the branches the source holds and on which of them are
+// protected, which this server does not read. Like the URL comparison, that
+// costs a question rather than skipping one.
+func (current branchFilter) widenedBy(next branchFilter) bool {
+	return next != current && (current.protectedOnly || current.regex != "")
+}
+
+// branchesPulled names the branches a mirror pulling through filter pulls, for
+// the widening question. A filter [branchFilter.after] returns holds at most
+// one of its two settings. A regex is quoted, since it is the caller's own
+// text and the person has to see where it ends.
+func branchesPulled(filter branchFilter) i18n.Message {
+	if filter.regex != "" {
+		return i18n.New(i18n.ConfirmPullMirrorBranchesMatching, i18n.S("regex", strconv.Quote(filter.regex)))
+	}
+	if filter.protectedOnly {
+		return i18n.New(i18n.ConfirmPullMirrorBranchesProtected)
+	}
+	return i18n.New(i18n.ConfirmPullMirrorBranchesAll)
 }
 
 // isTrue reports whether an optional flag was sent with the value true.
@@ -186,17 +294,22 @@ func isTrue(flag *bool) bool {
 	return flag != nil && *flag
 }
 
-// overwritesAfterCall reports, as asks, whether the configuration this call
-// leaves behind both pulls and overwrites diverged branches, or would as soon
-// as the mirror is turned on, and, as leftOff, whether that configuration
-// leaves the mirror off, which decides the question [pullMirrorQuestion] asks.
+// overwritesAfterCall reports which question, if any, this call is asked: none
+// unless the configuration it leaves behind both pulls and overwrites diverged
+// branches, or would as soon as the mirror is turned on, and the call is the
+// one that arms, re-aims or widens the overwrite. askOverwriteWhileOff is the
+// answer for a call that leaves the mirror off, and askWidening for one whose
+// only change to a mirror that overwrites is the branches it pulls, which are
+// then returned as the filter the mirror pulls through after the call.
 //
 // The overwrite flag is the call's own where the call sends it and the
 // project's current one otherwise, so the answer describes the configuration
 // GitLab will hold rather than the fields this particular call happens to name.
 // The current configuration is read once, and only when the call leaves unsaid
-// something the answer turns on: the flag, where the call does not send it, or
-// whether the mirror is on, where it sets the flag without sending enabled.
+// something the answer turns on: the flag, where the call does not send it,
+// whether the mirror is on, where it sets the flag without sending enabled,
+// and the source and branch filter the mirror has, where the call sends one of
+// its own.
 // Whether the mirror pulls takes no reading of its own: GET
 // /projects/:id/mirror/pull describes only a mirror that is on (the route
 // answers 400 unless the project mirrors, and the enabled it reports is the
@@ -211,11 +324,14 @@ func isTrue(flag *bool) bool {
 // the last one that can be asked about it (issue 1752). Turning the mirror off
 // without setting the flag asks nothing.
 //
-// A call that sends neither flag can arm nothing but by re-aiming the mirror,
-// so its URL is held to the source the project already pulls from, and one
-// naming that same repository is answered like the unrelated edit it is, since
-// it changes neither what the mirror pulls nor whether it overwrites.
-// [sameMirrorSource] says what counts as the same repository.
+// A call that sends neither flag can arm nothing but by re-aiming the mirror
+// or widening the branches it pulls, so its URL is held to the source the
+// project already pulls from, and its branch filter to the one the mirror
+// pulls through, both of which the read reports. One that names that same
+// repository and reaches no branch the mirror skipped is answered like the
+// unrelated edit it is, since it changes neither what the mirror pulls nor
+// whether it overwrites. [sameMirrorSource] says what counts as the same
+// repository and [branchFilter.widenedBy] what counts as widening.
 //
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off, and GitLab answers the read of a mirror that is off the same way, 400
@@ -237,30 +353,43 @@ func isTrue(flag *bool) bool {
 // that follows is refused for as well. Any other read failure is answered by
 // asking, with the question of a mirror that pulls: a guard that cannot see
 // the configuration must not assume the harmless one.
-func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (asks, leftOff bool) {
+func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (mirrorAsk, branchFilter) {
 	overwrite, overwriteSent := flagValue(input.MirrorOverwritesDivergedBranches)
 	enabled, enabledSent := flagValue(input.Enabled)
 	if overwriteSent && !overwrite {
-		return false, false
+		return askNothing, branchFilter{}
 	}
 	if overwriteSent && enabledSent {
-		return true, !enabled
+		if enabled {
+			return askOverwrite, branchFilter{}
+		}
+		return askOverwriteWhileOff, branchFilter{}
 	}
 	if enabledSent && !enabled {
-		return false, false
+		return askNothing, branchFilter{}
 	}
 
 	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if isNotMirrored(err) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return overwriteSent, overwriteSent
+			if overwriteSent {
+				return askOverwriteWhileOff, branchFilter{}
+			}
+			return askNothing, branchFilter{}
 		}
-		return true, false
+		return askOverwrite, branchFilter{}
 	}
-	if !overwriteSent && !enabledSent && sameMirrorSource(input.URL, current.URL) {
-		return false, false
+	if !overwriteSent && !current.MirrorOverwritesDivergedBranches {
+		return askNothing, branchFilter{}
 	}
-	return overwriteSent || current.MirrorOverwritesDivergedBranches, false
+	if overwriteSent || enabledSent || (input.URL != "" && !sameMirrorSource(input.URL, current.URL)) {
+		return askOverwrite, branchFilter{}
+	}
+	held := branchFilter{protectedOnly: current.OnlyMirrorProtectedBranches, regex: current.MirrorBranchRegex}
+	if next := held.after(input); held.widenedBy(next) {
+		return askWidening, next
+	}
+	return askNothing, branchFilter{}
 }
 
 // flagValue reports an optional flag's value and whether the caller sent it.

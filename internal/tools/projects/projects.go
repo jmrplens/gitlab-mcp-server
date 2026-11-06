@@ -696,7 +696,7 @@ type UpdateInput struct {
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead. It answers only
 	// the pull-mirror question, so it carries that question's tier.
-	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables or re-aims a mirror that is on and has it, or one whose settings cannot be read. A client that supports elicitation is asked instead"`
+	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or widens the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A client that supports elicitation is asked instead"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
@@ -1845,13 +1845,14 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 
 // Update modifies settings on an existing GitLab project.
 //
-// An update that leaves the pull mirror overwriting diverged branches, or that
-// stores the overwrite on a mirror it leaves off, is confirmed first, by the
-// guard project.pull_mirror_configure goes through:
-// PUT /projects/:id takes mirror, import_url and
-// mirror_overwrites_diverged_branches as well, so the same call made here
-// discards the same commits. See [confirmDivergedOverwrite] for which updates
-// that covers.
+// An update that leaves the pull mirror overwriting diverged branches, that
+// stores the overwrite on a mirror it leaves off, or that widens the branches
+// an overwriting mirror pulls, is confirmed first, by the guard
+// project.pull_mirror_configure goes through: PUT /projects/:id takes mirror,
+// import_url, mirror_overwrites_diverged_branches,
+// only_mirror_protected_branches and mirror_branch_regex as well, so the same
+// call made here discards the same commits. See [confirmDivergedOverwrite] for
+// which updates that covers.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err

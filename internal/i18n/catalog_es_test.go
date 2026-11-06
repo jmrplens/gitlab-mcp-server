@@ -98,6 +98,21 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" from that repository is replaced by its version, and the replaced commits cannot be recovered through the API.",
 		},
 		{
+			name: "the question for a mirror the call widens, its branches another catalog text with a value of its own",
+			msg: New(ConfirmPullMirrorOverwriteWiden,
+				S("project", "42"),
+				M("branches", New(ConfirmPullMirrorBranchesMatching, S("regex", `"^release/"`))),
+				M("source", New(ConfirmPullMirrorConfiguredSource))),
+			spanish: "¿Dejar que el mirror de pull del proyecto 42, que sobrescribe las ramas divergentes," +
+				` traiga las ramas cuyo nombre coincide con "^release/" desde su origen de mirror configurado?` +
+				" Cada rama que trae y que haya divergido de ese repositorio, incluidas las que hasta ahora saltaba," +
+				" se sustituye por su versión en la próxima sincronización, y los commits sustituidos no se pueden recuperar mediante la API.",
+			english: "Let the pull mirror of project 42, which overwrites diverged branches," +
+				` pull the branches whose names match "^release/" from its configured mirror source?` +
+				" Every branch it pulls that has diverged from that repository, the ones it skipped until now included," +
+				" is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
+		},
+		{
 			name: "a list joined with the conjunction",
 			msg: New(ConfirmWorkItemClear,
 				L("losses", New(ConfirmWorkItemAssignees, N("count", 3)), New(ConfirmWorkItemCrmContacts)),

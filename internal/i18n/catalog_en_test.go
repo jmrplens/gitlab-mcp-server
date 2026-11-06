@@ -40,6 +40,7 @@ const (
 	sampleTool       = `delete "it"`
 	sampleAction     = "delete"
 	sampleURL        = "https://mirror.example.com/app.git"
+	sampleRegex      = "^release/"
 	samplePath       = "group/app"
 	sampleNamespace  = "group/archive"
 	sampleFile       = "app-1.2.0.tgz"
@@ -209,6 +210,25 @@ func frozenEnglishRows() []frozenEnglish {
 					" and the replaced commits cannot be recovered through the API.",
 				sampleProject, sampleURL,
 			),
+		},
+		{
+			key: ConfirmPullMirrorOverwriteWiden, dotted: "confirm.pull_mirror.overwrite_widen",
+			args: []Arg{
+				S("project", sampleProject), M("branches", New(ConfirmPullMirrorBranchesAll)), S("source", sampleURL),
+			},
+			want: fmt.Sprintf(
+				"Let the pull mirror of project %s, which overwrites diverged branches, pull every branch from %s?"+
+					" Every branch it pulls that has diverged from that repository, the ones it skipped until now included,"+
+					" is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API.",
+				sampleProject, sampleURL,
+			),
+		},
+		{key: ConfirmPullMirrorBranchesAll, dotted: "confirm.pull_mirror.branches_all", want: "every branch"},
+		{key: ConfirmPullMirrorBranchesProtected, dotted: "confirm.pull_mirror.branches_protected", want: "the protected branches"},
+		{
+			key: ConfirmPullMirrorBranchesMatching, dotted: "confirm.pull_mirror.branches_matching",
+			args: []Arg{S("regex", strconv.Quote(sampleRegex))},
+			want: fmt.Sprintf("the branches whose names match %q", sampleRegex),
 		},
 		{key: ConfirmPullMirrorConfiguredSource, dotted: "confirm.pull_mirror.configured_source", want: "its configured mirror source"},
 		{

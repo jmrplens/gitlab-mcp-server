@@ -8,6 +8,7 @@ package projects
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -86,7 +87,38 @@ func storedMirrorJSON(overwrites bool) string {
 // mirrored, which notMirroredJSON is. A fixture that described one with
 // enabled false would test the guard against an answer GitLab never sends.
 func storedMirrorAt(overwrites bool, source string) string {
+	return storedMirrorFiltered(overwrites, source, storedFilter{})
+}
+
+// storedFilter is the branch filter a stored mirror pulls through, as GET
+// /projects/:id/mirror/pull reports it: only the protected branches when
+// protectedOnly is set, and only the branches whose names match regex when it
+// is not empty. The zero value pulls every branch.
+type storedFilter struct {
+	protectedOnly bool
+	regex         string
+}
+
+// The two filters the widening tests start from, one of each kind GitLab
+// stores: it never holds both, since a regex turns protected-only off and
+// protected-only clears the regex.
+var (
+	protectedBranchesFilter = storedFilter{protectedOnly: true}
+	releaseBranchesFilter   = storedFilter{regex: "^release/"}
+)
+
+// storedMirrorFiltered renders the configuration of a mirror that pulls from
+// source through filter. GitLab reports a mirror with no regex as null, and
+// the regexes these tests use are printable ASCII, which strconv.Quote writes
+// as JSON does.
+func storedMirrorFiltered(overwrites bool, source string, filter storedFilter) string {
+	regex := "null"
+	if filter.regex != "" {
+		regex = strconv.Quote(filter.regex)
+	}
 	return `{"id":5,"enabled":true,"url":"` + source + `",` +
+		`"only_mirror_protected_branches":` + jsonBool(filter.protectedOnly) + `,` +
+		`"mirror_branch_regex":` + regex + `,` +
 		`"mirror_overwrites_diverged_branches":` + jsonBool(overwrites) + `}`
 }
 
@@ -190,6 +222,133 @@ func mirrorOffRefusal(op, source string) string {
 		" once it is turned on? From the first sync after that, every branch the mirror pulls that has diverged" +
 		" from that repository is replaced by its version, and the replaced commits cannot be recovered through the API." +
 		" Re-send the same call with confirm=true once the user has approved it"
+}
+
+// mirrorWideningRefusal is the refusal a client that cannot ask receives from
+// the operation op for a call that lets project 42's overwriting mirror pull
+// branches it skipped, branches being how the question names the ones the
+// mirror pulls after the call and source what it pulls them from.
+func mirrorWideningRefusal(op, branches, source string) string {
+	return op + ": Let the pull mirror of project 42, which overwrites diverged branches, pull " + branches + " from " + source + "?" +
+		" Every branch it pulls that has diverged from that repository, the ones it skipped until now included," +
+		" is replaced by its version on the next sync, and the replaced commits cannot be recovered through the API." +
+		" Re-send the same call with confirm=true once the user has approved it"
+}
+
+// The two names the widening question gives a filter with no regex: every
+// branch, or the protected ones. One with a regex is named by
+// branchesMatching.
+const (
+	everyBranch       = "every branch"
+	protectedBranches = "the protected branches"
+)
+
+// branchesMatching is how the widening question names the branches whose
+// names match regex, which it quotes.
+func branchesMatching(regex string) string {
+	return "the branches whose names match " + strconv.Quote(regex)
+}
+
+// TestConfigurePullMirror_WideningAnOverwritingMirror_IsRefused verifies that
+// a call letting a mirror that already overwrites pull branches it skipped is
+// asked, although it sends neither flag nor URL. GitLab replaces a diverged
+// branch only among the ones the mirror does not skip, which
+// only_mirror_protected_branches and mirror_branch_regex decide
+// (Gitlab::Repositories::Mirror::BranchSkipFilter), so widening them aims the
+// overwrite at branches it did not reach, and the dedicated route syncs at
+// once. A regex replaces protected-only, as GitLab assigns the two, so sending
+// one to a mirror that pulls only its protected branches widens it too, and
+// protected-only replaces a regex, which reaches the protected branches the
+// regex skipped.
+//
+// The question names the branches the mirror pulls after the call, which is
+// what the person approves, and the read is the one that tells a widening from
+// a narrowing.
+func TestConfigurePullMirror_WideningAnOverwritingMirror_IsRefused(t *testing.T) {
+	tests := []struct {
+		name     string
+		filter   storedFilter
+		input    ConfigurePullMirrorInput
+		branches string
+	}{
+		{
+			name:     "every branch of a mirror that pulls only its protected ones",
+			filter:   protectedBranchesFilter,
+			input:    ConfigurePullMirrorInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			branches: everyBranch,
+		},
+		{
+			name:     "a regex in place of the protected branches",
+			filter:   protectedBranchesFilter,
+			input:    ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			branches: branchesMatching(".*"),
+		},
+		{
+			name:     "the protected branches in place of a regex",
+			filter:   releaseBranchesFilter,
+			input:    ConfigurePullMirrorInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(true)},
+			branches: protectedBranches,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorFiltered(true, "https://github.com/example/old.git", tt.filter))
+
+			_, err := ConfigurePullMirror(t.Context(), client, tt.input)
+			if err == nil {
+				t.Fatal("widening the branches of an overwriting mirror was accepted without confirmation")
+			}
+			if want := mirrorWideningRefusal(opConfigurePullMirror, tt.branches, configuredMirrorSource); err.Error() != want {
+				t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), want)
+			}
+			if got := calls.reads.Load(); got != 1 {
+				t.Errorf("reads = %d, want the one inspection read", got)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the configuration was applied %d time(s) despite being refused", got)
+			}
+		})
+	}
+}
+
+// TestConfigurePullMirror_NarrowingAnOverwritingMirror_Proceeds verifies the
+// other half: a filter that leaves the overwrite reaching no branch it did not
+// reach before goes out unasked, after the one read that says so. A mirror
+// that pulls every branch can only be narrowed, and a filter sent as the
+// mirror already holds it changes nothing.
+func TestConfigurePullMirror_NarrowingAnOverwritingMirror_Proceeds(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter storedFilter
+		input  ConfigurePullMirrorInput
+	}{
+		{
+			name:  "every branch narrowed to the protected ones",
+			input: ConfigurePullMirrorInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(true)},
+		},
+		{
+			name:   "the regex the mirror already pulls through",
+			filter: releaseBranchesFilter,
+			input:  ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: releaseBranchesFilter.regex},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, http.StatusOK, storedMirrorFiltered(true, "https://github.com/example/old.git", tt.filter))
+
+			if _, err := ConfigurePullMirror(t.Context(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := calls.reads.Load(); got != 1 {
+				t.Errorf("reads = %d, want the one inspection read", got)
+			}
+			if got := calls.writes.Load(); got != 1 {
+				t.Errorf("writes = %d, want the configuration applied once", got)
+			}
+		})
+	}
 }
 
 // TestConfigurePullMirror_ArmingTheOverwrite_ProceedsWithExplicitConfirm
@@ -959,6 +1118,13 @@ func readMirrorAt(overwrites bool, source string) mirrorRead {
 	return mirrorRead{status: http.StatusOK, body: storedMirrorAt(overwrites, source)}
 }
 
+// readFilteredMirror answers the inspection read with a mirror that pulls
+// from the repository storedMirrorJSON names through filter, for the cases
+// that turn on which branches a call lets the mirror pull.
+func readFilteredMirror(overwrites bool, filter storedFilter) mirrorRead {
+	return mirrorRead{status: http.StatusOK, body: storedMirrorFiltered(overwrites, "https://github.com/example/old.git", filter)}
+}
+
 // updateGuardHandler answers the two requests a project update that touches
 // the pull mirror can send: the read of the mirror configuration the guard
 // inspects, answered with read, and the update itself.
@@ -1207,6 +1373,96 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 	}
 }
 
+// TestUpdate_WideningAnOverwritingMirror_IsRefusedWithoutConfirmation verifies
+// that project.update is asked, as project.pull_mirror_configure is, when it
+// lets a mirror that already overwrites pull branches it skipped. PUT
+// /projects/:id takes only_mirror_protected_branches and mirror_branch_regex
+// under the dedicated route's names, and GitLab replaces a diverged branch
+// only among the ones the mirror does not skip, so an update sending either
+// can aim the overwrite at branches it did not reach, at the next sync.
+//
+// Widening is any change to a filter that does not already pass every branch:
+// turning protected-only off, a regex in its place, protected-only in place of
+// a regex (which reaches the protected branches the regex skipped) and
+// another regex, since this server cannot tell whether one regex matches more
+// than another. The question names the branches the mirror pulls after the
+// update and, where the update names the source the mirror already has, that
+// source. An update the guard cannot read the configuration for asks the
+// question of a mirror that pulls, as any other does.
+func TestUpdate_WideningAnOverwritingMirror_IsRefusedWithoutConfirmation(t *testing.T) {
+	tests := []struct {
+		name  string
+		read  mirrorRead
+		input UpdateInput
+		want  string
+	}{
+		{
+			name:  "every branch of a mirror that pulls only its protected ones",
+			read:  readFilteredMirror(true, protectedBranchesFilter),
+			input: UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			want:  mirrorWideningRefusal(opProjectUpdate, everyBranch, configuredMirrorSource),
+		},
+		{
+			name:  "a regex in place of the protected branches",
+			read:  readFilteredMirror(true, protectedBranchesFilter),
+			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			want:  mirrorWideningRefusal(opProjectUpdate, branchesMatching(".*"), configuredMirrorSource),
+		},
+		{
+			name:  "another regex",
+			read:  readFilteredMirror(true, releaseBranchesFilter),
+			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: "^(release|hotfix)/"},
+			want:  mirrorWideningRefusal(opProjectUpdate, branchesMatching("^(release|hotfix)/"), configuredMirrorSource),
+		},
+		{
+			name:  "the protected branches in place of a regex",
+			read:  readFilteredMirror(true, releaseBranchesFilter),
+			input: UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(true)},
+			want:  mirrorWideningRefusal(opProjectUpdate, protectedBranches, configuredMirrorSource),
+		},
+		{
+			name:  "widening beside an unrelated setting",
+			read:  readFilteredMirror(true, protectedBranchesFilter),
+			input: UpdateInput{ProjectID: "42", Description: new("mirrored"), OnlyMirrorProtectedBranches: new(false)},
+			want:  mirrorWideningRefusal(opProjectUpdate, everyBranch, configuredMirrorSource),
+		},
+		{
+			name: "widening with the source the mirror already pulls from",
+			read: mirrorRead{status: http.StatusOK, body: storedMirrorFiltered(true, mirrorSourceURL, protectedBranchesFilter)},
+			input: UpdateInput{
+				ProjectID: "42", ImportURL: mirrorSourceURL, OnlyMirrorProtectedBranches: new(false),
+			},
+			want: mirrorWideningRefusal(opProjectUpdate, everyBranch, mirrorSourceURL),
+		},
+		{
+			name:  "a branch filter where the configuration cannot be read",
+			read:  readUnavailable,
+			input: UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			want:  mirrorRefusal(opProjectUpdate, configuredMirrorSource),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := updateGuardedClient(t, &calls, tt.read)
+
+			_, err := Update(t.Context(), client, tt.input)
+			if err == nil {
+				t.Fatal("an update widening the branches of an overwriting mirror went out without confirmation")
+			}
+			if err.Error() != tt.want {
+				t.Errorf("refusal =\n%q\nwant\n%q", err.Error(), tt.want)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the update was applied %d time(s) despite being refused", got)
+			}
+			if got := calls.reads.Load(); got != 1 {
+				t.Errorf("reads = %d, want the one inspection read", got)
+			}
+		})
+	}
+}
+
 // TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking verifies the
 // other half of the rule on project.update: an update that cannot arm the
 // overwrite, or that leaves it disarmed, goes out without a question, and the
@@ -1227,6 +1483,14 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 // that re-send an overwriting mirror the source it already pulls from re-aim
 // nothing, whether the URL carries credentials GitLab reports masked or a host
 // in other capitals, so they are the unrelated edit the guard lets through.
+//
+// A branch filter that leaves an overwriting mirror reaching no branch it did
+// not reach is let through after the read that says so: narrowing a mirror
+// that pulls every branch, re-sending the filter it holds, or turning off a
+// protected-only setting that a regex already replaced, since GitLab stores
+// the regex with protected-only off. So is a filter of any kind on a mirror
+// that does not overwrite, on one that is off and on an instance that mounts
+// no pull mirror route, where the read finds no overwrite to aim.
 func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1240,12 +1504,63 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 			input: UpdateInput{ProjectID: "42", Description: new("renamed")},
 		},
 		{
-			name: "mirror settings that cannot arm it",
-			read: readOverwritingMirror,
-			input: UpdateInput{
-				ProjectID: "42", MirrorTriggerBuilds: new(true), OnlyMirrorProtectedBranches: new(true),
-				MirrorUserID: new(int64(7)),
-			},
+			name:  "mirror settings that cannot arm it",
+			read:  readOverwritingMirror,
+			input: UpdateInput{ProjectID: "42", MirrorTriggerBuilds: new(true), MirrorUserID: new(int64(7))},
+		},
+		{
+			name:      "narrowing a mirror that pulls every branch to its protected ones",
+			read:      readOverwritingMirror,
+			input:     UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "narrowing it to a regex",
+			read:      readOverwritingMirror,
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: "^main$"},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending the protected-only setting the mirror has",
+			read:      readFilteredMirror(true, protectedBranchesFilter),
+			input:     UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending the regex the mirror pulls through",
+			read:      readFilteredMirror(true, releaseBranchesFilter),
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: releaseBranchesFilter.regex},
+			wantReads: 1,
+		},
+		{
+			name:      "turning off a protected-only setting that a regex already replaced",
+			read:      readFilteredMirror(true, releaseBranchesFilter),
+			input:     UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			wantReads: 1,
+		},
+		{
+			name:      "re-sending the source of a mirror that pulls only its protected branches",
+			read:      mirrorRead{status: http.StatusOK, body: storedMirrorFiltered(true, mirrorSourceURL, protectedBranchesFilter)},
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL},
+			wantReads: 1,
+		},
+		{
+			name:      "widening a mirror that does not overwrite",
+			read:      readFilteredMirror(false, protectedBranchesFilter),
+			input:     UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			wantReads: 1,
+		},
+		{
+			name:      "widening a mirror that is off",
+			read:      readNotMirrored,
+			input:     UpdateInput{ProjectID: "42", OnlyMirrorProtectedBranches: new(false)},
+			wantReads: 1,
+		},
+		{
+			name:      "a branch regex where no pull mirror route is mounted",
+			read:      readRouteNotMounted,
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			wantReads: 1,
 		},
 		{
 			name:  "disabling the mirror",
