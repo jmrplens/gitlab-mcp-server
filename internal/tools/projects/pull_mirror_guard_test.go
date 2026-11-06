@@ -543,6 +543,7 @@ func TestSameMirrorSource_Values(t *testing.T) {
 		{name: "a default port written out", sent: "https://github.com:443/example/repo.git", current: mirrorSourceURL, want: false},
 		{name: "a trailing slash", sent: mirrorSourceURL + "/", current: mirrorSourceURL, want: false},
 		{name: "an @ after the host", sent: "https://github.com/example@evil.example/repo.git", current: "https://github.com/example@evil.example/repo.git", want: false},
+		{name: "an @ in the query", sent: mirrorSourceURL + "?ref=x@evil.example/repo.git", current: mirrorSourceURL + "?ref=x@evil.example/repo.git", want: false},
 		{name: "an absolute SSH path under a masked login", sent: "ssh://git@host.example/srv/repo.git", current: "ssh://*****@host.example/srv/repo.git", want: true},
 		{name: "a home-relative path under another login", sent: homeRelativeMirrorSource, current: maskedHomeRelativeMirrorSource, want: false},
 		{name: "a home-relative path resent as it was", sent: "ssh://alice@host.example/~/repo.git", current: maskedHomeRelativeMirrorSource, want: false},
@@ -878,12 +879,20 @@ func TestConfigurePullMirror_ThroughTheRoute_HonorsTheReservedConfirmKey(t *test
 // project would pull from when the call names a URL. The URL is the caller's
 // own parameter, so a credential written into its userinfo must not be echoed
 // into a prompt, and a value that is not an absolute URL is withheld rather
-// than shown. So is one with an @ left after the userinfo is dropped: GitLab
-// reads everything up to the last @ as credentials, so the rendering would
-// show a password net/url took for a host and a path, or a host GitLab does
-// not pull from. An @ written escaped is not one GitLab splits at, and is
-// shown as written. A call that names none is asked about the configured
-// source, which the two refusal tests above pin.
+// than shown. So is one with an @ left after the userinfo is dropped, in the
+// path, the query or the fragment: GitLab reads everything up to the last @ of
+// the whole URL as credentials, so the rendering would show a password
+// net/url took for a host and a path, or a host GitLab does not pull from,
+// such as the one after an @ in a query the rendering drops. An @ written
+// escaped is not one GitLab splits at, and is shown as written. A call that
+// names none is asked about the configured source, which the two refusal
+// tests above pin.
+//
+// The one user that is shown is the login of an SSH path that starts with ~,
+// since git resolves that path in the login's home and the login therefore
+// names the repository: its password is still dropped. Over HTTPS the same
+// path names one repository whoever authenticates, and an absolute SSH path
+// does too, so their user is a credential like any other.
 func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 	tests := []struct {
 		name string
@@ -895,7 +904,16 @@ func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 		{name: "query and fragment are dropped", raw: "https://github.com/example/repo.git?token=secret#frag", want: mirrorSourceURL},
 		{name: "a password GitLab reads past a port is withheld", raw: "https://alice:123/secret@mirror.example/repo.git", want: toolutil.RedactedPlaceholder},
 		{name: "a host GitLab reads past an @ in the path is withheld", raw: "https://github.com/example@evil.example/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "a host GitLab reads past an @ in the query is withheld", raw: mirrorSourceURL + "?ref=x@evil.example/attacker/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "a host GitLab reads past an @ in the fragment is withheld", raw: mirrorSourceURL + "#@evil.example/attacker/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "a password GitLab reads past a # is withheld", raw: "https://alice:123#secret@mirror.example/repo.git", want: toolutil.RedactedPlaceholder},
 		{name: "an escaped @ is not one GitLab splits at", raw: "https://github.com/example%40team/repo.git", want: "https://github.com/example%40team/repo.git"},
+		{name: "a home-relative SSH path keeps the login that picks its home", raw: "ssh://mallory:secret@host.example/~/repo.git", want: "ssh://mallory@host.example/~/repo.git"},
+		{name: "an escaped @ in that login stays escaped", raw: "ssh://mal%40lory@host.example/~/repo.git", want: "ssh://mal%40lory@host.example/~/repo.git"},
+		{name: "a home-relative SSH path with no login names none", raw: "ssh://host.example/~/repo.git", want: "ssh://host.example/~/repo.git"},
+		{name: "a home-relative SSH path with a password alone names no login", raw: "ssh://:secret@host.example/~/repo.git", want: "ssh://host.example/~/repo.git"},
+		{name: "a home-relative path over HTTPS keeps its user a credential", raw: "https://token@host.example/~/repo.git", want: "https://host.example/~/repo.git"},
+		{name: "an absolute SSH path keeps its login a credential", raw: "ssh://git@host.example/srv/repo.git", want: "ssh://host.example/srv/repo.git"},
 		{name: "scp syntax is withheld", raw: "git@github.com:example/repo.git", want: toolutil.RedactedPlaceholder},
 		{name: "unparseable text is withheld", raw: "https://exa mple.com/\x7f", want: toolutil.RedactedPlaceholder},
 		{name: "a bare path names no scheme and is withheld", raw: "github.com/example/repo.git", want: toolutil.RedactedPlaceholder},
@@ -1004,8 +1022,10 @@ func armingUpdate() UpdateInput {
 // an @ after the host, that either side gives in a form net/url refuses, or
 // whose path git resolves in the home of the account it logs in as, which
 // GitLab reports masked, is not the same source, and asks. The question
-// withholds a URL GitLab would read past an @, since what it shows as the host
-// is what GitLab takes for credentials.
+// withholds a URL GitLab would read past an @, in its path, its query or its
+// fragment, since what it shows as the host is what GitLab takes for
+// credentials, and it names the login of a home-relative SSH source, the one
+// part that tells that source from the one the mirror has.
 func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1109,10 +1129,24 @@ func TestUpdate_LeavingTheOverwriteArmed_IsRefusedWithoutConfirmation(t *testing
 			wantReads: 1,
 		},
 		{
+			name:      "a source GitLab would read past an @ in its query",
+			read:      readMirrorAt(true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL + "?ref=x@evil.example/attacker/repo.git"},
+			source:    toolutil.RedactedPlaceholder,
+			wantReads: 1,
+		},
+		{
+			name:      "a source GitLab would read past an @ in its fragment",
+			read:      readMirrorAt(true, mirrorSourceURL),
+			input:     UpdateInput{ProjectID: "42", ImportURL: mirrorSourceURL + "#@evil.example/attacker/repo.git"},
+			source:    toolutil.RedactedPlaceholder,
+			wantReads: 1,
+		},
+		{
 			name:      "a home-relative SSH source under another login",
 			read:      readMirrorAt(true, maskedHomeRelativeMirrorSource),
 			input:     UpdateInput{ProjectID: "42", ImportURL: homeRelativeMirrorSource},
-			source:    "ssh://host.example/~/repo.git",
+			source:    homeRelativeMirrorSource,
 			wantReads: 1,
 		},
 		{

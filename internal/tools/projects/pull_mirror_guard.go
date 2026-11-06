@@ -292,34 +292,49 @@ func sameMirrorSource(sent, current string) bool {
 // lower case, the form [sameMirrorSource] compares, or returns "" for a URL it
 // does not compare.
 //
-// A URL net/url cannot parse is not compared, and neither is one with an @
-// left once the credentials are gone. GitLab takes everything up to the last
-// @ of the whole URL for credentials (Gitlab::UrlSanitizer#parse_url), so for
-// https://host/a@b/repo it pulls from b while net/url reads host: the two
-// parsers agree on such a URL's repository only by chance. GitLab reads every
-// url it reports through that rule, so none it reports should carry one, and
-// the comparison does not rely on that.
+// A URL net/url cannot parse is not compared, and neither is one GitLab reads
+// past its userinfo, as [readsPastUserinfo] says: the two parsers agree on
+// such a URL's repository only by chance. GitLab reads every url it reports
+// through that rule, so none it reports should carry one, and the comparison
+// does not rely on that.
 //
-// Nor is a URL whose path starts with ~ compared. Git resolves such a path in
-// the home directory of the account it logs in as, so
-// ssh://alice@host/~/repo.git and ssh://bob@host/~/repo.git name two
-// repositories, and a URL that names no user logs in as the default one.
-// There the user picks the repository rather than the credentials, and GitLab
-// reports it masked, so the url it reports cannot tell this server which.
+// Nor is a URL whose path starts with ~ compared, which [homeRelative] says
+// is one where the user picks the repository rather than the credentials.
+// GitLab reports that user masked, so the url it reports cannot tell this
+// server which repository the mirror pulls.
 func mirrorSourceKey(raw string) string {
 	parsed, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-	if strings.HasPrefix(parsed.Path, "/~") {
+	if err != nil || homeRelative(parsed.Path) || readsPastUserinfo(parsed) {
 		return ""
 	}
 	parsed.User = nil
 	parsed.Host = strings.ToLower(parsed.Host)
-	if key := parsed.String(); !strings.Contains(key, "@") {
-		return key
-	}
-	return ""
+	return parsed.String()
+}
+
+// readsPastUserinfo reports whether GitLab takes more of parsed for
+// credentials than net/url does.
+//
+// GitLab takes everything up to the last @ of the whole URL for credentials
+// (Gitlab::UrlSanitizer#parse_url, whose comment says a password may hold #,
+// ? and /), and net/url only what comes before the host. The two agree only
+// when no @ is left once the userinfo is gone, in the path, the query or the
+// fragment. In https://host/a@b/repo GitLab pulls from b while net/url reads
+// host, and so it does for https://host/repo?ref=x@b/repo, whose @ sits in a
+// query [toolutil.RedactURL] drops. An @ written escaped, %40, is not one
+// GitLab splits at, and net/url keeps it escaped.
+func readsPastUserinfo(parsed *url.URL) bool {
+	bare := *parsed
+	bare.User = nil
+	return strings.Contains(bare.String(), "@")
+}
+
+// homeRelative reports whether a mirror URL's path is one git resolves in the
+// home directory of the account it logs in as. Over SSH,
+// ssh://alice@host/~/repo.git and ssh://bob@host/~/repo.git name two
+// repositories, and a URL that names no user logs in as the default one.
+func homeRelative(path string) bool {
+	return strings.HasPrefix(path, "/~")
 }
 
 // isNotMirrored reports whether err is GitLab refusing to describe a pull
@@ -335,22 +350,34 @@ func isNotMirrored(err error) bool {
 // The URL is the caller's own parameter and may carry credentials in its
 // userinfo despite the schema saying not to, so it is rendered through
 // [toolutil.RedactURL], and anything that does not parse as an absolute URL is
-// withheld rather than echoed. So is a URL with an @ left once the userinfo is
-// gone: GitLab takes everything up to the last @ for credentials, as
-// [mirrorSourceKey] says, so in https://alice:123/secret@mirror.example/repo.git
-// it reads the password 123/secret where net/url reads a host and a path, and
-// the rendering would both show that password and name a host GitLab does not
-// pull from. A call that sends no URL keeps the source the project already
-// has, which [confirmDivergedOverwrite] names from the catalog rather than
-// reveals: reading it would cost a round trip to tell the user something the
-// project's own settings page already shows them.
+// withheld rather than echoed. So is a URL GitLab reads past its userinfo, as
+// [readsPastUserinfo] says, wherever its @ is: in
+// https://alice:123/secret@mirror.example/repo.git GitLab reads the password
+// 123/secret where net/url reads a host and a path, and in
+// https://github.com/trusted/repo.git?ref=x@evil.example/repo.git it pulls
+// from evil.example, which sits in the query the rendering drops. Either
+// rendering would name a host GitLab does not pull from, and the first would
+// show that password too.
+//
+// The one user shown is the login of an SSH URL whose path [homeRelative]
+// says the login resolves, without its password: there the login names the
+// repository, so dropping it would ask about ssh://host/~/repo.git whichever
+// account's home the call points the mirror at, the masked form GitLab's own
+// settings page shows for the source the mirror has. Over HTTPS the same path
+// names one repository whoever authenticates, and a user there can be a token,
+// so it is dropped like any other credential.
+//
+// A call that sends no URL keeps the source the project already has, which
+// [confirmDivergedOverwrite] names from the catalog rather than reveals:
+// reading it would cost a round trip to tell the user something the project's
+// own settings page already shows them.
 func pullMirrorSourceForPrompt(raw string) string {
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || readsPastUserinfo(parsed) {
 		return toolutil.RedactedPlaceholder
 	}
-	if shown := toolutil.RedactURL(parsed); !strings.Contains(shown, "@") {
-		return shown
+	if login := parsed.User.Username(); login != "" && parsed.Scheme == "ssh" && homeRelative(parsed.Path) {
+		return parsed.Scheme + "://" + url.User(login).String() + "@" + parsed.Host + parsed.EscapedPath()
 	}
-	return toolutil.RedactedPlaceholder
+	return toolutil.RedactURL(parsed)
 }
