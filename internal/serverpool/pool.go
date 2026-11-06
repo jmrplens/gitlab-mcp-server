@@ -94,6 +94,14 @@ type Entry struct {
 	// copy anywhere a log line or a dump could reach, and it is set when the
 	// entry is built.
 	rememberBelowMinimum func()
+	// credentialHash is [CredentialHash] of the entry's credential, so that
+	// the lines dropping the entry for a rejected or below-minimum credential
+	// name it by the handle the created-entry line wrote. It is set when the
+	// entry is built, before anything can observe it, and never changed.
+	// Holding it keeps no credential material: it is the keyed digest that
+	// line already writes, and the key never leaves the process. It is not
+	// the pool key, an unkeyed digest of the token and URL that is never logged.
+	credentialHash string
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -719,10 +727,11 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 	//
 	// Released explicitly rather than with defer, unlike every other lock site
 	// in this file, and it has to be: both arms of the switch below take the
-	// write lock — dropRejectedEntry directly, the stale arm through the slow
-	// path — and a read lock still held there deadlocks the process. The block
-	// under it is a map read and, for an entry it finds, two field reads, none
-	// of which can panic, so defer buys nothing here and costs the function.
+	// write lock, the rejected arm through dropRejectedCredential and the stale
+	// arm through the slow path. A read lock still held there deadlocks the
+	// process. The block under it is a map read and, for an entry it finds, two
+	// field reads, none of which can panic, so defer buys nothing here and costs
+	// the function.
 	p.mu.RLock()
 	cached, ok := p.entries[key]
 	// Read only for an entry the pool holds, and under the same lock that
@@ -742,8 +751,8 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 		// that follows has not taken the lock yet. Dropping it here, rather
 		// than serving it once more, sends this request down the slow path,
 		// which rebuilds and re-verifies; the pending eviction then finds
-		// nothing under the key and does nothing.
-		p.dropRejectedEntry(key, cached)
+		// nothing to drop and does nothing.
+		p.dropRejectedCredential(key, cached)
 	case stale:
 		// The credential behind this entry has not been checked with GitLab
 		// inside the ceiling, so the entry stops being an answer. Dropping it
@@ -784,7 +793,7 @@ func (p *ServerPool) GetOrCreateEntryWithFacts(token, gitlabURL string, known *g
 		if buildErr != nil {
 			return nil, buildErr
 		}
-		return p.insertEntry(key, token, entry), nil
+		return p.insertEntry(key, entry), nil
 	})
 	if err != nil {
 		return nil, err
@@ -891,8 +900,9 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		identity:     resolveIdentity(p.lifetime(), client),
 		// Minted before anything can observe the entry, and never again: see
 		// [Entry.Owner] for why it is random rather than derived.
-		owner: rand.Text(),
-		token: facts,
+		owner:          rand.Text(),
+		credentialHash: CredentialHash(token),
+		token:          facts,
 		rememberBelowMinimum: func() {
 			if record := p.belowMinimum.Load(); record != nil {
 				(*record)(gitlabURL, token)
@@ -1100,13 +1110,22 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 	// released by a defer for the same reason, so the panic cannot leave it
 	// held.
 	defer recoverSweep(context.Background(), "rejected-credential eviction")
+	p.dropRejectedCredential(key, entry)
+}
+
+// dropRejectedCredential removes entry, if it is still the one under key,
+// and writes the line that says so. The eviction a 401 schedules and a
+// request that finds the entry already marked both call it, so whichever
+// takes the lock first logs and the other finds nothing to drop.
+func (p *ServerPool) dropRejectedCredential(key string, entry *Entry) {
 	gitlabURL, size, dropped := p.dropRejectedEntry(key, entry)
 	if !dropped {
 		return
 	}
 	slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
 		"gitlab_url", gitlabURL,
-		"pool_size", size)
+		"pool_size", size,
+		telemetry.LogFieldCredentialHash, entry.credentialHash)
 }
 
 // dropRejectedEntry removes entry under the lock, if it is still the one
@@ -1151,7 +1170,8 @@ func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *E
 	}
 	slog.InfoContext(ctx, "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
 		"gitlab_url", gitlabURL,
-		"pool_size", size)
+		"pool_size", size,
+		telemetry.LogFieldCredentialHash, entry.credentialHash)
 }
 
 // dropBelowMinimumEntry removes entry under the lock, if it is still the one
@@ -1274,7 +1294,7 @@ func (p *ServerPool) Admitted(token, gitlabURL string) bool {
 // been told is unusable. It is still returned, because the request that built
 // it has to be answered with something and that answer is the refusal its
 // server produces.
-func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
+func (p *ServerPool) insertEntry(key string, entry *Entry) *Entry {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -1310,7 +1330,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 		"enterprise", entry.serverConfig.Enterprise(),
 		"tier_source", p.tierSource(),
 		"scopes_detected", entry.serverConfig.TokenScopes != nil,
-		telemetry.LogFieldCredentialHash, CredentialHash(token),
+		telemetry.LogFieldCredentialHash, entry.credentialHash,
 	)
 
 	return entry
@@ -2017,9 +2037,10 @@ func newCredentialHashKey() []byte {
 // It replaced the token's last four characters, which were credential material
 // in clear: four characters of a working token on every pooled credential, or
 // most of a short secret pasted where a token belongs. The handle keeps what
-// the suffix was there for, tying a refusal, a pool entry and an
-// ignored-options warning to the same credential within one process, and
-// nothing else. It is keyed rather than a plain digest so that a log cannot
+// the suffix was there for, tying a refusal, a pool entry's creation and its
+// drop for a rejected or below-minimum credential, and an ignored-options
+// warning to the same credential within one process, and nothing else.
+// It is keyed rather than a plain digest so that a log cannot
 // confirm a guess: hashing a candidate password yields its handle only with the
 // key, and the key never leaves the process. The price is that an operator
 // cannot compute the handle from a client's token, and that one credential's
