@@ -112,6 +112,40 @@ func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions
 	return actions
 }
 
+// KeepRegistered narrows the index to the tools the server holds, registered,
+// as the server lists them once [Apply] has removed what it removes, and
+// returns it. A nil index is returned as it came.
+//
+// The index is built from the catalog the server registered from, and on the
+// individual surface that catalog still carries every write when the
+// deployment is read-only, which [Apply] withholds by removing the registered
+// tools afterwards. An index left with them answered calls for tools the
+// server did not serve: a call sending a param the tier pruned was refused
+// with the tier it needs and told to send the call without it, which the SDK
+// then answered as an unknown tool (issue 1239), and a fine-grained session's
+// call was answered with GitLab's permission rather than as unknown. The
+// standalone utilities are mapped by name whether or not they were
+// registered, and are narrowed the same way.
+func (t *ToolActions) KeepRegistered(registered []*mcp.Tool) *ToolActions {
+	if t == nil {
+		return nil
+	}
+	names := make(map[string]struct{}, len(registered))
+	for _, tool := range registered {
+		if tool != nil {
+			names[tool.Name] = struct{}{}
+		}
+	}
+	unregistered := func(name string) bool {
+		_, kept := names[name]
+		return !kept
+	}
+	maps.DeleteFunc(t.single, func(name, _ string) bool { return unregistered(name) })
+	maps.DeleteFunc(t.singleRoutes, func(name string, _ toolutil.ActionRoute) bool { return unregistered(name) })
+	maps.DeleteFunc(t.groups, func(name string, _ toolGroup) bool { return unregistered(name) })
+	return t
+}
+
 // ActionIDs returns, for each tool that runs catalog actions, their canonical
 // IDs, sorted, which is what the gitlab://tools manifest narrows a
 // fine-grained session's read by. The map is the caller's to keep.

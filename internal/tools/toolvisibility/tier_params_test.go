@@ -8,8 +8,10 @@
 package toolvisibility
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -50,8 +52,10 @@ func boardUpdateTool(t *testing.T) string {
 // middleware with the Free catalog's index and checks a board update sending
 // the Premium assignee_id is answered with the tier it needs on the
 // individual surface and on meta, where the SDK would refuse it as an
-// unexpected property or the dispatcher send it, and that a call sending only
-// served params is passed on with the session's tier for the dispatcher.
+// unexpected property or the dispatcher send it, and logged under the name
+// the answer calls it by, tool/action on meta as the meta dispatcher logs the
+// same refusal, and that a call sending only served params is passed on with
+// the session's tier for the dispatcher.
 func TestNarrowedCallMiddleware_TierPrunedParam_IsAnsweredWithItsTier(t *testing.T) {
 	individual := boardUpdateTool(t)
 	const sentence = `param "assignee_id" needs GitLab Premium or Ultimate, and this deployment is configured for GitLab Free, so the action's schema at this tier leaves it out and nothing was sent.`
@@ -61,24 +65,37 @@ func TestNarrowedCallMiddleware_TierPrunedParam_IsAnsweredWithItsTier(t *testing
 		tool      string
 		arguments string
 		want      string
+		logged    string
 	}{
 		{
 			name: "individual", surface: config.ToolSurfaceIndividual, tool: individual,
-			arguments: `{"project_id":"42","board_id":7,"assignee_id":5}`, want: individual + ": " + sentence,
+			arguments: `{"project_id":"42","board_id":7,"assignee_id":5}`, want: individual + ": " + sentence, logged: individual,
 		},
 		{
 			name: "meta", surface: config.ToolSurfaceMeta, tool: "gitlab_project",
 			arguments: `{"action":"board_update","params":{"project_id":"42","board_id":7,"assignee_id":5}}`, want: "gitlab_project/board_update: " + sentence,
+			logged: "gitlab_project/board_update",
 		},
 	}
 	reached := &mcp.CallToolResult{}
 	next := func(context.Context, string, mcp.Request) (mcp.Result, error) { return reached, nil }
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			original := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(original) })
 			index := freeIndex(t, tc.surface)
 			result, err := NarrowedCallMiddleware(func() *ToolActions { return index })(next)(context.Background(), methodToolsCall, metaCall(tc.tool, tc.arguments))
 			if text := answeredText(t, result, err, reached); !strings.HasPrefix(text, tc.want) {
 				t.Errorf("NarrowedCallMiddleware text = %q, want it to begin %q", text, tc.want)
+			}
+			for _, field := range []string{`"msg":"tool call refused"`, `"tool":"` + tc.logged + `"`, `"reason":"invalid_params"`} {
+				t.Run(field, func(t *testing.T) {
+					if !strings.Contains(logged.String(), field) {
+						t.Errorf("the log does not carry %s:\n%s", field, logged.String())
+					}
+				})
 			}
 		})
 	}
@@ -126,8 +143,8 @@ func TestToolActions_TierPrunedRefusal_LeavesEveryOtherCallAlone(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if refusal := tc.index.TierPrunedRefusal(tc.tool, json.RawMessage(tc.arguments)); refusal != nil {
-				t.Errorf("TierPrunedRefusal() = %+v, want nil", refusal)
+			if refusal, callName := tc.index.TierPrunedRefusal(tc.tool, json.RawMessage(tc.arguments)); refusal != nil || callName != "" {
+				t.Errorf("TierPrunedRefusal() = %+v, %q; want nil and no name", refusal, callName)
 			}
 		})
 	}

@@ -108,8 +108,8 @@ func NarrowedCallMiddleware(actions func() *ToolActions) mcp.Middleware {
 				toolutil.LogToolRefusal(ctx, nil, raw.Name+"/"+actionArgument(raw.Arguments), toolutil.RefusalUnknownAction)
 				return toolutil.LabelForRevision(req, toolutil.ErrorResult(message)), nil
 			}
-			if refusal := index.TierPrunedRefusal(raw.Name, raw.Arguments); refusal != nil {
-				toolutil.LogToolRefusal(ctx, nil, raw.Name, toolutil.RefusalInvalidParams)
+			if refusal, callName := index.TierPrunedRefusal(raw.Name, raw.Arguments); refusal != nil {
+				toolutil.LogToolRefusal(ctx, nil, callName, toolutil.RefusalInvalidParams)
 				return toolutil.LabelForRevision(req, refusal), nil
 			}
 			ctx = toolutil.WithWithheldAnswer(ctx, index.withheldAnswer)

@@ -42,19 +42,23 @@ func (t *ToolActions) ServedAt(tier edition.Tier, pinned bool) *ToolActions {
 // decoded whole only when one of those names is a pruned one, so a call
 // sending none costs a scan of its names. It is nil for every other call, a
 // tool this index runs no route of, and an index nothing told the tier.
-func (t *ToolActions) TierPrunedRefusal(name string, arguments json.RawMessage) *mcp.CallToolResult {
+//
+// callName is the name the refusal calls the call by, which a log record of
+// it names too: the tool for an individual tool, and tool/action for a meta
+// tool, as the meta dispatcher names the same refusal in its own record.
+func (t *ToolActions) TierPrunedRefusal(name string, arguments json.RawMessage) (refusal *mcp.CallToolResult, callName string) {
 	if !t.tierKnown {
-		return nil
+		return nil, ""
 	}
 	route, callName, params := t.paramsRoute(name, arguments)
 	if !namesAny(params, route.TierPruned) {
-		return nil
+		return nil, ""
 	}
 	decoded := map[string]any{}
 	if json.Unmarshal(params, &decoded) != nil {
-		return nil
+		return nil, ""
 	}
-	return toolutil.TierPrunedParamsRefusal(callName, route, toolutil.TierPrunedParams(route, decoded), t.tier, t.tierPinned, true)
+	return toolutil.TierPrunedParamsRefusal(callName, route, toolutil.TierPrunedParams(route, decoded), t.tier, t.tierPinned, true), callName
 }
 
 // paramsRoute is the route a call to the named tool runs, the name its

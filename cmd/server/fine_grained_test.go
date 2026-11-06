@@ -459,6 +459,39 @@ func TestCreateServer_Meta_CredentialKindWithheld_IsAnsweredWithTheWayOut(t *tes
 	}
 }
 
+// TestCreateServer_Individual_AToolReadOnlyRemoved_IsUnknownWhateverItsParams
+// verifies the call checks answer only for the tools the server holds (issue
+// 1239): on a read-only individual surface pinned to Free, the board update
+// tool, which read-only mode removed after registration, is answered as the
+// unknown tool it is whether or not the call sends a param the tier pruned.
+// The tier's refusal used to answer the second call and tell the caller to
+// send it without the param, which the SDK then answered as an unknown tool.
+// On a deployment that writes, the same call is answered with the tier.
+func TestCreateServer_Individual_AToolReadOnlyRemoved_IsUnknownWhateverItsParams(t *testing.T) {
+	const tool = "gitlab_board_update"
+	pruned := map[string]any{"project_id": "42", "board_id": 7, "assignee_id": 5}
+	readOnly := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Free, TierExplicit: true, ReadOnly: true})
+	for _, tc := range []struct {
+		name      string
+		arguments map[string]any
+	}{
+		{name: "served params only", arguments: map[string]any{"project_id": "42", "board_id": 7}},
+		{name: "a param the tier pruned", arguments: pruned},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if text := callText(t, readOnly, tool, tc.arguments); !strings.Contains(text, `unknown tool "`+tool+`"`) {
+				t.Errorf("call %s(%v) = %q, want the unknown tool a read-only deployment does not serve", tool, tc.arguments, text)
+			}
+		})
+	}
+
+	writes := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Free, TierExplicit: true})
+	const tier = tool + `: param "assignee_id" needs GitLab Premium or Ultimate`
+	if text := callText(t, writes, tool, pruned); !strings.HasPrefix(text, tier) {
+		t.Errorf("call %s on a deployment that writes = %q, want it to begin %q", tool, text, tier)
+	}
+}
+
 // TestCreateServer_Meta_AStoredRefusal_IsAnsweredBeforeTheWithheldCause
 // verifies that a gate holding the below-minimum refusal answers a call with
 // it on a connection the gate holds, even a meta call naming an action the

@@ -304,7 +304,12 @@ compact modes refuses before the action's definition calls it unknown;
 dynamic execute refuses before its "Unknown params" list; and
 `NarrowedCallMiddleware` answers an individual or meta call before the SDK
 validates it, reading the call's names with a streaming decoder and decoding
-the params only when one is pruned. All four word it with
+the params only when one is pruned, and logs it under the name the answer
+calls it by, `tool/action` on meta as the dispatcher does. The index it reads
+is narrowed to the tools the registration listing holds
+(`ToolActions.KeepRegistered`), since the individual catalog still carries
+the writes `toolvisibility.Apply` removes from a read-only server, and a call
+to one of them is the SDK's `unknown tool`. All four word it with
 `toolutil.TierPrunedParamsRefusal`, which shares the tier clauses with the
 withheld action's answer (`toolutil.TierRequired`, `SessionTierClause`,
 `TierWayOut`); the session's tier reaches the dispatcher through
@@ -376,7 +381,7 @@ GitLab's record by `cmd/gen_action_grants`, which writes it as
   and a filter inside the limiter would let one narrow grant lower what other
   credentials' wide listings are charged. The per-tool action sets it reads
   (`toolvisibility.NewToolActions`) are computed once per server at
-  registration.
+  registration, narrowed to the tools the registration listing holds.
 - **Find and the manifest.** `gitlab_find_action` leaves out of a fine-grained
   session's results what it may not list, before the limit is applied, and
   `gitlab://tools` is narrowed per read with the same per-tool sets, a copy of
