@@ -494,10 +494,12 @@ func validatePosition(ctx context.Context, client *gitlabclient.Client, projectI
 // validateTextPosition fetches the MR diff and validates that the given
 // position refers to a line actually present in the diff. This prevents
 // 400/500 errors from GitLab when commenting on out-of-range lines and
-// provides actionable error messages explaining what went wrong. When the
-// diff cannot be listed, or cannot be shown to be the one the position's
-// SHAs name, the check is skipped and the write that follows is judged by
-// GitLab, for the reasons [toolutil.MergeRequestDiffForPositionCheck] gives.
+// provides actionable error messages explaining what went wrong. On a file
+// the diff renames it also asks for both of the file's paths
+// ([toolutil.ValidateRenamedFilePosition]). When the diff cannot be listed,
+// or cannot be shown to be the one the position's SHAs name, the check is
+// skipped and the write that follows is judged by GitLab, for the reasons
+// [toolutil.MergeRequestDiffForPositionCheck] gives.
 func validateTextPosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
 	// GitLab takes the file from new_path unless it is blank, and from old_path
 	// otherwise (new_path.presence || old_path), so a new_path of blanks names
@@ -517,6 +519,9 @@ func validateTextPosition(ctx context.Context, client *gitlabclient.Client, proj
 			"file %q is not in the merge request diff. Inline comments can only be placed on changed files. "+
 				"Omit the position parameter to create a general (non-inline) discussion instead", targetPath,
 		)
+	}
+	if err := toolutil.ValidateRenamedFilePosition(fileDiff, pos.OldPath, pos.NewPath); err != nil {
+		return err
 	}
 
 	if fileDiff.Diff == "" {

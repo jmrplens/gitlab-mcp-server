@@ -167,6 +167,34 @@ func PositionNewPath(newPath string) *string {
 	return &newPath
 }
 
+// ValidateRenamedFilePosition refuses a text position on a file the merge
+// request's diff renames unless it names both of the file's paths, as the
+// diff gives them. GitLab looks the file's diff up by the paths the position
+// carries ([PositionNewPath]), and git pairs a rename only when both of its
+// paths are in the pathspec, so with one of them, or with the two in any
+// other order, GitLab reads the file as a deleted or an added one and
+// computes the comment's line on that diff rather than on the rename the
+// merge request shows: an unchanged line is not found there at all. That is
+// why GitLab's documentation asks a text position for both paths. A file the
+// diff does not rename has the same path on both sides, and either path
+// finds it, which is the old_path fallback the anchor check allows. git
+// pairs a rename only from a file the new tree no longer has to one the old
+// tree did not have, so neither path of a rename names another file of the
+// same diff. GitLab lists every file with both paths, and an entry that
+// lacks one says nothing about a rename, so it is left to GitLab, as the
+// check is advisory wherever its evidence is incomplete.
+func ValidateRenamedFilePosition(fileDiff *gl.MergeRequestDiff, oldPath, newPath string) error {
+	if fileDiff.OldPath == "" || fileDiff.NewPath == "" || fileDiff.OldPath == fileDiff.NewPath ||
+		(oldPath == fileDiff.OldPath && newPath == fileDiff.NewPath) {
+		return nil
+	}
+	return fmt.Errorf(
+		"the merge request diff renames %q to %q, and GitLab finds a renamed file's lines only by both of its paths: "+
+			"send old_path %q and new_path %q (got old_path %q, new_path %q)",
+		fileDiff.OldPath, fileDiff.NewPath, fileDiff.OldPath, fileDiff.NewPath, oldPath, newPath,
+	)
+}
+
 // ValidateTextPosition refuses a text position that names no line. GitLab
 // completes a text position only when its old_line or its new_line is present
 // (Gitlab::Diff::Formatters::TextFormatter#complete?), a line_range included,

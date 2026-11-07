@@ -1232,7 +1232,9 @@ func TestValidatePosition_DiffFetchError(t *testing.T) {
 // " ", which no diff holds, so a draft note GitLab would place on old_path's
 // file was refused as not in the diff. The out-of-range cases hold the
 // fallback to reading the old file's diff: a lookup skipped with a nil return
-// would pass the in-range cases and fail these.
+// would pass the in-range cases and fail these. The file is one the diff
+// does not rename, the only kind one path finds at GitLab
+// (TestValidatePosition_RenamedFile_NeedsBothPaths).
 func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1254,7 +1256,7 @@ func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 					return
 				}
 				if strings.Contains(r.URL.Path, "/diffs") {
-					testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+					testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"old_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
 					return
 				}
 				http.NotFound(w, r)
@@ -1275,6 +1277,53 @@ func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("validatePosition() error = %v, want one naming %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidatePosition_RenamedFile_NeedsBothPaths verifies that a draft note
+// text position on a file the merge request renames is refused before the
+// draft is saved unless it names both of the file's paths. GitLab looks the
+// file's diff up by the paths the position carries (Position#diff_options),
+// and git pairs a rename only when both paths are among them, so with one
+// path GitLab reads the file as deleted or as added and computes the line on
+// that diff, not on the rename the merge request shows. Before the check,
+// the line was judged against the rename and a position naming one path
+// passed.
+func TestValidatePosition_RenamedFile_NeedsBothPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldPath, newPath string
+		wantErr          bool
+	}{
+		{name: "both paths", oldPath: "old_name.go", newPath: "new_name.go"},
+		{name: "the new path alone", newPath: "new_name.go", wantErr: true},
+		{name: "the old path alone", oldPath: "old_name.go", wantErr: true},
+		{name: "the old path and a blank new path", oldPath: "old_name.go", newPath: "  ", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","renamed_file":true,"diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+			}))
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
+				OldPath: tc.oldPath, NewPath: tc.newPath,
+				NewLine: 2,
+			})
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("validatePosition() error = %v, want nil for both paths of the rename", err)
+				}
+				return
+			}
+			const want = `send old_path "old_name.go" and new_path "new_name.go"`
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("validatePosition() error = %v, want one saying %q", err, want)
 			}
 		})
 	}

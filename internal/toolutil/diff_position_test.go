@@ -1032,6 +1032,54 @@ func TestPositionNewPath_LeftOutOrBlank_IsNotSent(t *testing.T) {
 	}
 }
 
+// TestValidateRenamedFilePosition_OnePathOfARename_IsRefused holds the check
+// to how GitLab finds a text position's file: by the paths the position
+// carries, where git pairs a rename only when both of its paths are among
+// them. A file the diff does not rename passes with either path or both, a
+// renamed one only with both as the diff gives them, and the refusal names
+// the two paths to send. An entry that lacks one of its paths, which GitLab
+// does not answer but a listing could, says nothing about a rename and
+// passes, so the check never refuses on evidence it does not have.
+func TestValidateRenamedFilePosition_OnePathOfARename_IsRefused(t *testing.T) {
+	modified := &gl.MergeRequestDiff{OldPath: "main.go", NewPath: "main.go"}
+	renamed := &gl.MergeRequestDiff{OldPath: "old.go", NewPath: "new.go"}
+	noOldPath := &gl.MergeRequestDiff{NewPath: "moved.go"}
+	noNewPath := &gl.MergeRequestDiff{OldPath: "moved.go"}
+	for _, tc := range []struct {
+		name             string
+		fileDiff         *gl.MergeRequestDiff
+		oldPath, newPath string
+		wantErr          bool
+	}{
+		{name: "a file not renamed, both paths", fileDiff: modified, oldPath: "main.go", newPath: "main.go"},
+		{name: "a file not renamed, the new path alone", fileDiff: modified, newPath: "main.go"},
+		{name: "a file not renamed, the old path alone", fileDiff: modified, oldPath: "main.go"},
+		{name: "a renamed file, both paths", fileDiff: renamed, oldPath: "old.go", newPath: "new.go"},
+		{name: "a renamed file, the new path alone", fileDiff: renamed, newPath: "new.go", wantErr: true},
+		{name: "a renamed file, the old path alone", fileDiff: renamed, oldPath: "old.go", wantErr: true},
+		{name: "a renamed file, a blank new path", fileDiff: renamed, oldPath: "old.go", newPath: " ", wantErr: true},
+		{name: "a renamed file, the old path twice", fileDiff: renamed, oldPath: "old.go", newPath: "old.go", wantErr: true},
+		{name: "a renamed file, the paths swapped", fileDiff: renamed, oldPath: "new.go", newPath: "old.go", wantErr: true},
+		{name: "an entry with no old path", fileDiff: noOldPath, oldPath: "moved.go", newPath: "moved.go"},
+		{name: "an entry with no new path", fileDiff: noNewPath, oldPath: "moved.go", newPath: "moved.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRenamedFilePosition(tc.fileDiff, tc.oldPath, tc.newPath)
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("ValidateRenamedFilePosition() = %v, want nil", err)
+				}
+				return
+			}
+			const want = `the merge request diff renames "old.go" to "new.go", and GitLab finds a renamed file's lines ` +
+				`only by both of its paths: send old_path "old.go" and new_path "new.go"`
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateRenamedFilePosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
 // TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
 // rule for a text position (TextFormatter#complete?): an old_line or a
 // new_line present. Either one passes, both together pass, and neither is
