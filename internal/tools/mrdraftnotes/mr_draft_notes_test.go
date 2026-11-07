@@ -1021,6 +1021,26 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintAsksForBothPaths holds the hint a 400 from the
+// create is answered with to a text position naming both of the file's paths,
+// as the position guidance does: GitLab finds the comment's line in a diff it
+// reads by the paths the position carries, and a renamed file is paired only
+// when both are given.
+func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/merge_requests/1/draft_notes" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Note: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), "text both old_path and new_path") {
+		t.Fatalf("error = %v, want the 400 hint to ask a text position for both paths", err)
+	}
+}
+
 // TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

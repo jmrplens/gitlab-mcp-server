@@ -410,6 +410,26 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintAsksForBothPaths holds the hint a 400 from the
+// create is answered with to a text position naming both of the file's paths,
+// as the position guidance does: GitLab finds the file in the commit's diff by
+// the paths the position carries, and a renamed file is paired only when both
+// are given.
+func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != testPathCommitDiscussions {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), "text both old_path and new_path") {
+		t.Fatalf("error = %v, want the 400 hint to ask a text position for both paths", err)
+	}
+}
+
 // TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
