@@ -59,20 +59,23 @@ type options struct {
 	checkRecord string
 	// deferred is -freshness deferred.
 	deferred bool
+	// stamp is where the stamp of the packages' sources is written.
+	stamp string
 }
 
 // modeFlags is what the command line said about the mode the command runs
 // in, as parsed and before it is judged.
 type modeFlags struct {
-	out, writeRecord, checkRecord, freshness string
+	out, summary, writeRecord, checkRecord, freshness, stamp string
 }
 
 // runMain parses the command line, merges the profiles and reports, writing
-// the record when asked, or judges the offline half against a record. It
-// returns 2 for a command line it cannot use, 1 when the profiles or the
-// record could not be read or merged, a package could not be measured, the
-// report could not be printed, a file could not be written or the gate
-// failed, and 0 otherwise.
+// the record when asked, judges the offline half against a record, or
+// stamps the packages' sources. It returns 2 for a command line it cannot
+// use, 1 when the profiles or the record could not be read or merged, a run
+// profile a record was asked of is not stamped as a complete run of the
+// tree, a package could not be measured or stamped, the report could not be
+// printed, a file could not be written or the gate failed, and 0 otherwise.
 func runMain(args []string, stdout, stderr io.Writer) int {
 	opts, ok := parseArgs(args, stderr)
 	if !ok {
@@ -96,10 +99,11 @@ func parseArgs(args []string, stderr io.Writer) (options, bool) {
 	packages := flags.String("packages", "", "the packages to report, comma-separated as go test -coverpkg takes them")
 	var mode modeFlags
 	flags.StringVar(&mode.out, "o", "", "where to write the merged profile")
-	summary := flags.String("summary", "", "a Markdown file to append the report to, such as $GITHUB_STEP_SUMMARY")
+	flags.StringVar(&mode.summary, "summary", "", "a Markdown file to append the report to, such as $GITHUB_STEP_SUMMARY")
 	flags.StringVar(&mode.writeRecord, "write-record", "", "where to write the record of what the runs reached, beside the report")
 	flags.StringVar(&mode.checkRecord, "check-record", "", "the record to read the runs' half from, holding each package to it")
 	flags.StringVar(&mode.freshness, "freshness", "", "how -check-record judges a record that predates the tree: checked (the default) or deferred")
+	flags.StringVar(&mode.stamp, "stamp", "", "where to write the stamp of the packages' sources, which a complete run leaves beside its profile")
 	if flags.Parse(args) != nil {
 		return options{}, false
 	}
@@ -112,8 +116,9 @@ func parseArgs(args []string, stderr io.Writer) (options, bool) {
 		return options{}, false
 	}
 	opts := options{
-		packages: pkgs, out: mode.out, summary: *summary,
+		packages: pkgs, out: mode.out, summary: mode.summary,
 		writeRecord: mode.writeRecord, checkRecord: mode.checkRecord, deferred: mode.freshness == freshnessDeferred,
+		stamp: mode.stamp,
 	}
 	for _, p := range offline {
 		opts.sources = append(opts.sources, source{path: p, half: offlineHalf})
@@ -130,6 +135,9 @@ func parseArgs(args []string, stderr io.Writer) (options, bool) {
 func commandLineProblem(args []string, offline, online profileList, mode modeFlags) error {
 	if len(args) > 0 {
 		return fmt.Errorf("takes no arguments, and was given %q; name each profile with -offline or -online", args)
+	}
+	if mode.stamp != "" {
+		return stampProblem(offline, online, mode)
 	}
 	if len(offline) == 0 {
 		return errors.New("needs at least one -offline profile, which the packages' offline tests write")
@@ -166,6 +174,27 @@ func checkProblem(online profileList, mode modeFlags) error {
 	return nil
 }
 
+// stampProblem says why a command line that names -stamp cannot be used: the
+// stamp is of the packages' sources alone, so a profile, another output and a
+// record have no place beside it.
+func stampProblem(offline, online profileList, mode modeFlags) error {
+	if len(offline) > 0 || len(online) > 0 {
+		return errors.New("-stamp writes the stamp of the packages' sources and reads no profile")
+	}
+	for _, other := range []struct{ name, value string }{
+		{"-o", mode.out},
+		{"-write-record", mode.writeRecord},
+		{"-check-record", mode.checkRecord},
+		{"-freshness", mode.freshness},
+		{"-summary", mode.summary},
+	} {
+		if other.value != "" {
+			return fmt.Errorf("-stamp writes the stamp alone, so it takes no %s", other.name)
+		}
+	}
+	return nil
+}
+
 // parsePackages reads -packages: comma-separated, each a directory below the
 // module root spelled ./dir or an import path, as go test's -coverpkg takes
 // them, and each returned as the import path a profile names its files by.
@@ -192,13 +221,23 @@ func importPath(spelling string) string {
 	return path.Clean(spelling)
 }
 
-// run judges the offline half against a record when -check-record names
-// one. Otherwise it merges the profiles, writes the merged profile and the
-// record when asked, prints the report and appends it to the summary when
-// asked.
+// run writes the stamp of the packages' sources when -stamp names a file,
+// and judges the offline half against a record when -check-record names one.
+// Otherwise it merges the profiles, writes the merged profile and the record
+// when asked, prints the report and appends it to the summary when asked. A
+// record is taken only of run profiles a complete run of this tree stamped,
+// which is settled before anything is read or written.
 func run(opts options, stdout io.Writer) error {
+	if opts.stamp != "" {
+		return writeStamp(opts.stamp, opts.packages)
+	}
 	if opts.checkRecord != "" {
 		return check(opts, stdout)
+	}
+	if opts.writeRecord != "" {
+		if err := checkStamps(opts.sources, opts.packages); err != nil {
+			return err
+		}
 	}
 	cov, err := read(opts.sources)
 	if err != nil {

@@ -116,6 +116,7 @@ func TestRunMain_Arguments_RefuseWhatTheyCannotUse(t *testing.T) {
 	both := []string{"-offline", "a.out", "-online", "b.out"}
 	checking := []string{"-packages", "./x", "-offline", "a.out", "-check-record", "r.json"}
 	merging := append([]string{"-packages", "./x"}, both...)
+	stamping := []string{"-packages", "./x", "-stamp", "s"}
 	tests := []struct {
 		name string
 		args []string
@@ -132,6 +133,13 @@ func TestRunMain_Arguments_RefuseWhatTheyCannotUse(t *testing.T) {
 		{name: "a merged profile beside a record", args: append(checking, "-o", "m.out"), want: "-o writes the merge of profiles, which -check-record does not make"},
 		{name: "a freshness of another value", args: append(checking, "-freshness", "later"), want: `-freshness "later" is neither checked nor deferred`},
 		{name: "a freshness without a record", args: append(merging, "-freshness", "deferred"), want: "-freshness says how -check-record judges a record that predates the tree, and -check-record is not given"},
+		{name: "a stamp beside an offline profile", args: append(stamping, "-offline", "a.out"), want: "-stamp writes the stamp of the packages' sources and reads no profile"},
+		{name: "a stamp beside a run profile", args: append(stamping, "-online", "b.out"), want: "-stamp writes the stamp of the packages' sources and reads no profile"},
+		{name: "a stamp beside a merged profile", args: append(stamping, "-o", "m.out"), want: "-stamp writes the stamp alone, so it takes no -o"},
+		{name: "a stamp beside a record written", args: append(stamping, "-write-record", "w.json"), want: "-stamp writes the stamp alone, so it takes no -write-record"},
+		{name: "a stamp beside a record checked", args: append(stamping, "-check-record", "r.json"), want: "-stamp writes the stamp alone, so it takes no -check-record"},
+		{name: "a stamp beside a freshness", args: append(stamping, "-freshness", "checked"), want: "-stamp writes the stamp alone, so it takes no -freshness"},
+		{name: "a stamp beside a summary", args: append(stamping, "-summary", "s.md"), want: "-stamp writes the stamp alone, so it takes no -summary"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -296,15 +304,140 @@ func TestRunMain_StdoutThatRefusesTheReport_ExitsOne(t *testing.T) {
 	}
 }
 
+// stampLine is one source file's line in a stamp, as sha256sum writes it:
+// the SHA-256 of its text, two spaces and its path below the module root.
+func stampLine(file, text string) string {
+	return sum(text) + "  " + file + "\n"
+}
+
+// treeStamp is the stamp of the fixture tree with the fixture package's a.go
+// holding source: that file, then modeleval's c.go, the packages in the
+// order -packages names them.
+func treeStamp(source string) string {
+	return stampLine("test/e2e/internal/fixture/a.go", source) + stampLine("test/e2e/modeleval/c.go", modelevalSource)
+}
+
+// TestRunMain_Stamp_WritesTheStampOfTheSources runs the command the way
+// run-docker-e2e.sh stamps a pass of a complete run: with -packages and
+// -stamp alone it reads no profile, prints nothing, and writes the SHA-256 of
+// every source file of the packages, in sha256sum's format.
+func TestRunMain_Stamp_WritesTheStampOfTheSources(t *testing.T) {
+	writeTree(t, nil)
+	stamp := filepath.Join(t.TempDir(), "e2e-ce-coverprofile.complete.pending")
+	var stdout, stderr bytes.Buffer
+
+	code := runMain([]string{"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval", "-stamp", stamp}, &stdout, &stderr)
+
+	if code != 0 || stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("runMain() = %d, stdout %q, stderr %q; want 0 and nothing printed", code, stdout.String(), stderr.String())
+	}
+	if got, want := readFile(t, stamp), treeStamp(fixtureSource); got != want {
+		t.Errorf("stamp =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestRunMain_Stamp_Refusals_ExitOne holds a stamp the command cannot take,
+// of a package directory that is not there, or cannot write, to status 1
+// and the reason.
+func TestRunMain_Stamp_Refusals_ExitOne(t *testing.T) {
+	tests := []struct {
+		name, packages, stamp, want string
+	}{
+		{
+			name: "a package that is not there", packages: "./test/e2e/internal/fixture,./test/e2e/gone", stamp: "stamp",
+			want: "stamping the sources of test/e2e/gone: ",
+		},
+		{name: "a stamp it cannot write", packages: "./test/e2e/internal/fixture", stamp: filepath.Join("no-such-dir", "stamp"), want: "writing the stamp: "},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			writeTree(t, nil)
+			var stdout, stderr bytes.Buffer
+
+			code := runMain([]string{"-packages", tc.packages, "-stamp", filepath.Join(t.TempDir(), tc.stamp)}, &stdout, &stderr)
+
+			if code != 1 || !strings.HasPrefix(stderr.String(), "merge_coverage: ") || !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("runMain() = %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestRunMain_WriteRecord_RunProfilesNotStampedAsThisTree_AreRefused holds
+// the record to the complete runs of the tree it is written on: a run
+// profile with no stamp beside it, which run-docker-e2e.sh keeps only after a
+// complete run, one whose stamp is of another version of the sources, here A
+// edited after the run without moving a block, so the record would credit
+// the old reach to the new text's hash, and one whose stamp cannot be read,
+// are each refused with status 1, naming the profile, and no record is
+// written.
+func TestRunMain_WriteRecord_RunProfilesNotStampedAsThisTree_AreRefused(t *testing.T) {
+	tests := []struct {
+		name  string
+		stamp func(t *testing.T, dir string)
+		want  string
+	}{
+		{
+			name:  "no stamp",
+			stamp: func(*testing.T, string) {},
+			want:  "online.out has no stamp beside it (online.complete), which run-docker-e2e.sh leaves only after a complete run",
+		},
+		{
+			name: "a stamp of other sources",
+			stamp: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, "online.complete", treeStamp(fixtureSource))
+			},
+			want: "online.out was written from other sources than the tree holds",
+		},
+		{
+			name: "a stamp it cannot read",
+			stamp: func(t *testing.T, dir string) {
+				t.Helper()
+				if err := os.Mkdir(filepath.Join(dir, "online.complete"), 0o750); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "reading the stamp of ",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			writeTree(t, map[string]string{"test/e2e/internal/fixture/a.go": strings.Replace(fixtureSource, "_ = 2", "_ = 3", 1)})
+			dir := t.TempDir()
+			tc.stamp(t, dir)
+			recordPath := filepath.Join(dir, "record.json")
+			args := []string{
+				"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+				"-offline", writeProfile(t, dir, "offline.out", recordOffline),
+				"-online", writeProfile(t, dir, "online.out", recordOnline),
+				"-write-record", recordPath,
+			}
+			var stdout, stderr bytes.Buffer
+
+			if code := runMain(args, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("runMain() = %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
+			}
+			if _, err := os.Stat(recordPath); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("a refused record left %s behind (stat error %v)", recordPath, err)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want no report for a record refused before the merge", stdout.String())
+			}
+		})
+	}
+}
+
 // TestRunMain_WriteRecord_WritesTheRecordBesideTheReport runs the command the
-// way make e2e-support-coverage-record does: the merge is reported as always,
-// and the record of what the runs reached is written where -write-record
-// says.
+// way make e2e-support-coverage-record does, over a run profile a complete
+// run of this tree stamped: the merge is reported as always, and the record
+// of what the runs reached is written where -write-record says.
 func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
 	writeTree(t, nil)
 	setClock(t, time.Date(2026, 11, 19, 8, 0, 0, 0, time.UTC))
 	dir := t.TempDir()
 	recordPath := filepath.Join(dir, "e2e-support-coverage.json")
+	writeProfile(t, dir, "online.complete", treeStamp(fixtureSource))
 	args := []string{
 		"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
 		"-offline", writeProfile(t, dir, "offline.out", recordOffline),
@@ -328,7 +461,9 @@ func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
 // TestRunMain_WriteRecord_Refusals_ExitOne holds a record the command cannot
 // build, because the source is not the one the profiles measured or a
 // package is one the offline half does not carry, which the gate could then
-// never check, or cannot write, to status 1 and the reason.
+// never check, or cannot write, to status 1 and the reason. The run profile
+// carries the stamp of the tree as each case writes it, so what is refused
+// is the case's own reason.
 func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 	modelevalBlock := modelevalPkg + "/c.go:3.11,4.7 2 1\n"
 	tests := []struct {
@@ -365,6 +500,7 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 			}
 			writeTree(t, files)
 			dir := t.TempDir()
+			writeProfile(t, dir, "online.complete", treeStamp(cmp.Or(tc.source, fixtureSource)))
 			offline, online := cmp.Or(tc.offline, recordOffline), cmp.Or(tc.online, recordOnline)
 			recordPath := tc.recordPath(dir)
 			args := []string{
@@ -706,6 +842,55 @@ func TestRunner_CoverPkg_ReachesBothPassesUnderTheNamesTheMergeReads(t *testing.
 	}
 	if positions["main pass"] > positions["final pass"] {
 		t.Error("run-docker-e2e.sh writes the final pass's profile before the main pass's")
+	}
+}
+
+// TestRunner_CompleteRun_StampsEachPassUnderTheNamesTheRecordReads holds
+// run-docker-e2e.sh to the stamps -write-record asks of every run profile:
+// every stamp, kept or pending, removed before anything starts, so one an
+// earlier run left never vouches for this run's profile; each pass of a
+// complete run stamped right before it builds, under the name stampPath gives
+// the pass's profile with .pending after it; and the stamps kept once the
+// gate has decided the run's status, in that order. The stamp itself is
+// skip-gate.sh's stamp_complete_run, which runs this command's -stamp.
+func TestRunner_CompleteRun_StampsEachPassUnderTheNamesTheRecordReads(t *testing.T) {
+	runner := repoFile(t, "test/e2e/scripts/run-docker-e2e.sh")
+	mainStamp := stampPath("${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out")
+	finalStamp := stampPath("${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out")
+	lines := []struct{ name, text string }{
+		{
+			name: "cleared",
+			text: `rm -f "` + mainStamp + `" \` + "\n" + `    "` + mainStamp + `.pending" \` + "\n" +
+				`    "` + finalStamp + `" \` + "\n" + `    "` + finalStamp + `.pending"`,
+		},
+		{name: "trap", text: "trap teardown EXIT"},
+		{
+			name: "main pass stamped",
+			text: `if [ "${E2E_GATE_SKIPS:-false}" = "true" ] && [ -n "${E2E_COVERPKG:-}" ]; then` + "\n" +
+				`    stamp_complete_run "${REPO_ROOT}" "${E2E_COVERPKG}" "` + mainStamp + `"`,
+		},
+		{name: "main pass", text: `"-coverprofile=${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out"} "$@"`},
+		{name: "final pass stamped", text: `stamp_complete_run "${REPO_ROOT}" "${E2E_COVERPKG}" "` + finalStamp + `"`},
+		{name: "final pass", text: `"-coverprofile=${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"} -timeout 1800s -run`},
+		{name: "gate", text: `RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"`},
+		{name: "stamps kept", text: `keep_complete_run_stamps "${RUN_STATUS}" "` + mainStamp + `" \` + "\n" + `    "` + finalStamp + `"`},
+	}
+	positions := make([]int, len(lines))
+	for i, line := range lines {
+		positions[i] = strings.Index(runner, line.text)
+		t.Run(line.name, func(t *testing.T) {
+			if positions[i] < 0 {
+				t.Errorf("run-docker-e2e.sh does not hold the %s line %q", line.name, line.text)
+			}
+		})
+	}
+	for i := 1; i < len(lines); i++ {
+		if positions[i-1] > positions[i] {
+			t.Errorf("run-docker-e2e.sh has the %s line after the %s line", lines[i-1].name, lines[i].name)
+		}
+	}
+	if want := `go run ./cmd/merge_coverage/ -packages "$2" -stamp "$3.pending"`; !strings.Contains(repoFile(t, "test/e2e/scripts/skip-gate.sh"), want) {
+		t.Errorf("skip-gate.sh does not stamp a pass with %s", want)
 	}
 }
 

@@ -713,7 +713,7 @@ All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
 - `test/e2e/scripts/docker-images.sh`: holds the GitLab and runner images to the images their tags name today, pulling only a newer one
-- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, and names the scenario its final pass runs last
+- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, names the scenario its final pass runs last, and stamps the sources each pass of a complete run measures, keeping the stamp only once the run ended complete
 - `test/e2e/scripts/gitlab-exceptions.sh`: copies GitLab's exceptions log into the reports before the teardown deletes it
 
 ```bash

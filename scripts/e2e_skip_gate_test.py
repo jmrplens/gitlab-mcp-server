@@ -597,5 +597,139 @@ class RunnerWiringTest(unittest.TestCase):
                 self.assertNotIn("E2E_EXTERNAL_NETWORK", recipe)
 
 
+# The stand-in go for the stamp a complete run leaves beside each profile: it
+# writes where it ran and what it was asked to GO_LOG, and answers go run the
+# way cmd/merge_coverage -stamp does, writing a stamp at the path after
+# -stamp, or, when GO_STATUS is not zero, part of one and that status.
+STAMP_DRIVER = r"""
+set -euo pipefail
+. "$1"
+shift
+go() {
+    printf 'go ran in %s\ngo %s\n' "${PWD}" "$*" >>"${GO_LOG}"
+    local stamp=""
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = -stamp ]; then
+            stamp="$2"
+        fi
+        shift
+    done
+    if [ "${GO_STATUS}" != 0 ]; then
+        printf 'part of a stamp' >"${stamp}"
+        echo "a stamp error on stderr" >&2
+        return "${GO_STATUS}"
+    fi
+    printf 'the stamp\n' >"${stamp}"
+}
+status=0
+"$@" || status=$?
+echo "status=${status}"
+"""
+
+
+def drive_stamp(*command, go_status=0, go_log=None):
+    """Runs one stamp function of the script and returns its stdout lines and
+    its stderr."""
+    env = {key: value for key, value in os.environ.items() if key not in CLEARED}
+    env.update(GO_STATUS=str(go_status), GO_LOG=go_log or os.devnull)
+    result = subprocess.run(
+        ["bash", "-c", STAMP_DRIVER, "driver", SCRIPT, *command],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.splitlines(), result.stderr
+
+
+class StampCompleteRunTest(unittest.TestCase):
+    """A pass of a complete run stamps the sources it is about to build under
+    a pending name, from the repository root, and a pass it cannot stamp
+    leaves no stamp and does not fail the run."""
+
+    def stamp(self, go_status=0):
+        """Stamps a pass into a report directory and returns the repository
+        root, the report directory, the stdout lines, the stderr, what the
+        stand-in go was asked, and what the report directory holds."""
+        scratch = tempfile.mkdtemp()
+        self.addCleanup(subprocess.run, ["rm", "-rf", scratch], check=True)
+        root = os.path.join(scratch, "repo")
+        reports = os.path.join(scratch, "reports")
+        os.mkdir(root)
+        os.mkdir(reports)
+        log = os.path.join(scratch, "go.log")
+        lines, stderr = drive_stamp(
+            "stamp_complete_run", root, "./test/e2e/internal/fixture,./test/e2e/modeleval",
+            os.path.join(reports, "e2e-ce-coverprofile.complete"),
+            go_status=go_status, go_log=log,
+        )
+        with open(log, encoding="utf-8") as handle:
+            asked = handle.read().splitlines()
+        return root, reports, lines, stderr, asked, sorted(os.listdir(reports))
+
+    def test_the_stamp_is_written_pending_by_the_command_from_the_repository_root(self):
+        root, reports, lines, _, asked, held = self.stamp()
+        self.assertEqual(
+            asked,
+            [
+                f"go ran in {root}",
+                "go run ./cmd/merge_coverage/ -packages ./test/e2e/internal/fixture,./test/e2e/modeleval "
+                f"-stamp {reports}/e2e-ce-coverprofile.complete.pending",
+            ],
+        )
+        self.assertEqual(lines, ["status=0"])
+        self.assertEqual(held, ["e2e-ce-coverprofile.complete.pending"])
+        with open(os.path.join(reports, held[0]), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "the stamp\n")
+
+    def test_a_pass_it_cannot_stamp_leaves_no_stamp_and_does_not_fail_the_run(self):
+        _, _, lines, stderr, _, held = self.stamp(go_status=1)
+        self.assertEqual(lines, ["status=0"])
+        self.assertEqual(held, [])
+        self.assertIn("a stamp error on stderr", stderr)
+        self.assertIn("make e2e-support-coverage-record will refuse its profile", stderr)
+
+
+class KeepCompleteRunStampsTest(unittest.TestCase):
+    """The pending stamps of a run take their own names only when the run
+    ended with status 0, and are removed otherwise, so a stamp beside a
+    profile means a complete run wrote it."""
+
+    def keep(self, status, pending=("e2e-ce-coverprofile.complete",)):
+        """Leaves a pending stamp for each name in pending, keeps the stamps
+        of the main pass and the final pass with the status given, and
+        returns the stdout lines and what the report directory holds."""
+        reports = tempfile.mkdtemp()
+        self.addCleanup(subprocess.run, ["rm", "-rf", reports], check=True)
+        for name in pending:
+            with open(os.path.join(reports, name + ".pending"), "w", encoding="utf-8") as handle:
+                handle.write("the stamp of " + name + "\n")
+        lines, _ = drive_stamp(
+            "keep_complete_run_stamps", status,
+            os.path.join(reports, "e2e-ce-coverprofile.complete"),
+            os.path.join(reports, "e2e-ce-final-coverprofile.complete"),
+        )
+        return reports, lines, sorted(os.listdir(reports))
+
+    def test_a_complete_run_keeps_each_pending_stamp_under_its_own_name(self):
+        reports, lines, held = self.keep("0", pending=("e2e-ce-coverprofile.complete", "e2e-ce-final-coverprofile.complete"))
+        self.assertEqual(lines, ["status=0"])
+        self.assertEqual(held, ["e2e-ce-coverprofile.complete", "e2e-ce-final-coverprofile.complete"])
+        with open(os.path.join(reports, "e2e-ce-final-coverprofile.complete"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "the stamp of e2e-ce-final-coverprofile.complete\n")
+
+    def test_a_pass_that_left_no_pending_stamp_gets_none(self):
+        _, lines, held = self.keep("0")
+        self.assertEqual(lines, ["status=0"])
+        self.assertEqual(held, ["e2e-ce-coverprofile.complete"])
+
+    def test_a_run_that_did_not_pass_keeps_no_stamp(self):
+        for status in ("1", "2"):
+            with self.subTest(status=status):
+                _, lines, held = self.keep(status, pending=("e2e-ce-coverprofile.complete", "e2e-ce-final-coverprofile.complete"))
+                self.assertEqual(lines, ["status=0"])
+                self.assertEqual(held, [])
+
+
 if __name__ == "__main__":
     unittest.main()

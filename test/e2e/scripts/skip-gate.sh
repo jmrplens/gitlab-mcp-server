@@ -11,8 +11,11 @@
 # The judgement is cmd/audit_e2e_coverage -check-skips, whose table of
 # declared skips is cmd/audit_e2e_coverage/skip_declarations.go. What is here
 # is how a run reaches it, what it does to the run's status, what a run asking
-# to be complete has to be started with so that the gate can pass, and which
-# scenario such a run runs last, in a final pass of its own.
+# to be complete has to be started with so that the gate can pass, which
+# scenario such a run runs last, in a final pass of its own, and the stamp it
+# leaves beside each statement profile of the e2e support packages once it is
+# known to be complete, which is what make e2e-support-coverage-record asks of
+# every run profile it records.
 
 # shellcheck source=test/e2e/scripts/audit-command.sh
 . "$(dirname "${BASH_SOURCE[0]}")/audit-command.sh"
@@ -164,4 +167,42 @@ run_status_after_gate() {
     else
         echo "$2"
     fi
+}
+
+# stamp_complete_run writes, from the repository root, the stamp of the
+# sources a pass of a complete run is about to build its test binaries from:
+# cmd/merge_coverage -stamp, the SHA-256 of every source file of the packages
+# E2E_COVERPKG names. It is written under the stamp's name with .pending
+# after it, which keep_complete_run_stamps changes once the run is known to
+# be complete. A pass it cannot stamp is said so and left without a stamp,
+# which does not fail the run: only the record needs the stamp, and it
+# refuses a profile that has none.
+#
+#   stamp_complete_run <repository root> <packages> <stamp>
+stamp_complete_run() {
+    if ! (cd "$1" && go run ./cmd/merge_coverage/ -packages "$2" -stamp "$3.pending"); then
+        rm -f "$3.pending"
+        echo "WARNING: the sources this pass measures could not be stamped, so make e2e-support-coverage-record will refuse its profile" >&2
+    fi
+}
+
+# keep_complete_run_stamps gives each pending stamp of a run the stamp's own
+# name when the run ended with status 0, which for a complete run means both
+# passes passed and the gate held every skip to a declaration, and removes it
+# otherwise. A stamp beside a run profile therefore says a complete run wrote
+# the profile from the sources it lists.
+#
+#   keep_complete_run_stamps <run's status> <stamp>...
+keep_complete_run_stamps() {
+    local status="$1" stamp
+    shift
+    for stamp in "$@"; do
+        if [ -e "${stamp}.pending" ]; then
+            if [ "${status}" -eq 0 ]; then
+                mv "${stamp}.pending" "${stamp}"
+            else
+                rm -f "${stamp}.pending"
+            fi
+        fi
+    done
 }
