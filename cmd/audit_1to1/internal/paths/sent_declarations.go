@@ -1131,9 +1131,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupsPkg, Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 	{Package: toolsDir + "/projects", Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 
-	// The instance version four packages read to choose what to send: the
-	// route a release added, or whether to ask GraphQL for a transfer's
-	// reason. The client asks GET /version for them (gitlabclient.AtLeast),
+	// The instance version five packages read to choose what to send: the
+	// route a release added, whether to ask GraphQL for a transfer's reason,
+	// or whether to send a draft note's position back with its new body. The
+	// client asks GET /version for them (gitlabclient.AtLeast),
 	// and a splat is the right answer for the reason the other reads for a
 	// package's own use are one: nothing of the answer is published, so a key
 	// GitLab adds to the entity is not one the package leaves out.
@@ -1141,6 +1142,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: projectsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferReasonVersion},
 	{Package: toolsDir + "/jobs", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonBridgesRouteVersion},
 	{Package: mergeRequestsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonCancelAutoMergeVersion},
+	{Package: toolsDir + "/mrdraftnotes", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonDraftNotePositionVersion},
 
 	// The release link the dynamic surface's own test creates through
 	// gitlab_execute_action, which answers with the release link package's
@@ -1288,6 +1290,14 @@ const reasonCancelAutoMergeVersion = "merge_request.cancel_auto_merge sends POST
 	"deprecated cancel_merge_when_pipeline_succeeds route otherwise, so the client reads GET /version first " +
 	"(gitlabclient.AtLeast, once per client) and keeps only whether the release is 19.5 or later. Nothing of the answer " +
 	"is published; admin.metadata_get is the action that answers with the instance metadata."
+
+// reasonDraftNotePositionVersion answers the instance version a draft note
+// update reads to learn whether a body sent alone keeps the draft's position.
+const reasonDraftNotePositionVersion = "mr_review.draft_note_update sends a body given alone with the draft's " +
+	"current position to an instance not known to run 19.5 or later, the release whose update route keeps a position " +
+	"the request leaves out, so the client reads GET /version first (gitlabclient.AtLeast, once per client) and keeps " +
+	"only whether the release is 19.5 or later. Nothing of the answer is published; admin.metadata_get is the action " +
+	"that answers with the instance metadata."
 
 // reasonTerraformStateProjectPath answers the project the Terraform state
 // package reads to name it to GraphQL.

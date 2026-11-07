@@ -129,6 +129,12 @@ func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 			toolutil.SchemaEnumOverride("position.position_type",
 				toolutil.PositionTypeText, toolutil.PositionTypeImage, toolutil.PositionTypeFile),
 		}
+		if individualTool == "gitlab_mr_draft_note_update" {
+			// An update changes the body, the position or both, and keeps
+			// the one it is not given (Update), so one of the two is needed.
+			options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+				toolutil.SchemaAnyOfRequired("note", "position"))
+		}
 	}
 	return options
 }
@@ -202,7 +208,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",
 	},
 	"gitlab_mr_draft_note_update": {
-		Usage:   "Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.",
+		Usage:   "Edit the body, the inline position or both of a pending draft note before it is published. Give note, position or both. The one left out is kept as the draft has it. Only the draft's author can update it.",
 		Aliases: []string{"edit draft note", "update pending mr comment", "modify draft review note"},
 		Related: []string{actionDraftNoteGet, actionDraftNoteList, actionDraftNotePublish},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -215,7 +221,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 				ExampleBinding: `params.note:"Updated: use the shared helper instead."`,
 			},
 		},
-		Description: "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
+		Description: "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_delete": {
 		Usage:   "Discard a pending draft note so it is never published. Destructive and irreversible. Only the draft's author can delete it.",

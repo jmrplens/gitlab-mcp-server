@@ -221,9 +221,15 @@ func TestCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestUpdate_Forbidden verifies Update returns guidance for author-only draft notes.
+// TestUpdate_Forbidden verifies Update returns guidance for author-only draft
+// notes. The draft is answered, since a body sent alone to an instance whose
+// version is not known reads it first, and the update is refused.
 func TestUpdate_Forbidden(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/draft_notes/") {
+			testutil.RespondJSON(w, http.StatusOK, draftNoteActionJSON)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
 	}))
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "updated"})
@@ -326,22 +332,27 @@ func mrDraftNoteSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 // GitLab's route declares for it: the bulk publish its two reviewer_state
 // values, and the create and the update the three position_type values of
 // the positional params they share, as mr_review.discussion_create does.
-// No other draft note action carries a schema override, since none of them
-// takes either parameter.
+// The update carries one more, the root requirement of a body or a position,
+// since it keeps whichever of the two it is not given (Update) and has
+// nothing to change without either. No other draft note action carries a
+// schema override, since none of them takes either parameter.
 //
 // On the parent the create and the update publish position_type as a free
 // string, so a model could not see the three values without a refusal.
 func TestActionSpecs_InputSchemaOverrides_AreTheEnumsGitLabDeclares(t *testing.T) {
 	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
-	positionType := []toolutil.InputSchemaOverride{
-		{PropertyPath: "position.position_type", Values: map[string]any{"enum": []any{"text", "image", "file"}}},
+	positionType := toolutil.InputSchemaOverride{
+		PropertyPath: "position.position_type", Values: map[string]any{"enum": []any{"text", "image", "file"}},
 	}
 	want := map[string][]toolutil.InputSchemaOverride{
 		"gitlab_mr_draft_note_publish_all": {
 			{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
 		},
-		"gitlab_mr_draft_note_create": positionType,
-		"gitlab_mr_draft_note_update": positionType,
+		"gitlab_mr_draft_note_create": {positionType},
+		"gitlab_mr_draft_note_update": {positionType, {Values: map[string]any{"anyOf": []any{
+			map[string]any{"required": []string{"note"}},
+			map[string]any{"required": []string{"position"}},
+		}}}},
 	}
 	for tool, spec := range byTool {
 		t.Run(tool, func(t *testing.T) {

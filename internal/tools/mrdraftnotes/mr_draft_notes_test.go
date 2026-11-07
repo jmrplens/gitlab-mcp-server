@@ -13,8 +13,10 @@ import (
 	"maps"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -316,6 +318,12 @@ func TestDraftNoteCreate_CancelledContext(t *testing.T) {
 // TestDraftNoteUpdate_Success verifies DraftNoteUpdate when success.
 func TestDraftNoteUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The instance's version is not answered, so the update reads the
+		// draft for the position it keeps, and the draft has none.
+		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, draftWithoutPositionJSON)
+			return
+		}
 		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodPut {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text","commit_id":"","discussion_id":"","resolve_discussion":false}`)
 			return
@@ -1022,22 +1030,28 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyNote verifies Update when empty note.
-func TestUpdate_EmptyNote(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"old text","commit_id":"","discussion_id":"","resolve_discussion":false}`)
-			return
-		}
-		http.NotFound(w, r)
+// TestUpdate_NeitherNoteNorPosition_IsRefusedBeforeAnyRequest verifies that
+// an update naming no body and no position is refused, by naming both,
+// before anything is sent. GitLab refuses an update without a body with a 400
+// ("Missing params to modify"), and one that changes nothing has no body or
+// position to read back from the draft either; the update used to send the
+// empty object and hand the model GitLab's refusal.
+func TestUpdate_NeitherNoteNorPosition_IsRefusedBeforeAnyRequest(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, draftWithoutPositionJSON)
 	}))
-	// Note empty → the optional Note field is skipped, API still called
-	out, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10})
+	if err == nil {
+		t.Fatal("Update with neither note nor position answered no error, want a refusal")
 	}
-	if out.ID != 10 {
-		t.Errorf("expected ID=10, got %d", out.ID)
+	if !strings.Contains(err.Error(), "note") || !strings.Contains(err.Error(), "position") {
+		t.Errorf("error = %q, want it to name both note and position", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("Update sent %d request(s) before refusing, want none", got)
 	}
 }
 
@@ -1513,34 +1527,269 @@ func TestDraftNoteCreate_OptionalFieldsReachGitLab(t *testing.T) {
 // answer is identical either way, so an inverted guard would blank the note it
 // was asked to change while silently discarding the replacement text.
 func TestDraftNoteUpdate_NoteBodyReachesGitLab(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text"}`)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "Updated text"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, `"note":"Updated text"`) {
+		t.Errorf("request body %q is missing the new body", body)
+	}
+}
+
+// draftWithoutPositionJSON is a general draft note as GitLab answers it: the
+// draft has no position, and its position column reads as an empty
+// Gitlab::Diff::Position, whose text formatter answers every key null and the
+// type text.
+const draftWithoutPositionJSON = `{"id":10,"author_id":1,"merge_request_id":1,"note":"current body",` +
+	`"position":{"base_sha":null,"start_sha":null,"head_sha":null,"old_path":null,"new_path":null,` +
+	`"position_type":"text","old_line":null,"new_line":null,"line_range":null}}`
+
+// draftUpdateGitLab answers the requests a draft note update can send: the
+// instance's version, the read of the draft and the update itself. A version
+// or a draft left empty is answered 404. It records every request and the
+// body of the update, under a lock and without stopping the test, because it
+// runs on the httptest server's goroutine.
+type draftUpdateGitLab struct {
+	version string
+	draft   string
+
+	mu      sync.Mutex
+	seen    []string
+	updated map[string]any
+}
+
+// ServeHTTP records the request and answers it.
+func (g *draftUpdateGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	if r.Method == http.MethodPut {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "decoding the update body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	g.mu.Lock()
+	g.seen = append(g.seen, r.Method+" "+r.URL.Path)
+	if body != nil {
+		g.updated = body
+	}
+	g.mu.Unlock()
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v4/version" && g.version != "":
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"`+g.version+`"}`)
+	case r.Method == http.MethodGet && r.URL.Path == pathDraftNoteByID && g.draft != "":
+		testutil.RespondJSON(w, http.StatusOK, g.draft)
+	case r.Method == http.MethodPut && r.URL.Path == pathDraftNoteByID:
+		testutil.RespondJSON(w, http.StatusOK, draftNoteWrittenBody)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// requests returns the requests recorded, by method and path.
+func (g *draftUpdateGitLab) requests() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return slices.Clone(g.seen)
+}
+
+// body returns the body the update carried, nil when none was sent.
+func (g *draftUpdateGitLab) body() map[string]any {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.updated
+}
+
+// decodedJSON decodes a JSON document the way the stand-in decodes a body, so
+// a want written as JSON compares with what was sent.
+func decodedJSON(t *testing.T, document string) any {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal([]byte(document), &v); err != nil {
+		t.Fatalf("decoding %s: %v", document, err)
+	}
+	return v
+}
+
+// TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack verifies that a body
+// sent alone to an instance not known to run GitLab 19.5 or later goes with
+// the position the draft has, read from the draft first. Before 19.5 the
+// update route stored a position the request left out as none
+// (draft_note.update!(note: params[:note], position: params[:position])), so
+// a draft on main.go:12 whose typo was fixed answered 200 without its line
+// and was published as a general comment. An image position keeps its width,
+// height and a point on the edge, which client-go's NotePosition does not
+// model, a null base commit goes as an empty one since the route requires the
+// key, and a draft with no position GitLab could place goes with none.
+func TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack(t *testing.T) {
+	const anchor = `"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc"`
 	for _, tc := range []struct {
-		name    string
-		note    string
-		present string
-		absent  string
+		name, version, stored, want string
 	}{
-		{name: "a new body is sent", note: "Updated text", present: `"note":"Updated text"`},
-		{name: "an omitted body is not sent", note: "", absent: "note"},
+		{
+			name: "a text position with a line range, on 19.4", version: "19.4.1-ee",
+			stored: `{` + anchor + `,"old_path":"main.go","new_path":"main.go","position_type":"text","old_line":null,"new_line":12,` +
+				`"line_range":{"start":{"line_code":"abc_0_12","type":"new","old_line":null,"new_line":12},"end":{"line_code":"abc_0_13","type":"new","old_line":null,"new_line":13}}}`,
+			want: `{` + anchor + `,"old_path":"main.go","new_path":"main.go","position_type":"text","new_line":12,` +
+				`"line_range":{"start":{"line_code":"abc_0_12","type":"new","new_line":12},"end":{"line_code":"abc_0_13","type":"new","new_line":13}}}`,
+		},
+		{
+			name:   "an image position on the edge, on an instance whose version is not known",
+			stored: `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+			want:   `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+		},
+		{
+			name: "a file position, on 19.4", version: "19.4.0-ee",
+			stored: `{` + anchor + `,"old_path":"old.go","new_path":"new.go","position_type":"file"}`,
+			want:   `{` + anchor + `,"old_path":"old.go","new_path":"new.go","position_type":"file"}`,
+		},
+		{
+			name: "a branch with no merge base, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":null,"start_sha":"bbb","head_sha":"ccc","old_path":"main.go","new_path":"main.go","position_type":"text","old_line":3,"new_line":3,"line_range":null}`,
+			want:   `{"base_sha":"","start_sha":"bbb","head_sha":"ccc","old_path":"main.go","new_path":"main.go","position_type":"text","old_line":3,"new_line":3}`,
+		},
+		{
+			name: "a draft with no position, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":null,"start_sha":null,"head_sha":null,"old_path":null,"new_path":null,"position_type":"text","old_line":null,"new_line":null,"line_range":null}`,
+		},
+		{
+			name: "a position without its head commit, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":"aaa","start_sha":"bbb","head_sha":null,"old_path":"main.go","new_path":"main.go","position_type":"text","new_line":12}`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var body string
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				b, _ := io.ReadAll(r.Body)
-				body = string(b)
-				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text"}`)
-			}))
+			gitlab := &draftUpdateGitLab{
+				version: tc.version,
+				draft:   `{"id":10,"author_id":1,"merge_request_id":1,"note":"original","position":` + tc.stored + `}`,
+			}
+			client := testutil.NewTestClient(t, gitlab)
 
-			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: tc.note})
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if tc.present != "" && !strings.Contains(body, tc.present) {
-				t.Errorf("request body %q is missing %s", body, tc.present)
+			body := gitlab.body()
+			if body["note"] != "typo fixed" {
+				t.Errorf("note = %v, want the new body", body["note"])
 			}
-			if tc.absent != "" && strings.Contains(body, tc.absent) {
-				t.Errorf("request body %q carries %s the caller never set", body, tc.absent)
+			got, sent := body["position"]
+			switch {
+			case tc.want == "" && sent:
+				t.Errorf("position = %v, want none sent for a position GitLab cannot place", got)
+			case tc.want != "" && !reflect.DeepEqual(got, decodedJSON(t, tc.want)):
+				t.Errorf("position = %v, want the draft's own %s", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestDraftNoteUpdate_BodyAlone_OnNineteenFiveOrLater_SendsTheBodyAlone
+// verifies that an instance known to run 19.5 or later is sent the body
+// alone, and the draft is not read: gitlab-org/gitlab!258695, in 19.5.0, made
+// the route keep a position the request leaves out. GitLab.com's prerelease
+// counts as the minor it names.
+func TestDraftNoteUpdate_BodyAlone_OnNineteenFiveOrLater_SendsTheBodyAlone(t *testing.T) {
+	for _, version := range []string{"19.5.0-ee", "19.6.0-pre", "20.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			gitlab := &draftUpdateGitLab{
+				version: version,
+				draft:   `{"id":10,"note":"original","position":{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","new_path":"main.go","position_type":"text","new_line":12}}`,
+			}
+			client := testutil.NewTestClient(t, gitlab)
+
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			want := []string{http.MethodGet + " /api/v4/version", http.MethodPut + " " + pathDraftNoteByID}
+			if got := gitlab.requests(); !slices.Equal(got, want) {
+				t.Errorf("requests = %v, want %v", got, want)
+			}
+			if got := gitlab.body(); !reflect.DeepEqual(got, map[string]any{"note": "typo fixed"}) {
+				t.Errorf("update body = %v, want the new body alone", got)
+			}
+		})
+	}
+}
+
+// TestDraftNoteUpdate_PositionAlone_SendsTheDraftsBody verifies that a
+// position sent alone goes with the body the draft has, read from the draft
+// first, and that the instance's version is not asked. GitLab refuses an
+// update without a body, "Missing params to modify", on every release, so a
+// call moving a draft and naming no body used to be judged by the position
+// check and then refused.
+func TestDraftNoteUpdate_PositionAlone_SendsTheDraftsBody(t *testing.T) {
+	gitlab := &draftUpdateGitLab{draft: draftWithoutPositionJSON}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		ProjectID: "42", MRIID: 1, NoteID: 10,
+		Position: &DiffPosition{
+			BaseSHA: "aaa", StartSHA: "bbb", HeadSHA: "ccc",
+			OldPath: "old.go", NewPath: "new.go", PositionType: toolutil.PositionTypeFile,
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := []string{http.MethodGet + " " + pathDraftNoteByID, http.MethodPut + " " + pathDraftNoteByID}
+	if got := gitlab.requests(); !slices.Equal(got, want) {
+		t.Errorf("requests = %v, want %v", got, want)
+	}
+	body := gitlab.body()
+	if body["note"] != "current body" {
+		t.Errorf("note = %v, want the draft's current body", body["note"])
+	}
+	wantPosition := decodedJSON(t, `{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"old.go","new_path":"new.go","position_type":"file"}`)
+	if !reflect.DeepEqual(body["position"], wantPosition) {
+		t.Errorf("position = %v, want the one the caller gave, %v", body["position"], wantPosition)
+	}
+}
+
+// TestDraftNoteUpdate_DraftUnreadable_SendsNoUpdate verifies that an update
+// that has to read the draft first and cannot is reported with the read's
+// refusal, and sends no update: a draft that does not answer is not one whose
+// body or position could be kept.
+func TestDraftNoteUpdate_DraftUnreadable_SendsNoUpdate(t *testing.T) {
+	gitlab := &draftUpdateGitLab{}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+	if err == nil {
+		t.Fatal("Update answered no error for a draft that answered 404")
+	}
+	if !strings.Contains(err.Error(), "verify note_id with mr_review.draft_note_list") {
+		t.Errorf("error = %q, want the hint naming the list to find the draft in", err)
+	}
+	if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
+		t.Errorf("requests = %v, want no update sent", gitlab.requests())
+	}
+}
+
+// TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate verifies
+// that a draft whose position does not decode into the options the update
+// sends is reported rather than sent without its position. client-go decodes
+// the same answer without complaint, since NotePosition has no width, so the
+// fault is only seen here.
+func TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate(t *testing.T) {
+	gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"original","position":{"base_sha":"aaa","position_type":"image","width":"wide"}}`}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+	if err == nil {
+		t.Fatal("Update answered no error for a position that does not decode")
+	}
+	if !strings.Contains(err.Error(), "read the draft's position") {
+		t.Errorf("error = %q, want it to say the draft's position could not be read", err)
+	}
+	if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
+		t.Errorf("requests = %v, want no update sent", gitlab.requests())
 	}
 }
 

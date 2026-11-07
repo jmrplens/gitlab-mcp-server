@@ -858,6 +858,7 @@ var witnessDeclared = map[string]string{
 	"repository.capturedCompare.commits.extended_trailers":                    "kept-for-value 1",
 	"toolutil.DiscussionExtra.notes.confidential":                             "kept-for-value 1",
 	"toolutil.NoteExtra.confidential":                                         "kept-for-value 1",
+	"mrdraftnotes.capturedDraft.position":                                     "kept-for-value 1",
 	"dorametrics.capturedMetric.value":                                        "kept-for-null 1",
 	"mergetrains.trainMeasures.duration":                                      "kept-for-null 1",
 	"mergetrains.trainMeasures.pipeline.duration":                             "kept-for-null 1",
@@ -906,7 +907,7 @@ var witnessDeclared = map[string]string{
 // response (ADR-0021) reads keys the client-go struct decoded from the same
 // answer does not model, and nothing asked whether it also reads keys the
 // struct does: client-go v3.31 to v3.38 model thirty more of them, and on
-// v3.30.0 seventy-seven are read twice already. Each is kept for a reason a
+// v3.30.0 seventy-eight are read twice already. Each is kept for a reason a
 // predicate on the pinned SDK says, or the capture is retired: the approval
 // state's two timestamps and its pending rules, which client-go decodes as
 // GitLab sends them, are read off its decode now. A reader that hands back

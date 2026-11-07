@@ -90,13 +90,15 @@ type CreateInput struct {
 	Position              *DiffPosition        `json:"position,omitempty"                jsonschema:"Diff position for inline comments on specific lines. Omit for general MR comments."`
 }
 
-// UpdateInput defines parameters for updating a draft note.
+// UpdateInput defines parameters for updating a draft note. It takes a new
+// body, a new position or both, and keeps whichever of the two it is not
+// given ([Update]).
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
-	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown)"`
-	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments"`
+	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both"`
+	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments. Omit it to keep the current position. Give note, position or both"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.
@@ -363,7 +365,26 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return ToOutput(note), nil
 }
 
-// Update updates an existing draft note.
+// The first release whose draft note update keeps a position the request
+// leaves out: gitlab-org/gitlab!258695 made the route set the position only
+// when one is sent, and it shipped in 19.5.0. docs/development/upstream-bugs.md
+// records what an older release does.
+const (
+	keepsPositionSinceMajor = 19
+	keepsPositionSinceMinor = 5
+)
+
+// Update changes a pending draft note's body, its position or both.
+//
+// GitLab's update route writes both at once and asks for the body every
+// time: it refuses a request without one with a 400, "Missing params to
+// modify", although it declares the body optional, and a release
+// before 19.5 stores a position the request leaves out as none, so the
+// draft loses its line and is published as a general comment. So a position
+// sent alone goes with the draft's current body, and a body sent alone, to
+// an instance not known to run 19.5 or later, goes with the draft's current
+// position, both read from the draft first ([currentDraft]). A call naming
+// neither has nothing to change and is refused before any request.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -377,6 +398,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("draftNoteUpdate", "note_id")
 	}
+	if input.Note == "" && input.Position == nil {
+		return Output{}, errors.New("draftNoteUpdate: note or position is required. Give the new body, the new position or both, and the draft keeps the one left out")
+	}
 	if input.Position != nil {
 		if err := validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
 			return Output{}, fmt.Errorf("draftNoteUpdate: %w", err)
@@ -389,12 +413,85 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Position != nil {
 		opts.Position = toDiffPositionOptions(input.Position)
 	}
+	keepPosition := opts.Position == nil && !client.AtLeast(ctx, keepsPositionSinceMajor, keepsPositionSinceMinor)
+	if opts.Note == nil || keepPosition {
+		//gitlab:request optional: the draft is read only for what the update leaves out, its body when only a position is sent, and its position when only a body is sent to an instance not known to run 19.5 or later
+		current, err := currentDraft(ctx, client, input)
+		if err != nil {
+			return Output{}, err
+		}
+		if opts.Note == nil {
+			opts.Note = new(current.note)
+		}
+		if keepPosition {
+			opts.Position = current.position
+		}
+	}
 	note, _, err := client.GL().DraftNotes.UpdateDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("draftNoteUpdate", err, http.StatusForbidden,
 			"only the draft author can update; verify draft_note_id with mr_review.draft_note_list; published notes cannot be updated via this endpoint")
 	}
 	return ToOutput(note), nil
+}
+
+// capturedDraft is what an update decodes off the captured answer to its read
+// of the draft: the position, whole, in the options the update sends it back
+// in ([currentDraft]).
+type capturedDraft struct {
+	Position *gl.PositionOptions `json:"position"`
+}
+
+// storedDraft is what an update reads of the draft it changes: the body, and
+// the position as the options the update sends it back in, nil when the
+// draft has none GitLab places on the diff.
+type storedDraft struct {
+	note     string
+	position *gl.PositionOptions
+}
+
+// currentDraft reads the draft an update names, for the body or the position
+// the update leaves out ([Update]).
+//
+// The position is decoded from the captured response into the
+// PositionOptions the update sends, whose keys are the ones GitLab answers
+// with, because client-go's NotePosition carries no width, height, x or y
+// (docs/development/upstream-bugs.md) and an image draft would come back
+// without its point. A key GitLab answers as null is left out of the
+// request. GitLab answers a draft that has no position with an all-null text
+// position, and one with no start or head commit or no file is published as
+// a general comment whatever it carries ([toolutil.ValidatePositionAnchor]),
+// so neither is sent back. A base commit GitLab holds as null, which it does
+// for the diff of a branch with no merge base, is sent as an empty one,
+// since the route requires the key and an empty value is what a position
+// this server creates sends for it.
+func currentDraft(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (storedDraft, error) {
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	draft, _, err := client.GL().DraftNotes.GetDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(captureCtx))
+	if err != nil {
+		return storedDraft{}, toolutil.WrapErrWithStatusHint("draftNoteUpdate", err, http.StatusNotFound,
+			"the draft is read first for what the update leaves out; verify note_id with mr_review.draft_note_list; draft notes are visible only to their author until published")
+	}
+	var answer capturedDraft
+	if err = captured.Decode(&answer); err != nil {
+		return storedDraft{}, fmt.Errorf("draftNoteUpdate: read the draft's position: %w", err)
+	}
+	current := storedDraft{note: draft.Note}
+	if p := answer.Position; p != nil && toolutil.ValidatePositionAnchor(deref(p.StartSHA), deref(p.HeadSHA), deref(p.OldPath), deref(p.NewPath)) == nil {
+		if p.BaseSHA == nil {
+			p.BaseSHA = new("")
+		}
+		current.position = p
+	}
+	return current, nil
+}
+
+// deref returns the string s points to, and the empty string for nil.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // Delete deletes a draft note from a merge request.
