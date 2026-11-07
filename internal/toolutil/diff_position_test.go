@@ -1007,7 +1007,8 @@ func TestValidatePositionAnchor_EachMissingPart_IsNamed(t *testing.T) {
 // TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
 // rule for a text position (TextFormatter#complete?): an old_line or a
 // new_line present. Either one passes, both together pass, and neither is
-// refused in words naming the two.
+// refused in words naming the two. Line 1, the first a file has, passes on
+// either side.
 func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
@@ -1017,6 +1018,8 @@ func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
 		{name: "an added line", newLine: 12},
 		{name: "a removed line", oldLine: 7},
 		{name: "an unchanged line", oldLine: 7, newLine: 12},
+		{name: "the first line, added", newLine: 1},
+		{name: "the first line, removed", oldLine: 1},
 		{name: "no line", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1030,6 +1033,34 @@ func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
 			const want = "a text position needs new_line or old_line: "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Errorf("ValidateTextPosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestValidateTextPosition_NegativeLine_IsRefused verifies that a negative
+// new_line or old_line is refused, on either side and beside a line that is
+// valid, in words naming both values. GitLab declares both lines a bare
+// Integer and counts any number as present (TextFormatter#complete?), so
+// without this a draft note on line -1 was saved whenever the merge request's
+// diff could not be read, and a commit discussion, which reads no diff, was
+// sent to a 400 about a line_code.
+func TestValidateTextPosition_NegativeLine_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldLine, newLine int64
+		want             string
+	}{
+		{name: "a negative new_line alone", newLine: -1, want: "got new_line -1, old_line 0"},
+		{name: "a negative old_line alone", oldLine: -3, want: "got new_line 0, old_line -3"},
+		{name: "a negative new_line beside an old_line", oldLine: 4, newLine: -4, want: "got new_line -4, old_line 4"},
+		{name: "a negative old_line beside a new_line", oldLine: -2, newLine: 2, want: "got new_line 2, old_line -2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTextPosition(tc.oldLine, tc.newLine)
+			const opening = "new_line and old_line are line numbers counted from 1 ("
+			if err == nil || !strings.HasPrefix(err.Error(), opening) || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("ValidateTextPosition(%d, %d) = %v, want a refusal opening %q and naming %q", tc.oldLine, tc.newLine, err, opening, tc.want)
 			}
 		})
 	}

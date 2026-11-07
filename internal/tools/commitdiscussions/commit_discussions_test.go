@@ -669,6 +669,11 @@ func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testi
 			wantErr: "a text position needs new_line or old_line",
 		},
 		{
+			name:     "text on a negative line",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine = "text", -1 }),
+			wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line -1, old_line 0)",
+		},
+		{
 			name:     "file without its old path",
 			position: at(func(p *PositionInput) { p.PositionType = "file" }),
 			wantErr:  "(missing: old_path)",

@@ -2027,7 +2027,8 @@ type incompletePositionCase struct {
 // other part with one part of the anchor every type shares taken away: an
 // empty start_sha, a head_sha of blanks, or no path at all. It adds a text
 // position with its anchor and no line, the one part a text position needs
-// beyond it that is judged without the diff.
+// beyond it that is judged without the diff, and one on a negative line,
+// which no diff has.
 func incompletePositionCases() []incompletePositionCase {
 	types := []struct {
 		name   string
@@ -2064,6 +2065,10 @@ func incompletePositionCases() []incompletePositionCase {
 		name:     "text naming no line",
 		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
 		wantErr:  "a text position needs new_line or old_line",
+	}, incompletePositionCase{
+		name:     "text on a negative line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath, "old_line": -2},
+		wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line 0, old_line -2)",
 	})
 }
 

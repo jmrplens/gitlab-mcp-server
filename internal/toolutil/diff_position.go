@@ -157,8 +157,18 @@ func ValidatePositionAnchor(startSHA, headSHA, oldPath, newPath string) error {
 // judged against the merge request's diff by [ValidateDiffPosition], when the
 // diff can be read; this check needs no request, so it holds even when that
 // one is skipped. A line is numbered from 1, so 0 is no line, as the tools
-// send none for it.
+// send none for it, and a negative number is refused: GitLab declares both
+// lines a bare Integer and takes one as present, so it saves a draft note
+// placed on line -1 and answers a discussion with a 400 about a line_code,
+// which the caller did not send.
 func ValidateTextPosition(oldLine, newLine int64) error {
+	if oldLine < 0 || newLine < 0 {
+		return fmt.Errorf(
+			"new_line and old_line are line numbers counted from 1 (got new_line %d, old_line %d): "+
+				"leave out the one the line does not have rather than sending a negative number",
+			newLine, oldLine,
+		)
+	}
 	if oldLine != 0 || newLine != 0 {
 		return nil
 	}
