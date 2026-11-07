@@ -15263,23 +15263,23 @@
               ]
             },
             "new_line": {
-              "description": "Line number after change",
+              "description": "Line number after change. Send it alone for an added line, and with old_line for an unchanged one",
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after change, from the file's entry in repository.commit_diff. Send it with old_path",
+              "description": "File path after change, from the file's entry in repository.commit_diff, or from repository.tree for a file outside the diff. Send it with old_path",
               "type": "string"
             },
             "old_line": {
-              "description": "Line number before change",
+              "description": "Line number before change. Send it alone for a removed line, and with new_line for an unchanged one",
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed. Send it with new_path",
+              "description": "File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: text for a line comment, which needs new_line or old_line, or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them",
+              "description": "Position type: text for a line comment, which needs a line (new_line for an added line, old_line for a removed one, both for an unchanged one), or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them",
               "enum": [
                 "text",
                 "image",
@@ -141296,7 +141296,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type=file.",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type=file and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -141304,7 +141304,7 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type=file.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type=file and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
@@ -143745,7 +143745,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type 'file'.",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -143753,7 +143753,7 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
@@ -144611,7 +144611,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both",
+          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
@@ -144695,7 +144695,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type 'file'.",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -144703,7 +144703,7 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
