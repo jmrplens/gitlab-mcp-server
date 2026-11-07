@@ -1181,8 +1181,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestValidatePosition_FileNotInDiff verifies that validatePosition returns an
-// error when the target file path is not found in the merge request diff.
+// TestValidatePosition_FileNotInDiff verifies that validatePosition refuses a
+// text position on a file not found in the merge request diff, and offers a
+// file position on it or a general comment instead.
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -1206,8 +1207,25 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for file not in diff, got nil")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Errorf("error = %q, want 'not in the merge request diff'", err.Error())
+	// GitLab reads a line, and so the diff, only for a text position
+	// (DiffNote), so an image or a file position on a file outside the diff is
+	// accepted, and that file, which is unchanged, has the one path
+	// repository.tree lists at head_sha for both of its sides. The refusal used
+	// to say that inline comments can only be placed on changed files.
+	for _, want := range []string{
+		"not in the merge request diff",
+		"A text position can only be placed on a line of a file in the diff",
+		"send position_type file with the path repository.tree lists at head_sha as both old_path and new_path",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err.Error(), want)
+			}
+		})
+	}
+	if stale := "only be placed on changed files"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %q, still says %q, while an image or file position may name a file outside the diff", err.Error(), stale)
 	}
 }
 

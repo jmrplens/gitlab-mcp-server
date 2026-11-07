@@ -584,7 +584,7 @@ func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
 }
 
 // TestCreate_PositionValidationError verifies Create returns the validation
-// error when an inline comment targets a file outside the MR diff.
+// error when a text position targets a file outside the MR diff.
 func TestCreate_PositionValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
@@ -612,8 +612,32 @@ func TestCreate_PositionValidationError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected position validation error")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Fatalf("error = %q, want diff validation message", err.Error())
+	checkOutsideTheDiffRefusal(t, err)
+}
+
+// checkOutsideTheDiffRefusal holds the refusal of a text position on a file
+// outside the merge request's diff to what such a file can still take. GitLab
+// reads a line, and so the diff, only for a text position (DiffNote), so an
+// image or a file position on that file is accepted, and the file, which is
+// unchanged, has the one path repository.tree lists at head_sha for both of
+// its sides. The refusal used to say that inline comments can only be placed
+// on changed files.
+func checkOutsideTheDiffRefusal(t *testing.T, err error) {
+	t.Helper()
+	for _, want := range []string{
+		"not in the merge request diff",
+		"A text position can only be placed on a line of a file in the diff",
+		"send position_type file with the path repository.tree lists at head_sha as both old_path and new_path",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err.Error(), want)
+			}
+		})
+	}
+	if stale := "only be placed on changed files"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %q, still says %q, while an image or file position may name a file outside the diff", err.Error(), stale)
 	}
 }
 
@@ -1167,8 +1191,9 @@ func newMRDiscussionsActionSpecs(t *testing.T) []toolutil.ActionSpec {
 	return ActionSpecs(client)
 }
 
-// TestValidatePosition_FileNotInDiff verifies that validatePosition returns
-// an error when the target file is not part of the MR diff.
+// TestValidatePosition_FileNotInDiff verifies that validatePosition refuses a
+// text position on a file that is not part of the MR diff, and offers a file
+// position on it or a general discussion instead.
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
@@ -1185,9 +1210,7 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for file not in diff")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Errorf("unexpected error message: %v", err)
-	}
+	checkOutsideTheDiffRefusal(t, err)
 }
 
 // TestValidatePosition_ValidFile verifies that validatePosition succeeds

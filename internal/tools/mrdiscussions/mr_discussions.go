@@ -516,8 +516,9 @@ func validateTextPosition(ctx context.Context, client *gitlabclient.Client, proj
 	}
 	if fileDiff == nil {
 		return fmt.Errorf(
-			"file %q is not in the merge request diff. Inline comments can only be placed on changed files. "+
-				"Omit the position parameter to create a general (non-inline) discussion instead", targetPath,
+			"file %q is not in the merge request diff. A text position can only be placed on a line of a file in the diff. "+
+				"To comment on the whole file, send position_type file with the path repository.tree lists at head_sha as both old_path and new_path, "+
+				"or omit the position parameter to create a general (non-inline) discussion instead", targetPath,
 		)
 	}
 	if err := toolutil.ValidateRenamedFilePosition(fileDiff, pos.OldPath, pos.NewPath); err != nil {
