@@ -89,19 +89,38 @@ func publish(report, summary string, stdout io.Writer) error {
 	return nil
 }
 
-// appendSummary appends the report to path, after a blank line's worth of
-// separation from whatever follows. It appends rather than replaces because
-// the path a workflow passes is $GITHUB_STEP_SUMMARY, which every step of a
-// job writes its own section to.
+// appendSummary appends the report to path, on a line of its own and after
+// a blank line's worth of separation from whatever follows. It appends
+// rather than replaces because the path a workflow passes is
+// $GITHUB_STEP_SUMMARY, which every step of a job writes its own section
+// to. Text the file already holds that ends without a newline gets one
+// first, or the report's heading would continue that text's last line and
+// not render as a heading.
 func appendSummary(path, report string) error {
 	// #nosec G304 -- the path is the one the caller named on the command line.
-	file, err := os.OpenFile(filepath.Clean(path), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	file, err := os.OpenFile(filepath.Clean(path), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
+	}
+	if endsMidLine(file) {
+		report = "\n" + report
 	}
 	if _, err = file.WriteString(report + "\n"); err != nil {
 		_ = file.Close()
 		return err
 	}
 	return file.Close()
+}
+
+// endsMidLine reports whether the file's last byte is something other than
+// a newline. An empty file, which a seek back from its end refuses, ends no
+// line. The file is opened to append, so reading it here moves nothing the
+// write goes to.
+func endsMidLine(file *os.File) bool {
+	if _, err := file.Seek(-1, io.SeekEnd); err != nil {
+		return false
+	}
+	last := make([]byte, 1)
+	n, _ := file.Read(last)
+	return n == 1 && last[0] != '\n'
 }
