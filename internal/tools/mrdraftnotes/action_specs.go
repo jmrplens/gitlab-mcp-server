@@ -164,12 +164,15 @@ var mrIIDGuidance = toolutil.ParameterGuidance{
 const positionValueSource = "Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha."
 
 // positionPathsConfusion asks the create and the update for both of the
-// file's paths. GitLab documents both for a text position
-// (doc/api/draft_notes.md) and takes one, but looks the file's diff up by
-// the paths the position carries, where git pairs a rename only when both of
-// its paths are given, so one path finds only a file that was not renamed
-// (toolutil.ValidateRenamedFilePosition).
-const positionPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. GitLab documents both for a text position and takes one on a file that was not renamed, but finds a renamed file's lines only by both."
+// file's paths, and says which positions are refused with one. GitLab
+// documents both for a text position (doc/api/draft_notes.md) and takes one,
+// but looks the file's diff up by the paths the position carries, where git
+// pairs a rename only when both of its paths are given, so a text position
+// on a renamed file is refused without both
+// (toolutil.ValidateRenamedFilePosition). A file position needs both
+// whatever the file (toolutil.ValidateFilePosition), and a text or image
+// position on a file that was not renamed passes with either.
+const positionPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
 
 // noteIDGuidance is the shared parameter guidance for note_id.
 var noteIDGuidance = toolutil.ParameterGuidance{
@@ -238,7 +241,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			"position": {
 				SemanticRole:     "diff_position",
 				ValueSource:      positionValueSource,
-				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one.", positionPathsConfusion},
+				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one.", positionPathsConfusion},
 			},
 		},
 		Description: "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",

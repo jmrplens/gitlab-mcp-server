@@ -424,21 +424,54 @@ func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
 // asks for both of the file's paths with.
 const bothPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed."
 
+// onePathConfusion is the sentence the position guidance of both writes says
+// which positions are refused with one path in: a file position
+// (toolutil.ValidateFilePosition) and a text position on a file the diff
+// renames (toolutil.ValidateRenamedFilePosition), and no other.
+const onePathConfusion = "A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
+
 // assertBothPathsAsked checks that the old_path and new_path descriptions
-// each ask for the other path beside it, and that the create's Usage asks
-// for both paths from mr_review.changes_get.
+// each ask for the other path beside it and name the positions that need
+// both, and that the create's Usage asks for both paths from
+// mr_review.changes_get.
 func assertBothPathsAsked(t *testing.T, createUsage string) {
 	t.Helper()
-	for name, want := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+	for name, otherPath := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
 		t.Run(name, func(t *testing.T) {
 			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
-			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, want) {
-				t.Errorf("%s description = %q, want it to say %q", name, description, want)
+			description := field.Tag.Get("jsonschema")
+			for _, want := range []string{otherPath, "Required for position_type 'file' and for a text position on a renamed file."} {
+				if !strings.Contains(description, want) {
+					t.Errorf("%s description = %q, want it to say %q", name, description, want)
+				}
 			}
 		})
 	}
 	if !strings.Contains(createUsage, "the file's old_path and new_path from mr_review.changes_get") {
 		t.Errorf("create usage = %q, want it to ask for both paths", createUsage)
+	}
+}
+
+// assertWriteGuidance checks the position guidance of one of the two writes:
+// where it sends a caller for each part of a position, and the sentences
+// that ask for both of the file's paths and name the positions refused with
+// one.
+func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
+	t.Helper()
+	for _, want := range []string{
+		"base_sha, start_sha and head_sha are the diff_refs of merge_request.get.",
+		"The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get.",
+		"whose path repository.tree lists at head_sha.",
+	} {
+		if !strings.Contains(guidance.ValueSource, want) {
+			t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
+		}
+	}
+	confusions := strings.Join(guidance.CommonConfusions, " ")
+	for _, want := range []string{bothPathsConfusion, onePathConfusion} {
+		if !strings.Contains(confusions, want) {
+			t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+		}
 	}
 }
 
@@ -456,7 +489,12 @@ func assertBothPathsAsked(t *testing.T, createUsage string) {
 // Both writes, the create's Usage and the two path fields ask for both of
 // the file's paths, as GitLab documents for a text position, and say that
 // one is enough only on a file that was not renamed. They used to offer
-// either path as sufficient.
+// either path as sufficient. Asking for both is a recommendation, not a rule
+// for every position: the check before the write refuses one path only for
+// a file position and for a text position on a file the diff renames, so the
+// guidance, the path fields and the update's parameter say which positions
+// those are. The update's parameter and guidance used to say every position
+// needs both.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
@@ -469,27 +507,20 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			if !found {
 				t.Fatalf("%s carries no guidance for position", tool)
 			}
-			for _, want := range []string{
-				"base_sha, start_sha and head_sha are the diff_refs of merge_request.get.",
-				"The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get.",
-				"whose path repository.tree lists at head_sha.",
-			} {
-				if !strings.Contains(guidance.ValueSource, want) {
-					t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
-				}
-			}
-			if confusions := strings.Join(guidance.CommonConfusions, " "); !strings.Contains(confusions, bothPathsConfusion) {
-				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, bothPathsConfusion)
-			}
+			assertWriteGuidance(t, guidance)
 		})
 	}
 	assertBothPathsAsked(t, byTool["gitlab_mr_draft_note_create"].Usage)
 	update := strings.Join(byTool["gitlab_mr_draft_note_update"].ParameterGuidance["position"].CommonConfusions, " ")
 	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Position")
 	description := field.Tag.Get("jsonschema")
+	const onePathDescription = "Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one."
+	if !strings.Contains(description, onePathDescription) {
+		t.Errorf("update position description = %q, want it to say %q", description, onePathDescription)
+	}
 	for _, want := range []string{
 		"base_sha, start_sha and head_sha",
-		"the file's old_path and new_path",
+		"the file's path, and by position_type",
 		"a new_line or old_line (text, the default)",
 		"width, height, x and y in whole pixels (image)",
 		"both old_path and new_path (file)",

@@ -1607,11 +1607,14 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			})
 		}
 		assertBothPathsGuidance(t, guidance)
-		for name, want := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+		for name, otherPath := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
 			t.Run(name, func(t *testing.T) {
 				field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
-				if description := field.Tag.Get("jsonschema"); !strings.Contains(description, want) {
-					t.Errorf("%s description = %q, want it to say %q", name, description, want)
+				description := field.Tag.Get("jsonschema")
+				for _, want := range []string{otherPath, "Required for position_type=file and for a text position on a renamed file."} {
+					if !strings.Contains(description, want) {
+						t.Errorf("%s description = %q, want it to say %q", name, description, want)
+					}
 				}
 			})
 		}
@@ -1642,13 +1645,18 @@ func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
 // the file's paths, in its example as well, and says why one is not always
 // enough. GitLab documents both for a text position, takes one on a file the
 // diff does not rename, and finds a renamed file's lines only by both, where
-// the guidance used to offer either path as sufficient.
+// the guidance used to offer either path as sufficient. Asking for both is a
+// recommendation, so it also names the positions the check before the write
+// refuses with one path, a file position and a text position on a file the
+// diff renames, and says a text or image position on any other file passes
+// with one.
 func assertBothPathsGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 	t.Helper()
 	confusions := strings.Join(guidance.CommonConfusions, " ")
 	for _, want := range []string{
 		"Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed.",
-		"finds a renamed file's lines only by both",
+		"A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both.",
+		"A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position.",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(confusions, want) {

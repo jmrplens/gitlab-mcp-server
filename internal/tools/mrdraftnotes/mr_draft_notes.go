@@ -52,8 +52,8 @@ type DiffPosition struct {
 	BaseSHA      string         `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string         `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
 	HeadSHA      string         `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
-	OldPath      string         `json:"old_path,omitempty"  jsonschema:"File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file'."`
-	NewPath      string         `json:"new_path,omitempty"  jsonschema:"File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type 'file'."`
+	OldPath      string         `json:"old_path,omitempty"  jsonschema:"File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file' and for a text position on a renamed file."`
+	NewPath      string         `json:"new_path,omitempty"  jsonschema:"File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type 'file' and for a text position on a renamed file."`
 	PositionType string         `json:"position_type,omitempty" jsonschema:"Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line."`
 	OldLine      int            `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int            `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
@@ -99,7 +99,7 @@ type UpdateInput struct {
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both"`
-	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both"`
+	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.
