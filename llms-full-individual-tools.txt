@@ -9428,7 +9428,7 @@ Update a pending draft note's body, position or both, keeping the one left out. 
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string): Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both
 - `note_id` (integer) (required): Draft note ID
-- `position` (object): Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both
+- `position` (object): Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

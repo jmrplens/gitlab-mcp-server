@@ -15267,7 +15267,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after change",
+              "description": "File path after change, from the file's entry in repository.commit_diff. Send it with old_path",
               "type": "string"
             },
             "old_line": {
@@ -15275,7 +15275,7 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before change",
+              "description": "File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed. Send it with new_path",
               "type": "string"
             },
             "position_type": {
@@ -141215,7 +141215,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type=image.",
+              "description": "Image height in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
                 "integer"
@@ -141296,7 +141296,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type=file.",
               "type": "string"
             },
             "old_line": {
@@ -141304,11 +141304,11 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type=file.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type=file.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
               "enum": [
                 "text",
                 "image",
@@ -141321,7 +141321,7 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type=image.",
+              "description": "Image width in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
                 "integer"
@@ -141345,8 +141345,7 @@
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
@@ -143673,7 +143672,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image height in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -143746,7 +143745,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type 'file'.",
               "type": "string"
             },
             "old_line": {
@@ -143754,11 +143753,11 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file'.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
               "enum": [
                 "text",
                 "image",
@@ -143771,7 +143770,7 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image width in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -143795,8 +143794,7 @@
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
@@ -144613,7 +144611,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both",
+          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
@@ -144624,7 +144622,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image height in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -144697,7 +144695,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type 'file'.",
               "type": "string"
             },
             "old_line": {
@@ -144705,11 +144703,11 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type 'file'.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
               "enum": [
                 "text",
                 "image",
@@ -144722,7 +144720,7 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image width in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -144746,8 +144744,7 @@
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
