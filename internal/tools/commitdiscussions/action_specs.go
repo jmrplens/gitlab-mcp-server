@@ -147,7 +147,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single commit discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: gitlab_list_commit_discussions, gitlab_add_commit_discussion_note, gitlab_commit_get."
 	case "gitlab_create_commit_discussion":
-		options.Usage = "Open a new discussion thread on a commit. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners."
+		options.Usage = "Open a new discussion thread on a commit. Provide a position to attach an inline comment to a line of the commit's diff or a whole file, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_create_commit_discussion", "create commit discussion", "comment on commit diff", "start commit review thread"}
 		options.RelatedActions = []string{canonicalID(specAddNote), canonicalID(specList), actionCommitDiff, actionCommitGet}
 		options.ParameterGuidance = commitScopeGuidance()

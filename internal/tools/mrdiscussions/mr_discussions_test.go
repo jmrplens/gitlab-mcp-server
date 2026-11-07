@@ -1608,7 +1608,10 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 // which an image or file position may name, to repository.tree. The guidance
 // used to send a caller to mr_review.changes_get for the SHAs too, which
 // lists the diff's files and none of its SHAs. It gives a text position's
-// line by [lineRule], where it used to ask for new_line or old_line.
+// line by [lineRule], where it used to ask for new_line or old_line. And the
+// action's Usage names the three things a position anchors a comment to, a
+// line of the diff, a point of an image or a whole file, where it used to
+// offer only a file and a line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
@@ -1618,6 +1621,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
 			continue
 		}
+		assertUsageNamesEveryPositionType(t, spec.Usage)
 		guidance := spec.ParameterGuidance["position"]
 		source := guidance.ValueSource
 		for _, want := range []string{
@@ -1701,6 +1705,18 @@ func assertBothPathsGuidance(t *testing.T, guidance toolutil.ParameterGuidance) 
 	}
 	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
 		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
+	}
+}
+
+// assertUsageNamesEveryPositionType checks that mr_review.discussion_create's
+// Usage names what each position_type anchors a comment to: a text position
+// a line of the diff, an image position a point of an image and a file
+// position a whole file. It is the first sentence a model reads of the
+// action, and it used to offer a position only for a file and a line.
+func assertUsageNamesEveryPositionType(t *testing.T, usage string) {
+	t.Helper()
+	if want := "Provide a position to attach an inline comment to a line of the diff, a point of an image or a whole file, or omit it for a general MR discussion."; !strings.Contains(usage, want) {
+		t.Errorf("Usage = %q, want it to say %q", usage, want)
 	}
 }
 

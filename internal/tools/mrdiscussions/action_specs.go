@@ -108,7 +108,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_mr_discussion_create":
-		options.Usage = "Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners."
+		options.Usage = "Open a new discussion thread on a merge request. Provide a position to attach an inline comment to a line of the diff, a point of an image or a whole file, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_mr_discussion_create", "create merge request discussion", "comment on merge request diff", "start MR review thread"}
 		options.RelatedActions = []string{actionDiscussionReply, actionDiscussionList, actionMRChangesGet, actionMRNoteCreate}
 		options.ParameterGuidance = mrScopeGuidance()

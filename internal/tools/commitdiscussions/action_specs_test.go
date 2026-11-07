@@ -143,7 +143,10 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 // which GitLab accepts and which has no entry in repository.commit_diff, so
 // the guidance and the two path fields say that such a file takes the path
 // repository.tree lists at the commit as both, where they used to send the
-// caller to that entry for every file.
+// caller to that entry for every file. And the action's Usage names the two
+// things a position this action sends anchors a comment to, a line of the
+// commit's diff or a whole file, where it used to offer only a file and a
+// line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	detail := reflect.TypeFor[commits.DetailOutput]()
 	id, hasID := detail.FieldByName("ID")
@@ -154,7 +157,11 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("building the specs should reach no GitLab")
 	}))
-	guidance := commitDiscussionSpecsByTool(t, ActionSpecs(client))["gitlab_create_commit_discussion"].ParameterGuidance["position"]
+	spec := commitDiscussionSpecsByTool(t, ActionSpecs(client))["gitlab_create_commit_discussion"]
+	if want := "Provide a position to attach an inline comment to a line of the commit's diff or a whole file, or omit it for a general commit discussion."; !strings.Contains(spec.Usage, want) {
+		t.Errorf("Usage = %q, want it to say %q", spec.Usage, want)
+	}
+	guidance := spec.ParameterGuidance["position"]
 	for _, want := range []string{
 		"base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get,",
 		"the file's old_path and new_path and the line come from repository.commit_diff.",
