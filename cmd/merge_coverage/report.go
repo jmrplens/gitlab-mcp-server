@@ -74,8 +74,12 @@ func (r *row) cell(h half) string {
 }
 
 // publish prints the report and, when summary names a file, appends it there.
+// An output that refuses the report is an error like a summary that cannot
+// be written, so a run that delivered no report does not exit 0.
 func publish(report, summary string, stdout io.Writer) error {
-	_, _ = io.WriteString(stdout, report)
+	if _, err := io.WriteString(stdout, report); err != nil {
+		return fmt.Errorf("printing the report: %w", err)
+	}
 	if summary == "" {
 		return nil
 	}

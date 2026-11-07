@@ -13,6 +13,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -229,6 +230,60 @@ func TestRunMain_SummaryThatRefusesTheWrite_ExitsOne(t *testing.T) {
 
 	if code != 1 || !strings.Contains(stderr.String(), "appending the report to /dev/full: ") {
 		t.Errorf("runMain() = %d, stderr %q; want 1 and the refused write", code, stderr.String())
+	}
+}
+
+// errRefusedOutput is what refusingOutput answers every write with.
+var errRefusedOutput = errors.New("the output refused the write")
+
+// refusingOutput is a stdout that refuses every write, as a closed
+// descriptor or a full disk behind a redirect does.
+type refusingOutput struct{}
+
+// Write refuses the write.
+func (refusingOutput) Write([]byte) (int, error) { return 0, errRefusedOutput }
+
+// TestRunMain_StdoutThatRefusesTheReport_ExitsOne holds both reports, the
+// merge's and the gate's, to status 1 and the reason when stdout refuses
+// them, rather than to a run that exits 0 having delivered nothing. The gate
+// is run on the tree its record describes, which it passes otherwise.
+func TestRunMain_StdoutThatRefusesTheReport_ExitsOne(t *testing.T) {
+	tests := []struct {
+		name string
+		args func(t *testing.T) []string
+	}{
+		{
+			name: "the merge's report",
+			args: func(t *testing.T) []string {
+				t.Helper()
+				_, args := fixtureFiles(t)
+				return args
+			},
+		},
+		{
+			name: "the gate's report",
+			args: func(t *testing.T) []string {
+				t.Helper()
+				writeTree(t, nil)
+				dir := t.TempDir()
+				return []string{
+					"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
+					"-offline", writeProfile(t, dir, "offline.out", recordOffline),
+					"-check-record", writeProfile(t, dir, "e2e-support-coverage.json", fixtureRecord),
+				}
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+
+			code := runMain(tc.args(t), refusingOutput{}, &stderr)
+
+			if want := "merge_coverage: printing the report: " + errRefusedOutput.Error() + "\n"; code != 1 || stderr.String() != want {
+				t.Errorf("runMain() = %d, stderr %q; want 1 and %q", code, stderr.String(), want)
+			}
+		})
 	}
 }
 

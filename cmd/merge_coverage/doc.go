@@ -109,9 +109,9 @@
 // packages, is refused.
 //
 // It exits 0 when it reported, or the gate passed, 1 when a profile or the
-// record could not be read or merged, a package could not be measured, a file
-// could not be written or the gate failed, and 2 for a command line it cannot
-// use. make e2e-support-coverage runs the offline half and this command over
+// record could not be read or merged, a package could not be measured, the
+// report could not be printed, a file could not be written or the gate
+// failed, and 2 for a command line it cannot use. make e2e-support-coverage runs the offline half and this command over
 // the profiles the complete runs left, make e2e-support-coverage-record does
 // the same and writes the record, and make check-e2e-support-coverage is the
 // gate.

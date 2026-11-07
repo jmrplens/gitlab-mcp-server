@@ -70,8 +70,9 @@ type modeFlags struct {
 // runMain parses the command line, merges the profiles and reports, writing
 // the record when asked, or judges the offline half against a record. It
 // returns 2 for a command line it cannot use, 1 when the profiles or the
-// record could not be read or merged, a package could not be measured, a
-// file could not be written or the gate failed, and 0 otherwise.
+// record could not be read or merged, a package could not be measured, the
+// report could not be printed, a file could not be written or the gate
+// failed, and 0 otherwise.
 func runMain(args []string, stdout, stderr io.Writer) int {
 	opts, ok := parseArgs(args, stderr)
 	if !ok {
