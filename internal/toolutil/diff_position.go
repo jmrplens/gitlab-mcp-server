@@ -150,6 +150,23 @@ func ValidatePositionAnchor(startSHA, headSHA, oldPath, newPath string) error {
 	)
 }
 
+// PositionNewPath returns the new_path a merge request position sends, nil
+// when it is left out or blank so that the key is not sent at all. GitLab
+// reads a blank new_path as absent and completes the position with old_path
+// (Position#file_path is new_path.presence || old_path), but it looks the
+// file's diff up by the paths the position carries,
+// [old_path, new_path].compact.uniq (Position#diff_options), which keeps an
+// empty string, and Gitaly passes each to git diff as a pathspec, which git
+// refuses for an empty one ("empty string is not a valid pathspec"). Sent
+// as "", a position naming only old_path failed there instead of being
+// placed.
+func PositionNewPath(newPath string) *string {
+	if strings.TrimSpace(newPath) == "" {
+		return nil
+	}
+	return &newPath
+}
+
 // ValidateTextPosition refuses a text position that names no line. GitLab
 // completes a text position only when its old_line or its new_line is present
 // (Gitlab::Diff::Formatters::TextFormatter#complete?), a line_range included,

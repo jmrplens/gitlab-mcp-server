@@ -1004,6 +1004,34 @@ func TestValidatePositionAnchor_EachMissingPart_IsNamed(t *testing.T) {
 	}
 }
 
+// TestPositionNewPath_LeftOutOrBlank_IsNotSent holds what a merge request
+// position sends as new_path: the path as given, and no key at all for one
+// left out or blank, since GitLab reads a blank one as absent and looks the
+// file's diff up by every path the position carries, where an empty one
+// reaches git diff as a pathspec git refuses. A path with blanks around it is
+// sent as given.
+func TestPositionNewPath_LeftOutOrBlank_IsNotSent(t *testing.T) {
+	for _, tc := range []struct {
+		name, newPath string
+		wantSent      bool
+	}{
+		{name: "a path", newPath: "a.go", wantSent: true},
+		{name: "a path with blanks around it", newPath: " a.go ", wantSent: true},
+		{name: "left out", newPath: ""},
+		{name: "blanks", newPath: " \t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PositionNewPath(tc.newPath)
+			switch {
+			case !tc.wantSent && got != nil:
+				t.Errorf("PositionNewPath(%q) = %q, want nil", tc.newPath, *got)
+			case tc.wantSent && (got == nil || *got != tc.newPath):
+				t.Errorf("PositionNewPath(%q) = %v, want %q", tc.newPath, got, tc.newPath)
+			}
+		})
+	}
+}
+
 // TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
 // rule for a text position (TextFormatter#complete?): an old_line or a
 // new_line present. Either one passes, both together pass, and neither is

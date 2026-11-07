@@ -9,11 +9,13 @@ package mrdraftnotes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1976,6 +1978,86 @@ func TestWrites_ImageCoordinateOfZero_IsSent(t *testing.T) {
 			assertSentField(t, sent, "height", float64(32))
 			assertSentField(t, sent, "x", float64(0))
 			assertSentField(t, sent, "y", float64(0))
+		})
+	}
+}
+
+// TestWrites_PositionWithoutNewPath_SendsNone asserts that a draft note
+// position whose new_path is left out or blank reaches GitLab without the
+// key, on the create and on the update alike. GitLab completes such a
+// position with old_path (Position#file_path is new_path.presence ||
+// old_path), but it looks the file's diff up by the paths the position
+// names, [old_path, new_path].compact.uniq, which keeps an empty string, and
+// Gitaly hands each to git diff as a pathspec, which git refuses for an
+// empty one ("empty string is not a valid pathspec"). The create reads that
+// diff right after saving the draft. On the parent both requests carried
+// "new_path":"".
+func TestWrites_PositionWithoutNewPath_SendsNone(t *testing.T) {
+	for _, write := range draftNoteWrites() {
+		t.Run(write.tool, func(t *testing.T) {
+			assertWriteSendsNoNewPath(t, write)
+		})
+	}
+}
+
+// assertWriteSendsNoNewPath runs write with a position whose new_path is
+// left out, and with one whose new_path is blank, and asserts that neither
+// carries the key to GitLab.
+func assertWriteSendsNoNewPath(t *testing.T, write draftNoteWrite) {
+	t.Helper()
+	for _, newPath := range []string{"", "  "} {
+		t.Run("new_path "+strconv.Quote(newPath), func(t *testing.T) {
+			var mu sync.Mutex
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != write.method || r.URL.Path != write.path {
+					http.NotFound(w, r)
+					return
+				}
+				position := sentPosition(t, r)
+				mu.Lock()
+				sent = position
+				mu.Unlock()
+				testutil.RespondJSON(w, http.StatusOK, draftNoteWrittenBody)
+			}))
+
+			err := write.call(t, client, map[string]any{
+				"base_sha": "aaa", "start_sha": "ccc", "head_sha": "bbb",
+				"old_path": "main.go", "new_path": newPath, "old_line": 7,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if sent == nil {
+				t.Fatal("no position reached GitLab")
+			}
+			assertSentField(t, sent, "new_path", nil)
+			assertSentField(t, sent, "old_path", "main.go")
+		})
+	}
+}
+
+// TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires asserts that the
+// served schema of a draft note position requires the three SHAs and no
+// path, on the create and on the update. GitLab's route requires base_sha,
+// start_sha, head_sha and position_type and declares new_path and old_path
+// optional (lib/api/draft_notes.rb), and completes a position with either
+// path. position_type is optional here because the handler sends text when
+// it is left out. While new_path was required, a client validating against
+// the schema refused a position naming only old_path, which the handlers and
+// GitLab both take.
+func TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires(t *testing.T) {
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, tool := range []string{"gitlab_mr_draft_note_create", "gitlab_mr_draft_note_update"} {
+		t.Run(tool, func(t *testing.T) {
+			props, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			position, _ := props["position"].(map[string]any)
+			got := fmt.Sprint(position["required"])
+			if want := "[base_sha start_sha head_sha]"; got != want {
+				t.Errorf("position required = %s, want %s", got, want)
+			}
 		})
 	}
 }

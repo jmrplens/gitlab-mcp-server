@@ -10,6 +10,7 @@ package mrdiscussions
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"reflect"
@@ -1777,6 +1778,68 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestCreate_PositionWithoutNewPath_SendsNone asserts that a position whose
+// new_path is left out or blank reaches GitLab without the key. GitLab
+// completes such a position with old_path (Position#file_path is
+// new_path.presence || old_path), but it looks the file's diff up by the
+// paths the position names, [old_path, new_path].compact.uniq, which keeps an
+// empty string, and Gitaly hands each to git diff as a pathspec, which git
+// refuses for an empty one ("empty string is not a valid pathspec"). On the
+// parent the request carried "new_path":"".
+func TestCreate_PositionWithoutNewPath_SendsNone(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		newPath string
+	}{
+		{name: "new_path left out", newPath: ""},
+		{name: "new_path of blanks", newPath: "  "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			createWithAssertions(t, CreateInput{
+				ProjectID: testProjectID,
+				MRIID:     1,
+				Body:      testRefactoringComment,
+				Position: &DiffPosition{
+					BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222",
+					OldPath: "main.go", NewPath: tc.newPath, OldLine: 7,
+				},
+			}, func(body map[string]any) {
+				pos, ok := body["position"].(map[string]any)
+				if !ok {
+					t.Errorf("position missing from the request body %v", body)
+					return
+				}
+				assertJSONField(t, pos, "new_path", nil)
+				assertJSONField(t, pos, "old_path", "main.go")
+			})
+		})
+	}
+}
+
+// TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires asserts that the
+// served schema of a position requires the three SHAs and no path. GitLab's
+// route requires base_sha, start_sha, head_sha and position_type and declares
+// new_path and old_path optional (lib/api/discussions.rb), and completes a
+// position with either path. position_type is optional here because the
+// handler sends text when it is left out. While new_path was required, a
+// client validating against the schema refused a position naming only
+// old_path, which the handler and GitLab both take.
+func TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires(t *testing.T) {
+	for _, spec := range newMRDiscussionsActionSpecs(t) {
+		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
+			continue
+		}
+		props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+		position, _ := props["position"].(map[string]any)
+		got := fmt.Sprint(position["required"])
+		if want := "[base_sha start_sha head_sha]"; got != want {
+			t.Errorf("position required = %s, want %s", got, want)
+		}
+		return
+	}
+	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
 }
 
 // discussionCreateRoute returns the handler every surface reaches

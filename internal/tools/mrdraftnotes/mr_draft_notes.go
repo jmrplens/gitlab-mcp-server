@@ -53,7 +53,7 @@ type DiffPosition struct {
 	StartSHA     string         `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
 	HeadSHA      string         `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
 	OldPath      string         `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files). Required for position_type 'file'."`
-	NewPath      string         `json:"new_path"            jsonschema:"File path after the change,required"`
+	NewPath      string         `json:"new_path,omitempty"  jsonschema:"File path after the change. Required for position_type 'file'."`
 	PositionType string         `json:"position_type,omitempty" jsonschema:"Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line."`
 	OldLine      int            `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int            `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
@@ -205,7 +205,8 @@ func ToOutput(d *gl.DraftNote) Output {
 }
 
 // toDiffPositionOptions converts a DiffPosition to the GitLab client
-// PositionOptions, mirroring every field one-to-one.
+// PositionOptions, mirroring every field one-to-one. A new_path left out or
+// blank is not sent, for the reason [toolutil.PositionNewPath] gives.
 func toDiffPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	positionType := p.PositionType
 	if positionType == "" {
@@ -215,7 +216,7 @@ func toDiffPositionOptions(p *DiffPosition) *gl.PositionOptions {
 		BaseSHA:      new(p.BaseSHA),
 		StartSHA:     new(p.StartSHA),
 		HeadSHA:      new(p.HeadSHA),
-		NewPath:      new(p.NewPath),
+		NewPath:      toolutil.PositionNewPath(p.NewPath),
 		PositionType: new(positionType),
 	}
 	if p.OldPath != "" {
