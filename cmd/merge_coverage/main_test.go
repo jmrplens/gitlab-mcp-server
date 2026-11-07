@@ -173,6 +173,14 @@ func TestRunMain_Refusals_ExitOneWithTheReason(t *testing.T) {
 			want: "counts 2 statements in ",
 		},
 		{
+			name: "a run profile of a version with a function this one deleted",
+			extra: func(t *testing.T, dir string) []string {
+				t.Helper()
+				return []string{"-online", writeProfile(t, dir, "stale.out", onlineProfile+fixturePkg+"/a.go:9.1,11.2 1 1\n")}
+			},
+			want: "/a.go: the block at 9.1,11.2 is in ",
+		},
+		{
 			name:  "a package no profile carries",
 			extra: func(*testing.T, string) []string { return []string{"-packages", "./test/e2e/internal/harness"} },
 			want:  "no profile carries github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness",

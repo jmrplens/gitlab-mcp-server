@@ -72,26 +72,28 @@ func compareSpans(a, b span) int {
 
 // block is what the profiles say of one span: how many statements it holds,
 // its count added over every profile, which halves carried it and which of
-// them reached it, and the first profile that carried it, which a refusal
-// names.
+// them reached it, and the profiles that carried it, in the order read, the
+// first of which a refusal names.
 type block struct {
 	statements int
 	count      int
 	seen, hit  [halves]bool
-	from       string
+	in         []string
 }
 
 // coverage is the union of every profile read: the mode the merged profile
-// is written in, and every block by its span.
+// is written in, every block by its span, and the profiles that carry a
+// block of each package, in the order read.
 type coverage struct {
-	mode   string
-	blocks map[span]*block
+	mode     string
+	blocks   map[span]*block
+	packages map[string][]string
 }
 
 // read parses every source and merges them, refusing a profile it cannot
 // parse and any two blocks that cannot have come from the same source.
 func read(sources []source) (*coverage, error) {
-	c := &coverage{blocks: map[span]*block{}}
+	c := &coverage{blocks: map[span]*block{}, packages: map[string][]string{}}
 	for _, src := range sources {
 		if err := c.addSource(src); err != nil {
 			return nil, err
@@ -100,17 +102,26 @@ func read(sources []source) (*coverage, error) {
 	if err := c.checkOverlaps(); err != nil {
 		return nil, err
 	}
+	if err := c.checkCarriers(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
-// addSource parses one profile and folds every block of it in.
+// addSource parses one profile and folds every block of it in, noting each
+// package it carries once.
 func (c *coverage) addSource(src source) error {
 	profiles, err := cover.ParseProfiles(src.path)
 	if err != nil {
 		return fmt.Errorf("profile %s: %w", src.path, err)
 	}
+	carried := map[string]bool{}
 	for _, p := range profiles {
 		c.addMode(p.Mode)
+		if pkg := path.Dir(p.FileName); !carried[pkg] {
+			carried[pkg] = true
+			c.packages[pkg] = append(c.packages[pkg], src.path)
+		}
 		for _, b := range p.Blocks {
 			if blockErr := c.addBlock(src, p.FileName, b); blockErr != nil {
 				return blockErr
@@ -133,18 +144,21 @@ func (c *coverage) addMode(mode string) {
 }
 
 // addBlock folds one block of a profile in, refusing an extent another
-// profile already gave another number of statements.
+// profile already gave another number of statements. A profile lists each
+// block of a file once, since cover.ParseProfiles folds the repeats, so the
+// profile is added to the block's once.
 func (c *coverage) addBlock(src source, file string, pb cover.ProfileBlock) error {
 	s := span{file: file, start: position{pb.StartLine, pb.StartCol}, end: position{pb.EndLine, pb.EndCol}}
 	b, known := c.blocks[s]
 	if !known {
-		b = &block{statements: pb.NumStmt, from: src.path}
+		b = &block{statements: pb.NumStmt}
 		c.blocks[s] = b
 	}
 	if b.statements != pb.NumStmt {
 		return fmt.Errorf("%s: the block at %s counts %d statements in %s and %d in %s, so the two were not written from the same source",
-			file, s.extent(), b.statements, b.from, pb.NumStmt, src.path)
+			file, s.extent(), b.statements, b.in[0], pb.NumStmt, src.path)
 	}
+	b.in = append(b.in, src.path)
 	b.count += pb.Count
 	b.seen[src.half] = true
 	if pb.Count > 0 {
@@ -171,10 +185,40 @@ func (c *coverage) checkOverlaps() error {
 		prev, next := spans[i-1], spans[i]
 		if prev.file == next.file && next.start.before(prev.end) {
 			return fmt.Errorf("%s: the block at %s in %s and the block at %s in %s overlap without being one block, so the profiles were not written from the same source",
-				next.file, prev.extent(), c.blocks[prev].from, next.extent(), c.blocks[next].from)
+				next.file, prev.extent(), c.blocks[prev].in[0], next.extent(), c.blocks[next].in[0])
 		}
 	}
 	return nil
+}
+
+// checkCarriers refuses a block that a profile carrying its package does not
+// carry. go test writes every block of every package a test binary measures,
+// the ones no test reached included, so profiles written from one source
+// carry a package whole or not at all, and a block one of them lacks is code
+// only one version of the package has: a function or a file added or
+// deleted. A deleted function after the unchanged ones overlaps no block of
+// the other version, so this is the check that refuses it.
+func (c *coverage) checkCarriers() error {
+	for _, s := range c.sorted() {
+		in, carriers := c.blocks[s].in, c.packages[path.Dir(s.file)]
+		if len(in) != len(carriers) {
+			return fmt.Errorf("%s: the block at %s is in %s and not in %s, which carries the package, so the profiles were not written from the same source",
+				s.file, s.extent(), in[0], missingFrom(carriers, in))
+		}
+	}
+	return nil
+}
+
+// missingFrom returns the first of the profiles carrying a package that in,
+// the profiles carrying one of its blocks, leaves out. Both list profiles in
+// the order read, and every profile in in carries the package.
+func missingFrom(carriers, in []string) string {
+	for i, profile := range in {
+		if carriers[i] != profile {
+			return carriers[i]
+		}
+	}
+	return carriers[len(in)]
 }
 
 // profile renders the merged profile: the mode, then every block once in

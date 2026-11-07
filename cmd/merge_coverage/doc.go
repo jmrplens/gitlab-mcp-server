@@ -48,9 +48,14 @@
 //
 // Two profiles written from the same source agree on every block, so a
 // disagreement is refused rather than merged: the same extent counting a
-// different number of statements, or two blocks of one file that overlap
-// without being the same block. Either means the profiles describe two
-// versions of a file, and a figure folded from both would be about neither.
+// different number of statements, two blocks of one file that overlap
+// without being the same block, or a block one profile carries of a package
+// that another carries without it. go test writes every block of a package a
+// test binary measures, reached or not, so a profile carries a package whole
+// or not at all, and a block only some of them have is a function or a file
+// only one version has, such as a function deleted after the unchanged ones,
+// which overlaps nothing. Each means the profiles describe two versions of
+// the package, and a figure folded from both would be about neither.
 //
 // The merged profile keeps the mode of its inputs when they share one, with
 // the counts of a counting mode added; inputs of different modes merge in set
