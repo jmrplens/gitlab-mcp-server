@@ -4508,6 +4508,23 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *t
 			},
 			wantErr: "filter meta action catalog",
 		},
+		{
+			// The names a call naming a withheld action is matched by are
+			// part of what a meta server answers from (issue 1282), so a
+			// failure to index them fails the registration rather than leave
+			// that call answered as a value outside the tool's enum.
+			name:    "meta refuses without its action names",
+			surface: config.ToolSurfaceMeta,
+			arrange: func(t *testing.T) error {
+				t.Helper()
+				forced := errors.New("forced index failure")
+				replaceRegistrationHook(t, &metaActionKeys, func(bool, edition.Tier) (map[string]map[string]string, error) {
+					return nil, fmt.Errorf("index the meta action names: %w", forced)
+				})
+				return forced
+			},
+			wantErr: "index the meta action names",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -10982,14 +10999,14 @@ func TestCreateServer_ReadOnly_MetaSurfaceKeepsMixedDomainReads(t *testing.T) {
 	if strings.Contains(write, "issueCreate") {
 		t.Errorf("mutating meta action executed in read-only mode: %s", write)
 	}
-	// The action is not advertised in the tool's action enum, so the call is
-	// rejected during schema validation before dispatch; older builds instead
-	// answered "unknown action" from the dispatcher.
-	rejected := strings.Contains(write, "does not equal any of") ||
-		strings.Contains(strings.ToLower(write), "unknown action") ||
-		strings.Contains(strings.ToLower(write), "unsupported")
-	if !rejected {
-		t.Errorf("mutating meta action was not rejected in read-only mode: %s", write)
+	// The action is not advertised in the tool's action enum, and the call is
+	// answered with the operator's cause before schema validation, in the
+	// dynamic surface's words (issue 1282). Older builds were refused by the
+	// enum, which reads as a typo, and before that answered "unknown action"
+	// from the dispatcher.
+	const cause = `gitlab_issue: action "create" exists but is not available: this deployment is configured to withhold it`
+	if !strings.HasPrefix(write, cause) {
+		t.Errorf("mutating meta action was not answered with read-only mode as its cause: %s", write)
 	}
 }
 

@@ -44,6 +44,13 @@ const (
 type ToolActions struct {
 	single map[string]string
 	groups map[string]toolGroup
+	// withheldKeys and withheld are what [ToolActions.Withhold] attached on a
+	// meta surface: every action argument a meta tool's actions answer to,
+	// mapped to its canonical ID, and the record of what the session's
+	// configuration withheld. Both are nil until then, and on every other
+	// surface.
+	withheldKeys map[string]map[string]string
+	withheld     *actioncatalog.Withheld
 }
 
 // toolGroup is one meta tool: the routes its action argument names, and the

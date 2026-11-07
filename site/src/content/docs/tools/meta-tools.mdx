@@ -4,7 +4,7 @@ description: Meta-tools group related GitLab operations into domain-level MCP to
 datePublished: "2026-04-21"
 faq:
   - q: "What is the action parameter?"
-    a: "The `action` parameter is the required field on every meta-tool. Each meta-tool defines an `action` enum listing the operations it supports, and the server validates the chosen action before dispatching to the corresponding handler. For example, `gitlab_issue` accepts `list`, `get`, `create`, `update`, `delete`, and more. The `action` is always required and must be one of the enumerated values; the remaining parameters live under `params` and depend on the action you choose."
+    a: "The `action` parameter is the required field on every meta-tool. Each meta-tool defines an `action` enum listing the operations it supports, and the server validates the chosen action before dispatching to the corresponding handler. For example, `gitlab_issue` accepts `list`, `get`, `create`, `update`, `delete`, and more. The `action` is always required and must be one of the enumerated values; the remaining parameters live under `params` and depend on the action you choose. An action the session's tier, token scopes or read-only mode withheld from the tool is answered with that cause, in the words the dynamic surface uses, rather than refused as a value outside the enum."
   - q: "How much do meta-tools reduce the tool count?"
     a: "Meta-tools reduce the registered tool count by **more than 95%** while preserving 100% of the functionality. Individual mode registers {{tools.free}} tools on Free/CE, {{tools.premium}} on self-managed Premium, {{tools.ultimate_self_managed}} on self-managed Ultimate and {{tools.gitlab_com}} on GitLab.com Ultimate with Orbit, whereas meta-tool mode exposes {{meta.base}} tools on Free/CE, {{meta.premium}} on self-managed Premium, {{meta.self_managed_enterprise}} on self-managed Ultimate and {{meta.gitlab_com}} on GitLab.com Ultimate. Every individual operation is still reachable as an action inside a domain meta-tool, so no capability is lost; only the token overhead of the tool list drops sharply."
   - q: "How do I find the exact parameters for an action?"
@@ -58,7 +58,7 @@ Some AI clients impose tool count limits: Windsurf allows 100 tools across all s
 
 ## How do meta-tools work?
 
-Each meta-tool defines an `action` enum that lists every operation it supports, then validates the chosen action and dispatches to the corresponding handler function internally. The `action` parameter is always required and must be one of the enumerated values; additional parameters depend on the chosen action. This is why one tool such as `gitlab_issue` can cover an entire domain without exposing a separate tool per operation.
+Each meta-tool defines an `action` enum that lists every operation it supports, then validates the chosen action and dispatches to the corresponding handler function internally. The `action` parameter is always required and must be one of the enumerated values; additional parameters depend on the chosen action. This is why one tool such as `gitlab_issue` can cover an entire domain without exposing a separate tool per operation. An action of the domain that this session's configuration withheld is answered with the reason ([When an action is withheld from the session](#when-an-action-is-withheld-from-the-session)).
 
 ```mermaid
 flowchart LR
@@ -89,6 +89,21 @@ A meta-tool takes exactly two top-level arguments, `action` and `params`. `param
 ```
 
 Before it calls GitLab, the server checks the envelope: a call naming an action the tool does not have is refused with the list of valid actions, and one that leaves out a required parameter is refused with the names it needs, unless `params` also carries a name the schema does not list, which may be a parameter alias the action resolves. An action with no required parameters takes an empty object, `"params": {}`, or no `params` at all.
+
+### When an action is withheld from the session
+
+The `action` enum lists only the actions this session can run, so a model is not offered what it cannot call. A call naming an action the session's configuration withheld from the tool is still answered with its cause rather than as a value outside the enum, which would read as a typo and leave a model concluding the capability is missing. The answer is the one the dynamic surface gives, with the meta-tool's name and the action as the call spelled it ([When an action is withheld from the session](/gitlab-mcp-server/tools/dynamic-tools/#when-an-action-is-withheld-from-the-session)):
+
+- **The instance's tier.** On a Free instance with `GITLAB_MCP_TOOL_SURFACE=meta`, `gitlab_project` with `{"action":"approval_config_get"}` is answered:
+
+  ```text
+  gitlab_project: action "approval_config_get" exists but is not available: it needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier. Do not report the capability as missing.
+  ```
+
+- **The credential's scopes.** A write on a `read_api` token, such as `gitlab_issue` with `{"action":"create"}`, names the scope the credential lacks and who asks for it, and asks for reauthorization.
+- **The operator.** A write read-only mode removed is answered `this deployment is configured to withhold it` and asks the operator.
+
+Three cases keep the answer they had. An action the operator excluded by name with `GITLAB_MCP_EXCLUDE_TOOLS` (`--exclude-tools`) is refused as a value outside the enum, since naming it back would contradict the exclusion. A meta-tool whose whole group was withheld, such as `gitlab_merge_train` on Free or `gitlab_admin` for a token without `admin_mode`, is not registered, and a call to it is answered `unknown tool` like any name the server does not serve. A fine-grained token's call is answered with the permission GitLab declares, before any of these ([Reading a withheld answer](/gitlab-mcp-server/operations/fine-grained-tokens/#reading-a-withheld-answer)).
 
 ## How many actions does each meta-tool have?
 

@@ -4,7 +4,7 @@ description: Las meta-herramientas agrupan operaciones de GitLab en herramientas
 datePublished: "2026-04-21"
 faq:
   - q: "¿Qué es el parámetro action?"
-    a: "El parámetro `action` es el campo requerido en cada meta-herramienta. Cada meta-herramienta define un enum `action` que lista las operaciones que admite, y el servidor valida la acción elegida antes de despachar al handler correspondiente. Por ejemplo, `gitlab_issue` acepta `list`, `get`, `create`, `update`, `delete` y más. El `action` siempre es requerido y debe ser uno de los valores enumerados; el resto de parámetros van bajo `params` y dependen de la acción que elijas."
+    a: "El parámetro `action` es el campo requerido en cada meta-herramienta. Cada meta-herramienta define un enum `action` que lista las operaciones que admite, y el servidor valida la acción elegida antes de despachar al handler correspondiente. Por ejemplo, `gitlab_issue` acepta `list`, `get`, `create`, `update`, `delete` y más. El `action` siempre es requerido y debe ser uno de los valores enumerados; el resto de parámetros van bajo `params` y dependen de la acción que elijas. Una acción que el tier, los scopes del token o el modo de solo lectura retienen para la sesión se responde con esa causa, con las palabras de la superficie dinámica, en lugar de rechazarse como un valor fuera del enum."
   - q: "¿Cuánto reducen las meta-herramientas el número de herramientas?"
     a: "Las meta-herramientas reducen el recuento de herramientas registradas en **más del 95%** manteniendo el 100% de la funcionalidad. El modo individual registra {{tools.free}} herramientas en Free/CE, {{tools.premium}} en Premium autoalojado, {{tools.ultimate_self_managed}} en Ultimate autoalojado y {{tools.gitlab_com}} en GitLab.com Ultimate con Orbit, mientras que el modo meta-herramientas expone {{meta.base}} herramientas en Free/CE, {{meta.premium}} en Premium autoalojado, {{meta.self_managed_enterprise}} en Ultimate autoalojado y {{meta.gitlab_com}} en GitLab.com Ultimate. Cada operación individual sigue siendo accesible como una acción dentro de una meta-herramienta de dominio, así que no se pierde ninguna capacidad; solo cae drásticamente el coste en tokens de la lista de herramientas."
   - q: "¿Cómo encuentro los parámetros exactos de una acción?"
@@ -58,7 +58,7 @@ Algunos clientes de IA imponen límites en el número de herramientas: Windsurf 
 
 ## ¿Cómo funcionan las meta-herramientas?
 
-Cada meta-herramienta define un enum `action` que lista todas las operaciones que admite, luego valida la acción elegida y la despacha a la función handler correspondiente internamente. El parámetro `action` siempre es requerido y debe ser uno de los valores enumerados; los parámetros adicionales dependen de la acción elegida. Por eso una sola herramienta como `gitlab_issue` puede cubrir un dominio entero sin exponer una herramienta separada por operación.
+Cada meta-herramienta define un enum `action` que lista todas las operaciones que admite, luego valida la acción elegida y la despacha a la función handler correspondiente internamente. El parámetro `action` siempre es requerido y debe ser uno de los valores enumerados; los parámetros adicionales dependen de la acción elegida. Por eso una sola herramienta como `gitlab_issue` puede cubrir un dominio entero sin exponer una herramienta separada por operación. Una acción del dominio que la configuración de esta sesión retiene se responde con el motivo ([Cuando una acción está retenida para la sesión](#cuando-una-acción-está-retenida-para-la-sesión)).
 
 ```mermaid
 flowchart LR
@@ -89,6 +89,21 @@ Una meta-herramienta recibe exactamente dos argumentos de primer nivel, `action`
 ```
 
 Antes de llamar a GitLab, el servidor comprueba el sobre: una llamada que nombra una acción que la herramienta no tiene se rechaza con la lista de acciones válidas, y una a la que le falta un parámetro requerido se rechaza con los nombres que necesita, salvo que `params` lleve también un nombre que el schema no recoge, que puede ser un alias de parámetro que la acción resuelve. Una acción sin parámetros requeridos recibe un objeto vacío, `"params": {}`, o ningún `params`.
+
+### Cuando una acción está retenida para la sesión
+
+El enum `action` lista solo las acciones que esta sesión puede ejecutar, para que a un modelo no se le ofrezca lo que no puede llamar. Una llamada que nombra una acción que la configuración de la sesión retiene para la herramienta se sigue respondiendo con su causa, y no como un valor fuera del enum, que se leería como una errata y llevaría a un modelo a concluir que falta la capacidad. La respuesta es la de la superficie dinámica, con el nombre de la meta-herramienta y la acción tal como la escribió la llamada ([Cuando una acción está retenida para la sesión](/gitlab-mcp-server/es/tools/dynamic-tools/#cuando-una-acción-está-retenida-para-la-sesión)):
+
+- **El tier de la instancia.** En una instancia Free con `GITLAB_MCP_TOOL_SURFACE=meta`, `gitlab_project` con `{"action":"approval_config_get"}` se responde:
+
+  ```text
+  gitlab_project: action "approval_config_get" exists but is not available: it needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier. Do not report the capability as missing.
+  ```
+
+- **Los scopes de la credencial.** Una escritura con un token `read_api`, como `gitlab_issue` con `{"action":"create"}`, nombra el scope que le falta a la credencial y quién lo pide, y pide reautorizar.
+- **El operador.** Una escritura que retiró el modo de solo lectura se responde `this deployment is configured to withhold it` y remite al operador.
+
+Tres casos conservan la respuesta que tenían. Una acción que el operador excluyó por nombre con `GITLAB_MCP_EXCLUDE_TOOLS` (`--exclude-tools`) se rechaza como un valor fuera del enum, porque nombrarla contradiría la exclusión. Una meta-herramienta cuyo grupo entero se retuvo, como `gitlab_merge_train` en Free o `gitlab_admin` para un token sin `admin_mode`, no se registra, y una llamada a ella se responde `unknown tool` como cualquier nombre que el servidor no sirve. La llamada de un token de grano fino se responde con el permiso que declara GitLab, antes que cualquiera de estas ([Leer una respuesta retenida](/gitlab-mcp-server/es/operations/fine-grained-tokens/#leer-una-respuesta-retenida)).
 
 ## ¿Cuántas acciones tiene cada meta-herramienta?
 

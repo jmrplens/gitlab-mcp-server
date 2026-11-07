@@ -736,6 +736,21 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 			want:    "filter meta action catalog",
 		},
 		{
+			// What the tier removed is recorded in the same build (issue
+			// 1282), so a failure to read it fails the catalog rather than
+			// leave a meta surface answering a tier-withheld call without its
+			// cause.
+			name: "meta tier",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := sharedTierRemoved
+				t.Cleanup(func() { sharedTierRemoved = original })
+				sharedTierRemoved = func(bool, edition.Tier) (*actioncatalog.Catalog, error) { return nil, forced }
+			},
+			run:  func() error { _, _, err := SharedMetaCatalog(client, fresh("meta-tier")); return err },
+			want: "record what the tier withheld from the meta catalog",
+		},
+		{
 			name:    "individual base",
 			arrange: failBase,
 			run:     func() error { _, _, err := SharedIndividualCatalog(client, fresh("individual-base")); return err },

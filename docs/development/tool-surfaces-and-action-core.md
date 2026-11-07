@@ -251,6 +251,30 @@ meta-tools from the filtered catalog. After tools are registered, the server
 exposes `gitlab://tools` and `gitlab://tools/{id}` as the public, surface-aware
 manifest for accepted call shapes and input schemas.
 
+What the filters withheld is recorded, so a call naming one of those actions
+is answered with its cause rather than as unknown. The record is
+`actioncatalog.Withheld`, which holds the token-scope, operator and tier
+causes and writes the one sentence every surface answers with
+(`Withheld.Message`); `tools.WithheldActions` carries the lists out of the
+catalog builders. The dynamic registry answers from it in execute. The meta
+surface answers from it too (issue 1282), and before the SDK refuses the
+action as a value outside the tool's enum: `SharedMetaCatalog` records
+`ByTier` beside the filter's lists, `tools.MetaActionKeys` maps each meta
+tool's route names and historical spellings to canonical IDs from the
+catalogs the narrowing started from (the base catalog and the actions the tier
+removed), and `toolvisibility.ToolActions.Withhold` attaches both to the
+per-server index the fine-grained checks read. `NarrowedCallMiddleware` reads
+the action argument of a call to a registered meta tool, and when the group
+does not route it and the record holds it, answers with the cause, labeled for
+the call's revision and counted as an unknown action. It runs inside the rate
+limiter and the fine-grained call check and before the argument limit, waits
+for the readiness gate like the fine-grained check, and hands the same answer
+to the meta dispatcher through `toolutil.WithWithheldAnswer`, which
+`validateMetaToolInput` consults before it calls an action unknown. Two
+answers stay as they were: an action the operator excluded by name is never
+recorded, so its tool's enum refuses it (AUT-004), and a group withheld whole
+is a tool never registered, which the SDK answers `unknown tool`.
+
 Every filter above but one is applied to the catalog, before anything is
 registered, and keyed on what the configuration shape holds. The fine-grained
 narrowing cannot be: a fine-grained token's grant is a value its caller mints,

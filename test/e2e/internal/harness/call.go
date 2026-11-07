@@ -444,10 +444,13 @@ func ExpectToolError(s *Session, id ActionID, params map[string]any, contains st
 // to a client. The three surfaces decline in three shapes and all three are
 // accepted here, since each is that surface's correct answer: the dynamic
 // dispatcher names the action as unknown or as withheld with its reason; the
-// meta dispatcher's tool no longer admits the action in its schema, so the
-// SDK refuses the argument before the dispatcher runs, or the whole group is
-// gone and the tool is unregistered; and the individual surface answers a
-// JSON-RPC error for a tool it never registered. An action the session does
+// meta tool's group answers with the same reason, or the whole group is gone
+// and the tool is unregistered; and the individual surface answers a JSON-RPC
+// error for a tool it never registered. The SDK's refusal of a meta call's
+// action as a value outside the tool's enum is accepted only for an action
+// the operator excluded by name, the one narrowing no answer names (AUT-004):
+// for every other one the meta surface says why since issue 1282, and the
+// enum refusal would be that answer gone missing. An action the session does
 // serve fails the test, because then there is no withholding to assert and
 // the call belongs to Refused.
 func Withheld(s *Session, id ActionID, params map[string]any, opts ...CallOption) string {
@@ -471,7 +474,7 @@ func Withheld(s *Session, id ActionID, params map[string]any, opts ...CallOption
 			callLabel(id, resolved), s.Surface(), s.Mode(), answer.describe())
 		return ""
 	}
-	if !withheldAnswer(answer) {
+	if !withheldAnswer(answer, s.excludedByName(id)) {
 		s.env.T.Fatalf("%s: declined as %s rather than as a withheld action: %s",
 			callLabel(id, resolved), answer.failure, firstLines(answer.said(), 6))
 	}
@@ -479,18 +482,23 @@ func Withheld(s *Session, id ActionID, params map[string]any, opts ...CallOption
 }
 
 // withheldAnswer reports whether an answer is one of the shapes a withheld
-// action is declined in.
+// action is declined in, excluded saying whether the operator excluded the
+// action by name.
 //
-// The invalid-params shape is admitted only when it is the action argument
-// the schema refused: a meta tool whose group lost the action lists the rest
-// in its enum, and that is the refusal. A parameter of the action refused
-// for another reason means the action was admitted, and so served.
-func withheldAnswer(answer callResult) bool {
+// The invalid-params shape is admitted only for such an action, and only when
+// it is the action argument the schema refused: a meta tool whose group lost
+// an action the operator named keeps the rest in its enum, and that refusal is
+// the answer, since naming the action back would contradict the exclusion
+// (AUT-004). Every other withheld action of a registered meta tool is
+// answered with its cause (issue 1282), so the enum refusal of one is the
+// defect the cause replaced. A parameter of the action refused for another
+// reason means the action was admitted, and so served.
+func withheldAnswer(answer callResult, excluded bool) bool {
 	switch answer.failure {
 	case FailureUnknownAction, failureFineGrained:
 		return true
 	case FailureInvalidParams:
-		return strings.Contains(answer.text, "/properties/action")
+		return excluded && strings.Contains(answer.text, "/properties/action")
 	case FailureProtocolError:
 		return answer.err != nil && strings.Contains(answer.err.Error(), "unknown tool")
 	default:
