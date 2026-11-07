@@ -171,13 +171,16 @@ func PositionNewPath(newPath string) *string {
 // request's diff renames unless it names both of the file's paths, as the
 // diff gives them. GitLab looks the file's diff up by the paths the position
 // carries ([PositionNewPath]), and git pairs a rename only when both of its
-// paths are in the pathspec, so with one of them, or with the two in any
-// other order, GitLab reads the file as a deleted or an added one and
-// computes the comment's line on that diff rather than on the rename the
-// merge request shows: an unchanged line is not found there at all. That is
-// why GitLab's documentation asks a text position for both paths. A file the
-// diff does not rename has the same path on both sides, and either path
-// finds it, which is the old_path fallback the anchor check allows. git
+// paths are in the pathspec, so with one of them GitLab reads the file as a
+// deleted or an added one and computes the comment's line on that diff
+// rather than on the rename the merge request shows: an unchanged line is
+// not found there at all. That is why GitLab's documentation asks a text
+// position for both paths. Swapped, the two still find the rename, since git
+// matches pathspecs in any order, but GitLab keeps the position the wrong
+// way round and takes its file from new_path (Position#file_path), the path
+// the rename removed, so the check asks for them as the diff gives them. A
+// file the diff does not rename has the same path on both sides, and either
+// path finds it, which is the old_path fallback the anchor check allows. git
 // pairs a rename only from a file the new tree no longer has to one the old
 // tree did not have, so neither path of a rename names another file of the
 // same diff. GitLab lists every file with both paths, and an entry that
