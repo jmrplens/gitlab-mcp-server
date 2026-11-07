@@ -225,7 +225,11 @@ func TestValidateDiffPosition_ContextLineMissingNewLine(t *testing.T) {
 }
 
 // TestValidateDiffPosition_OutsideDiff verifies that validation fails when
-// the specified line numbers fall outside the parsed diff range.
+// the specified line numbers fall outside the parsed diff range, and that the
+// refusal says the rule holds for a text position, the only kind placed on a
+// line, and offers a file position on the same file beside a general
+// discussion. It used to say that inline comments can only be placed on lines
+// of the diff, which a file or an image position is not placed on.
 func TestValidateDiffPosition_OutsideDiff(t *testing.T) {
 	lines := ParseDiffLines(simpleDiff)
 
@@ -234,8 +238,21 @@ func TestValidateDiffPosition_OutsideDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("line outside diff should return error")
 	}
-	if got := err.Error(); !contains(got, "outside the diff range") {
-		t.Errorf("error should mention 'outside the diff range', got: %s", got)
+	got := err.Error()
+	for _, want := range []string{
+		"outside the diff range",
+		"A text position can only be placed on a line visible in the diff context",
+		"send position_type file with the file's old_path and new_path to comment on the whole file",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !contains(got, want) {
+				t.Errorf("error = %q, want it to say %q", got, want)
+			}
+		})
+	}
+	if stale := "Inline comments can only be placed on lines"; contains(got, stale) {
+		t.Errorf("error = %q, still says %q", got, stale)
 	}
 }
 

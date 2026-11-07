@@ -481,7 +481,9 @@ func validateOldLineOnlyPosition(dl DiffLine, oldLine int) (bool, error) {
 }
 
 // buildPositionError constructs a descriptive error when a line is not found
-// in the diff at all, listing the valid line ranges.
+// in the diff at all, listing the valid line ranges. Only a text position is
+// placed on a line, so the refusal offers a file position on the same file,
+// which GitLab places by its two paths alone, beside a general discussion.
 func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
 	// Zero is "no such line" here, so a range starts at the first line that
 	// has a number rather than at zero.
@@ -515,9 +517,10 @@ func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
 	}
 
 	return fmt.Errorf(
-		"position (%s) is outside the diff range. Inline comments can only be placed on lines "+
+		"position (%s) is outside the diff range. A text position can only be placed on a line "+
 			"visible in the diff context (valid new_line: %d-%d, valid old_line: %d-%d). "+
-			"To comment on code outside the diff, omit the position parameter to create a general discussion instead. "+
+			"To comment on code outside the diff, send position_type file with the file's old_path and new_path to comment on the whole file, "+
+			"or omit the position parameter to create a general discussion instead. "+
 			"See https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff",
 		target, minNew, maxNew, minOld, maxOld,
 	)
