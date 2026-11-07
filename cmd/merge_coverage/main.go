@@ -226,7 +226,7 @@ func importPath(spelling string) string {
 // Otherwise it merges the profiles, writes the merged profile and the record
 // when asked, prints the report and appends it to the summary when asked. A
 // record is taken only of run profiles a complete run of this tree stamped,
-// which is settled before anything is read or written.
+// which is settled before a profile is read or anything is written.
 func run(opts options, stdout io.Writer) error {
 	if opts.stamp != "" {
 		return writeStamp(opts.stamp, opts.packages)

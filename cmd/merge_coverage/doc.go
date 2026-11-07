@@ -103,8 +103,8 @@
 // builds, and keeps the stamp beside the pass's profile, <stem>.complete for
 // <stem>.out, only once the run ended with status 0, both passes passed and
 // every skip declared. -write-record refuses a run profile with no stamp, or
-// with the stamp of other sources than the tree holds, before it reads
-// anything: profiles of an edit that moved no block merge, so without the
+// with the stamp of other sources than the tree holds, before it reads a
+// profile: profiles of an edit that moved no block merge, so without the
 // stamp the record would credit what a run reached in the old code to the
 // new code's hash, and a run that failed or skipped scenarios would raise
 // the ceiling.
