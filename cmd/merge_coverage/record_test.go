@@ -533,8 +533,10 @@ func TestCredit_DeclarationsTheRecordNoLongerDescribes_AreDropped(t *testing.T) 
 // TestCredit_RecordItCannotApply_IsRefused holds a record whose reach cannot
 // be read, or whose file cannot be read, to an error rather than to a merge
 // that leaves part of it out: a reached block spelled any other way than the
-// writer spells it, and a recorded file the offline tests measure that is
-// not on disk.
+// writer spells it, one that lies outside its declaration, which the writer
+// never records and which would credit another declaration's block under
+// this one's hash, and a recorded file the offline tests measure that is not
+// on disk.
 func TestCredit_RecordItCannotApply_IsRefused(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -545,6 +547,12 @@ func TestCredit_RecordItCannotApply_IsRefused(t *testing.T) {
 		{name: "not an extent", reached: "x", want: `test/e2e/internal/fixture/a.go func A: the reached block "x" is not spelled as the record writes one`},
 		{name: "a signed line", reached: "+0.17,1.7 1", want: `the reached block "+0.17,1.7 1" is not spelled`},
 		{name: "text after it", reached: "0.17,1.7 1 x", want: `the reached block "0.17,1.7 1 x" is not spelled`},
+		{
+			name: "a block of the declaration after it", reached: "9.11,10.7 1",
+			want: `test/e2e/internal/fixture/a.go func A: the reached block "9.11,10.7 1" lies outside the declaration`,
+		},
+		{name: "a block above it", reached: "-3.1,-2.5 1", want: `the reached block "-3.1,-2.5 1" lies outside the declaration`},
+		{name: "a block that ends past it", reached: "4.7,6.3 1", want: `the reached block "4.7,6.3 1" lies outside the declaration`},
 		{name: "a file that is not there", gone: true, want: "reading the source the profiles measured: "},
 	}
 	for _, tc := range tests {

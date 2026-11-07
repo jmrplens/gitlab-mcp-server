@@ -90,6 +90,13 @@ func genKey(d *ast.GenDecl) string {
 	return d.Tok.String() + " " + strings.Join(names, ", ")
 }
 
+// holds reports whether the block at s lies inside the declaration's text,
+// from its first position to its last, which is where every block go test
+// measures in it lies.
+func (d declaration) holds(s span) bool {
+	return !s.start.before(d.start) && !d.end.before(s.end)
+}
+
 // holding returns the declaration whose text holds a block that starts at
 // p, which is every block go test measures: it instruments function bodies,
 // the literals of a var among them, and nothing between declarations.

@@ -98,7 +98,9 @@
 // is credited with the blocks they reached in it; one whose text changed,
 // that its file no longer declares, whose file the offline half no longer
 // measures, or whose recorded blocks are not the ones go test instruments in
-// it today (another toolchain's instrumentation), is dropped whole and named.
+// it today (another toolchain's instrumentation), is dropped whole and named;
+// a recorded block that lies outside its declaration, which the writer never
+// records, refuses the record.
 // Each package is then held to the record: more statements reached by
 // neither half than the record says fails, naming the two ways out, a test
 // that reaches them or a complete run recorded again. With -freshness

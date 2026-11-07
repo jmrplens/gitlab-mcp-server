@@ -281,7 +281,8 @@ type dropped struct {
 // did, and reached each recorded block of a declaration whose text is still
 // what they ran. A declaration that no longer describes the tree is dropped
 // whole, with the reason, rather than credited in part. A record whose reach
-// cannot be read, or whose file cannot be read, is refused.
+// cannot be read or lies outside its declaration, or whose file cannot be
+// read, is refused.
 func (c *coverage) credit(rec *record) ([]dropped, error) {
 	files := map[string]string{}
 	measured := map[string]bool{}
@@ -327,7 +328,10 @@ func (c *coverage) credit(rec *record) ([]dropped, error) {
 
 // match finds a recorded declaration in its file today and returns the
 // spans of the blocks the runs reached in it, or why its reach no longer
-// counts.
+// counts. A reached block outside the declaration is refused: the writer
+// records each block under the declaration that holds it, and the text is
+// unchanged, so such a block was put there by hand and would credit another
+// declaration's block under this one's hash.
 func (c *coverage) match(file string, decls []declaration, e recordDeclaration) ([]span, string, error) {
 	i := slices.IndexFunc(decls, func(d declaration) bool { return d.key == e.Declaration })
 	if i < 0 {
@@ -341,6 +345,9 @@ func (c *coverage) match(file string, decls []declaration, e recordDeclaration) 
 		s, statements, err := absoluteBlock(file, decls[i], extent)
 		if err != nil {
 			return nil, "", err
+		}
+		if !decls[i].holds(s) {
+			return nil, "", fmt.Errorf("the reached block %q lies outside the declaration, and the record keeps each block under the declaration that holds it", extent)
 		}
 		if b, ok := c.blocks[s]; !ok || b.statements != statements {
 			return nil, whyInstrumented, nil
