@@ -364,7 +364,8 @@ func TestRunMain_Stamp_Refusals_ExitOne(t *testing.T) {
 }
 
 // TestRunMain_WriteRecord_RunProfilesNotStampedAsThisTree_AreRefused holds
-// the record to the complete runs of the tree it is written on: a run
+// the record to complete runs of the packages' sources as the tree it is
+// written on holds them: a run
 // profile with no stamp beside it, which run-docker-e2e.sh keeps only after a
 // complete run, one whose stamp is of another version of the sources, here A
 // edited after the run without moving a block, so the record would credit
@@ -430,7 +431,8 @@ func TestRunMain_WriteRecord_RunProfilesNotStampedAsThisTree_AreRefused(t *testi
 
 // TestRunMain_WriteRecord_WritesTheRecordBesideTheReport runs the command the
 // way make e2e-support-coverage-record does, over a run profile a complete
-// run of this tree stamped: the merge is reported as always, and the record
+// run stamped with the packages' sources as this tree holds them: the merge
+// is reported as always, and the record
 // of what the runs reached is written where -write-record says.
 func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
 	writeTree(t, nil)

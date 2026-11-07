@@ -75,13 +75,14 @@
 # server, whose statements E2E_COVER_DIR collects from the children. Both
 # profiles are removed before anything starts, and make e2e-support-coverage
 # merges every one the report directory holds with the profile the packages'
-# offline tests write. A complete run also stamps the sources each pass is
-# about to build, the SHA-256 of every source file of those packages, and
-# keeps the stamp beside the pass's profile, as <stem>-coverprofile.complete
+# offline tests write. A complete run also stamps the sources of those
+# packages before each pass builds, the SHA-256 of every source file of them,
+# and keeps the stamp beside the pass's profile, as <stem>-coverprofile.complete
 # and <stem>-final-coverprofile.complete, only once the run ended with status
 # 0: make e2e-support-coverage-record takes no run profile without a stamp
-# that is the tree's, so a record is only ever of complete runs of the tree it
-# is written on.
+# that is the tree's, so a record is only ever of complete runs of the
+# packages' sources the tree it is written on holds. The scenarios, the
+# harness and the server that drive them are not stamped.
 #
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the

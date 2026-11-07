@@ -170,9 +170,10 @@ run_status_after_gate() {
 }
 
 # stamp_complete_run writes, from the repository root, the stamp of the
-# sources a pass of a complete run is about to build its test binaries from:
-# cmd/merge_coverage -stamp, the SHA-256 of every source file of the packages
-# E2E_COVERPKG names. It is written under the stamp's name with .pending
+# packages E2E_COVERPKG names as the tree holds them right before a pass of a
+# complete run builds its test binaries: cmd/merge_coverage -stamp, the
+# SHA-256 of every source file of those packages, and of nothing else the
+# pass builds. It is written under the stamp's name with .pending
 # after it, which keep_complete_run_stamps changes once the run is known to
 # be complete. A pass it cannot stamp is said so and left without a stamp,
 # which does not fail the run: only the record needs the stamp, and it

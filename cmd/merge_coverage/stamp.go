@@ -72,8 +72,9 @@ func writeStamp(name string, packages []string) error {
 	return nil
 }
 
-// checkStamps holds every run profile a record is taken of to the stamp a
-// complete run of this tree leaves beside it. A profile with no stamp was not
+// checkStamps holds every run profile a record is taken of to the stamp of
+// the packages' sources as this tree holds them, which a complete run leaves
+// beside it. A profile with no stamp was not
 // written by a complete run: run-docker-e2e.sh keeps a pass's stamp only once
 // both passes passed and every skip was declared. A profile whose stamp is
 // not the tree's was written from other sources, and the record would credit

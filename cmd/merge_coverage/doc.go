@@ -98,13 +98,14 @@
 // refused for what it would hold leaves neither the record nor the merged
 // profile -o names.
 //
-// The record is taken only of complete runs of the tree it is written on.
-// -stamp writes the stamp of the packages' sources, the SHA-256 of every Go
-// file of each package that is not a test, in sha256sum's format;
-// run-docker-e2e.sh stamps each pass of a complete run right before the pass
-// builds, and keeps the stamp beside the pass's profile, <stem>.complete for
-// <stem>.out, only once the run ended with status 0, both passes passed and
-// every skip declared. -write-record refuses a run profile with no stamp, or
+// The record is taken only of complete runs of the packages' sources as the
+// tree it is written on holds them; the scenarios, the harness and the server
+// that drive the packages are not stamped. -stamp writes the stamp of the
+// packages' sources, the SHA-256 of every Go file of each package that is
+// not a test, in sha256sum's format; run-docker-e2e.sh stamps each pass of a
+// complete run right before the pass builds, and keeps the stamp beside the
+// pass's profile, <stem>.complete for <stem>.out, only once the run ended
+// with status 0, both passes passed and every skip declared. -write-record refuses a run profile with no stamp, or
 // with the stamp of other sources than the tree holds, before it reads a
 // profile: profiles of an edit that moved no block merge, so without the
 // stamp the record would credit what a run reached in the old code to the
@@ -138,10 +139,10 @@
 //
 // It exits 0 when it reported, the gate passed or the stamp was written, 1
 // when a profile or the record could not be read or merged, a run profile a
-// record was asked of is not stamped as a complete run of the tree, a package
-// could not be measured or stamped, the report could not be printed, a file
-// could not be written or the gate failed, and 2 for a command line it
-// cannot use. make e2e-support-coverage
+// record was asked of is not stamped by a complete run of the packages'
+// sources the tree holds, a package could not be measured or stamped, the
+// report could not be printed, a file could not be written or the gate
+// failed, and 2 for a command line it cannot use. make e2e-support-coverage
 // runs the offline half and this command over the profiles the complete runs
 // left, make e2e-support-coverage-record does the same and writes the record,
 // and make check-e2e-support-coverage is the gate.

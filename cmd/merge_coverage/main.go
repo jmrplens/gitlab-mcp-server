@@ -73,9 +73,10 @@ type modeFlags struct {
 // the record when asked, judges the offline half against a record, or
 // stamps the packages' sources. It returns 2 for a command line it cannot
 // use, 1 when the profiles or the record could not be read or merged, a run
-// profile a record was asked of is not stamped as a complete run of the
-// tree, a package could not be measured or stamped, the report could not be
-// printed, a file could not be written or the gate failed, and 0 otherwise.
+// profile a record was asked of is not stamped by a complete run of the
+// packages' sources the tree holds, a package could not be measured or
+// stamped, the report could not be printed, a file could not be written or
+// the gate failed, and 0 otherwise.
 func runMain(args []string, stdout, stderr io.Writer) int {
 	opts, ok := parseArgs(args, stderr)
 	if !ok {

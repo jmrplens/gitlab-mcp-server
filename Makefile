@@ -2412,11 +2412,13 @@ e2e-support-coverage:
 #
 # It is e2e-support-coverage writing the record, so the record is folded from
 # exactly the halves the report beside it shows. The record is taken only of
-# complete runs of this tree: run-docker-e2e.sh stamps the sources each pass
-# of a complete run builds and keeps the stamp, <stem>-coverprofile.complete,
-# only once the run ended with status 0, and merge_coverage -write-record
-# refuses a run profile without one, or whose stamp is not this tree's,
-# before it writes anything.
+# complete runs of the two packages' sources as this tree holds them:
+# run-docker-e2e.sh stamps those sources before each pass of a complete run
+# builds and keeps the stamp, <stem>-coverprofile.complete, only once the run
+# ended with status 0, and merge_coverage -write-record refuses a run profile
+# without one, or whose stamp is not this tree's, before it writes anything.
+# The scenarios, the harness and the server that drive the two packages are
+# not stamped.
 e2e-support-coverage-record:
 	@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=$(E2E_SUPPORT_RECORD)
 
