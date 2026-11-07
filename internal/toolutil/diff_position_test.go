@@ -316,12 +316,18 @@ func TestValidateDiffPosition_NoLines(t *testing.T) {
 }
 
 // TestValidateDiffPosition_ZeroBoth verifies that validation fails when both
-// old_line and new_line are zero, which is an invalid position.
+// old_line and new_line are zero, which is an invalid position, in words
+// giving the line by its kind as [ValidateTextPosition] does, both numbers
+// for an unchanged line, where it used to ask for at least one of them.
 func TestValidateDiffPosition_ZeroBoth(t *testing.T) {
 	lines := ParseDiffLines(simpleDiff)
 	err := ValidateDiffPosition(lines, 0, 0)
 	if err == nil {
 		t.Fatal("both lines zero should return error")
+	}
+	const want = "a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one)"
+	if err.Error() != want {
+		t.Errorf("ValidateDiffPosition(0, 0) = %q, want %q", err, want)
 	}
 }
 

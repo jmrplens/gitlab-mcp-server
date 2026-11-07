@@ -421,7 +421,7 @@ func ValidateDiffPosition(diffLines []DiffLine, newLine, oldLine int) error {
 		return errors.New("no diff content available for this file")
 	}
 	if newLine == 0 && oldLine == 0 {
-		return errors.New("at least one of new_line or old_line must be set")
+		return errors.New("a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one)")
 	}
 
 	for _, dl := range diffLines {

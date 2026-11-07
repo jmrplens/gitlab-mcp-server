@@ -1077,6 +1077,24 @@ func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
 	}
 }
 
+// TestCreateInput_PositionDescription_NamesEveryPositionType holds the
+// description of the create's position parameter to the three things a
+// position can place a draft note on, as the create's Usage and position
+// guidance do: a line of the diff (text), a point of an image (image) and a
+// whole file (file). It used to say inline comments on specific lines, which
+// an image or file position is not placed on.
+func TestCreateInput_PositionDescription_NamesEveryPositionType(t *testing.T) {
+	field, _ := reflect.TypeFor[CreateInput]().FieldByName("Position")
+	description := field.Tag.Get("jsonschema")
+	const want = "an inline comment on a line of the diff, a point of an image or a whole file"
+	if !strings.Contains(description, want) {
+		t.Errorf("create position description = %q, want it to say %q", description, want)
+	}
+	if stale := "on specific lines"; strings.Contains(description, stale) {
+		t.Errorf("create position description = %q, still says %q", description, stale)
+	}
+}
+
 // TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

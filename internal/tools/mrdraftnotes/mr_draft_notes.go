@@ -88,7 +88,7 @@ type CreateInput struct {
 	CommitID              string               `json:"commit_id,omitempty"               jsonschema:"SHA of the commit to comment on"`
 	InReplyToDiscussionID string               `json:"in_reply_to_discussion_id,omitempty" jsonschema:"Discussion ID to reply to"`
 	ResolveDiscussion     *bool                `json:"resolve_discussion,omitempty"      jsonschema:"Resolve the discussion when published"`
-	Position              *DiffPosition        `json:"position,omitempty"                jsonschema:"Diff position for inline comments on specific lines. Omit for general MR comments."`
+	Position              *DiffPosition        `json:"position,omitempty"                jsonschema:"Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments."`
 }
 
 // UpdateInput defines parameters for updating a draft note. It takes a new
