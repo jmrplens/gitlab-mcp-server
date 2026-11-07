@@ -1228,14 +1228,20 @@ func TestValidatePosition_DiffFetchError(t *testing.T) {
 // new_path.presence || old_path. Before the blank case was handled, a
 // new_path of " " passed the anchor check and was then looked up as the path
 // " ", which no diff holds, so a draft note GitLab would place on old_path's
-// file was refused as not in the diff.
+// file was refused as not in the diff. The out-of-range cases hold the
+// fallback to reading the old file's diff: a lookup skipped with a nil return
+// would pass the in-range cases and fail these.
 func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 	tests := []struct {
 		name    string
 		newPath string
+		newLine int
+		wantErr string
 	}{
-		{name: "new_path empty", newPath: ""},
-		{name: "new_path of blanks", newPath: "  "},
+		{name: "new_path empty", newPath: "", newLine: 2},
+		{name: "new_path of blanks", newPath: "  ", newLine: 2},
+		{name: "new_path empty, new_line outside the diff", newPath: "", newLine: 9, wantErr: "new_line 9"},
+		{name: "new_path of blanks, new_line outside the diff", newPath: "  ", newLine: 9, wantErr: "new_line 9"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1257,10 +1263,16 @@ func TestValidatePosition_FallbackToOldPath(t *testing.T) {
 				BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
 				OldPath: "old_name.go",
 				NewPath: tt.newPath,
-				NewLine: 2,
+				NewLine: tt.newLine,
 			})
-			if err != nil {
-				t.Errorf("validatePosition() error = %v, want nil", err)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validatePosition() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("validatePosition() error = %v, want one naming %q", err, tt.wantErr)
 			}
 		})
 	}
