@@ -137,16 +137,18 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 // the file's paths, in its example as well: GitLab looks a commit position's
 // file up in the commit's diff by the paths it carries, as it does a merge
 // request's, so one path finds a renamed file only as a deleted or an added
-// one. It used to offer either path as sufficient. It gives a text
-// position's line by [lineRule], where it used to ask for new_line or
-// old_line. A file position may name a file outside the commit's diff,
-// which GitLab accepts and which has no entry in repository.commit_diff, so
-// the guidance and the two path fields say that such a file takes the path
-// repository.tree lists at the commit as both, where they used to send the
-// caller to that entry for every file. And the action's Usage names the two
-// things a position this action sends anchors a comment to, a line of the
-// commit's diff or a whole file, where it used to offer only a file and a
-// line.
+// one. It used to offer either path as sufficient. It says GitLab takes one
+// path only for a text position on a file that was not renamed, where it
+// used to say so of any position, while a file position needs both
+// (FileFormatter#complete?). It gives a text position's line by [lineRule],
+// where it used to ask for new_line or old_line. A file position may name a
+// file outside the commit's diff, which GitLab accepts and which has no
+// entry in repository.commit_diff, so the guidance and the two path fields
+// say that such a file takes the path repository.tree lists at the commit as
+// both, where they used to send the caller to that entry for every file. And
+// the action's Usage names the two things a position this action sends
+// anchors a comment to, a line of the commit's diff or a whole file, where it
+// used to offer only a file and a line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	detail := reflect.TypeFor[commits.DetailOutput]()
 	id, hasID := detail.FieldByName("ID")
@@ -178,7 +180,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		"a commit with no parent takes the all-zero SHA for base_sha and start_sha",
 		"Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed.",
 		"A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both.",
-		"finds a renamed file's lines only by both",
+		"GitLab takes one for a text position on a file that was not renamed, but finds a renamed file's lines only by both",
 		"text also needs a line of the commit diff (" + lineRule + ")",
 	} {
 		t.Run(want, func(t *testing.T) {
@@ -186,6 +188,9 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
 			}
 		})
+	}
+	if old := "GitLab takes one on a file that was not renamed"; strings.Contains(confusions, old) {
+		t.Errorf("position guidance confusions = %q, want them no longer to say %q, which a file position contradicts", confusions, old)
 	}
 	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
 		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
