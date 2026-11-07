@@ -934,8 +934,12 @@ func TestValidateImagePosition_EachMissingField_IsNamed(t *testing.T) {
 // TestValidateFilePosition_EachMissingPath_IsNamed holds the file check to
 // GitLab's rule for a file position: old_path and new_path both present,
 // where a path of blanks is not. A renamed file passes as well as an
-// unchanged one, and the refusal names exactly the paths left out.
+// unchanged one, and the refusal names exactly the paths left out. It also
+// says where each path comes from, a file outside the diff included: that
+// file has no entry in the diff listing, and the refusal used to send the
+// caller to that listing alone.
 func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
+	const outsideTheDiff = "or for a file outside the diff send the path repository.tree lists at head_sha as both"
 	for _, tc := range []struct {
 		name, oldPath, newPath, wantMissing string
 	}{
@@ -958,6 +962,10 @@ func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
 			want := "a file position needs both old_path and new_path (missing: " + tc.wantMissing + "): "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Errorf("ValidateFilePosition() = %v, want a refusal opening %q", err, want)
+				return
+			}
+			if !strings.Contains(err.Error(), outsideTheDiff) {
+				t.Errorf("ValidateFilePosition() = %v, want it to say %q", err, outsideTheDiff)
 			}
 		})
 	}

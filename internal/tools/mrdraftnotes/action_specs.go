@@ -171,8 +171,11 @@ const positionValueSource = "Inline diff location for a review comment. base_sha
 // on a renamed file is refused without both
 // (toolutil.ValidateRenamedFilePosition). A file position needs both
 // whatever the file (toolutil.ValidateFilePosition), and a text or image
-// position on a file that was not renamed passes with either.
-const positionPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
+// position on a file that was not renamed passes with either. A file outside
+// the diff, which only an image or file position may name, has no entry in
+// mr_review.changes_get, and is unchanged, so the one path repository.tree
+// lists for it is both.
+const positionPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
 
 // noteIDGuidance is the shared parameter guidance for note_id.
 var noteIDGuidance = toolutil.ParameterGuidance{
@@ -206,7 +209,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_create": {
-		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get. A text position (the default) also needs a line of the diff: new_line for an added line, old_line for a removed one, both for an unchanged one. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
+		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get, or both from repository.tree for a file outside the diff. A text position (the default) also needs a line of the diff: new_line for an added line, old_line for a removed one, both for an unchanged one. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
 		Aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
 		Related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
 		Guidance: map[string]toolutil.ParameterGuidance{

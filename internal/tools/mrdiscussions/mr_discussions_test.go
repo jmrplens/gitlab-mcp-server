@@ -1639,7 +1639,11 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			t.Run(name, func(t *testing.T) {
 				field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
 				description := field.Tag.Get("jsonschema")
-				for _, want := range []string{otherPath, "Required for position_type=file and for a text position on a renamed file."} {
+				for _, want := range []string{
+					otherPath,
+					"or from repository.tree for a file outside the diff.",
+					"Required for position_type=file and for a text position on a renamed file.",
+				} {
 					if !strings.Contains(description, want) {
 						t.Errorf("%s description = %q, want it to say %q", name, description, want)
 					}
@@ -1677,12 +1681,15 @@ func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
 // recommendation, so it also names the positions the check before the write
 // refuses with one path, a file position and a text position on a file the
 // diff renames, and says a text or image position on any other file passes
-// with one.
+// with one. A file outside the diff has no entry in mr_review.changes_get,
+// so the guidance says it takes the path repository.tree lists as both,
+// where it used to send the caller to that entry for every file.
 func assertBothPathsGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 	t.Helper()
 	confusions := strings.Join(guidance.CommonConfusions, " ")
 	for _, want := range []string{
 		"Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed.",
+		"A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both.",
 		"A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both.",
 		"A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position.",
 	} {

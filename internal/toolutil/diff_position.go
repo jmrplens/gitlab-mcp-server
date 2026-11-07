@@ -286,7 +286,10 @@ func ValidateImagePosition(width, height, x, y *int64) error {
 // (Gitlab::Diff::Formatters::FileFormatter#complete?), where a path of blanks
 // is not, and reads no line of one, so the lines of the merge request's diff
 // are not consulted. It runs before any request for the reason
-// [ValidateImagePosition] gives.
+// [ValidateImagePosition] gives. A file position may name a file outside
+// the diff, which GitLab accepts, and such a file has no entry in the diff
+// listing to take the paths from, so the refusal also names the repository
+// tree, whose one path for an unchanged file is both.
 func ValidateFilePosition(oldPath, newPath string) error {
 	var missing []string
 	if strings.TrimSpace(oldPath) == "" {
@@ -301,7 +304,8 @@ func ValidateFilePosition(oldPath, newPath string) error {
 	return fmt.Errorf(
 		"a file position needs both old_path and new_path (missing: %s): take them from the file's entry in "+
 			"the diff (mr_review.changes_get for a merge request, repository.commit_diff for a commit), which "+
-			"gives an added or a deleted file the same path in both",
+			"gives an added or a deleted file the same path in both, or for a file outside the diff send the "+
+			"path repository.tree lists at head_sha as both",
 		strings.Join(missing, ", "),
 	)
 }

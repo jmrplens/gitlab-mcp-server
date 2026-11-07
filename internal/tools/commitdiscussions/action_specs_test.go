@@ -139,7 +139,11 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 // request's, so one path finds a renamed file only as a deleted or an added
 // one. It used to offer either path as sufficient. It gives a text
 // position's line by [lineRule], where it used to ask for new_line or
-// old_line.
+// old_line. A file position may name a file outside the commit's diff,
+// which GitLab accepts and which has no entry in repository.commit_diff, so
+// the guidance and the two path fields say that such a file takes the path
+// repository.tree lists at the commit as both, where they used to send the
+// caller to that entry for every file.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	detail := reflect.TypeFor[commits.DetailOutput]()
 	id, hasID := detail.FieldByName("ID")
@@ -154,6 +158,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	for _, want := range []string{
 		"base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get,",
 		"the file's old_path and new_path and the line come from repository.commit_diff.",
+		"A file position may name a file outside the diff, whose path repository.tree lists at head_sha.",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(guidance.ValueSource, want) {
@@ -165,6 +170,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	for _, want := range []string{
 		"a commit with no parent takes the all-zero SHA for base_sha and start_sha",
 		"Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed.",
+		"A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both.",
 		"finds a renamed file's lines only by both",
 		"text also needs a line of the commit diff (" + lineRule + ")",
 	} {
@@ -176,6 +182,14 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	}
 	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
 		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
+	}
+	for _, name := range []string{"OldPath", "NewPath"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[PositionInput]().FieldByName(name)
+			if description, want := field.Tag.Get("jsonschema"), "or from repository.tree for a file outside the diff."; !strings.Contains(description, want) {
+				t.Errorf("%s description = %q, want it to say %q", name, description, want)
+			}
+		})
 	}
 }
 

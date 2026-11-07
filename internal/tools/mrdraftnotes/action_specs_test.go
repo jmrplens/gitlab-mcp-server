@@ -424,6 +424,13 @@ func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
 // asks for both of the file's paths with.
 const bothPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed."
 
+// outsideTheDiffConfusion is the sentence the position guidance of both
+// writes says where a file outside the diff takes its paths in. Such a file,
+// which an image or file position may name, has no entry in
+// mr_review.changes_get, and the guidance used to send the caller there for
+// both paths whatever the file.
+const outsideTheDiffConfusion = "A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both."
+
 // onePathConfusion is the sentence the position guidance of both writes says
 // which positions are refused with one path in: a file position
 // (toolutil.ValidateFilePosition) and a text position on a file the diff
@@ -448,22 +455,26 @@ func assertBothPathsAsked(t *testing.T, createUsage string) {
 		t.Run(name, func(t *testing.T) {
 			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
 			description := field.Tag.Get("jsonschema")
-			for _, want := range []string{otherPath, "Required for position_type 'file' and for a text position on a renamed file."} {
+			for _, want := range []string{
+				otherPath,
+				"or from repository.tree for a file outside the diff.",
+				"Required for position_type 'file' and for a text position on a renamed file.",
+			} {
 				if !strings.Contains(description, want) {
 					t.Errorf("%s description = %q, want it to say %q", name, description, want)
 				}
 			}
 		})
 	}
-	if !strings.Contains(createUsage, "the file's old_path and new_path from mr_review.changes_get") {
-		t.Errorf("create usage = %q, want it to ask for both paths", createUsage)
+	if want := "the file's old_path and new_path from mr_review.changes_get, or both from repository.tree for a file outside the diff."; !strings.Contains(createUsage, want) {
+		t.Errorf("create usage = %q, want it to say %q", createUsage, want)
 	}
 }
 
 // assertWriteGuidance checks the position guidance of one of the two writes:
 // where it sends a caller for each part of a position, and the sentences
-// that ask for both of the file's paths and name the positions refused with
-// one.
+// that ask for both of the file's paths, say where a file outside the diff
+// takes them, and name the positions refused with one.
 func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 	t.Helper()
 	for _, want := range []string{
@@ -476,7 +487,7 @@ func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 		}
 	}
 	confusions := strings.Join(guidance.CommonConfusions, " ")
-	for _, want := range []string{bothPathsConfusion, onePathConfusion} {
+	for _, want := range []string{bothPathsConfusion, outsideTheDiffConfusion, onePathConfusion} {
 		if !strings.Contains(confusions, want) {
 			t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
 		}
@@ -506,7 +517,10 @@ func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 //
 // They also give a text position's line by [lineRule], the create's Usage
 // included: an unchanged line needs both of its numbers, where they used to
-// ask for new_line or old_line.
+// ask for new_line or old_line. And they say that a file outside the diff,
+// which has no entry in mr_review.changes_get, takes the path
+// repository.tree lists as both, the create's Usage and the two path fields
+// included, where they used to send the caller to that entry for every file.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
