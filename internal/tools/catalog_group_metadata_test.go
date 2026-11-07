@@ -259,6 +259,36 @@ func TestCatalogGroupDescription_MRChangesPagination_StatesReturnAndParameters(t
 	}
 }
 
+// TestCatalogGroupDescription_MRReviewPosition_SaysWhatEachTypeNeeds verifies
+// that the curated description of gitlab_mr_review says what a position
+// needs by its position_type, in the hint of a 400 and in the position object
+// it lists. Both were written for a text position alone: the hint asked every
+// position for a line, which an image or file position does not carry, and
+// asked for new_line or old_line where an unchanged line needs both
+// (Gitlab::Diff::File#line_for_position), and the object listed none of
+// position_type, width, height, x and y. The hint now repeats the one the
+// handlers of mr_review.discussion_create and mr_review.draft_note_create
+// return.
+func TestCatalogGroupDescription_MRReviewPosition_SaysWhatEachTypeNeeds(t *testing.T) {
+	description := catalogGroupDescription("gitlab_mr_review")
+	for _, want := range []string{
+		"400 invalid params (hint: position requires base_sha + start_sha + head_sha, and by position_type: " +
+			"text old_path + new_path and its line (new_line for an added line, old_line for a removed one, both for an unchanged one), " +
+			"image width + height + x + y, file old_path + new_path)",
+		"position object: {base_sha, start_sha, head_sha, old_path, new_path, position_type (text by default, image or file), " +
+			"new_line (added line), old_line (removed line), both lines for an unchanged line, width, height, x, y in whole pixels for an image}",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(description, want) {
+				t.Errorf("MR review description lacks %q", want)
+			}
+		})
+	}
+	if stale := "new_path/old_path + new_line/old_line"; strings.Contains(description, stale) {
+		t.Errorf("MR review description still asks every position for %q", stale)
+	}
+}
+
 func assertPanics(t *testing.T, fn func()) {
 	t.Helper()
 	defer func() {
