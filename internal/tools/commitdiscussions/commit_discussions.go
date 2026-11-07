@@ -5,6 +5,7 @@ package commitdiscussions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -56,16 +57,18 @@ type LineRangeInput struct {
 // PositionInput defines position attributes for inline commit discussions. It
 // mirrors gl.NotePosition in full — the position struct accepted by
 // gl.CreateCommitDiscussionOptions.Position. Commit-thread positions are text
-// (line) positions only; gl.NotePosition has no image (width/height/x/y) fields,
-// so none are surfaced here (1:1 audit: no invented fields).
+// (line) and file positions; gl.NotePosition has no image (width/height/x/y)
+// fields, so none are surfaced here (1:1 audit: no invented fields), and an
+// image position, which GitLab cannot complete without them, is refused
+// before the request.
 type PositionInput struct {
 	BaseSHA      string          `json:"base_sha" jsonschema:"Base commit SHA,required"`
 	StartSHA     string          `json:"start_sha" jsonschema:"Start commit SHA,required"`
 	HeadSHA      string          `json:"head_sha" jsonschema:"Head commit SHA,required"`
-	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, image for an image coordinate comment, or file for a whole-file comment,required"`
-	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change"`
+	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, which needs new_line or old_line, or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them,required"`
+	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change, from the file's entry in repository.commit_diff. Send it with old_path"`
 	NewLine      int64           `json:"new_line,omitempty" jsonschema:"Line number after change"`
-	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change"`
+	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed. Send it with new_path"`
 	OldLine      int64           `json:"old_line,omitempty" jsonschema:"Line number before change"`
 	LineRange    *LineRangeInput `json:"line_range,omitempty" jsonschema:"Start/end line range for a multi-line text diff comment."`
 }
@@ -173,6 +176,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return Output{}, fmt.Errorf("commit_discussion_create: %w", err)
 	}
+	if input.Position != nil {
+		if err = validatePosition(input.Position); err != nil {
+			return Output{}, fmt.Errorf("commit_discussion_create: %w", err)
+		}
+	}
 	opts := &gl.CreateCommitDiscussionOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
 		CreatedAt: createdAt,
@@ -184,7 +192,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateCommitDiscussion(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_create", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; verify the commit_sha exists in the project")
+			"for inline diff comments, position requires base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with new_line or old_line on a line of the commit's diff, file both old_path and new_path; verify the commit_sha exists in the project")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -273,6 +281,42 @@ func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtr
 		Discussions: toolutil.DiscussionThreadOutputsFromGitLab[Output](discussions, extras),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
+}
+
+// validatePosition judges a commit discussion's position by the fields GitLab
+// reads for it, before the write is sent and with no request, since the
+// commit's diff is not read here. Every position needs the start and head
+// commits and a file path, which [toolutil.ValidatePositionAnchor] checks
+// first; a text position, which is what an unnamed type is sent as, needs a
+// line, and a file position both of its paths. A position_type GitLab does
+// not declare is left to GitLab, which refuses it by name.
+//
+// An image position is refused. GitLab completes one only with its width,
+// height, x and y (ImageFormatter#complete?), and this action cannot send
+// them: the position client-go's CreateCommitDiscussionOptions carries is a
+// gl.NotePosition, which models no image field. The gap is recorded in
+// docs/development/upstream-bugs.md, and the refusal retires when the commit
+// discussion's position carries the four fields.
+//
+// GitLab would otherwise refuse each of these with a 400 that names no field
+// (DiffNote#positions_complete).
+func validatePosition(pos *PositionInput) error {
+	if err := toolutil.ValidatePositionAnchor(pos.StartSHA, pos.HeadSHA, pos.OldPath, pos.NewPath); err != nil {
+		return err
+	}
+	switch pos.PositionType {
+	case "", toolutil.PositionTypeText:
+		return toolutil.ValidateTextPosition(pos.OldLine, pos.NewLine)
+	case toolutil.PositionTypeImage:
+		return errors.New(
+			"an image position cannot be placed through repository.commit_discussion_create: GitLab places an image " +
+				"comment by the image's width, height, x and y, and this action sends none of them; use position_type " +
+				"file to comment on the image as a whole, or omit position for a general commit discussion",
+		)
+	case toolutil.PositionTypeFile:
+		return toolutil.ValidateFilePosition(pos.OldPath, pos.NewPath)
+	}
+	return nil
 }
 
 // buildNotePosition maps the full [PositionInput] onto the SDK's

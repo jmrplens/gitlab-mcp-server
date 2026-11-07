@@ -410,6 +410,26 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintAsksForBothPaths holds the hint a 400 from the
+// create is answered with to a text position naming both of the file's paths,
+// as the position guidance does: GitLab finds the file in the commit's diff by
+// the paths the position carries, and a renamed file is paired only when both
+// are given.
+func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != testPathCommitDiscussions {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), "text both old_path and new_path") {
+		t.Fatalf("error = %v, want the 400 hint to ask a text position for both paths", err)
+	}
+}
+
 // TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -608,6 +628,98 @@ func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
 			}
 			if !reflect.DeepEqual(sent.LineRange, tc.want) {
 				t.Errorf("line_range sent = %s, want %s", jsonString(t, sent.LineRange), jsonString(t, tc.want))
+			}
+		})
+	}
+}
+
+// TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt holds
+// the position pre-check of repository.commit_discussion_create to what
+// GitLab reads for a position (Position#complete?), with no request: the
+// start and head commits and a file path on every type, a line on a text
+// position, named or by default, and both paths on a file position. An image
+// position is refused, since the action cannot send the width, height, x and
+// y GitLab completes one by. A complete position reaches GitLab as given, and
+// a position_type GitLab does not declare is left to GitLab, which refuses it
+// by name. A refused case runs against a GitLab that fails the test on any
+// request.
+//
+// On the parent every refused case is sent, and GitLab answers each with a
+// 400 that names no field.
+func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testing.T) {
+	at := func(edit func(p *PositionInput)) *PositionInput {
+		p := &PositionInput{BaseSHA: "base-sha", StartSHA: "start-sha", HeadSHA: "head-sha", NewPath: "after.go"}
+		edit(p)
+		return p
+	}
+	for _, tc := range []struct {
+		name     string
+		position *PositionInput
+		wantErr  string
+	}{
+		{name: "text on a line", position: at(func(p *PositionInput) { p.PositionType, p.NewLine = "text", 12 })},
+		{name: "text by default on a line", position: at(func(p *PositionInput) { p.OldLine = 7 })},
+		{name: "file with both paths", position: at(func(p *PositionInput) { p.PositionType, p.OldPath = "file", "before.go" })},
+		{name: "a type GitLab does not declare", position: at(func(p *PositionInput) { p.PositionType = "Text" })},
+		{
+			name:     "text with an empty start_sha",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine, p.StartSHA = "text", 12, "" }),
+			wantErr:  "(missing: start_sha)",
+		},
+		{
+			name:     "file with a head_sha of blanks",
+			position: at(func(p *PositionInput) { p.PositionType, p.OldPath, p.HeadSHA = "file", "before.go", " " }),
+			wantErr:  "(missing: head_sha)",
+		},
+		{
+			name:     "text with no path",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine, p.NewPath = "text", 12, "" }),
+			wantErr:  "(missing: a path in new_path or old_path)",
+		},
+		{
+			name:     "text naming no line",
+			position: at(func(p *PositionInput) { p.PositionType = "text" }),
+			wantErr:  "a text position needs new_line or old_line",
+		},
+		{
+			name: "text by default naming only a line range",
+			position: at(func(p *PositionInput) {
+				p.LineRange = &LineRangeInput{End: &LinePositionInput{NewLine: 12}}
+			}),
+			wantErr: "a text position needs new_line or old_line",
+		},
+		{
+			name:     "text on a negative line",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine = "text", -1 }),
+			wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line -1, old_line 0)",
+		},
+		{
+			name:     "file without its old path",
+			position: at(func(p *PositionInput) { p.PositionType = "file" }),
+			wantErr:  "(missing: old_path)",
+		},
+		{
+			name:     "image",
+			position: at(func(p *PositionInput) { p.PositionType, p.OldPath = "image", "after.go" }),
+			wantErr:  "an image position cannot be placed through repository.commit_discussion_create",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "on the diff", Position: tc.position}
+			if tc.wantErr != "" {
+				client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+				if _, err := Create(t.Context(), client, input); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("Create() error = %v, want a refusal naming %q", err, tc.wantErr)
+				}
+				return
+			}
+			var captured capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated, `{"id":"d7","notes":[]}`, &captured))
+			if _, err := Create(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got, want := decodeCreateSent(t, captured.Body).Position, buildNotePosition(tc.position); !reflect.DeepEqual(got, want) {
+				t.Errorf("position sent = %s, want %s", jsonString(t, got), jsonString(t, want))
 			}
 		})
 	}

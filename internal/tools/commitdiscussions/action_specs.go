@@ -158,9 +158,9 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion.",
-			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","position_type":"text","new_path":"main.go","new_line":12}`,
-			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line."},
+			ValueSource:      "Diff anchor. base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get, and the file's old_path and new_path and the line come from repository.commit_diff. Omit for a general discussion.",
+			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","position_type":"text","old_path":"main.go","new_path":"main.go","new_line":12}`,
+			CommonConfusions: []string{"Every position needs start_sha and head_sha and the file's path. Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed. GitLab takes one on a file that was not renamed, but finds a renamed file's lines only by both. GitLab refuses SHAs other than the commit's first parent and the commit itself, and a commit with no parent takes the all-zero SHA for base_sha and start_sha. By position_type: text also needs new_line or old_line on a line of the commit diff, and file needs both old_path and new_path and no line. An image position cannot be sent by this action, which carries no image coordinates. Omit position entirely for a thread that is not tied to the diff."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a commit, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_add_commit_discussion_note, gitlab_list_commit_discussions, gitlab_commit_diff."
 		// Position vocabularies from https://docs.gitlab.com/api/discussions/

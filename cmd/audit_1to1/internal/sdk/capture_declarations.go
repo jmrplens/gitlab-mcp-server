@@ -244,6 +244,17 @@ var confidentialKind = waits.FieldKind{Type: "Note", Field: "Confidential", Kind
 var valueCaptures = []captureDeclaration{
 	{Type: "toolutil.DiscussionExtra", Key: "notes.confidential", Category: keptForValue, Predicates: []waits.Predicate{confidentialKind}, Reason: confidentialReason},
 	{Type: "toolutil.NoteExtra", Key: "confidential", Category: keptForValue, Predicates: []waits.Predicate{confidentialKind}, Reason: confidentialReason},
+	{
+		Type: "mrdraftnotes.capturedDraft", Key: "position", Category: keptForValue,
+		Predicates: []waits.Predicate{
+			waits.FieldKind{Type: "DraftNote", Field: "Position", Kind: "*NotePosition"},
+			waits.LacksKey{Type: "NotePosition", Key: "width"},
+			waits.LacksKey{Type: "NotePosition", Key: "height"},
+			waits.LacksKey{Type: "NotePosition", Key: "x"},
+			waits.LacksKey{Type: "NotePosition", Key: "y"},
+		},
+		Reason: "a draft note update that keeps the draft's position sends it back whole, and client-go's NotePosition cannot hold an image position's width, height, x and y (register row 159), so the position is read into the PositionOptions the update sends",
+	},
 }
 
 // siblingCaptures are the keys one client-go struct a captured type is paired
