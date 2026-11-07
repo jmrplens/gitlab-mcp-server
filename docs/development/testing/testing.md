@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,486 |
-| Unit test functions                                   | 21,773 |
+| Total test functions                                  | 23,497 |
+| Unit test functions                                   | 21,784 |
 | E2E test functions                                    |  1,713 |
 | cmd test functions                                    |  5,815 |
 | Test files (internal/)                                |    759 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,730 | 58.5% |
+| `TestFunc_Scenario` (2-part)           | 13,731 | 58.4% |
 | `TestFunc` (no underscore)             |    901 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,855 | 37.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,865 | 37.7% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,239 |        262 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            452 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,267 |        480 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,278 |        480 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,713 |        442 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,815 |        473 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,486** |  **1,674** |                                                                                                 |
+| **Total**               |     **23,497** |  **1,674** |                                                                                                 |
 
 ### Core Packages
 
@@ -99,7 +99,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   507 |   100.0% |    57 |
+| projects          |   518 |   100.0% |    57 |
 | mergerequests     |   349 |   100.0% |    30 |
 | dynamic           |   328 |   100.0% |     2 |
 | groups            |   327 |   100.0% |    37 |
@@ -265,7 +265,7 @@
 | projectimportexport     |         55 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        507 |          9 |   100.0% |        57 |
+| projects                |        518 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         31 |          2 |   100.0% |         6 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,267** |    **480** |          | **1,195** |
+| **Total**               | **11,278** |    **480** |          | **1,195** |
 
 </details>
 
