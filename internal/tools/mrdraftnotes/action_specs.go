@@ -206,7 +206,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_create": {
-		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get. A text position (the default) also needs new_line or old_line on a diff line. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
+		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get. A text position (the default) also needs a line of the diff: new_line for an added line, old_line for a removed one, both for an unchanged one. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
 		Aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
 		Related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -241,7 +241,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			"position": {
 				SemanticRole:     "diff_position",
 				ValueSource:      positionValueSource,
-				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one.", positionPathsConfusion},
+				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one.", positionPathsConfusion},
 			},
 		},
 		Description: "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",

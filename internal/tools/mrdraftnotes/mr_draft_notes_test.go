@@ -1041,6 +1041,25 @@ func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to the line rule the position
+// guidance states. GitLab finds a text position's line only where both of its
+// numbers match the diff line (Gitlab::Diff::File#line_for_position), so an
+// unchanged line given one number is not found and the note is refused for
+// its line code. The hint used to ask for new_line or old_line, the mistake
+// that answer follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Note: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
 // TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -137,7 +137,9 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 // the file's paths, in its example as well: GitLab looks a commit position's
 // file up in the commit's diff by the paths it carries, as it does a merge
 // request's, so one path finds a renamed file only as a deleted or an added
-// one. It used to offer either path as sufficient.
+// one. It used to offer either path as sufficient. It gives a text
+// position's line by [lineRule], where it used to ask for new_line or
+// old_line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	detail := reflect.TypeFor[commits.DetailOutput]()
 	id, hasID := detail.FieldByName("ID")
@@ -164,6 +166,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		"a commit with no parent takes the all-zero SHA for base_sha and start_sha",
 		"Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed.",
 		"finds a renamed file's lines only by both",
+		"text also needs a line of the commit diff (" + lineRule + ")",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(confusions, want) {
@@ -173,5 +176,27 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	}
 	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
 		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
+	}
+}
+
+// TestPositionInput_Lines_AreDescribedByTheLineRule verifies that the
+// position_type, new_line and old_line descriptions of a commit position give
+// a text position's line by [lineRule]: an unchanged line needs both of its
+// numbers. They used to say a text position needs new_line or old_line, and
+// the two line fields said nothing about which to send, while this action
+// reads no diff before the write and GitLab refuses one number on an
+// unchanged line with a 400 about the line code.
+func TestPositionInput_Lines_AreDescribedByTheLineRule(t *testing.T) {
+	for name, want := range map[string]string{
+		"PositionType": "which needs a line (" + lineRule + ")",
+		"NewLine":      "Send it alone for an added line, and with old_line for an unchanged one",
+		"OldLine":      "Send it alone for a removed line, and with new_line for an unchanged one",
+	} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[PositionInput]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, want) {
+				t.Errorf("%s description = %q, want it to say %q", name, description, want)
+			}
+		})
 	}
 }

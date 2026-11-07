@@ -542,6 +542,30 @@ func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
 	}
 }
 
+// lineRule is the rule the position guidance and the 400 hint give a text
+// position's line by: GitLab finds the line only where both of its numbers
+// match the diff line (Gitlab::Diff::File#line_for_position), so an unchanged
+// line needs both, and the check before the write refuses it with one when
+// it can read the diff (toolutil.ValidateDiffPosition).
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to [lineRule]. An unchanged line
+// given one number is not found and the thread is refused for its line code,
+// and the hint used to ask for new_line or old_line, the mistake that answer
+// follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
 // TestCreate_PositionValidationError verifies Create returns the validation
 // error when an inline comment targets a file outside the MR diff.
 func TestCreate_PositionValidationError(t *testing.T) {
@@ -1583,7 +1607,8 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 // and the line to mr_review.changes_get, and for a file outside the diff,
 // which an image or file position may name, to repository.tree. The guidance
 // used to send a caller to mr_review.changes_get for the SHAs too, which
-// lists the diff's files and none of its SHAs.
+// lists the diff's files and none of its SHAs. It gives a text position's
+// line by [lineRule], where it used to ask for new_line or old_line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
@@ -1607,6 +1632,9 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			})
 		}
 		assertBothPathsGuidance(t, guidance)
+		if confusions, want := strings.Join(guidance.CommonConfusions, " "), "text (the default) also needs a line of the MR diff ("+lineRule+")"; !strings.Contains(confusions, want) {
+			t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+		}
 		for name, otherPath := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
 			t.Run(name, func(t *testing.T) {
 				field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)

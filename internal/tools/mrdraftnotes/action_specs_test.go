@@ -430,6 +430,14 @@ const bothPathsConfusion = "Send old_path and new_path, both from the file's ent
 // renames (toolutil.ValidateRenamedFilePosition), and no other.
 const onePathConfusion = "A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
 
+// lineRule is the rule the position guidance, the update's position
+// parameter and the 400 hint give a text position's line by. GitLab finds the
+// line only where both of its numbers match the diff line
+// (Gitlab::Diff::File#line_for_position), so an unchanged line needs both,
+// and the check before the write refuses it with one when it can read the
+// diff (toolutil.ValidateDiffPosition).
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
 // assertBothPathsAsked checks that the old_path and new_path descriptions
 // each ask for the other path beside it and name the positions that need
 // both, and that the create's Usage asks for both paths from
@@ -495,6 +503,10 @@ func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
 // guidance, the path fields and the update's parameter say which positions
 // those are. The update's parameter and guidance used to say every position
 // needs both.
+//
+// They also give a text position's line by [lineRule], the create's Usage
+// included: an unchanged line needs both of its numbers, where they used to
+// ask for new_line or old_line.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
@@ -511,6 +523,9 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		})
 	}
 	assertBothPathsAsked(t, byTool["gitlab_mr_draft_note_create"].Usage)
+	if usage, want := byTool["gitlab_mr_draft_note_create"].Usage, "A text position (the default) also needs a line of the diff: "+lineRule+"."; !strings.Contains(usage, want) {
+		t.Errorf("create usage = %q, want it to say %q", usage, want)
+	}
 	update := strings.Join(byTool["gitlab_mr_draft_note_update"].ParameterGuidance["position"].CommonConfusions, " ")
 	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Position")
 	description := field.Tag.Get("jsonschema")
@@ -521,7 +536,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	for _, want := range []string{
 		"base_sha, start_sha and head_sha",
 		"the file's path, and by position_type",
-		"a new_line or old_line (text, the default)",
+		"a line of the diff (text, the default: " + lineRule + ")",
 		"width, height, x and y in whole pixels (image)",
 		"both old_path and new_path (file)",
 	} {

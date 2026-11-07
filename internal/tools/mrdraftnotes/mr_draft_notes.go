@@ -99,7 +99,7 @@ type UpdateInput struct {
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both"`
-	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both"`
+	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.
@@ -362,7 +362,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	note, _, err := client.GL().DraftNotes.CreateDraftNote(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("draftNoteCreate", err, http.StatusBadRequest,
-			"note body is required; an inline position needs base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with new_line or old_line, image width, height, x and y, file both old_path and new_path; in_reply_to_discussion_id requires existing discussion_id; resolve_discussion only valid on existing discussions")
+			"note body is required; an inline position needs base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with a line (new_line for an added line, old_line for a removed one, both for an unchanged one), image width, height, x and y, file both old_path and new_path; in_reply_to_discussion_id requires existing discussion_id; resolve_discussion only valid on existing discussions")
 	}
 	return ToOutput(note), nil
 }

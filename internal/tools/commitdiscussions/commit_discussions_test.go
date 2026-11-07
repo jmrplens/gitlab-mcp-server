@@ -430,6 +430,29 @@ func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
 	}
 }
 
+// lineRule is the rule the position guidance, the line descriptions and the
+// 400 hint give a text position's line by. GitLab finds the line only where
+// both of its numbers match the line in the commit's diff
+// (Gitlab::Diff::File#line_for_position), so an unchanged line needs both.
+// This action reads no diff before the write, so GitLab's 400 is the only
+// refusal one number on an unchanged line gets.
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to [lineRule]. The hint used to ask
+// for new_line or old_line, the mistake that answer follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
 // TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

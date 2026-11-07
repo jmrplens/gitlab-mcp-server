@@ -177,7 +177,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionCreate", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, head_sha and start_sha, and by position_type: text both old_path and new_path with new_line or old_line, image width, height, x and y, file both old_path and new_path; use mr_review.changes_get to fetch the diff context")
+			"for inline diff comments, position requires base_sha, head_sha and start_sha, and by position_type: text both old_path and new_path with a line (new_line for an added line, old_line for a removed one, both for an unchanged one), image width, height, x and y, file both old_path and new_path; use mr_review.changes_get to fetch the diff context")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {

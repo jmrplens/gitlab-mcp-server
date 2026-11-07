@@ -65,11 +65,11 @@ type PositionInput struct {
 	BaseSHA      string          `json:"base_sha" jsonschema:"Base commit SHA,required"`
 	StartSHA     string          `json:"start_sha" jsonschema:"Start commit SHA,required"`
 	HeadSHA      string          `json:"head_sha" jsonschema:"Head commit SHA,required"`
-	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, which needs new_line or old_line, or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them,required"`
+	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, which needs a line (new_line for an added line, old_line for a removed one, both for an unchanged one), or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them,required"`
 	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change, from the file's entry in repository.commit_diff. Send it with old_path"`
-	NewLine      int64           `json:"new_line,omitempty" jsonschema:"Line number after change"`
+	NewLine      int64           `json:"new_line,omitempty" jsonschema:"Line number after change. Send it alone for an added line, and with old_line for an unchanged one"`
 	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed. Send it with new_path"`
-	OldLine      int64           `json:"old_line,omitempty" jsonschema:"Line number before change"`
+	OldLine      int64           `json:"old_line,omitempty" jsonschema:"Line number before change. Send it alone for a removed line, and with new_line for an unchanged one"`
 	LineRange    *LineRangeInput `json:"line_range,omitempty" jsonschema:"Start/end line range for a multi-line text diff comment."`
 }
 
@@ -192,7 +192,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateCommitDiscussion(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_create", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with new_line or old_line on a line of the commit's diff, file both old_path and new_path; verify the commit_sha exists in the project")
+			"for inline diff comments, position requires base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with a line of the commit's diff (new_line for an added line, old_line for a removed one, both for an unchanged one), file both old_path and new_path; verify the commit_sha exists in the project")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
