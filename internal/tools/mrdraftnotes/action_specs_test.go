@@ -402,6 +402,59 @@ func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
+// the create and the update send a caller for the three SHAs of a position to
+// merge_request.get, whose output carries them as diff_refs, and for the
+// file and the line to mr_review.changes_get, and that a file outside the
+// diff, which an image or file position may name, is looked up in
+// repository.tree. The guidance used to send a caller to
+// mr_review.changes_get for the SHAs too, which lists the diff's files and
+// none of its SHAs. The update replaces the position whole, so its guidance
+// and the description of the parameter itself also say what each
+// position_type needs. The update had no position guidance at all.
+func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
+	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
+	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
+		t.Fatalf("merge_request.get's output has no diff_refs for the guidance to point at")
+	}
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, tool := range []string{"gitlab_mr_draft_note_create", "gitlab_mr_draft_note_update"} {
+		t.Run(tool, func(t *testing.T) {
+			guidance, found := byTool[tool].ParameterGuidance["position"]
+			if !found {
+				t.Fatalf("%s carries no guidance for position", tool)
+			}
+			for _, want := range []string{
+				"base_sha, start_sha and head_sha are the diff_refs of merge_request.get.",
+				"The file's new_path or old_path, and a line for a text position, come from mr_review.changes_get.",
+				"whose path repository.tree lists at head_sha.",
+			} {
+				if !strings.Contains(guidance.ValueSource, want) {
+					t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
+				}
+			}
+		})
+	}
+	update := strings.Join(byTool["gitlab_mr_draft_note_update"].ParameterGuidance["position"].CommonConfusions, " ")
+	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Position")
+	description := field.Tag.Get("jsonschema")
+	for _, want := range []string{
+		"base_sha, start_sha and head_sha",
+		"a new_line or old_line (text, the default)",
+		"width, height, x and y",
+		"both old_path and new_path (file)",
+	} {
+		t.Run("the update names "+want, func(t *testing.T) {
+			if !strings.Contains(update, want) {
+				t.Errorf("update position guidance = %q, want it to say %q", update, want)
+			}
+			if !strings.Contains(description, want) {
+				t.Errorf("update position description = %q, want it to say %q", description, want)
+			}
+		})
+	}
+}
+
 // TestDecorateDraftNoteMeta_UnknownTool verifies the metadata decorator leaves
 // options unchanged for a tool name that is not in the metadata map.
 func TestDecorateDraftNoteMeta_UnknownTool(t *testing.T) {

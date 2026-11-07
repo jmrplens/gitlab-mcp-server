@@ -99,7 +99,7 @@ type UpdateInput struct {
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both"`
-	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments. Omit it to keep the current position. Give note, position or both"`
+	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.

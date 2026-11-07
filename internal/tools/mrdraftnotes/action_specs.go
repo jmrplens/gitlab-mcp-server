@@ -156,6 +156,13 @@ var mrIIDGuidance = toolutil.ParameterGuidance{
 	CommonConfusions: []string{"Use the project-scoped merge_request_iid, not the global merge_request_id."},
 }
 
+// positionValueSource says where the create and the update take each part of
+// a position from. mr_review.changes_get lists the files and lines of the
+// diff and none of its SHAs, which the merge request answers as its
+// diff_refs, and a file outside the diff, which an image or file position may
+// name, is listed by the repository tree.
+const positionValueSource = "Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's new_path or old_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha."
+
 // noteIDGuidance is the shared parameter guidance for note_id.
 var noteIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     "draft_note_id",
@@ -201,7 +208,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			},
 			"position": {
 				SemanticRole:     "diff_position",
-				ValueSource:      "Inline diff location for a review comment, from mr_review.changes_get: the MR diff SHAs and the target file's path, plus a line for a text position.",
+				ValueSource:      positionValueSource,
 				CommonConfusions: []string{"Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped."},
 			},
 		},
@@ -219,6 +226,11 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 				SemanticRole:   "comment_body",
 				ValueSource:    "The revised Markdown body for the draft note.",
 				ExampleBinding: `params.note:"Updated: use the shared helper instead."`,
+			},
+			"position": {
+				SemanticRole:     "diff_position",
+				ValueSource:      positionValueSource,
+				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one."},
 			},
 		},
 		Description: "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",

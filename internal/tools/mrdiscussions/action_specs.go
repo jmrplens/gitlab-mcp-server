@@ -119,7 +119,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion.",
+			ValueSource:      "Diff anchor. base_sha, start_sha and head_sha are the diff_refs of merge_request.get, and the file's new_path or old_path and the line come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha. Omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
 			CommonConfusions: []string{"Every position needs start_sha and head_sha from the MR diff refs and the file's new_path or old_path. By position_type: text (the default) also needs new_line or old_line on a line of the MR diff, image needs width, height, x and y in whole pixels and no line, and file needs both old_path and new_path and no line. Omit position entirely for a thread that is not tied to the diff."},
 		}

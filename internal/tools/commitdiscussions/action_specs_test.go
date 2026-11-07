@@ -6,6 +6,8 @@ package commitdiscussions
 
 import (
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -120,5 +122,40 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 	}
 	if opts.ParameterGuidance["commit_sha"].SemanticRole == "" {
 		t.Error("expected fallback commit_sha guidance")
+	}
+}
+
+// TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
+// repository.commit_discussion_create sends a caller for the SHAs of a
+// position to repository.commit_get, whose output carries the commit's id and
+// parent_ids, and for the file and the line to repository.commit_diff. GitLab
+// holds a commit position to the commit's own diff refs, base_sha and
+// start_sha both its first parent and head_sha the commit
+// (Commit#diff_refs, DiffPositionableNote#diff_refs_match_commit). The
+// guidance used to send a caller to repository.commit_diff for the SHAs too,
+// which lists the diff's files and none of its SHAs.
+func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
+	detail := reflect.TypeFor[commits.DetailOutput]()
+	id, hasID := detail.FieldByName("ID")
+	parents, hasParents := detail.FieldByName("ParentIDs")
+	if !hasID || id.Tag.Get("json") != "id" || !hasParents || parents.Tag.Get("json") != "parent_ids" {
+		t.Fatalf("repository.commit_get's output publishes no id and parent_ids for the guidance to point at")
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("building the specs should reach no GitLab")
+	}))
+	guidance := commitDiscussionSpecsByTool(t, ActionSpecs(client))["gitlab_create_commit_discussion"].ParameterGuidance["position"]
+	for _, want := range []string{
+		"base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get,",
+		"the file's new_path or old_path and the line come from repository.commit_diff.",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(guidance.ValueSource, want) {
+				t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
+			}
+		})
+	}
+	if confusions := strings.Join(guidance.CommonConfusions, " "); !strings.Contains(confusions, "a commit with no parent takes the all-zero SHA for base_sha and start_sha") {
+		t.Errorf("position guidance confusions = %q, want them to say what a commit with no parent takes", confusions)
 	}
 }

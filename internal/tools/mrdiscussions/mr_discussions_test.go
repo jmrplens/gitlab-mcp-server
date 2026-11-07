@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -1493,6 +1494,39 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 			assertDiscoveryMetadata(t, tool, byTool[tool])
 		})
 	}
+}
+
+// TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
+// mr_review.discussion_create sends a caller for the three SHAs of a position
+// to merge_request.get, whose output carries them as diff_refs, for the file
+// and the line to mr_review.changes_get, and for a file outside the diff,
+// which an image or file position may name, to repository.tree. The guidance
+// used to send a caller to mr_review.changes_get for the SHAs too, which
+// lists the diff's files and none of its SHAs.
+func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
+	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
+	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
+		t.Fatalf("merge_request.get's output has no diff_refs for the guidance to point at")
+	}
+	for _, spec := range newMRDiscussionsActionSpecs(t) {
+		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
+			continue
+		}
+		source := spec.ParameterGuidance["position"].ValueSource
+		for _, want := range []string{
+			"base_sha, start_sha and head_sha are the diff_refs of merge_request.get,",
+			"the file's new_path or old_path and the line come from mr_review.changes_get.",
+			"whose path repository.tree lists at head_sha.",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(source, want) {
+					t.Errorf("position guidance = %q, want it to say %q", source, want)
+				}
+			})
+		}
+		return
+	}
+	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
 }
 
 // assertDiscoveryMetadata checks one MR discussion spec against the R-META
