@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
@@ -407,6 +408,133 @@ func TestCreateServer_Meta_WithheldActionIsAnsweredWithItsCauseAndSpendsItsToken
 	}
 	if text := callText(t, session, "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "1"}}); !strings.Contains(text, "rate limit exceeded") {
 		t.Errorf("third call = %q, want it refused for the rate: the two withheld calls should have spent the bucket", text)
+	}
+}
+
+// TestCreateServer_Meta_CredentialKindWithheld_IsAnsweredWithTheWayOut
+// verifies, on a registered meta server built for an OAuth access token
+// (register row AUT-009), that a call naming an action of gitlab_access that
+// GitLab refuses such a token is answered with the credential's kind rather
+// than the SDK's refusal of a value outside the tool's enum, which is what it
+// got with the meta registration's record of the kind left out, and that the
+// way out follows the deployment's door: a personal access token where the
+// door admits one, carrying the api scope where the credential lacks it, and
+// the operator where the door refuses every personal access token.
+func TestCreateServer_Meta_CredentialKindWithheld_IsAnsweredWithTheWayOut(t *testing.T) {
+	const cause = `gitlab_access: action "token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token`
+	cases := []struct {
+		name   string
+		cfg    config.ServerConfig
+		wayOut string
+	}{
+		{
+			name:   "a door admitting personal access tokens",
+			cfg:    config.ServerConfig{OAuthCredential: true},
+			wayOut: "Authenticate with a personal access token, sent as the Bearer token, to use it",
+		},
+		{
+			name:   "a read_api OAuth token",
+			cfg:    config.ServerConfig{OAuthCredential: true, ReadAPIOnly: true, TokenScopes: []string{"read_api"}},
+			wayOut: "Authenticate with a personal access token carrying the api scope",
+		},
+		{
+			name:   "a door refusing personal access tokens",
+			cfg:    config.ServerConfig{OAuthCredential: true, PersonalTokensRefused: true},
+			wayOut: "Ask the operator for a deployment that admits personal access tokens",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := tc.cfg
+			cfg.ToolSurface = config.ToolSurfaceMeta
+			session := modeTestSession(t, &cfg)
+			text := callModeTool(t, session, "gitlab_access", map[string]any{"action": "token_personal_rotate_self", "params": map[string]any{}})
+			if !strings.HasPrefix(text, cause) || !strings.Contains(text, tc.wayOut) {
+				t.Errorf("call gitlab_access(token_personal_rotate_self) = %q, want it to begin %q and say %q", text, cause, tc.wayOut)
+			}
+			if strings.Contains(text, "Reauthorize") {
+				t.Errorf("the answer sends the caller to reauthorize an OAuth token GitLab refuses the action: %q", text)
+			}
+		})
+	}
+}
+
+// TestCreateServer_Individual_AToolReadOnlyRemoved_IsUnknownWhateverItsParams
+// verifies the call checks answer only for the tools the server holds (issue
+// 1239): on a read-only individual surface pinned to Free, the board update
+// tool, which read-only mode removed after registration, is answered as the
+// unknown tool it is whether or not the call sends a param the tier pruned.
+// The tier's refusal used to answer the second call and tell the caller to
+// send it without the param, which the SDK then answered as an unknown tool.
+// On a deployment that writes, the same call is answered with the tier.
+func TestCreateServer_Individual_AToolReadOnlyRemoved_IsUnknownWhateverItsParams(t *testing.T) {
+	const tool = "gitlab_board_update"
+	pruned := map[string]any{"project_id": "42", "board_id": 7, "assignee_id": 5}
+	readOnly := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Free, TierExplicit: true, ReadOnly: true})
+	for _, tc := range []struct {
+		name      string
+		arguments map[string]any
+	}{
+		{name: "served params only", arguments: map[string]any{"project_id": "42", "board_id": 7}},
+		{name: "a param the tier pruned", arguments: pruned},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if text := callText(t, readOnly, tool, tc.arguments); !strings.Contains(text, `unknown tool "`+tool+`"`) {
+				t.Errorf("call %s(%v) = %q, want the unknown tool a read-only deployment does not serve", tool, tc.arguments, text)
+			}
+		})
+	}
+
+	writes := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, Tier: edition.Free, TierExplicit: true})
+	const tier = tool + `: param "assignee_id" needs GitLab Premium or Ultimate`
+	if text := callText(t, writes, tool, pruned); !strings.HasPrefix(text, tier) {
+		t.Errorf("call %s on a deployment that writes = %q, want it to begin %q", tool, text, tier)
+	}
+}
+
+// TestCreateServer_Meta_AStoredRefusal_IsAnsweredBeforeTheWithheldCause
+// verifies that a gate holding the below-minimum refusal answers a call with
+// it on a connection the gate holds, even a meta call naming an action the
+// narrowing would explain: a stdio process that learned after registration
+// that its token is below the admission minimum refuses every catalog method
+// (register row ADM-001), and the call checks, which run outside the gate, do
+// not answer for the session first. The same call on a connection the gate
+// does not hold, which the gate never refuses, is still answered with the
+// cause, so the refusal is what made the difference.
+func TestCreateServer_Meta_AStoredRefusal_IsAnsweredBeforeTheWithheldCause(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cfg := &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Free, TierExplicit: true}
+	shell, err := newServerShell(t.Context(), client, cfg)
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	if err = shell.register(t.Context()); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	shell.gate.markRefused(stdioBelowMinimumRefusal())
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := shell.server.Connect(withReadinessGate(t.Context()), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+	gated, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = gated.Close() })
+
+	arguments := map[string]any{"action": "approval_config_get", "params": map[string]any{"project_id": "1"}}
+	_, err = gated.CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_project", Arguments: arguments})
+	var refusal *jsonrpc.Error
+	if !errors.As(err, &refusal) || refusal.Code != errCodeForbidden || refusal.Message != stdioBelowMinimumMessage {
+		t.Errorf("gated call error = %v, want the -40300 refusal naming the minimum", err)
+	}
+
+	const cause = `gitlab_project: action "approval_config_get" exists but is not available`
+	if text := callText(t, newInMemorySession(t, shell.server), "gitlab_project", arguments); !strings.HasPrefix(text, cause) {
+		t.Errorf("ungated call = %q, want it to begin %q", text, cause)
 	}
 }
 

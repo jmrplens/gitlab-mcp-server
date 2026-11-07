@@ -119,18 +119,61 @@ func TestWithheld_Message_TierAnswerNamesTheTierAndWhatElseWithholds(t *testing.
 // answer an action GitLab refuses to an OAuth access token gets (issue 1238,
 // register row AUT-009): it exists, the credential in use is an OAuth token
 // while GitLab answers only a personal access token, and the way out is to
-// authenticate with one, which is the caller's to do.
+// authenticate with one, which is the caller's to do, carrying the scopes
+// the credential lacks for the action besides. On a deployment that refuses
+// every personal access token at its door the way out is the operator's, and
+// the answer sends the caller to no token the door would refuse.
 func TestWithheld_Message_CredentialKind_NamesTheTokenTheActionNeeds(t *testing.T) {
-	var withheld Withheld
-	withheld.RecordCredentialKind([]string{"access.token_personal_rotate_self", " "})
-
-	const want = `gitlab_execute_action: action "access.token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.`
-	got, ok := withheld.Message("gitlab_execute_action", "access.token_personal_rotate_self", "access.token_personal_rotate_self")
-	if !ok || got != want {
-		t.Errorf("Message() = %q, %t, want %q", got, ok, want)
+	const cause = `gitlab_execute_action: action "access.token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it.`
+	cases := []struct {
+		name    string
+		entry   ScopeWithheld
+		refused bool
+		want    string
+	}{
+		{
+			name: "a credential lacking no scope for it",
+			want: cause + ` Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.`,
+		},
+		{
+			name:  "a read_api credential, the action needing api",
+			entry: ScopeWithheld{ByGitLab: []string{"api"}},
+			want:  cause + ` Authenticate with a personal access token carrying the api scope, sent as the Bearer token, to use it, since GitLab requires the api scope for it and the credential in use does not carry it; do not report the capability as missing.`,
+		},
+		{
+			name:    "a deployment that refuses personal access tokens",
+			entry:   ScopeWithheld{ByGitLab: []string{"api"}},
+			refused: true,
+			want:    cause + ` This deployment admits only the OAuth applications its operator named, which refuses every personal access token, so no credential it admits can run the action. Ask the operator for a deployment that admits personal access tokens; do not report the capability as missing.`,
+		},
 	}
-	if !withheld.Holds("Access.Token_Personal_Rotate_Self") || withheld.Holds("") {
-		t.Error("Holds() does not read the credential-kind record by its normalized key alone")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var withheld Withheld
+			tc.entry.ID = "access.token_personal_rotate_self"
+			withheld.RecordCredentialKind([]ScopeWithheld{tc.entry, {ID: " "}}, tc.refused)
+			got, ok := withheld.Message("gitlab_execute_action", "access.token_personal_rotate_self", "access.token_personal_rotate_self")
+			if !ok || got != tc.want {
+				t.Errorf("Message() = %q, %t, want %q", got, ok, tc.want)
+			}
+			if !withheld.Holds("Access.Token_Personal_Rotate_Self") || withheld.Holds("") {
+				t.Error("Holds() does not read the credential-kind record by its normalized key alone")
+			}
+		})
+	}
+}
+
+// TestWithheld_SessionTier_IsWhatRecordTierRecorded verifies the session tier
+// a tier-pruned param's refusal is worded with (issue 1239): unknown until a
+// tier is recorded, then the tier and whether it was pinned.
+func TestWithheld_SessionTier_IsWhatRecordTierRecorded(t *testing.T) {
+	var withheld Withheld
+	if _, _, known := withheld.SessionTier(); known {
+		t.Error("SessionTier() is known before any tier was recorded")
+	}
+	withheld.RecordTier(nil, edition.Premium, true)
+	if tier, pinned, known := withheld.SessionTier(); tier != edition.Premium || !pinned || !known {
+		t.Errorf("SessionTier() = %s, %t, %t; want premium, pinned, known", tier, pinned, known)
 	}
 }
 
@@ -162,7 +205,7 @@ func TestWithheld_Record_DropsBlankKeysAndNamesAScopeForAnEntryNamingNone(t *tes
 	if empty.Holds("issue.create") {
 		t.Error("an empty record holds a key")
 	}
-	if withheldKeySet(nil) != nil || withheldScopes(nil) != nil || withheldTiers(nil) != nil {
+	if withheldKeySet(nil) != nil || withheldScopes(nil) != nil || withheldTiers(nil) != nil || withheldKinds(nil) != nil {
 		t.Error("an empty list was indexed as something other than nil")
 	}
 }

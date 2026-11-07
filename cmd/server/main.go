@@ -2614,25 +2614,33 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// binary sees.
 	toolvisibility.Apply(ctx, server, cfg, sh.toolSurface, surfaceCatalog)
 
-	// Which actions each registered tool runs, read by the fine-grained call
-	// check and listing filter (register row AUT-007) and by the manifest
-	// below, so the three can never disagree about a tool, and on meta what
-	// was withheld from each tool's group, which the narrowed call check
-	// answers from (issue 1282).
-	toolActions := toolvisibility.NewToolActions(sh.toolSurface, surfaceCatalog).
-		Withhold(surfaceRegistration.metaActionKeys, surfaceRegistration.withheld)
-	sh.toolActions.Store(toolActions)
-
-	// One listing serves both the count logged here and the gitlab://tools
-	// manifest built below, and nothing between the two registers a tool. A
-	// listing marshals every registered tool's schemas, which is about a
-	// quarter of a second on the individual surface and ten times that under
-	// the race detector, so a second listing made only to count them was the
-	// largest avoidable cost of a registration.
+	// One listing serves the index built next, the count logged here and the
+	// gitlab://tools manifest built below, and nothing between them registers
+	// or removes a tool. A listing marshals every registered tool's schemas,
+	// which is about a quarter of a second on the individual surface and ten
+	// times that under the race detector, so a second listing made only to
+	// count them was the largest avoidable cost of a registration.
 	registeredTools, listErr := listRegisteredToolsForInspection(server, "registration")
 	if listErr != nil {
 		slog.Warn("failed to list registered tools; gitlab://tools is not served", "error", listErr)
 	}
+
+	// Which actions each registered tool runs, read by the fine-grained call
+	// check and listing filter (register row AUT-007) and by the manifest
+	// below, so the three can never disagree about a tool, and on meta what
+	// was withheld from each tool's group, which the narrowed call check
+	// answers from (issue 1282), with the tier the server was built for,
+	// which it words a tier-pruned param's refusal with (issue 1239). It is
+	// narrowed to the tools the listing holds, since the catalog it is built
+	// from still carries what Apply removed above, the writes of a read-only
+	// individual surface among them; a listing that failed leaves it whole.
+	toolActions := toolvisibility.NewToolActions(sh.toolSurface, surfaceCatalog).
+		Withhold(surfaceRegistration.metaActionKeys, surfaceRegistration.withheld).
+		ServedAt(cfg.Tier, cfg.TierExplicit)
+	if listErr == nil {
+		toolActions = toolActions.KeepRegistered(registeredTools)
+	}
+	sh.toolActions.Store(toolActions)
 	logRegisteredToolSurface(sh.toolSurface, len(registeredTools), metaSchemaRoutes)
 
 	// The meta routes are not filtered against the tools left registered:
@@ -2786,7 +2794,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
 			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator),
 			dynamictools.WithTierWithheld(withheld.ByTier, cfg.Tier, cfg.TierExplicit),
-			dynamictools.WithCredentialKindWithheld(withheld.ByCredentialKind))
+			dynamictools.WithCredentialKindWithheld(withheld.ByCredentialKind, cfg.PersonalTokensRefused))
 		return serverSurfaceRegistration{
 			metaSchemaRoutes: actionCatalog.ActionMaps(),
 			surfaceCatalog:   actionCatalog,
@@ -2818,7 +2826,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		withheld := &actioncatalog.Withheld{}
 		withheld.RecordActions(metaWithheld.ByTokenScope, metaWithheld.ByOperator)
 		withheld.RecordTier(metaWithheld.ByTier, cfg.Tier, cfg.TierExplicit)
-		withheld.RecordCredentialKind(metaWithheld.ByCredentialKind)
+		withheld.RecordCredentialKind(metaWithheld.ByCredentialKind, cfg.PersonalTokensRefused)
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
 		gitlabtools.RegisterMetaStandaloneToolsFor(server, client, gitlabtools.MetaActionCalls(filteredCatalog))
 		return serverSurfaceRegistration{

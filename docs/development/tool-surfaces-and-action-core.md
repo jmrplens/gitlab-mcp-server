@@ -262,7 +262,15 @@ row AUT-009; the routes are marked in the generated table from
 `cmd/gen_action_grants`' declarations), and writes the one sentence every
 surface answers with
 (`Withheld.Message`); `tools.WithheldActions` carries the lists out of the
-catalog builders. The dynamic registry answers from it in execute. The meta
+catalog builders. `FilterActionCatalog` files an action the credential kind
+withholds under the kind whatever scope the credential lacks besides: the
+kind step runs after read-only mode and before the `read_api` reach step, and
+the admin_mode group step files such an action under the kind too, each entry
+carrying the scopes the personal access token must hold, since reauthorizing
+an OAuth token only yields another one GitLab refuses. Where the deployment's
+door refuses every personal access token (`ServerConfig.PersonalTokensRefused`,
+OAuth mode with `--oauth-client-uid`, register row ADM-004) the answer asks
+the operator instead. The dynamic registry answers from it in execute. The meta
 surface answers from it too (issue 1282), and before the SDK refuses the
 action as a value outside the tool's enum: `SharedMetaCatalog` records
 `ByTier` beside the filter's lists, `tools.MetaActionKeys` maps each meta
@@ -274,12 +282,39 @@ the action argument of a call to a registered meta tool, and when the group
 does not route it and the record holds it, answers with the cause, labeled for
 the call's revision and counted as an unknown action. It runs inside the rate
 limiter and the fine-grained call check and before the argument limit, waits
-for the readiness gate like the fine-grained check, and hands the same answer
+for the readiness gate like the fine-grained check, gives way to the refusal a
+gate holds for a stdio token below the admission minimum (register row
+ADM-001), as both checks do, and hands the same answer
 to the meta dispatcher through `toolutil.WithWithheldAnswer`, which
 `validateMetaToolInput` consults before it calls an action unknown. Two
 answers stay as they were: an action the operator excluded by name is never
 recorded, so its tool's enum refuses it (AUT-004), and a group withheld whole
 is a tool never registered, which the SDK answers `unknown tool`.
+
+A param the tier pruned from a served action's schema is refused the same
+way, with its tier, rather than sent or refused as unknown (issue 1239,
+register row AUT-003). `pruneSpecFieldsByTier` records what it pruned from
+the input on the route (`ActionRoute.TierPruned`, from
+`toolutil.TierPrunedFields`), and `toolutil.TierPrunedParams` reads a call's
+params against it after the compatibility aliases resolve, so an alias of a
+served param is never refused. The meta dispatcher refuses before
+`UnmarshalParams`, which would decode the param into the input type, where
+the field still exists, and send it; the guarded handler of the full and
+compact modes refuses before the action's definition calls it unknown;
+dynamic execute refuses before its "Unknown params" list; and
+`NarrowedCallMiddleware` answers an individual or meta call before the SDK
+validates it, reading the call's names with a streaming decoder and decoding
+the params only when one is pruned, and logs it under the name the answer
+calls it by, `tool/action` on meta as the dispatcher does. The index it reads
+is narrowed to the tools the registration listing holds
+(`ToolActions.KeepRegistered`), since the individual catalog still carries
+the writes `toolvisibility.Apply` removes from a read-only server, and a call
+to one of them is the SDK's `unknown tool`. All four word it with
+`toolutil.TierPrunedParamsRefusal`, which shares the tier clauses with the
+withheld action's answer (`toolutil.TierRequired`, `SessionTierClause`,
+`TierWayOut`); the session's tier reaches the dispatcher through
+`toolutil.WithSessionTier`, which the middleware installs from
+`ToolActions.ServedAt`.
 
 Every filter above but one is applied to the catalog, before anything is
 registered, and keyed on what the configuration shape holds. The fine-grained
@@ -346,7 +381,7 @@ GitLab's record by `cmd/gen_action_grants`, which writes it as
   and a filter inside the limiter would let one narrow grant lower what other
   credentials' wide listings are charged. The per-tool action sets it reads
   (`toolvisibility.NewToolActions`) are computed once per server at
-  registration.
+  registration, narrowed to the tools the registration listing holds.
 - **Find and the manifest.** `gitlab_find_action` leaves out of a fine-grained
   session's results what it may not list, before the limit is applied, and
   `gitlab://tools` is narrowed per read with the same per-tool sets, a copy of

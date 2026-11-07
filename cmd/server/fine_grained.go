@@ -60,13 +60,25 @@ func narrowedCalls(gate *readinessGate, actions func() *toolvisibility.ToolActio
 // callsAfterReadiness makes a tools/call check wait for the readiness gate
 // first on a transport the gate holds, and runs every other method straight
 // through it.
+//
+// A gate that holds a refusal answers the call with it before the check runs
+// ([readinessGate.markRefused]): a stdio process that learned after
+// registration that its token is below the admission minimum refuses every
+// catalog method (register row ADM-001), and the check, which runs outside
+// the gate, would otherwise answer a meta call naming a withheld action with
+// that action's cause, as if the session could be served at all.
 func callsAfterReadiness(gate *readinessGate, check mcp.Middleware) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		checked := check(next)
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if method == "tools/call" && !gate.isReady() && readinessEnforced(ctx) {
-				if err := gate.await(ctx, method); err != nil {
-					return nil, err
+			if method == "tools/call" && readinessEnforced(ctx) {
+				if !gate.isReady() {
+					if err := gate.await(ctx, method); err != nil {
+						return nil, err
+					}
+				}
+				if refusal := gate.refusal.Load(); refusal != nil {
+					return nil, refusal
 				}
 			}
 			return checked(ctx, method, req)

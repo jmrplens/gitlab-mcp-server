@@ -79,15 +79,20 @@ func (t *ToolActions) withheldAnswer(name, action string) (string, bool) {
 // NarrowedCallMiddleware answers a call the session's narrowing explains
 // before the SDK validates its arguments against the tool's input schema,
 // which would otherwise refuse it as invalid params and say nothing about
-// why: today a meta tool's call naming an action its group withheld
-// ([ToolActions.WithheldMessage], issue 1282). The answer is a tool result
-// returned in the dispatcher's place, so it carries the resultType the
-// call's revision requires ([toolutil.LabelForRevision]), and it is counted
-// as the dynamic surface counts the same answer, as an unknown action.
+// why: a meta tool's call naming an action its group withheld
+// ([ToolActions.WithheldMessage], issue 1282), counted as the dynamic
+// surface counts the same answer, as an unknown action; and a call to an
+// individual or meta tool sending params its action's tier left out of the
+// served schema ([ToolActions.TierPrunedRefusal], issue 1239), counted as
+// invalid params. The answer is a tool result returned in the dispatcher's
+// place, so it carries the resultType the call's revision requires
+// ([toolutil.LabelForRevision]).
 //
-// A call it lets through carries the same answer for the meta dispatcher,
-// which consults it before it calls an action unknown. actions returns nil
-// until registration is done, which lets every call through.
+// A call it lets through carries, for the meta dispatcher, the withheld
+// answer, which the dispatcher consults before it calls an action unknown,
+// and the session's tier, which it words a tier-pruned param's refusal with.
+// actions returns nil until registration is done, which lets every call
+// through.
 func NarrowedCallMiddleware(actions func() *ToolActions) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -103,7 +108,15 @@ func NarrowedCallMiddleware(actions func() *ToolActions) mcp.Middleware {
 				toolutil.LogToolRefusal(ctx, nil, raw.Name+"/"+actionArgument(raw.Arguments), toolutil.RefusalUnknownAction)
 				return toolutil.LabelForRevision(req, toolutil.ErrorResult(message)), nil
 			}
-			return next(toolutil.WithWithheldAnswer(ctx, index.withheldAnswer), method, req)
+			if refusal, callName := index.TierPrunedRefusal(raw.Name, raw.Arguments); refusal != nil {
+				toolutil.LogToolRefusal(ctx, nil, callName, toolutil.RefusalInvalidParams)
+				return toolutil.LabelForRevision(req, refusal), nil
+			}
+			ctx = toolutil.WithWithheldAnswer(ctx, index.withheldAnswer)
+			if index.tierKnown {
+				ctx = toolutil.WithSessionTier(ctx, index.tier, index.tierPinned)
+			}
+			return next(ctx, method, req)
 		}
 	}
 }

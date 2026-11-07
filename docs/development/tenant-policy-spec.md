@@ -264,7 +264,9 @@ where its value comes from, in three ways:
   an OAuth access token is not served the actions GitLab refuses to one on every way
   whatever its scopes, the calling token's own revocation and rotations and the model
   registry's package file download, and one whose kind nothing described is served all of
-  them (`AUT-009`, issue 1238).
+  them (`AUT-009`, issue 1238). A call for one is answered with the kind whatever scope
+  the credential lacks besides, and with the operator as the way out where `ADM-004`'s
+  pin refuses every personal access token at the door.
 - **INV-009 The surface varies only with the authorization.** A listing may vary with the
   authorization on the request and never with the connection or other requests on it, and
   a listing is never shrunk to express a refusal.

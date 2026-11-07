@@ -239,6 +239,8 @@ Then it checks `params` against the action's schema. An unknown parameter, inclu
 gitlab_execute_action/<action>: invalid params. Unknown params: ... Did you mean ...? Missing required params: ... Missing one of ... Valid params: ...
 ```
 
+A parameter the instance's tier leaves out of the action's schema is not listed among the unknown ones. It is refused before them, with the tier it needs and nothing sent, as `assignee_id` is on `project.board_update` at the Free tier ([Argument errors](/gitlab-mcp-server/operations/error-handling/#argument-errors)).
+
 A call that passes this check and still carries a value the action cannot take is answered by the backing handler, with the same validation error it returns on the meta surface.
 
 ### When an action is withheld from the session
@@ -257,6 +259,7 @@ An action the catalog holds but this session may not run is never answered as un
   gitlab_execute_action: action "issue.create" exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.
   ```
 
+- **The credential's kind.** In OAuth mode, a session the server knows to be authenticated by an OAuth access token is not served the five actions GitLab refuses to one whatever its scopes: the calling token's own revocation and three rotations, and the model registry's package file download. A call naming one is answered that the credential in use is an OAuth access token and that a personal access token sent as the Bearer token runs it ([Actions an OAuth access token is not served](/gitlab-mcp-server/operations/oauth-app/#actions-an-oauth-access-token-is-not-served)).
 - **A fine-grained token.** Execute answers right after it resolves the action, before it checks the parameters or asks for confirmation, with the permission GitLab declares or the reason no fine-grained token reaches the action. [Reading a withheld answer](/gitlab-mcp-server/operations/fine-grained-tokens/#reading-a-withheld-answer) quotes both texts.
 - **The instance's tier.** An action above the tier the instance is served at is not in the catalog, and is answered with the tier it needs and the tier the session was built for. Only the operator can change the tier, so the answer asks the operator; where the tier was detected rather than set with `GITLAB_MCP_TIER` (`--tier`), it allows that the detection may be wrong, since a tier nothing answered for is Free:
 

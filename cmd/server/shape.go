@@ -37,14 +37,22 @@ import (
 //   - Whether the instance is GitLab.com: it decides whether the Orbit group
 //     exists at all.
 //   - Read-only, the narrowing a token carrying read_api and not api causes,
-//     safe mode, the excluded tools and the token scopes: these are the
+//     safe mode, the excluded tools, the token scopes and whether the OAuth
+//     verifier knows the credential to be an OAuth access token: these are the
 //     narrowing [gitlabtools.FilterActionCatalog] applies, and two credentials
-//     narrowed differently are served different catalogs.
+//     narrowed differently are served different catalogs. The last is one
+//     bit, as the read_api narrowing is: GitLab refuses such a token what acts
+//     on the calling token itself whatever its scopes (issue 1238).
 //   - The language the texts a person reads are rendered in, which the shell
 //     installs. It is set per process, so every shape of one deployment
 //     carries the same and it splits nothing in practice; it is the effective
 //     one ([config.EffectiveLanguage]), so a snapshot built by hand with no
 //     language shares the shape of English.
+//   - Whether the deployment's door refuses every personal access token
+//     ([config.ServerConfig] PersonalTokensRefused, an OAuth deployment that
+//     pins its applications), which words the answer the server holds for an
+//     action GitLab serves only such a token. It is the deployment's too, so
+//     it splits nothing in practice either.
 //
 // # What is deliberately not in it
 //
@@ -54,14 +62,14 @@ import (
 // no gain, and a deployment publishing several instances is exactly the one
 // that most wants the sharing.
 //
-// Nor is anything about the credential itself. The token, the user, the
-// instance the token belongs to: none of them changes what is registered, and a
-// key that depended on any of them would be a key per credential, which is what
-// this replaces.
+// Nor is anything about the credential itself but that bit of its kind. The
+// token, the user, the instance the token belongs to: none of them changes
+// what is registered, and a key that depended on any of them would be a key
+// per credential, which is what this replaces.
 func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
 	toolSurface := config.EffectiveToolSurface(cfg.ToolSurface)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
-	return fmt.Sprintf("surface=%s|capability=%s|schema=%s|tier=%s|tierPinned=%t|dotcom=%t|%s|stateless=%t|lang=%s",
+	return fmt.Sprintf("surface=%s|capability=%s|schema=%s|tier=%s|tierPinned=%t|dotcom=%t|%s|stateless=%t|personalTokensRefused=%t|lang=%s",
 		toolSurface,
 		capabilitySurface,
 		cfg.MetaParamSchema,
@@ -70,6 +78,7 @@ func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
 		dotcom,
 		gitlabtools.CatalogFilterKey(cfg),
 		cfg.Stateless,
+		cfg.PersonalTokensRefused,
 		config.EffectiveLanguage(cfg.Language),
 	)
 }

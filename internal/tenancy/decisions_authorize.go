@@ -131,12 +131,23 @@ func authorizeDecisions() []Decision {
 			// the answer says where the tier was detected rather than pinned.
 			// An action the operator excluded by name is never recorded, so
 			// no answer names one (AUT-004).
-			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956"},
+			// Issue 1239: a param of a served action that the tier pruned
+			// from its schema is refused with the tier it needs before
+			// anything is sent, by every dispatcher and, ahead of the SDK's
+			// validation, by the call middleware, rather than sent through
+			// the meta surface or refused as unknown. The answer is the
+			// tier's, Ask the operator, and allows a detected tier may be
+			// wrong.
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
 					Methods: []string{"tools/list"}, Channel: Absent, Answer: AskOperator,
 					At: refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				},
+				{
+					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,
+					At: refuse(pkgToolutil, "TierPrunedParamsRefusal"),
 				},
 			},
 			Sites: []Site{
@@ -147,6 +158,11 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				enforce(pkgTools, "pruneSpecFieldsByTier"),
+				enforce(pkgToolutil, "TierPrunedFields"),
+				enforce(pkgToolutil, "TierPrunedParams"),
+				enforce(pkgVisibility, "ToolActions.TierPrunedRefusal"),
+				refuse(pkgToolutil, "TierPrunedParamsRefusal"),
 				metaWithheld,
 				withheld,
 			},
@@ -352,14 +368,25 @@ func authorizeDecisions() []Decision {
 			// personal token read keeps its no-id way and GitLab's 400 with
 			// it. stdio sends PRIVATE-TOKEN, which GitLab reads as a personal
 			// access token only, so the decision does not exist there.
+			//
+			// The kind is the cause whatever scope the credential lacks
+			// besides, filed before the read_api narrowing and from the
+			// admin_mode one, since reauthorizing an OAuth token yields
+			// another, and the answer names those scopes as what the
+			// personal access token must carry. Where ADM-004's pin is set
+			// the door refuses every personal access token, so no credential
+			// the deployment admits runs the action and the answer is Ask
+			// the operator; the pin is the deployment's, one bit of the shape
+			// key that splits no deployment.
 			ID: "AUT-009", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the actions GitLab refuses to an OAuth access token on every way: the calling token's own revocation and rotations, and the model registry's package file download",
 			Key:      KeyEntry, StdioKey: KeyNone,
 			Decided:  []string{"issue 1238"},
-			Refusals: narrowed(Reauthorize),
+			Refusals: append(narrowed(Reauthorize), Refusal{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld}),
 			Sites: []Site{
 				enforce(pkgOAuth, "admitToken"),
 				enforce(pkgServer, "verifiedFacts"),
+				enforce(pkgConfig, "Config.ServerConfig"),
 				enforce(pkgPool, "ServerPool.entryConfig"),
 				enforce(pkgTools, "narrowForCredentialKind"),
 				enforce(pkgActionCatalog, "Action.OAuthRefused"),

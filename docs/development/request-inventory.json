@@ -1466,6 +1466,20 @@
     {
       "package": "internal/tools",
       "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/boards/:board_id",
+      "body": [
+        "assignee_id",
+        "name"
+      ],
+      "identifiers": {
+        ":board_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/external_status_checks",
       "identifiers": {
