@@ -402,6 +402,24 @@ func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
 	}
 }
 
+// TestDiffPosition_ImageMeasures_AreDescribedInWholePixels verifies that every
+// field of a position that carries an image measure, and the position_type
+// that lists them, says the measures are whole pixels. The inputs take
+// integers, as GitLab declares width, height, x and y (lib/api/draft_notes.rb),
+// and a fraction is refused when the arguments are read, but a reference that
+// prints a field's description and not its type, as the tool reference does
+// for the update's position, gave no hint of it.
+func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
+	for _, name := range []string{"PositionType", "Width", "Height", "X", "Y"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, "whole pixels") {
+				t.Errorf("%s description = %q, want it to say the measures are whole pixels", name, description)
+			}
+		})
+	}
+}
+
 // bothPathsConfusion is the sentence the position guidance of both writes
 // asks for both of the file's paths with.
 const bothPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed."
@@ -473,7 +491,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		"base_sha, start_sha and head_sha",
 		"the file's old_path and new_path",
 		"a new_line or old_line (text, the default)",
-		"width, height, x and y",
+		"width, height, x and y in whole pixels (image)",
 		"both old_path and new_path (file)",
 	} {
 		t.Run("the update names "+want, func(t *testing.T) {

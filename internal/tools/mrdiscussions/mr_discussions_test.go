@@ -1600,6 +1600,24 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
 }
 
+// TestDiffPosition_ImageMeasures_AreDescribedInWholePixels verifies that every
+// field of a position that carries an image measure, and the position_type
+// that lists them, says the measures are whole pixels. The input takes
+// integers, as GitLab declares width, height, x and y
+// (lib/api/discussions.rb), and a fraction is refused when the arguments are
+// read, but a reference that prints a field's description and not its type
+// gave no hint of it for the width, the height or the position_type.
+func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
+	for _, name := range []string{"PositionType", "Width", "Height", "X", "Y"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, "whole pixels") {
+				t.Errorf("%s description = %q, want it to say the measures are whole pixels", name, description)
+			}
+		})
+	}
+}
+
 // assertBothPathsGuidance checks that the position guidance asks for both of
 // the file's paths, in its example as well, and says why one is not always
 // enough. GitLab documents both for a text position, takes one on a file the

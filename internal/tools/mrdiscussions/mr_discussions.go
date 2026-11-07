@@ -51,10 +51,10 @@ type DiffPosition struct {
 	NewPath      string              `json:"new_path,omitempty"  jsonschema:"File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type=file."`
 	OldLine      int                 `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
-	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line."`
+	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line."`
 	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
-	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in pixels. Required for position_type=image."`
-	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in pixels. Required for position_type=image."`
+	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in whole pixels. Required for position_type=image."`
+	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in whole pixels. Required for position_type=image."`
 	X            *int64              `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
 	Y            *int64              `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
 }
