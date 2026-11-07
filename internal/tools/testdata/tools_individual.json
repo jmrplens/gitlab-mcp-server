@@ -143661,7 +143661,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Diff position for inline comments on specific lines. Omit for general MR comments.",
+          "description": "Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments.",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",

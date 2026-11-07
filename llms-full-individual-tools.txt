@@ -9347,7 +9347,7 @@ Create a pending draft note on a merge request. Returns: the created draft note 
 - `in_reply_to_discussion_id` (string): Discussion ID to reply to
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string) (required): Note body text (Markdown)
-- `position` (object): Diff position for inline comments on specific lines. Omit for general MR comments.
+- `position` (object): Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `resolve_discussion` (boolean): Resolve the discussion when published
 
