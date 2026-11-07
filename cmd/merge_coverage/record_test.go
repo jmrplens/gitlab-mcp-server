@@ -468,6 +468,46 @@ func TestCredit_UnchangedTree_CountsWhatTheRunsReached(t *testing.T) {
 	}
 }
 
+// TestCredit_LineAddedAboveTheDeclarations_KeepsTheirReach holds the credit
+// to each declaration's own lines: a blank line added above A moves every
+// block of the file down one, and the record taken before it still credits
+// the runs' reach to the same statements, now one line lower, with nothing
+// dropped and the merge what it was.
+func TestCredit_LineAddedAboveTheDeclarations_KeepsTheirReach(t *testing.T) {
+	const movedOffline = "mode: set\n" +
+		fixturePkg + "/a.go:5.17,6.7 1 1\n" +
+		fixturePkg + "/a.go:6.7,8.3 1 0\n" +
+		fixturePkg + "/a.go:8.3,9.8 1 1\n" +
+		fixturePkg + "/a.go:12.21,12.31 1 0\n" +
+		fixturePkg + "/a.go:14.11,15.7 1 0\n" +
+		modelevalPkg + "/c.go:3.11,4.7 2 1\n"
+	moved := map[string]string{"test/e2e/internal/fixture/a.go": strings.Replace(fixtureSource, "package fixture\n", "package fixture\n\n", 1)}
+
+	cov, gone := creditFixture(t, moved, movedOffline, nil)
+
+	if len(gone) != 0 {
+		t.Errorf("dropped = %+v, want nothing", gone)
+	}
+	for _, s := range []span{
+		{file: fixturePkg + "/a.go", start: position{5, 17}, end: position{6, 7}},
+		{file: fixturePkg + "/a.go", start: position{6, 7}, end: position{8, 3}},
+		{file: fixturePkg + "/a.go", start: position{12, 21}, end: position{12, 31}},
+	} {
+		t.Run(s.extent(), func(t *testing.T) {
+			if !cov.blocks[s].hit[onlineHalf] {
+				t.Errorf("the block at %s lost the runs' reach the record credits to it one line higher", s.extent())
+			}
+		})
+	}
+	rows, err := cov.rows(recordPackages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := rows[0].merged, (figure{statements: 5, covered: 4}); got != want {
+		t.Errorf("fixture merged = %v, want %v, the figure of the tree the record was taken from", got, want)
+	}
+}
+
 // TestCredit_DeclarationsTheRecordNoLongerDescribes_AreDropped holds every
 // way a recorded declaration stops describing the tree to dropping its reach
 // alone, with the reason, while the other declaration keeps its own: its
