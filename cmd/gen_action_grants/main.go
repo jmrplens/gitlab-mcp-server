@@ -105,6 +105,9 @@ type sources struct {
 	grants        join.Declarations
 	variations    []classicDeclaration
 	disagreements []classicDeclaration
+	// oauth are the routes GitLab refuses to an OAuth access token, which the
+	// table marks on their operations.
+	oauth []oauthDeclaration
 }
 
 // newSources returns the inputs runMain reads, behind a variable so a test
@@ -126,6 +129,7 @@ func liveSources() sources {
 		grants:        withClassic(grantDeclarations, classicRoutes),
 		variations:    classicVariations,
 		disagreements: annotationDisagreements,
+		oauth:         oauthRefusedRoutes,
 	}
 }
 
@@ -239,6 +243,7 @@ func deriveAndJoin(root string, in sources) (outcome, error) {
 	findings := append(append([]string{}, derived.Findings...), joined.Findings...)
 	findings = append(findings, gateFindings(derived.Actions, joined.Actions, record)...)
 	findings = append(findings, classicFindings(joined.Actions, actions, in.variations, in.disagreements)...)
+	findings = append(findings, markOAuthRefused(&joined.Table, in.oauth)...)
 	return outcome{catalog: actions, derived: derived, joined: joined, findings: findings}, nil
 }
 

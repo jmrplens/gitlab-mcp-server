@@ -41,6 +41,18 @@ type Withheld struct {
 	byTier     map[string]TierWithheld
 	tier       edition.Tier
 	tierPinned bool
+	// byCredentialKind names the actions GitLab refuses to the session's
+	// kind of credential whatever its scopes, an OAuth access token's
+	// (issue 1238). The caller can resolve it, by authenticating with a
+	// personal access token, which the answer says.
+	byCredentialKind map[string]struct{}
+}
+
+// RecordCredentialKind records the actions GitLab refuses to an OAuth access
+// token on every way, which the session's credential is (register row
+// AUT-009). It replaces what an earlier call recorded.
+func (w *Withheld) RecordCredentialKind(byCredentialKind []string) {
+	w.byCredentialKind = withheldKeySet(byCredentialKind)
 }
 
 // RecordActions records the actions filtered out of the catalog before it was
@@ -78,6 +90,9 @@ func (w *Withheld) Holds(key string) bool {
 	if _, byOperator := w.byOperator[key]; byOperator {
 		return true
 	}
+	if _, byKind := w.byCredentialKind[key]; byKind {
+		return true
+	}
 	_, byTier := w.byTier[key]
 	return byTier
 }
@@ -112,6 +127,9 @@ func (w *Withheld) Message(toolName, action, key string) (string, bool) {
 	}
 	if _, ok := w.byOperator[key]; ok {
 		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
+	}
+	if _, ok := w.byCredentialKind[key]; ok {
+		return fmt.Sprintf("%s: action %q exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.", toolName, action), true
 	}
 	if withheld, ok := w.byTier[key]; ok {
 		return w.tierWithheldMessage(toolName, action, withheld), true

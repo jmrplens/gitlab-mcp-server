@@ -1035,6 +1035,46 @@ func TestGetOrCreate_UsesScopesTheCallerAlreadyResolved(t *testing.T) {
 	}
 }
 
+// TestGetOrCreateEntryWithFacts_OAuthToken_IsNarrowedByItsKind verifies an
+// entry built from facts the OAuth verifier handed in carries the credential's
+// kind into its configuration (issue 1238, register row AUT-009): an OAuth
+// access token's entry is marked so, under --ignore-scopes as well, since the
+// kind is not a scope, and a personal access token's is not.
+func TestGetOrCreateEntryWithFacts_OAuthToken_IsNarrowedByItsKind(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+
+	cases := []struct {
+		name         string
+		token        string
+		ignoreScopes bool
+		oauth        bool
+	}{
+		{name: "an OAuth access token", token: "gloas-a", oauth: true},
+		{name: "an OAuth access token under --ignore-scopes", token: "gloas-b", ignoreScopes: true, oauth: true},
+		{name: "a personal access token", token: "glpat-c"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testConfig(srv.URL)
+			cfg.IgnoreScopes = tc.ignoreScopes
+			var got *config.ServerConfig
+			factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
+				got = entryCfg
+				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+			}
+			pool := New(cfg, factory)
+			facts := &gitlabclient.TokenFacts{Scopes: []string{"api"}, OAuth: tc.oauth}
+			if _, err := pool.GetOrCreateEntryWithFacts(tc.token, srv.URL, facts); err != nil {
+				t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+			}
+			if got == nil || got.OAuthCredential != tc.oauth {
+				t.Errorf("entry OAuthCredential = %+v, want %t", got, tc.oauth)
+			}
+		})
+	}
+}
+
 // licenseMux returns a mux that serves /version plus a /license endpoint whose
 // plan depends on the token, so DetectTier can resolve a per-token tier.
 func licenseMux(planForToken func(token string) (status int, plan string)) *http.ServeMux {

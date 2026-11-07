@@ -115,6 +115,25 @@ func TestWithheld_Message_TierAnswerNamesTheTierAndWhatElseWithholds(t *testing.
 	}
 }
 
+// TestWithheld_Message_CredentialKind_NamesTheTokenTheActionNeeds pins the
+// answer an action GitLab refuses to an OAuth access token gets (issue 1238,
+// register row AUT-009): it exists, the credential in use is an OAuth token
+// while GitLab answers only a personal access token, and the way out is to
+// authenticate with one, which is the caller's to do.
+func TestWithheld_Message_CredentialKind_NamesTheTokenTheActionNeeds(t *testing.T) {
+	var withheld Withheld
+	withheld.RecordCredentialKind([]string{"access.token_personal_rotate_self", " "})
+
+	const want = `gitlab_execute_action: action "access.token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.`
+	got, ok := withheld.Message("gitlab_execute_action", "access.token_personal_rotate_self", "access.token_personal_rotate_self")
+	if !ok || got != want {
+		t.Errorf("Message() = %q, %t, want %q", got, ok, want)
+	}
+	if !withheld.Holds("Access.Token_Personal_Rotate_Self") || withheld.Holds("") {
+		t.Error("Holds() does not read the credential-kind record by its normalized key alone")
+	}
+}
+
 // TestWithheld_Record_DropsBlankKeysAndNamesAScopeForAnEntryNamingNone
 // verifies how the records are indexed: each key is lowercased and trimmed, a
 // key that is blank or only spaces is not indexed at all, and a scope entry

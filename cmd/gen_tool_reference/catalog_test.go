@@ -160,7 +160,7 @@ func testSurfaces() surfaceNames {
 // testReference assembles the synthetic builds, failing the test on an error.
 func testReference(t *testing.T) reference {
 	t.Helper()
-	ref, err := assemble(testBuilds(t), testSurfaces(), map[string][]string{"gitlab_widget": {"admin_mode"}}, testGrants(), nil)
+	ref, err := assemble(testBuilds(t), testSurfaces(), map[string][]string{"gitlab_widget": {"admin_mode"}}, testGrants())
 	if err != nil {
 		t.Fatalf("assemble() error = %v", err)
 	}
@@ -296,7 +296,7 @@ func TestAssemble_UnregisteredTool_IsRefused(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			surfaces := testSurfaces()
 			tt.surface(surfaces)
-			_, err := assemble(testBuilds(t), surfaces, nil, testGrants(), nil)
+			_, err := assemble(testBuilds(t), surfaces, nil, testGrants())
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("assemble() error = %v, want it to say %s", err, tt.want)
 			}
@@ -307,7 +307,7 @@ func TestAssemble_UnregisteredTool_IsRefused(t *testing.T) {
 func TestAssemble_ActionWithoutIndividualTool_IsServedOnTheOtherSurfaces(t *testing.T) {
 	probe := testAction("probe", "", nil)
 	catalog := testCatalog(t, testGroup("gitlab_widget", actioncatalog.SurfaceKindMetaGroup, nil, probe))
-	ref, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaceNames{meta: map[string]bool{"gitlab_widget": true}}, nil, testGrants(), nil)
+	ref, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaceNames{meta: map[string]bool{"gitlab_widget": true}}, nil, testGrants())
 	if err != nil {
 		t.Fatalf("assemble() error = %v", err)
 	}
@@ -339,7 +339,7 @@ func TestAssemble_ActionTheGrantsTableHoldsNoClassicScopeFor_IsRefused(t *testin
 			}
 			catalog := testCatalog(t, testGroup("gitlab_widget", actioncatalog.SurfaceKindMetaGroup, nil, probe))
 			surfaces := surfaceNames{meta: map[string]bool{"gitlab_widget": true}, individual: map[string]bool{"gitlab_widget_probe": true}}
-			_, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaces, nil, testGrants(), nil)
+			_, err := assemble([]build{{tier: edition.Free, catalog: catalog}}, surfaces, nil, testGrants())
 			if err == nil || !strings.Contains(err.Error(), "widget.probe: the action grants table holds no classic scope for it; run make gen-action-grants first") {
 				t.Errorf("assemble() error = %v, want the action named and the generator to run", err)
 			}
@@ -405,8 +405,41 @@ var realReference = sync.OnceValues(func() (reference, error) {
 	if err != nil {
 		return reference{}, err
 	}
-	return assemble(builds, defaultSurfaces(), gitlabtools.MetaToolScopes, actiongrants.Table(), oauthRefusedRoutes)
+	return assemble(builds, defaultSurfaces(), gitlabtools.MetaToolScopes, actiongrants.Table())
 })
+
+// TestAssemble_RealCatalog_NamesTheActionsRefusedToAnOAuthToken verifies the
+// routes the table marks refused to an OAuth token reach the actions they
+// were declared for in the catalog this binary builds: the four that act on
+// the calling token alone and the model registry's package file download,
+// which no OAuth token can run, and the personal token read, which reads the
+// calling token only when it is given no id.
+func TestAssemble_RealCatalog_NamesTheActionsRefusedToAnOAuthToken(t *testing.T) {
+	ref := mustRealReference(t)
+	everyWay, some := []string{}, []string{}
+	for _, group := range ref.groups {
+		for _, action := range group.actions {
+			switch {
+			case action.oauthRefusedEveryWay:
+				everyWay = append(everyWay, action.id)
+			case len(action.oauthRefused) > 0:
+				some = append(some, action.id)
+			}
+		}
+	}
+	slices.Sort(everyWay)
+	slices.Sort(some)
+	wantEveryWay := []string{
+		"access.token_group_rotate_self", "access.token_personal_revoke_self", "access.token_personal_rotate_self",
+		"access.token_project_rotate_self", "model_registry.download",
+	}
+	if !slices.Equal(everyWay, wantEveryWay) {
+		t.Errorf("actions refused to an OAuth token on every way = %v, want %v", everyWay, wantEveryWay)
+	}
+	if want := []string{"access.token_personal_get"}; !slices.Equal(some, want) {
+		t.Errorf("actions refused to an OAuth token on some ways = %v, want %v", some, want)
+	}
+}
 
 // mustRealReference is realReference, failing the test on an error.
 func mustRealReference(t *testing.T) reference {

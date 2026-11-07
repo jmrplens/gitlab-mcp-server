@@ -10265,6 +10265,23 @@ func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T)
 	}
 }
 
+// TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken pins the
+// answer to a call for an action GitLab refuses to an OAuth access token on
+// every way (issue 1238): it exists, the credential in use is an OAuth token,
+// and the way out is a personal access token, which the caller can use; a
+// cross-link to it is published like any withheld action's.
+func TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken(t *testing.T) {
+	registry := newCatalogRegistry(narrowedCatalog(t), WithCredentialKindWithheld([]string{"project.hook_add"}))
+	text := executeText(t, registry, "project.hook_add")
+	const want = `gitlab_execute_action: action "project.hook_add" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token`
+	if !strings.HasPrefix(text, want) || strings.Contains(text, "unknown action") {
+		t.Errorf("Execute() error text = %q, want it to begin %q", text, want)
+	}
+	if spelling, published := registry.publishableRelatedAction("project.hook_add"); !published || spelling != "project.hook_add" {
+		t.Errorf("publishableRelatedAction() = %q, %t, want the link kept", spelling, published)
+	}
+}
+
 // TestExecute_WithheldByTier_NamesTheTierAndAsksTheOperator pins the answer to
 // a call for an action the instance's licensing tier removed (issue 956). It
 // used to be "unknown action" with near-miss suggestions, because the tier

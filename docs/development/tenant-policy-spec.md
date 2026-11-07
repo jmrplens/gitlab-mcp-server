@@ -260,7 +260,11 @@ where its value comes from, in three ways:
   fine-grained token's scope list, the single value `granular`, is unknown scopes, and
   its grant decides per action what it is shown and may call, judged against what GitLab
   declares (`AUT-007`, `AUT-008`, ADR-0024); an action the generated table has no row for
-  is unknown authority, listed and callable.
+  is unknown authority, listed and callable. A credential the OAuth verifier knows to be
+  an OAuth access token is not served the actions GitLab refuses to one on every way
+  whatever its scopes, the calling token's own revocation and rotations and the model
+  registry's package file download, and one whose kind nothing described is served all of
+  them (`AUT-009`, issue 1238).
 - **INV-009 The surface varies only with the authorization.** A listing may vary with the
   authorization on the request and never with the connection or other requests on it, and
   a listing is never shrunk to express a refusal.

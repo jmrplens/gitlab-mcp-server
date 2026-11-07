@@ -361,6 +361,9 @@ func verifiedScopes(r *http.Request) []string {
 // endpoint answered, the scopes are the verifier's assumption
 // ([oauth.ScopesAssumedKey]) and say nothing of the token's kind, so the facts
 // say the kind is unknown, which has the pool ask the self endpoint itself.
+// When /oauth/token/info described the token, it is an OAuth access token
+// ([oauth.IssuedByOAuthKey]), and the facts say so: the pool's entry is then not
+// served what GitLab refuses to such a token on every way (issue 1238).
 func verifiedFacts(r *http.Request) *gitlabclient.TokenFacts {
 	scopes := verifiedScopes(r)
 	if scopes == nil {
@@ -370,6 +373,7 @@ func verifiedFacts(r *http.Request) *gitlabclient.TokenFacts {
 	id, _ := extra[oauth.TokenIDKey].(int64)
 	facts := gitlabclient.FactsFromScopes(scopes, id)
 	facts.KindUnknown, _ = extra[oauth.ScopesAssumedKey].(bool)
+	facts.OAuth, _ = extra[oauth.IssuedByOAuthKey].(bool)
 	return &facts
 }
 
