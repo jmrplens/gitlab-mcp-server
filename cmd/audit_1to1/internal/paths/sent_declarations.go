@@ -318,6 +318,14 @@ const (
 	deploymentMergeRequestsPkg = toolsDir + "/deploymentmergerequests"
 )
 
+// The two merge request note packages, which read the merge request and its
+// diffs to check a position before the write, and the draft note package,
+// which also reads the instance's version to choose what an update sends.
+const (
+	mrDiscussionsPkg = toolsDir + "/mrdiscussions"
+	mrDraftNotesPkg  = toolsDir + "/mrdraftnotes"
+)
+
 // The three group-scoped user packages, beside internal/tools/users. All four
 // publish a user, all four pair with client-go's User, and only the last is
 // filled from an instance-wide route.
@@ -1104,10 +1112,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The merge request the two note packages read to compare its diff_refs
 	// with the position, and the diffs they list for the position pre-check.
-	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
-	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
-	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
-	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+	{Package: mrDiscussionsPkg, Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
+	{Package: mrDraftNotesPkg, Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
+	{Package: mrDiscussionsPkg, Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+	{Package: mrDraftNotesPkg, Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 
 	// The tree the submodule package lists to find the commit a submodule is
 	// pinned at, and the project the two contribution listings read to link
@@ -1142,7 +1150,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: projectsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferReasonVersion},
 	{Package: toolsDir + "/jobs", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonBridgesRouteVersion},
 	{Package: mergeRequestsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonCancelAutoMergeVersion},
-	{Package: toolsDir + "/mrdraftnotes", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonDraftNotePositionVersion},
+	{Package: mrDraftNotesPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonDraftNotePositionVersion},
 
 	// The release link the dynamic surface's own test creates through
 	// gitlab_execute_action, which answers with the release link package's
