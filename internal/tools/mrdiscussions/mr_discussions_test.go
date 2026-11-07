@@ -566,6 +566,11 @@ func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
 // it can read the diff (toolutil.ValidateDiffPosition).
 const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
 
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
 // TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
 // a 400 from the create is answered with to [lineRule]. An unchanged line
 // given one number is not found and the thread is refused for its line code,
@@ -2224,16 +2229,16 @@ func positionTypeCases() []positionTypeCase {
 		},
 		{
 			name: "text naming no line", position: at(map[string]any{"position_type": "text"}),
-			wantErr: "a text position needs new_line or old_line",
+			wantErr: noLineRefusal,
 		},
 		{
 			name: "text by default naming no line", position: at(map[string]any{}),
-			wantErr: "a text position needs new_line or old_line",
+			wantErr: noLineRefusal,
 		},
 		{
 			name:     "text naming only a line range",
 			position: at(map[string]any{"line_range": map[string]any{"start": map[string]any{"new_line": 1}, "end": map[string]any{"new_line": 1}}}),
-			wantErr:  "a text position needs new_line or old_line",
+			wantErr:  noLineRefusal,
 		},
 		{
 			name:     "image with width, height, x and y",
@@ -2391,7 +2396,7 @@ func incompletePositionCases() []incompletePositionCase {
 	return append(cases, incompletePositionCase{
 		name:     "text naming no line",
 		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
-		wantErr:  "a text position needs new_line or old_line",
+		wantErr:  noLineRefusal,
 	}, incompletePositionCase{
 		name:     "text on a negative line",
 		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath, "old_line": -2},

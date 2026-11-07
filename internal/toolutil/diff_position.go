@@ -208,7 +208,10 @@ func ValidateRenamedFilePosition(fileDiff *gl.MergeRequestDiff, oldPath, newPath
 // send none for it, and a negative number is refused: GitLab declares both
 // lines a bare Integer and takes one as present, so it saves a draft note
 // placed on line -1 and answers a discussion with a 400 about a line_code,
-// which the caller did not send.
+// which the caller did not send. The refusal gives the line by its kind, as
+// the position guidance does, because GitLab finds an unchanged line only by
+// both of its numbers (Gitlab::Diff::File#line_for_position), so one of them
+// is not enough there.
 func ValidateTextPosition(oldLine, newLine int64) error {
 	if oldLine < 0 || newLine < 0 {
 		return fmt.Errorf(
@@ -221,8 +224,8 @@ func ValidateTextPosition(oldLine, newLine int64) error {
 		return nil
 	}
 	return errors.New(
-		"a text position needs new_line or old_line: GitLab places a line comment by the line's number in the " +
-			"new file (an added line), in the old file (a removed line) or in both (an unchanged line), " +
+		"a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one): " +
+			"GitLab places a line comment by the line's number in the new file, in the old file or in both, " +
 			"and a line_range does not stand in for it",
 	)
 }

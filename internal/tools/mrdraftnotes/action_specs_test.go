@@ -445,6 +445,11 @@ const onePathConfusion = "A file position needs both, and so does a text positio
 // diff (toolutil.ValidateDiffPosition).
 const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
 
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
 // assertBothPathsAsked checks that the old_path and new_path descriptions
 // each ask for the other path beside it and name the positions that need
 // both, and that the create's Usage asks for both paths from

@@ -1091,8 +1091,9 @@ func TestValidateRenamedFilePosition_OnePathOfARename_IsRefused(t *testing.T) {
 // TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
 // rule for a text position (TextFormatter#complete?): an old_line or a
 // new_line present. Either one passes, both together pass, and neither is
-// refused in words naming the two. Line 1, the first a file has, passes on
-// either side.
+// refused in words giving the line by its kind, both numbers for an unchanged
+// line, where the refusal used to ask for new_line or old_line. Line 1, the
+// first a file has, passes on either side.
 func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
@@ -1114,9 +1115,12 @@ func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
 				}
 				return
 			}
-			const want = "a text position needs new_line or old_line: "
+			const want = "a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one): "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Errorf("ValidateTextPosition() = %v, want a refusal opening %q", err, want)
+			}
+			if stale := "needs new_line or old_line"; err != nil && strings.Contains(err.Error(), stale) {
+				t.Errorf("ValidateTextPosition() = %v, still says a text position %s", err, stale)
 			}
 		})
 	}

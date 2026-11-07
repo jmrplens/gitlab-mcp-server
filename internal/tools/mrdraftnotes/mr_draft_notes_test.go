@@ -2291,16 +2291,16 @@ func positionTypeCases() []positionTypeCase {
 		},
 		{
 			name: "text naming no line", position: at(map[string]any{"position_type": "text"}),
-			wantErr: "a text position needs new_line or old_line",
+			wantErr: noLineRefusal,
 		},
 		{
 			name: "text by default naming no line", position: at(map[string]any{}),
-			wantErr: "a text position needs new_line or old_line",
+			wantErr: noLineRefusal,
 		},
 		{
 			name:     "text naming only a line range",
 			position: at(map[string]any{"line_range": map[string]any{"start": map[string]any{"new_line": 1}, "end": map[string]any{"new_line": 1}}}),
-			wantErr:  "a text position needs new_line or old_line",
+			wantErr:  noLineRefusal,
 		},
 		{
 			name:     "image with width, height, x and y",
@@ -2462,7 +2462,7 @@ func incompletePositionCases() []incompletePositionCase {
 	return append(cases, incompletePositionCase{
 		name:     "text naming no line",
 		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
-		wantErr:  "a text position needs new_line or old_line",
+		wantErr:  noLineRefusal,
 	}, incompletePositionCase{
 		name:     "text on a negative line",
 		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath, "new_line": -1},

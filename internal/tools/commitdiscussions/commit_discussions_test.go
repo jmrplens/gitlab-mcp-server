@@ -455,6 +455,11 @@ func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
 // refusal one number on an unchanged line gets.
 const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
 
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
 // TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
 // a 400 from the create is answered with to [lineRule]. The hint used to ask
 // for new_line or old_line, the mistake that answer follows.
@@ -719,14 +724,14 @@ func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testi
 		{
 			name:     "text naming no line",
 			position: at(func(p *PositionInput) { p.PositionType = "text" }),
-			wantErr:  "a text position needs new_line or old_line",
+			wantErr:  noLineRefusal,
 		},
 		{
 			name: "text by default naming only a line range",
 			position: at(func(p *PositionInput) {
 				p.LineRange = &LineRangeInput{End: &LinePositionInput{NewLine: 12}}
 			}),
-			wantErr: "a text position needs new_line or old_line",
+			wantErr: noLineRefusal,
 		},
 		{
 			name:     "text on a negative line",
