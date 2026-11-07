@@ -318,6 +318,14 @@ const (
 	deploymentMergeRequestsPkg = toolsDir + "/deploymentmergerequests"
 )
 
+// The two merge request note packages, which read the merge request and its
+// diffs to check a position before the write, and the draft note package,
+// which also reads the instance's version to choose what an update sends.
+const (
+	mrDiscussionsPkg = toolsDir + "/mrdiscussions"
+	mrDraftNotesPkg  = toolsDir + "/mrdraftnotes"
+)
+
 // The three group-scoped user packages, beside internal/tools/users. All four
 // publish a user, all four pair with client-go's User, and only the last is
 // filled from an instance-wide route.
@@ -1104,10 +1112,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 
 	// The merge request the two note packages read to compare its diff_refs
 	// with the position, and the diffs they list for the position pre-check.
-	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
-	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
-	{Package: toolsDir + "/mrdiscussions", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
-	{Package: toolsDir + "/mrdraftnotes", Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+	{Package: mrDiscussionsPkg, Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
+	{Package: mrDraftNotesPkg, Entity: "API::Entities::MergeRequest", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionSnapshot},
+	{Package: mrDiscussionsPkg, Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
+	{Package: mrDraftNotesPkg, Entity: "API::Entities::Diff", Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonPositionPreCheck},
 
 	// The tree the submodule package lists to find the commit a submodule is
 	// pinned at, and the project the two contribution listings read to link
@@ -1131,9 +1139,10 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupsPkg, Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 	{Package: toolsDir + "/projects", Entity: todoEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferFailureTodos},
 
-	// The instance version four packages read to choose what to send: the
-	// route a release added, or whether to ask GraphQL for a transfer's
-	// reason. The client asks GET /version for them (gitlabclient.AtLeast),
+	// The instance version five packages read to choose what to send: the
+	// route a release added, whether to ask GraphQL for a transfer's reason,
+	// or whether to send a draft note's position back with its new body. The
+	// client asks GET /version for them (gitlabclient.AtLeast),
 	// and a splat is the right answer for the reason the other reads for a
 	// package's own use are one: nothing of the answer is published, so a key
 	// GitLab adds to the entity is not one the package leaves out.
@@ -1141,6 +1150,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: projectsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonTransferReasonVersion},
 	{Package: toolsDir + "/jobs", Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonBridgesRouteVersion},
 	{Package: mergeRequestsPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonCancelAutoMergeVersion},
+	{Package: mrDraftNotesPkg, Entity: metadataEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonDraftNotePositionVersion},
 
 	// The release link the dynamic surface's own test creates through
 	// gitlab_execute_action, which answers with the release link package's
@@ -1288,6 +1298,14 @@ const reasonCancelAutoMergeVersion = "merge_request.cancel_auto_merge sends POST
 	"deprecated cancel_merge_when_pipeline_succeeds route otherwise, so the client reads GET /version first " +
 	"(gitlabclient.AtLeast, once per client) and keeps only whether the release is 19.5 or later. Nothing of the answer " +
 	"is published; admin.metadata_get is the action that answers with the instance metadata."
+
+// reasonDraftNotePositionVersion answers the instance version a draft note
+// update reads to learn whether a body sent alone keeps the draft's position.
+const reasonDraftNotePositionVersion = "mr_review.draft_note_update sends a body given alone with the draft's " +
+	"current position to an instance not known to run 19.5 or later, the release whose update route keeps a position " +
+	"the request leaves out, so the client reads GET /version first (gitlabclient.AtLeast, once per client) and keeps " +
+	"only whether the release is 19.5 or later. Nothing of the answer is published; admin.metadata_get is the action " +
+	"that answers with the instance metadata."
 
 // reasonTerraformStateProjectPath answers the project the Terraform state
 // package reads to name it to GraphQL.

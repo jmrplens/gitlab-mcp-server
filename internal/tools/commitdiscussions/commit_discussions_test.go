@@ -410,6 +410,71 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths holds the hint a
+// 400 from the create is answered with to the path rule the position guidance
+// gives: every position needs the file's path and is sent both, a file
+// position needs both (FileFormatter#complete?), and so does a text position
+// on a file the commit renames, which GitLab finds in the commit's diff only
+// by both, while a text position on any other file is taken with one
+// (Position#file_path is new_path.presence || old_path). The hint used to ask
+// every text position for both paths.
+func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != testPathCommitDiscussions {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+
+	if err == nil {
+		t.Fatal(errExpAPIFailure)
+	}
+	for _, want := range []string{
+		"head_sha and the file's path (send old_path and new_path)",
+		"and both paths on a renamed file",
+		"file both paths",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want the 400 hint to say %q", err, want)
+			}
+		})
+	}
+	if stale := "text both old_path and new_path"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %v, still asks every text position for both paths (%q)", err, stale)
+	}
+}
+
+// lineRule is the rule the position guidance, the line descriptions and the
+// 400 hint give a text position's line by. GitLab finds the line only where
+// both of its numbers match the line in the commit's diff
+// (Gitlab::Diff::File#line_for_position), so an unchanged line needs both.
+// This action reads no diff before the write, so GitLab's 400 is the only
+// refusal one number on an unchanged line gets.
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to [lineRule]. The hint used to ask
+// for new_line or old_line, the mistake that answer follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
 // TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -608,6 +673,98 @@ func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
 			}
 			if !reflect.DeepEqual(sent.LineRange, tc.want) {
 				t.Errorf("line_range sent = %s, want %s", jsonString(t, sent.LineRange), jsonString(t, tc.want))
+			}
+		})
+	}
+}
+
+// TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt holds
+// the position pre-check of repository.commit_discussion_create to what
+// GitLab reads for a position (Position#complete?), with no request: the
+// start and head commits and a file path on every type, a line on a text
+// position, named or by default, and both paths on a file position. An image
+// position is refused, since the action cannot send the width, height, x and
+// y GitLab completes one by. A complete position reaches GitLab as given, and
+// a position_type GitLab does not declare is left to GitLab, which refuses it
+// by name. A refused case runs against a GitLab that fails the test on any
+// request.
+//
+// On the parent every refused case is sent, and GitLab answers each with a
+// 400 that names no field.
+func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testing.T) {
+	at := func(edit func(p *PositionInput)) *PositionInput {
+		p := &PositionInput{BaseSHA: "base-sha", StartSHA: "start-sha", HeadSHA: "head-sha", NewPath: "after.go"}
+		edit(p)
+		return p
+	}
+	for _, tc := range []struct {
+		name     string
+		position *PositionInput
+		wantErr  string
+	}{
+		{name: "text on a line", position: at(func(p *PositionInput) { p.PositionType, p.NewLine = "text", 12 })},
+		{name: "text by default on a line", position: at(func(p *PositionInput) { p.OldLine = 7 })},
+		{name: "file with both paths", position: at(func(p *PositionInput) { p.PositionType, p.OldPath = "file", "before.go" })},
+		{name: "a type GitLab does not declare", position: at(func(p *PositionInput) { p.PositionType = "Text" })},
+		{
+			name:     "text with an empty start_sha",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine, p.StartSHA = "text", 12, "" }),
+			wantErr:  "(missing: start_sha)",
+		},
+		{
+			name:     "file with a head_sha of blanks",
+			position: at(func(p *PositionInput) { p.PositionType, p.OldPath, p.HeadSHA = "file", "before.go", " " }),
+			wantErr:  "(missing: head_sha)",
+		},
+		{
+			name:     "text with no path",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine, p.NewPath = "text", 12, "" }),
+			wantErr:  "(missing: a path in new_path or old_path)",
+		},
+		{
+			name:     "text naming no line",
+			position: at(func(p *PositionInput) { p.PositionType = "text" }),
+			wantErr:  noLineRefusal,
+		},
+		{
+			name: "text by default naming only a line range",
+			position: at(func(p *PositionInput) {
+				p.LineRange = &LineRangeInput{End: &LinePositionInput{NewLine: 12}}
+			}),
+			wantErr: noLineRefusal,
+		},
+		{
+			name:     "text on a negative line",
+			position: at(func(p *PositionInput) { p.PositionType, p.NewLine = "text", -1 }),
+			wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line -1, old_line 0)",
+		},
+		{
+			name:     "file without its old path",
+			position: at(func(p *PositionInput) { p.PositionType = "file" }),
+			wantErr:  "(missing: old_path)",
+		},
+		{
+			name:     "image",
+			position: at(func(p *PositionInput) { p.PositionType, p.OldPath = "image", "after.go" }),
+			wantErr:  "an image position cannot be placed through repository.commit_discussion_create",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "on the diff", Position: tc.position}
+			if tc.wantErr != "" {
+				client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+				if _, err := Create(t.Context(), client, input); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("Create() error = %v, want a refusal naming %q", err, tc.wantErr)
+				}
+				return
+			}
+			var captured capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated, `{"id":"d7","notes":[]}`, &captured))
+			if _, err := Create(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got, want := decodeCreateSent(t, captured.Body).Position, buildNotePosition(tc.position); !reflect.DeepEqual(got, want) {
+				t.Errorf("position sent = %s, want %s", jsonString(t, got), jsonString(t, want))
 			}
 		})
 	}

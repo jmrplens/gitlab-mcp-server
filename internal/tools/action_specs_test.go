@@ -1458,7 +1458,6 @@ var clearingDeclarations = map[string]clearingDeclaration{
 	"merge_request.update.title":                                     clearRequired("a merge request has a title"),
 	"mr_review.discussion_note_update.body":                          clearRequired("a note has a body"),
 	"mr_review.discussion_note_update.created_at":                    clearNotStored(reasonAdminMoment),
-	"mr_review.draft_note_update.note":                               clearRequired("a draft note has a body"),
 	"package.protection_rule_update.minimum_access_level_for_delete": clearUnverified,
 	"package.protection_rule_update.minimum_access_level_for_push":   clearUnverified,
 	"package.registry_rule_update.repository_path_pattern":           clearRequired("a protection rule matches a repository path pattern"),

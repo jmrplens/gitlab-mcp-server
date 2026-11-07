@@ -14158,9 +14158,9 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes/:draft_note_id",
       "identifiers": {
-        ":draft_note_id": 2,
+        ":draft_note_id": 3,
         ":merge_request_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -14203,6 +14203,12 @@
         ":merge_request_id": 1,
         ":project_id": 1
       }
+    },
+    {
+      "package": "internal/tools/mrdraftnotes",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/version"
     },
     {
       "package": "internal/tools/mrnotes",

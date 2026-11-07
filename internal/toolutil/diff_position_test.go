@@ -225,7 +225,11 @@ func TestValidateDiffPosition_ContextLineMissingNewLine(t *testing.T) {
 }
 
 // TestValidateDiffPosition_OutsideDiff verifies that validation fails when
-// the specified line numbers fall outside the parsed diff range.
+// the specified line numbers fall outside the parsed diff range, and that the
+// refusal says the rule holds for a text position, the only kind placed on a
+// line, and offers a file position on the same file beside a general
+// discussion. It used to say that inline comments can only be placed on lines
+// of the diff, which a file or an image position is not placed on.
 func TestValidateDiffPosition_OutsideDiff(t *testing.T) {
 	lines := ParseDiffLines(simpleDiff)
 
@@ -234,8 +238,21 @@ func TestValidateDiffPosition_OutsideDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("line outside diff should return error")
 	}
-	if got := err.Error(); !contains(got, "outside the diff range") {
-		t.Errorf("error should mention 'outside the diff range', got: %s", got)
+	got := err.Error()
+	for _, want := range []string{
+		"outside the diff range",
+		"A text position can only be placed on a line visible in the diff context",
+		"send position_type file with the file's old_path and new_path to comment on the whole file",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !contains(got, want) {
+				t.Errorf("error = %q, want it to say %q", got, want)
+			}
+		})
+	}
+	if stale := "Inline comments can only be placed on lines"; contains(got, stale) {
+		t.Errorf("error = %q, still says %q", got, stale)
 	}
 }
 
@@ -299,12 +316,18 @@ func TestValidateDiffPosition_NoLines(t *testing.T) {
 }
 
 // TestValidateDiffPosition_ZeroBoth verifies that validation fails when both
-// old_line and new_line are zero, which is an invalid position.
+// old_line and new_line are zero, which is an invalid position, in words
+// giving the line by its kind as [ValidateTextPosition] does, both numbers
+// for an unchanged line, where it used to ask for at least one of them.
 func TestValidateDiffPosition_ZeroBoth(t *testing.T) {
 	lines := ParseDiffLines(simpleDiff)
 	err := ValidateDiffPosition(lines, 0, 0)
 	if err == nil {
 		t.Fatal("both lines zero should return error")
+	}
+	const want = "a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one)"
+	if err.Error() != want {
+		t.Errorf("ValidateDiffPosition(0, 0) = %q, want %q", err, want)
 	}
 }
 
@@ -900,16 +923,15 @@ func searchSubstring(s, substr string) bool {
 // where a 0 is present. A complete position passes, the four at 0 included,
 // and the refusal names exactly the fields left out, in that order.
 func TestValidateImagePosition_EachMissingField_IsNamed(t *testing.T) {
-	width, height, x, y := new(int64(64)), new(int64(32)), new(12.5), new(8.0)
-	zero, origin := new(int64(0)), new(0.0)
+	width, height, x, y := new(int64(64)), new(int64(32)), new(int64(12)), new(int64(8))
+	zero := new(int64(0))
 	for _, tc := range []struct {
-		name          string
-		width, height *int64
-		x, y          *float64
-		wantMissing   string
+		name                string
+		width, height, x, y *int64
+		wantMissing         string
 	}{
 		{name: "all four", width: width, height: height, x: x, y: y},
-		{name: "all four at zero", width: zero, height: zero, x: origin, y: origin},
+		{name: "all four at zero", width: zero, height: zero, x: zero, y: zero},
 		{name: "no width", height: height, x: x, y: y, wantMissing: "width"},
 		{name: "no height", width: width, x: x, y: y, wantMissing: "height"},
 		{name: "no x", width: width, height: height, y: y, wantMissing: "x"},
@@ -935,8 +957,12 @@ func TestValidateImagePosition_EachMissingField_IsNamed(t *testing.T) {
 // TestValidateFilePosition_EachMissingPath_IsNamed holds the file check to
 // GitLab's rule for a file position: old_path and new_path both present,
 // where a path of blanks is not. A renamed file passes as well as an
-// unchanged one, and the refusal names exactly the paths left out.
+// unchanged one, and the refusal names exactly the paths left out. It also
+// says where each path comes from, a file outside the diff included: that
+// file has no entry in the diff listing, and the refusal used to send the
+// caller to that listing alone.
 func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
+	const outsideTheDiff = "or for a file outside the diff send the path repository.tree lists at head_sha as both"
 	for _, tc := range []struct {
 		name, oldPath, newPath, wantMissing string
 	}{
@@ -959,6 +985,218 @@ func TestValidateFilePosition_EachMissingPath_IsNamed(t *testing.T) {
 			want := "a file position needs both old_path and new_path (missing: " + tc.wantMissing + "): "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Errorf("ValidateFilePosition() = %v, want a refusal opening %q", err, want)
+				return
+			}
+			if !strings.Contains(err.Error(), outsideTheDiff) {
+				t.Errorf("ValidateFilePosition() = %v, want it to say %q", err, outsideTheDiff)
+			}
+		})
+	}
+}
+
+// TestValidatePositionAnchor_EachMissingPart_IsNamed holds the anchor check to
+// GitLab's rule for a position of any type (Position#complete? and
+// DiffRefs#complete?): start_sha and head_sha present, and a file path in
+// new_path or, when that is blank, old_path, where a value of blanks is not
+// present. One path is enough, the old one of a deleted file included, and
+// the refusal names exactly the parts left out, in that order.
+func TestValidatePositionAnchor_EachMissingPart_IsNamed(t *testing.T) {
+	const pathPart = "a path in new_path or old_path"
+	for _, tc := range []struct {
+		name                                string
+		startSHA, headSHA, oldPath, newPath string
+		wantMissing                         string
+	}{
+		{name: "both SHAs and both paths", startSHA: "start", headSHA: "head", oldPath: "a.go", newPath: "a.go"},
+		{name: "the new path alone", startSHA: "start", headSHA: "head", newPath: "a.go"},
+		{name: "the old path alone", startSHA: "start", headSHA: "head", oldPath: "a.go"},
+		{name: "a blank new path beside the old one", startSHA: "start", headSHA: "head", oldPath: "a.go", newPath: " "},
+		{name: "no start_sha", headSHA: "head", newPath: "a.go", wantMissing: "start_sha"},
+		{name: "a start_sha of blanks", startSHA: " \t", headSHA: "head", newPath: "a.go", wantMissing: "start_sha"},
+		{name: "no head_sha", startSHA: "start", newPath: "a.go", wantMissing: "head_sha"},
+		{name: "a head_sha of blanks", startSHA: "start", headSHA: "\n", newPath: "a.go", wantMissing: "head_sha"},
+		{name: "no path", startSHA: "start", headSHA: "head", wantMissing: pathPart},
+		{name: "two paths of blanks", startSHA: "start", headSHA: "head", oldPath: " ", newPath: "\t", wantMissing: pathPart},
+		{name: "none of them", wantMissing: "start_sha, head_sha, " + pathPart},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidatePositionAnchor(tc.startSHA, tc.headSHA, tc.oldPath, tc.newPath)
+			if tc.wantMissing == "" {
+				if err != nil {
+					t.Errorf("ValidatePositionAnchor() = %v, want nil for a complete anchor", err)
+				}
+				return
+			}
+			want := "a position of any type needs start_sha, head_sha and the file's new_path or old_path (missing: " + tc.wantMissing + "): "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidatePositionAnchor() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestPositionNewPath_LeftOutOrBlank_IsNotSent holds what a merge request
+// position sends as new_path: the path as given, and no key at all for one
+// left out or blank, since GitLab reads a blank one as absent and looks the
+// file's diff up by every path the position carries, where an empty one
+// reaches git diff as a pathspec git refuses. A path with blanks around it is
+// sent as given.
+func TestPositionNewPath_LeftOutOrBlank_IsNotSent(t *testing.T) {
+	for _, tc := range []struct {
+		name, newPath string
+		wantSent      bool
+	}{
+		{name: "a path", newPath: "a.go", wantSent: true},
+		{name: "a path with blanks around it", newPath: " a.go ", wantSent: true},
+		{name: "left out", newPath: ""},
+		{name: "blanks", newPath: " \t"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PositionNewPath(tc.newPath)
+			switch {
+			case !tc.wantSent && got != nil:
+				t.Errorf("PositionNewPath(%q) = %q, want nil", tc.newPath, *got)
+			case tc.wantSent && (got == nil || *got != tc.newPath):
+				t.Errorf("PositionNewPath(%q) = %v, want %q", tc.newPath, got, tc.newPath)
+			}
+		})
+	}
+}
+
+// TestValidateRenamedFilePosition_OnePathOfARename_IsRefused holds the check
+// to how GitLab finds a text position's file: by the paths the position
+// carries, where git pairs a rename only when both of its paths are among
+// them. A file the diff does not rename passes with either path or both, a
+// renamed one only with both as the diff gives them, and the refusal names
+// the two paths to send. An entry that lacks one of its paths, which GitLab
+// does not answer but a listing could, says nothing about a rename and
+// passes, so the check never refuses on evidence it does not have.
+func TestValidateRenamedFilePosition_OnePathOfARename_IsRefused(t *testing.T) {
+	modified := &gl.MergeRequestDiff{OldPath: "main.go", NewPath: "main.go"}
+	renamed := &gl.MergeRequestDiff{OldPath: "old.go", NewPath: "new.go"}
+	noOldPath := &gl.MergeRequestDiff{NewPath: "moved.go"}
+	noNewPath := &gl.MergeRequestDiff{OldPath: "moved.go"}
+	for _, tc := range []struct {
+		name             string
+		fileDiff         *gl.MergeRequestDiff
+		oldPath, newPath string
+		wantErr          bool
+	}{
+		{name: "a file not renamed, both paths", fileDiff: modified, oldPath: "main.go", newPath: "main.go"},
+		{name: "a file not renamed, the new path alone", fileDiff: modified, newPath: "main.go"},
+		{name: "a file not renamed, the old path alone", fileDiff: modified, oldPath: "main.go"},
+		{name: "a renamed file, both paths", fileDiff: renamed, oldPath: "old.go", newPath: "new.go"},
+		{name: "a renamed file, the new path alone", fileDiff: renamed, newPath: "new.go", wantErr: true},
+		{name: "a renamed file, the old path alone", fileDiff: renamed, oldPath: "old.go", wantErr: true},
+		{name: "a renamed file, a blank new path", fileDiff: renamed, oldPath: "old.go", newPath: " ", wantErr: true},
+		{name: "a renamed file, the old path twice", fileDiff: renamed, oldPath: "old.go", newPath: "old.go", wantErr: true},
+		{name: "a renamed file, the paths swapped", fileDiff: renamed, oldPath: "new.go", newPath: "old.go", wantErr: true},
+		{name: "an entry with no old path", fileDiff: noOldPath, oldPath: "moved.go", newPath: "moved.go"},
+		{name: "an entry with no new path", fileDiff: noNewPath, oldPath: "moved.go", newPath: "moved.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRenamedFilePosition(tc.fileDiff, tc.oldPath, tc.newPath)
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("ValidateRenamedFilePosition() = %v, want nil", err)
+				}
+				return
+			}
+			const want = `the merge request diff renames "old.go" to "new.go", and GitLab finds a renamed file's lines ` +
+				`only by both of its paths: send old_path "old.go" and new_path "new.go"`
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateRenamedFilePosition() = %v, want a refusal opening %q", err, want)
+			}
+		})
+	}
+}
+
+// TestValidateTextPosition_NoLine_IsRefused holds the text check to GitLab's
+// rule for a text position (TextFormatter#complete?): an old_line or a
+// new_line present. Either one passes, both together pass, and neither is
+// refused in words giving the line by its kind, both numbers for an unchanged
+// line, where the refusal used to ask for new_line or old_line. Line 1, the
+// first a file has, passes on either side.
+func TestValidateTextPosition_NoLine_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldLine, newLine int64
+		wantErr          bool
+	}{
+		{name: "an added line", newLine: 12},
+		{name: "a removed line", oldLine: 7},
+		{name: "an unchanged line", oldLine: 7, newLine: 12},
+		{name: "the first line, added", newLine: 1},
+		{name: "the first line, removed", oldLine: 1},
+		{name: "no line", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTextPosition(tc.oldLine, tc.newLine)
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("ValidateTextPosition() = %v, want nil for a position naming a line", err)
+				}
+				return
+			}
+			const want = "a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one): "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("ValidateTextPosition() = %v, want a refusal opening %q", err, want)
+			}
+			if stale := "needs new_line or old_line"; err != nil && strings.Contains(err.Error(), stale) {
+				t.Errorf("ValidateTextPosition() = %v, still says a text position %s", err, stale)
+			}
+		})
+	}
+}
+
+// TestValidateTextPosition_NegativeLine_IsRefused verifies that a negative
+// new_line or old_line is refused, on either side and beside a line that is
+// valid, in words naming both values. GitLab declares both lines a bare
+// Integer and counts any number as present (TextFormatter#complete?), so
+// without this a draft note on line -1 was saved whenever the merge request's
+// diff could not be read, and a commit discussion, which reads no diff, was
+// sent to a 400 about a line_code.
+func TestValidateTextPosition_NegativeLine_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldLine, newLine int64
+		want             string
+	}{
+		{name: "a negative new_line alone", newLine: -1, want: "got new_line -1, old_line 0"},
+		{name: "a negative old_line alone", oldLine: -3, want: "got new_line 0, old_line -3"},
+		{name: "a negative new_line beside an old_line", oldLine: 4, newLine: -4, want: "got new_line -4, old_line 4"},
+		{name: "a negative old_line beside a new_line", oldLine: -2, newLine: 2, want: "got new_line 2, old_line -2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateTextPosition(tc.oldLine, tc.newLine)
+			const opening = "new_line and old_line are line numbers counted from 1 ("
+			if err == nil || !strings.HasPrefix(err.Error(), opening) || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("ValidateTextPosition(%d, %d) = %v, want a refusal opening %q and naming %q", tc.oldLine, tc.newLine, err, opening, tc.want)
+			}
+		})
+	}
+}
+
+// TestImageCoordinate_ConvertsWholePixelsAndKeepsAbsence verifies that an
+// image coordinate reaches client-go's float64 as the same whole number, 0
+// included, and that one left out stays nil so it is not sent.
+func TestImageCoordinate_ConvertsWholePixelsAndKeepsAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   *int64
+		want *float64
+	}{
+		{name: "left out", in: nil, want: nil},
+		{name: "the image's edge", in: new(int64(0)), want: new(0.0)},
+		{name: "a point inside", in: new(int64(1920)), want: new(1920.0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ImageCoordinate(tc.in)
+			switch {
+			case tc.want == nil && got != nil:
+				t.Errorf("ImageCoordinate(nil) = %v, want nil", *got)
+			case tc.want != nil && (got == nil || *got != *tc.want):
+				t.Errorf("ImageCoordinate(%d) = %v, want %v", *tc.in, got, *tc.want)
 			}
 		})
 	}

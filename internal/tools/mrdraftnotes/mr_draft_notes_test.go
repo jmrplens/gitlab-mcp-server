@@ -9,12 +9,16 @@ package mrdraftnotes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -316,6 +320,12 @@ func TestDraftNoteCreate_CancelledContext(t *testing.T) {
 // TestDraftNoteUpdate_Success verifies DraftNoteUpdate when success.
 func TestDraftNoteUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The instance's version is not answered, so the update reads the
+		// draft for the position it keeps, and the draft has none.
+		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, draftWithoutPositionJSON)
+			return
+		}
 		if r.URL.Path == pathDraftNoteByID && r.Method == http.MethodPut {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text","commit_id":"","discussion_id":"","resolve_discussion":false}`)
 			return
@@ -1011,6 +1021,80 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths holds the hint a
+// 400 from the create is answered with to the path rule the position guidance
+// and the check before the write follow: every position needs the file's path
+// and is sent both, a file position needs both (FileFormatter#complete?), and
+// so does a text position on a file the diff renames, which GitLab pairs only
+// by both, while a text or image position on any other file is taken with one
+// (Position#file_path is new_path.presence || old_path). The hint used to ask
+// every text position for both paths.
+func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/merge_requests/1/draft_notes" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Note: "x"})
+
+	if err == nil {
+		t.Fatal("Create() error = nil, want the 400 with its hint")
+	}
+	for _, want := range []string{
+		"head_sha and the file's path (send old_path and new_path)",
+		"and both paths on a renamed file",
+		"file both paths",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want the 400 hint to say %q", err, want)
+			}
+		})
+	}
+	if stale := "text both old_path and new_path"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %v, still asks every text position for both paths (%q)", err, stale)
+	}
+}
+
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to the line rule the position
+// guidance states. GitLab finds a text position's line only where both of its
+// numbers match the diff line (Gitlab::Diff::File#line_for_position), so an
+// unchanged line given one number is not found and the note is refused for
+// its line code. The hint used to ask for new_line or old_line, the mistake
+// that answer follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Note: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
+// TestCreateInput_PositionDescription_NamesEveryPositionType holds the
+// description of the create's position parameter to the three things a
+// position can place a draft note on, as the create's Usage and position
+// guidance do: a line of the diff (text), a point of an image (image) and a
+// whole file (file). It used to say inline comments on specific lines, which
+// an image or file position is not placed on.
+func TestCreateInput_PositionDescription_NamesEveryPositionType(t *testing.T) {
+	field, _ := reflect.TypeFor[CreateInput]().FieldByName("Position")
+	description := field.Tag.Get("jsonschema")
+	const want = "an inline comment on a line of the diff, a point of an image or a whole file"
+	if !strings.Contains(description, want) {
+		t.Errorf("create position description = %q, want it to say %q", description, want)
+	}
+	if stale := "on specific lines"; strings.Contains(description, stale) {
+		t.Errorf("create position description = %q, still says %q", description, stale)
+	}
+}
+
 // TestUpdate_MissingProjectID verifies Update when missing project ID.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1022,22 +1106,28 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyNote verifies Update when empty note.
-func TestUpdate_EmptyNote(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"old text","commit_id":"","discussion_id":"","resolve_discussion":false}`)
-			return
-		}
-		http.NotFound(w, r)
+// TestUpdate_NeitherNoteNorPosition_IsRefusedBeforeAnyRequest verifies that
+// an update naming no body and no position is refused, by naming both,
+// before anything is sent. GitLab refuses an update without a body with a 400
+// ("Missing params to modify"), and one that changes nothing has no body or
+// position to read back from the draft either; the update used to send the
+// empty object and hand the model GitLab's refusal.
+func TestUpdate_NeitherNoteNorPosition_IsRefusedBeforeAnyRequest(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, draftWithoutPositionJSON)
 	}))
-	// Note empty → the optional Note field is skipped, API still called
-	out, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10})
+	if err == nil {
+		t.Fatal("Update with neither note nor position answered no error, want a refusal")
 	}
-	if out.ID != 10 {
-		t.Errorf("expected ID=10, got %d", out.ID)
+	if !strings.Contains(err.Error(), "note") || !strings.Contains(err.Error(), "position") {
+		t.Errorf("error = %q, want it to name both note and position", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("Update sent %d request(s) before refusing, want none", got)
 	}
 }
 
@@ -1109,8 +1199,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestValidatePosition_FileNotInDiff verifies that validatePosition returns an
-// error when the target file path is not found in the merge request diff.
+// TestValidatePosition_FileNotInDiff verifies that validatePosition refuses a
+// text position on a file not found in the merge request diff, and offers a
+// file position on it or a general comment instead.
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -1134,8 +1225,25 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for file not in diff, got nil")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Errorf("error = %q, want 'not in the merge request diff'", err.Error())
+	// GitLab reads a line, and so the diff, only for a text position
+	// (DiffNote), so an image or a file position on a file outside the diff is
+	// accepted, and that file, which is unchanged, has the one path
+	// repository.tree lists at head_sha for both of its sides. The refusal used
+	// to say that inline comments can only be placed on changed files.
+	for _, want := range []string{
+		"not in the merge request diff",
+		"A text position can only be placed on a line of a file in the diff",
+		"send position_type file with the path repository.tree lists at head_sha as both old_path and new_path",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err.Error(), want)
+			}
+		})
+	}
+	if stale := "only be placed on changed files"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %q, still says %q, while an image or file position may name a file outside the diff", err.Error(), stale)
 	}
 }
 
@@ -1209,31 +1317,107 @@ func TestValidatePosition_DiffFetchError(t *testing.T) {
 	}
 }
 
-// TestValidatePosition_FallbackToOldPath verifies that validatePosition uses
-// OldPath when NewPath is empty to find the file in the diff.
+// TestValidatePosition_FallbackToOldPath verifies that validatePosition looks
+// the file up by OldPath when NewPath is empty or only blanks, as GitLab reads
+// new_path.presence || old_path. Before the blank case was handled, a
+// new_path of " " passed the anchor check and was then looked up as the path
+// " ", which no diff holds, so a draft note GitLab would place on old_path's
+// file was refused as not in the diff. The out-of-range cases hold the
+// fallback to reading the old file's diff: a lookup skipped with a nil return
+// would pass the in-range cases and fail these. The file is one the diff
+// does not rename, the only kind one path finds at GitLab
+// (TestValidatePosition_RenamedFile_NeedsBothPaths).
 func TestValidatePosition_FallbackToOldPath(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
-			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
-			return
-		}
-		if strings.Contains(r.URL.Path, "/diffs") {
-			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
-			return
-		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, mux)
+	tests := []struct {
+		name    string
+		newPath string
+		newLine int
+		wantErr string
+	}{
+		{name: "new_path empty", newPath: "", newLine: 2},
+		{name: "new_path of blanks", newPath: "  ", newLine: 2},
+		{name: "new_path empty, new_line outside the diff", newPath: "", newLine: 9, wantErr: "new_line 9"},
+		{name: "new_path of blanks, new_line outside the diff", newPath: "  ", newLine: 9, wantErr: "new_line 9"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+					return
+				}
+				if strings.Contains(r.URL.Path, "/diffs") {
+					testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"old_name.go","diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+					return
+				}
+				http.NotFound(w, r)
+			})
+			client := testutil.NewTestClient(t, mux)
 
-	// NewPath is empty, should fallback to OldPath
-	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
-		BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
-		OldPath: "old_name.go",
-		NewLine: 2,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
+				OldPath: "old_name.go",
+				NewPath: tt.newPath,
+				NewLine: tt.newLine,
+			})
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validatePosition() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("validatePosition() error = %v, want one naming %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidatePosition_RenamedFile_NeedsBothPaths verifies that a draft note
+// text position on a file the merge request renames is refused before the
+// draft is saved unless it names both of the file's paths. GitLab looks the
+// file's diff up by the paths the position carries (Position#diff_options),
+// and git pairs a rename only when both paths are among them, so with one
+// path GitLab reads the file as deleted or as added and computes the line on
+// that diff, not on the rename the merge request shows. Before the check,
+// the line was judged against the rename and a position naming one path
+// passed.
+func TestValidatePosition_RenamedFile_NeedsBothPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldPath, newPath string
+		wantErr          bool
+	}{
+		{name: "both paths", oldPath: "old_name.go", newPath: "new_name.go"},
+		{name: "the new path alone", newPath: "new_name.go", wantErr: true},
+		{name: "the old path alone", oldPath: "old_name.go", wantErr: true},
+		{name: "the old path and a blank new path", oldPath: "old_name.go", newPath: "  ", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"aaa","start_sha":"ccc","head_sha":"bbb"}}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old_name.go","new_path":"new_name.go","renamed_file":true,"diff":"@@ -1,3 +1,4 @@\n line1\n+added\n line3\n line4\n"}]`)
+			}))
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "aaa", StartSHA: "ccc", HeadSHA: "bbb",
+				OldPath: tc.oldPath, NewPath: tc.newPath,
+				NewLine: 2,
+			})
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("validatePosition() error = %v, want nil for both paths of the rename", err)
+				}
+				return
+			}
+			const want = `send old_path "old_name.go" and new_path "new_name.go"`
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("validatePosition() error = %v, want one saying %q", err, want)
+			}
+		})
 	}
 }
 
@@ -1301,8 +1485,8 @@ func TestToDiffPositionOptions_FullImageAndRange(t *testing.T) {
 		PositionType: "image",
 		Width:        new(int64(800)),
 		Height:       new(int64(600)),
-		X:            new(12.5),
-		Y:            new(34.5),
+		X:            new(int64(12)),
+		Y:            new(int64(34)),
 		LineRange: &DiffLineRange{
 			Start: &DiffLinePosition{LineCode: "lc1", Type: "new", OldLine: 0, NewLine: 10},
 			End:   &DiffLinePosition{LineCode: "lc2", Type: "new", OldLine: 0, NewLine: 12},
@@ -1320,11 +1504,11 @@ func TestToDiffPositionOptions_FullImageAndRange(t *testing.T) {
 	if opts.Height == nil || *opts.Height != 600 {
 		t.Errorf("expected Height=600, got %v", opts.Height)
 	}
-	if opts.X == nil || *opts.X != 12.5 {
-		t.Errorf("expected X=12.5, got %v", opts.X)
+	if opts.X == nil || *opts.X != 12 {
+		t.Errorf("expected X=12, got %v", opts.X)
 	}
-	if opts.Y == nil || *opts.Y != 34.5 {
-		t.Errorf("expected Y=34.5, got %v", opts.Y)
+	if opts.Y == nil || *opts.Y != 34 {
+		t.Errorf("expected Y=34, got %v", opts.Y)
 	}
 	if opts.LineRange == nil || opts.LineRange.Start == nil || opts.LineRange.End == nil {
 		t.Fatal("expected line_range start and end")
@@ -1498,34 +1682,318 @@ func TestDraftNoteCreate_OptionalFieldsReachGitLab(t *testing.T) {
 // answer is identical either way, so an inverted guard would blank the note it
 // was asked to change while silently discarding the replacement text.
 func TestDraftNoteUpdate_NoteBodyReachesGitLab(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text"}`)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "Updated text"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, `"note":"Updated text"`) {
+		t.Errorf("request body %q is missing the new body", body)
+	}
+}
+
+// draftWithoutPositionJSON is a general draft note as GitLab answers it: the
+// draft has no position, and its position column reads as an empty
+// Gitlab::Diff::Position, whose text formatter answers every key null and the
+// type text.
+const draftWithoutPositionJSON = `{"id":10,"author_id":1,"merge_request_id":1,"note":"current body",` +
+	`"position":{"base_sha":null,"start_sha":null,"head_sha":null,"old_path":null,"new_path":null,` +
+	`"position_type":"text","old_line":null,"new_line":null,"line_range":null}}`
+
+// draftUpdateGitLab answers the requests a draft note update can send: the
+// instance's version, the read of the draft and the update itself. A version
+// or a draft left empty is answered 404. It records every request and the
+// body of the update, under a lock and without stopping the test, because it
+// runs on the httptest server's goroutine.
+type draftUpdateGitLab struct {
+	version string
+	draft   string
+
+	mu      sync.Mutex
+	seen    []string
+	updated map[string]any
+}
+
+// ServeHTTP records the request and answers it.
+func (g *draftUpdateGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	if r.Method == http.MethodPut {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "decoding the update body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	g.mu.Lock()
+	g.seen = append(g.seen, r.Method+" "+r.URL.Path)
+	if body != nil {
+		g.updated = body
+	}
+	g.mu.Unlock()
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v4/version" && g.version != "":
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"`+g.version+`"}`)
+	case r.Method == http.MethodGet && r.URL.Path == pathDraftNoteByID && g.draft != "":
+		testutil.RespondJSON(w, http.StatusOK, g.draft)
+	case r.Method == http.MethodPut && r.URL.Path == pathDraftNoteByID:
+		testutil.RespondJSON(w, http.StatusOK, draftNoteWrittenBody)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// requests returns the requests recorded, by method and path.
+func (g *draftUpdateGitLab) requests() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return slices.Clone(g.seen)
+}
+
+// body returns the body the update carried, nil when none was sent.
+func (g *draftUpdateGitLab) body() map[string]any {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.updated
+}
+
+// decodedJSON decodes a JSON document the way the stand-in decodes a body, so
+// a want written as JSON compares with what was sent.
+func decodedJSON(t *testing.T, document string) any {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal([]byte(document), &v); err != nil {
+		t.Fatalf("decoding %s: %v", document, err)
+	}
+	return v
+}
+
+// TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack verifies that a body
+// sent alone to an instance not known to run GitLab 19.5 or later goes with
+// the position the draft has, read from the draft first. Before 19.5 the
+// update route stored a position the request left out as none
+// (draft_note.update!(note: params[:note], position: params[:position])), so
+// a draft on main.go:12 whose typo was fixed answered 200 without its line
+// and was published as a general comment. An image position keeps its width,
+// height and a point on the edge, which client-go's NotePosition does not
+// model, and goes back as numbers when GitLab stored them as the strings its
+// position schema admits. A null base commit goes as an empty one since the
+// route requires the key, and a draft with no position GitLab could place
+// goes with none.
+func TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack(t *testing.T) {
+	const anchor = `"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc"`
 	for _, tc := range []struct {
-		name    string
-		note    string
-		present string
-		absent  string
+		name, version, stored, want string
 	}{
-		{name: "a new body is sent", note: "Updated text", present: `"note":"Updated text"`},
-		{name: "an omitted body is not sent", note: "", absent: "note"},
+		{
+			name: "a text position with a line range, on 19.4", version: "19.4.1-ee",
+			stored: `{` + anchor + `,"old_path":"main.go","new_path":"main.go","position_type":"text","old_line":null,"new_line":12,` +
+				`"line_range":{"start":{"line_code":"abc_0_12","type":"new","old_line":null,"new_line":12},"end":{"line_code":"abc_0_13","type":"new","old_line":null,"new_line":13}}}`,
+			want: `{` + anchor + `,"old_path":"main.go","new_path":"main.go","position_type":"text","new_line":12,` +
+				`"line_range":{"start":{"line_code":"abc_0_12","type":"new","new_line":12},"end":{"line_code":"abc_0_13","type":"new","new_line":13}}}`,
+		},
+		{
+			name:   "an image position on the edge, on an instance whose version is not known",
+			stored: `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+			want:   `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+		},
+		{
+			name: "an image position stored with its measures as strings, on 19.4", version: "19.4.1-ee",
+			stored: `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":"64","height":"32","x":"0","y":"7"}`,
+			want:   `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+		},
+		{
+			name: "a file position, on 19.4", version: "19.4.0-ee",
+			stored: `{` + anchor + `,"old_path":"old.go","new_path":"new.go","position_type":"file"}`,
+			want:   `{` + anchor + `,"old_path":"old.go","new_path":"new.go","position_type":"file"}`,
+		},
+		{
+			name: "a branch with no merge base, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":null,"start_sha":"bbb","head_sha":"ccc","old_path":"main.go","new_path":"main.go","position_type":"text","old_line":3,"new_line":3,"line_range":null}`,
+			want:   `{"base_sha":"","start_sha":"bbb","head_sha":"ccc","old_path":"main.go","new_path":"main.go","position_type":"text","old_line":3,"new_line":3}`,
+		},
+		{
+			name: "a draft with no position, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":null,"start_sha":null,"head_sha":null,"old_path":null,"new_path":null,"position_type":"text","old_line":null,"new_line":null,"line_range":null}`,
+		},
+		{
+			name: "a position without its head commit, on 19.4", version: "19.4.1-ee",
+			stored: `{"base_sha":"aaa","start_sha":"bbb","head_sha":null,"old_path":"main.go","new_path":"main.go","position_type":"text","new_line":12}`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var body string
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				b, _ := io.ReadAll(r.Body)
-				body = string(b)
-				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text"}`)
-			}))
+			gitlab := &draftUpdateGitLab{
+				version: tc.version,
+				draft:   `{"id":10,"author_id":1,"merge_request_id":1,"note":"original","position":` + tc.stored + `}`,
+			}
+			client := testutil.NewTestClient(t, gitlab)
 
-			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: tc.note})
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if tc.present != "" && !strings.Contains(body, tc.present) {
-				t.Errorf("request body %q is missing %s", body, tc.present)
+			body := gitlab.body()
+			if body["note"] != "typo fixed" {
+				t.Errorf("note = %v, want the new body", body["note"])
 			}
-			if tc.absent != "" && strings.Contains(body, tc.absent) {
-				t.Errorf("request body %q carries %s the caller never set", body, tc.absent)
+			got, sent := body["position"]
+			switch {
+			case tc.want == "" && sent:
+				t.Errorf("position = %v, want none sent for a position GitLab cannot place", got)
+			case tc.want != "" && !reflect.DeepEqual(got, decodedJSON(t, tc.want)):
+				t.Errorf("position = %v, want the draft's own %s", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestDraftNoteUpdate_BodyAlone_OnNineteenFiveOrLater_SendsTheBodyAlone
+// verifies that an instance known to run 19.5 or later is sent the body
+// alone, and the draft is not read: gitlab-org/gitlab!258695, in 19.5.0, made
+// the route keep a position the request leaves out. GitLab.com's prerelease
+// counts as the minor it names.
+func TestDraftNoteUpdate_BodyAlone_OnNineteenFiveOrLater_SendsTheBodyAlone(t *testing.T) {
+	for _, version := range []string{"19.5.0-ee", "19.6.0-pre", "20.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			gitlab := &draftUpdateGitLab{
+				version: version,
+				draft:   `{"id":10,"note":"original","position":{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","new_path":"main.go","position_type":"text","new_line":12}}`,
+			}
+			client := testutil.NewTestClient(t, gitlab)
+
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			want := []string{http.MethodGet + " /api/v4/version", http.MethodPut + " " + pathDraftNoteByID}
+			if got := gitlab.requests(); !slices.Equal(got, want) {
+				t.Errorf("requests = %v, want %v", got, want)
+			}
+			if got := gitlab.body(); !reflect.DeepEqual(got, map[string]any{"note": "typo fixed"}) {
+				t.Errorf("update body = %v, want the new body alone", got)
+			}
+		})
+	}
+}
+
+// TestDraftNoteUpdate_PositionAlone_SendsTheDraftsBody verifies that a
+// position sent alone goes with the body the draft has, read from the draft
+// first, and that the instance's version is not asked. GitLab refuses an
+// update without a body, "Missing params to modify", on every release, so a
+// call moving a draft and naming no body used to be judged by the position
+// check and then refused.
+func TestDraftNoteUpdate_PositionAlone_SendsTheDraftsBody(t *testing.T) {
+	gitlab := &draftUpdateGitLab{draft: draftWithoutPositionJSON}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		ProjectID: "42", MRIID: 1, NoteID: 10,
+		Position: &DiffPosition{
+			BaseSHA: "aaa", StartSHA: "bbb", HeadSHA: "ccc",
+			OldPath: "old.go", NewPath: "new.go", PositionType: toolutil.PositionTypeFile,
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := []string{http.MethodGet + " " + pathDraftNoteByID, http.MethodPut + " " + pathDraftNoteByID}
+	if got := gitlab.requests(); !slices.Equal(got, want) {
+		t.Errorf("requests = %v, want %v", got, want)
+	}
+	body := gitlab.body()
+	if body["note"] != "current body" {
+		t.Errorf("note = %v, want the draft's current body", body["note"])
+	}
+	wantPosition := decodedJSON(t, `{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"old.go","new_path":"new.go","position_type":"file"}`)
+	if !reflect.DeepEqual(body["position"], wantPosition) {
+		t.Errorf("position = %v, want the one the caller gave, %v", body["position"], wantPosition)
+	}
+}
+
+// TestDraftNoteUpdate_DraftUnreadable_SendsNoUpdate verifies that an update
+// that has to read the draft first and cannot is reported with the read's
+// refusal, and sends no update: a draft that does not answer is not one whose
+// body or position could be kept.
+func TestDraftNoteUpdate_DraftUnreadable_SendsNoUpdate(t *testing.T) {
+	gitlab := &draftUpdateGitLab{}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+	if err == nil {
+		t.Fatal("Update answered no error for a draft that answered 404")
+	}
+	if !strings.Contains(err.Error(), "verify note_id with mr_review.draft_note_list") {
+		t.Errorf("error = %q, want the hint naming the list to find the draft in", err)
+	}
+	if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
+		t.Errorf("requests = %v, want no update sent", gitlab.requests())
+	}
+}
+
+// TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate verifies
+// that a draft whose position does not read into the options the update
+// sends is reported rather than sent without its position: a measure that is
+// no number at all, a width that is not a whole number, and an x out of the
+// range of the float the options carry. client-go decodes the same answers
+// without complaint, since NotePosition has no width, x or y, so the fault is
+// only seen here.
+func TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate(t *testing.T) {
+	const placed = `"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"logo.png","new_path":"logo.png","position_type":"image"`
+	for _, tc := range []struct{ name, stored string }{
+		{name: "a width that is no number", stored: `{"base_sha":"aaa","position_type":"image","width":"wide"}`},
+		{name: "a width that is not whole", stored: `{` + placed + `,"width":"64.5","height":32,"x":1,"y":2}`},
+		{name: "an x out of range", stored: `{` + placed + `,"width":64,"height":32,"x":"1e999","y":2}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"original","position":` + tc.stored + `}`}
+			client := testutil.NewTestClient(t, gitlab)
+
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+			if err == nil {
+				t.Fatal("Update answered no error for a position that does not decode")
+			}
+			if !strings.Contains(err.Error(), "read the draft's position") {
+				t.Errorf("error = %q, want it to say the draft's position could not be read", err)
+			}
+			if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
+				t.Errorf("requests = %v, want no update sent", gitlab.requests())
+			}
+		})
+	}
+}
+
+// TestDraftNoteUpdate_PositionAlone_DoesNotReadTheStoredPosition verifies
+// that a position sent alone replaces the draft's position without the stored
+// one being decoded: the update reads the draft only for its body, so a
+// stored position this server could not send back, here a width that is no
+// number, does not stop a call that replaces it. The draft's own body still
+// goes with the new position.
+func TestDraftNoteUpdate_PositionAlone_DoesNotReadTheStoredPosition(t *testing.T) {
+	gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"current body","position":{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc",` +
+		`"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":"wide","height":32,"x":1,"y":2}}`}
+	client := testutil.NewTestClient(t, gitlab)
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		ProjectID: "42", MRIID: 1, NoteID: 10,
+		Position: &DiffPosition{
+			BaseSHA: "aaa", StartSHA: "bbb", HeadSHA: "ccc",
+			OldPath: "logo.png", NewPath: "logo.png", PositionType: toolutil.PositionTypeFile,
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	body := gitlab.body()
+	if body["note"] != "current body" {
+		t.Errorf("note = %v, want the draft's current body", body["note"])
+	}
+	wantPosition := decodedJSON(t, `{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"logo.png","new_path":"logo.png","position_type":"file"}`)
+	if !reflect.DeepEqual(body["position"], wantPosition) {
+		t.Errorf("position = %v, want the one the caller gave, %v", body["position"], wantPosition)
 	}
 }
 
@@ -1655,6 +2123,86 @@ func TestWrites_ImageCoordinateOfZero_IsSent(t *testing.T) {
 	}
 }
 
+// TestWrites_PositionWithoutNewPath_SendsNone asserts that a draft note
+// position whose new_path is left out or blank reaches GitLab without the
+// key, on the create and on the update alike. GitLab completes such a
+// position with old_path (Position#file_path is new_path.presence ||
+// old_path), but it looks the file's diff up by the paths the position
+// names, [old_path, new_path].compact.uniq, which keeps an empty string, and
+// Gitaly hands each to git diff as a pathspec, which git refuses for an
+// empty one ("empty string is not a valid pathspec"). The create reads that
+// diff right after saving the draft. On the parent both requests carried
+// "new_path":"".
+func TestWrites_PositionWithoutNewPath_SendsNone(t *testing.T) {
+	for _, write := range draftNoteWrites() {
+		t.Run(write.tool, func(t *testing.T) {
+			assertWriteSendsNoNewPath(t, write)
+		})
+	}
+}
+
+// assertWriteSendsNoNewPath runs write with a position whose new_path is
+// left out, and with one whose new_path is blank, and asserts that neither
+// carries the key to GitLab.
+func assertWriteSendsNoNewPath(t *testing.T, write draftNoteWrite) {
+	t.Helper()
+	for _, newPath := range []string{"", "  "} {
+		t.Run("new_path "+strconv.Quote(newPath), func(t *testing.T) {
+			var mu sync.Mutex
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != write.method || r.URL.Path != write.path {
+					http.NotFound(w, r)
+					return
+				}
+				position := sentPosition(t, r)
+				mu.Lock()
+				sent = position
+				mu.Unlock()
+				testutil.RespondJSON(w, http.StatusOK, draftNoteWrittenBody)
+			}))
+
+			err := write.call(t, client, map[string]any{
+				"base_sha": "aaa", "start_sha": "ccc", "head_sha": "bbb",
+				"old_path": "main.go", "new_path": newPath, "old_line": 7,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if sent == nil {
+				t.Fatal("no position reached GitLab")
+			}
+			assertSentField(t, sent, "new_path", nil)
+			assertSentField(t, sent, "old_path", "main.go")
+		})
+	}
+}
+
+// TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires asserts that the
+// served schema of a draft note position requires the three SHAs and no
+// path, on the create and on the update. GitLab's route requires base_sha,
+// start_sha, head_sha and position_type and declares new_path and old_path
+// optional (lib/api/draft_notes.rb), and completes a position with either
+// path. position_type is optional here because the handler sends text when
+// it is left out. While new_path was required, a client validating against
+// the schema refused a position naming only old_path, which the handlers and
+// GitLab both take.
+func TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires(t *testing.T) {
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, tool := range []string{"gitlab_mr_draft_note_create", "gitlab_mr_draft_note_update"} {
+		t.Run(tool, func(t *testing.T) {
+			props, _ := byTool[tool].Route.InputSchema["properties"].(map[string]any)
+			position, _ := props["position"].(map[string]any)
+			got := fmt.Sprint(position["required"])
+			if want := "[base_sha start_sha head_sha]"; got != want {
+				t.Errorf("position required = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
 // positionTypePath is the file of the merge request diff the position_type
 // tests name, and positionTypeDiff is that diff: positionTypePath with a
 // patch of lines, so a text position is judged against them and a pre-check
@@ -1760,12 +2308,30 @@ func positionTypeCases() []positionTypeCase {
 			wantSent: map[string]any{"position_type": "text", "new_line": float64(40)}, wantRead: true,
 		},
 		{
+			name: "text naming no line", position: at(map[string]any{"position_type": "text"}),
+			wantErr: noLineRefusal,
+		},
+		{
+			name: "text by default naming no line", position: at(map[string]any{}),
+			wantErr: noLineRefusal,
+		},
+		{
+			name:     "text naming only a line range",
+			position: at(map[string]any{"line_range": map[string]any{"start": map[string]any{"new_line": 1}, "end": map[string]any{"new_line": 1}}}),
+			wantErr:  noLineRefusal,
+		},
+		{
 			name:     "image with width, height, x and y",
-			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}),
 			wantSent: map[string]any{
-				"position_type": "image", "width": float64(64), "height": float64(32), "x": 12.5, "y": float64(8),
+				"position_type": "image", "width": float64(64), "height": float64(32), "x": float64(12), "y": float64(8),
 				"new_line": nil, "old_line": nil,
 			},
+		},
+		{
+			name:     "image at a fraction of a pixel",
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			wantErr:  "position.x",
 		},
 		{
 			name:     "image at its top left corner",
@@ -1836,18 +2402,19 @@ func (c positionTypeCase) check(t *testing.T, g *positionTypeGitLab, err error) 
 // TestWrites_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt holds
 // the position pre-check of mr_review.draft_note_create and
 // mr_review.draft_note_update to what GitLab reads for each position_type. A
-// text position, named or by default, is judged against the lines of the
-// merge request's diff. An image position is judged by its width, height, x
-// and y, and a file position by its old and new paths, before any request
-// and without reading the diff, since GitLab places neither by a line. For a
-// draft note that check is the only one: GitLab saves a draft whose image or
-// file position is incomplete and publishes it as a general comment, its
-// position dropped. A position_type GitLab does not declare is left to
-// GitLab, which refuses it by name.
+// text position, named or by default, needs a line before anything is read,
+// and is then judged against the lines of the merge request's diff. An image
+// position is judged by its width, height, x and y, in whole pixels, and a
+// file position by its old and new paths, before any request and without
+// reading the diff, since GitLab places neither by a line. For a draft note
+// that check is the only one: GitLab saves a draft whose position is
+// incomplete and publishes it as a general comment, its position dropped. A
+// position_type GitLab does not declare is left to GitLab, which refuses it
+// by name.
 //
-// On the parent every image and file case fails on both writes, and so does
-// the undeclared type: the pre-check read the diff for each and refused it
-// as a text position naming no line.
+// On the parent the three text positions naming no line are refused only
+// after the merge request and its diff are read, and the image at a fraction
+// of a pixel is sent as 12.5, which GitLab places at 12.
 func TestWrites_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testing.T) {
 	for _, write := range draftNoteWrites() {
 		t.Run(write.tool, func(t *testing.T) {
@@ -1857,6 +2424,92 @@ func TestWrites_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testi
 					client := testutil.NewTestClient(t, gitlab.handler(t, write))
 
 					tc.check(t, gitlab, write.call(t, client, tc.position))
+				})
+			}
+		})
+	}
+}
+
+// incompletePositionCase is a position, as a caller spells it, that GitLab
+// cannot complete, and the words its refusal names.
+type incompletePositionCase struct {
+	name     string
+	position map[string]any
+	wantErr  string
+}
+
+// incompletePositionCases lists, for each position_type GitLab declares and
+// for the text an unnamed type is sent as, a position complete in every
+// other part with one part of the anchor every type shares taken away: an
+// empty start_sha, a head_sha of blanks, or no path at all. It adds a text
+// position with its anchor and no line, the one part a text position needs
+// beyond it that is judged without the diff, and one on a negative line,
+// which no diff has.
+func incompletePositionCases() []incompletePositionCase {
+	types := []struct {
+		name   string
+		fields map[string]any
+	}{
+		{name: "text", fields: map[string]any{"position_type": "text", "new_line": 1}},
+		{name: "text by default", fields: map[string]any{"new_line": 1}},
+		{name: "image", fields: map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}},
+		{name: "file", fields: map[string]any{"position_type": "file", "old_path": positionTypePath}},
+	}
+	breaks := []struct {
+		name    string
+		apply   func(position map[string]any)
+		wantErr string
+	}{
+		{name: "an empty start_sha", apply: func(p map[string]any) { p["start_sha"] = "" }, wantErr: "(missing: start_sha)"},
+		{name: "a head_sha of blanks", apply: func(p map[string]any) { p["head_sha"] = "  " }, wantErr: "(missing: head_sha)"},
+		{
+			name:    "no path",
+			apply:   func(p map[string]any) { delete(p, "new_path"); delete(p, "old_path") },
+			wantErr: "(missing: a path in new_path or old_path)",
+		},
+	}
+	var cases []incompletePositionCase
+	for _, typ := range types {
+		for _, br := range breaks {
+			position := map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath}
+			maps.Copy(position, typ.fields)
+			br.apply(position)
+			cases = append(cases, incompletePositionCase{name: typ.name + " with " + br.name, position: position, wantErr: br.wantErr})
+		}
+	}
+	return append(cases, incompletePositionCase{
+		name:     "text naming no line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
+		wantErr:  noLineRefusal,
+	}, incompletePositionCase{
+		name:     "text on a negative line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath, "new_line": -1},
+		wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line -1, old_line 0)",
+	})
+}
+
+// TestWrites_IncompletePosition_IsRefusedBeforeAnyRequest holds
+// mr_review.draft_note_create and mr_review.draft_note_update to the anchor
+// GitLab completes every position by (Position#complete?): the start and
+// head commits of the diff and the file's path, on every position type. A
+// position missing one is refused in words naming it, and nothing is sent,
+// not even the read of the merge request's diff, so nothing is saved. GitLab
+// would have saved the draft and published it as a general comment, its
+// position dropped (DraftNote#on_diff?), with nothing said at either step.
+//
+// On the parent every case sends a request: the image and file positions go
+// straight to the write, and a text position is judged only by the diff,
+// which a blank SHA skips and an unreadable merge request leaves to GitLab.
+func TestWrites_IncompletePosition_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, write := range draftNoteWrites() {
+		t.Run(write.tool, func(t *testing.T) {
+			for _, tc := range incompletePositionCases() {
+				t.Run(tc.name, func(t *testing.T) {
+					client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+					if err := write.call(t, client, tc.position); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+						t.Errorf("error = %v, want a refusal naming %q", err, tc.wantErr)
+					}
 				})
 			}
 		})
