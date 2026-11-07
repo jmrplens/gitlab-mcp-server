@@ -95,14 +95,17 @@ func publish(report, summary string, stdout io.Writer) error {
 // $GITHUB_STEP_SUMMARY, which every step of a job writes its own section
 // to. Text the file already holds that ends without a newline gets one
 // first, or the report's heading would continue that text's last line and
-// not render as a heading.
+// not render as a heading. The file is opened only to write, since a
+// summary that can be written and not read still takes the report, and the
+// guard reads it where it can.
 func appendSummary(path, report string) error {
+	path = filepath.Clean(path)
 	// #nosec G304 -- the path is the one the caller named on the command line.
-	file, err := os.OpenFile(filepath.Clean(path), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	if endsMidLine(file) {
+	if endsMidLine(path) {
 		report = "\n" + report
 	}
 	if _, err = file.WriteString(report + "\n"); err != nil {
@@ -112,15 +115,25 @@ func appendSummary(path, report string) error {
 	return file.Close()
 }
 
-// endsMidLine reports whether the file's last byte is something other than
-// a newline. An empty file, which a seek back from its end refuses, ends no
-// line. The file is opened to append, so reading it here moves nothing the
-// write goes to.
-func endsMidLine(file *os.File) bool {
-	if _, err := file.Seek(-1, io.SeekEnd); err != nil {
-		return false
+// endsMidLine reports whether the last byte of the file at path is something
+// other than a newline. It reads on a descriptor of its own, opened only to
+// read, because the summary need only be writable: a file whose mode grants
+// no read, or /dev/stdout on macOS, where a descriptor reopened through
+// /dev/fd may ask for no more than the original grants, refuses the read and
+// still takes the report. A file it cannot open, or seek back from the end
+// of (an empty one, a pipe), ends no line as far as it can tell, so the
+// report goes in with nothing before it. It is called once the file is open
+// to write, so a named pipe, which opens to read only when it has a writer,
+// already has one.
+func endsMidLine(path string) bool {
+	last := []byte{'\n'}
+	// #nosec G304 -- the path is the one the caller named on the command line.
+	file, err := os.Open(path)
+	if err == nil {
+		if _, err = file.Seek(-1, io.SeekEnd); err == nil {
+			_, _ = file.Read(last)
+		}
+		_ = file.Close()
 	}
-	last := make([]byte, 1)
-	n, _ := file.Read(last)
-	return n == 1 && last[0] != '\n'
+	return last[0] != '\n'
 }

@@ -5,12 +5,14 @@
 // from, one row per package with each half's figure and the merged one, a
 // half that never measured a package, percentages that never round a
 // package up to whole, and the report appended to a summary on a line of its
-// own.
+// own, or to one that can be written and not read.
 
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -126,5 +128,38 @@ func TestAppendSummary_EarlierText_StartsTheReportOnALineOfItsOwn(t *testing.T) 
 				t.Errorf("summary =\n%q\nwant\n%q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestAppendSummary_WriteOnlyFile_ReceivesTheReport holds a summary the
+// caller may write but not read to receiving the report, as it always did:
+// appending asks for nothing but a write, and the newline guard reads the
+// last byte on a descriptor of its own, so a file that refuses the read goes
+// without the guard rather than without the report. A mode with no read bit
+// is such a file on a Unix. Windows has no mode that refuses a read and
+// grants a write, and root reads what no mode grants.
+func TestAppendSummary_WriteOnlyFile_ReceivesTheReport(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no file mode that grants a write and refuses a read")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced, so the file would be read")
+	}
+	const report = "### A section\n\nA line.\n"
+	const earlier = "An earlier step.\n"
+	path := writeProfile(t, t.TempDir(), "summary.md", earlier)
+	if err := os.Chmod(path, 0o200); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := appendSummary(path, report); err != nil {
+		t.Fatalf("appendSummary() error = %v", err)
+	}
+
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, path), earlier+report+"\n"; got != want {
+		t.Errorf("summary =\n%q\nwant\n%q", got, want)
 	}
 }
