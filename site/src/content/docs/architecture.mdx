@@ -224,7 +224,7 @@ Each action in the catalog is classified destructive or not, once, and every sur
 3. The client supports elicitation: the user is asked, and the call proceeds only if they approve.
 4. None of these holds: the call fails closed, nothing reaches GitLab, and the answer asks for the call to be sent again with `confirm: true` only after the user approves.
 
-The default dynamic surface skips step 3: `gitlab_execute_action` asks no question, so an action classified destructive runs there through step 1 or step 2 and is otherwise refused. A user who declines a prompt gets an answer telling the model not to retry and to ask what they want instead. [Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions) covers which actions are destructive, and the two whose arguments decide, which follow the order above on every surface.
+The default dynamic surface skips step 3: `gitlab_execute_action` asks no question, so an action classified destructive runs there through step 1 or step 2 and is otherwise refused. A user who declines a prompt gets an answer telling the model not to retry and to ask what they want instead. [Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions) covers which actions are destructive, and the three whose arguments decide, which follow the order above on every surface.
 
 ### Pagination
 

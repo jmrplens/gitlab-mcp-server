@@ -27184,6 +27184,18 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/mirror/pull",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.overwritesAfterCall"
+          ],
+          "sdk_methods": [
+            "Projects.GetProjectPullMirrorDetails"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id",
           "placeholders": {
             "id": "project_id"
@@ -27200,7 +27212,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

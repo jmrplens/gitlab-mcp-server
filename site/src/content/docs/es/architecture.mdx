@@ -224,7 +224,7 @@ Cada acción del catálogo se clasifica como destructiva o no, una sola vez, y t
 3. El cliente admite elicitación: se pregunta al usuario, y la llamada sigue solo si lo aprueba.
 4. No se cumple nada de lo anterior: la llamada se rechaza por defecto (fail-closed), nada llega a GitLab, y la respuesta pide volver a enviar la llamada con `confirm: true` solo después de que el usuario lo apruebe.
 
-La superficie dinámica predeterminada se salta el paso 3: `gitlab_execute_action` no pregunta nada, así que una acción clasificada como destructiva se ejecuta ahí por el paso 1 o el paso 2 y, si no, se rechaza. Un usuario que rechaza la pregunta obtiene una respuesta que indica al modelo que no lo reintente y que pregunte qué quiere en su lugar. [Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas) explica qué acciones son destructivas, y las dos cuyos argumentos deciden, que siguen el orden anterior en todas las superficies.
+La superficie dinámica predeterminada se salta el paso 3: `gitlab_execute_action` no pregunta nada, así que una acción clasificada como destructiva se ejecuta ahí por el paso 1 o el paso 2 y, si no, se rechaza. Un usuario que rechaza la pregunta obtiene una respuesta que indica al modelo que no lo reintente y que pregunte qué quiere en su lugar. [Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas) explica qué acciones son destructivas, y las tres cuyos argumentos deciden, que siguen el orden anterior en todas las superficies.
 
 ### Paginación
 

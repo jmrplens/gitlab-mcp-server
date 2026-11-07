@@ -5933,7 +5933,7 @@ var table = finegrained.Table{
 		{ID: "project.transfer", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{820}}, Optional: []uint32{96, 412, 413, 414}},
 		{ID: "project.unarchive", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{821}}},
 		{ID: "project.unstar", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{822}}},
-		{ID: "project.update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{823}}},
+		{ID: "project.update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{823}}, Optional: []uint32{793}},
 		{ID: "project.upload", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{824}}},
 		{ID: "project.upload_avatar", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{823}}},
 		{ID: "project.upload_delete", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{825}}},

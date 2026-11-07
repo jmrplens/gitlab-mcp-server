@@ -194788,7 +194788,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_configure",
-    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces each diverged branch the mirror pulls with the source's version and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194801,7 +194801,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "enabled": {
@@ -194816,7 +194816,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
           "type": [
             "null",
             "boolean"
@@ -202821,6 +202821,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "container_expiration_policy_attributes": {
           "additionalProperties": false,
           "description": "Container registry cleanup policy attributes",
@@ -203088,7 +203092,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Overwrite diverged branches when mirroring",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
           "type": [
             "null",
             "boolean"
