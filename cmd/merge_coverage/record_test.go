@@ -250,9 +250,27 @@ func TestLoadRecord_NoFile_IsNotFoundRatherThanAnError(t *testing.T) {
 	}
 }
 
+// TestLoadRecord_WhiteSpaceAfterTheRecord_IsReadAsTheRecord holds the reader
+// to taking blank lines after the record, which an editor may leave, as the
+// record alone.
+func TestLoadRecord_WhiteSpaceAfterTheRecord_IsReadAsTheRecord(t *testing.T) {
+	path := writeProfile(t, t.TempDir(), "record.json", fixtureRecord+"\n \t\r\n")
+
+	rec, found, err := loadRecord(path)
+
+	if err != nil || !found {
+		t.Fatalf("loadRecord() = found %v, error %v; want the record", found, err)
+	}
+	if got := string(rec.encode()); got != fixtureRecord {
+		t.Errorf("record read back =\n%s\nwant\n%s", got, fixtureRecord)
+	}
+}
+
 // TestLoadRecord_RecordsItCannotUse_AreRefused holds every record the reader
 // cannot trust to an error naming the record: a path it cannot read, text
-// that is not JSON, a field the layout does not have, and another schema.
+// that is not JSON, a field the layout does not have, another schema, and
+// text after the record, a second record or anything else, which the reader
+// would otherwise leave unread while the gate held the packages to the first.
 func TestLoadRecord_RecordsItCannotUse_AreRefused(t *testing.T) {
 	tests := []struct {
 		name, text, want string
@@ -260,6 +278,9 @@ func TestLoadRecord_RecordsItCannotUse_AreRefused(t *testing.T) {
 		{name: "not JSON", text: "{", want: "unexpected EOF"},
 		{name: "an unknown field", text: `{"schema": 1, "floors": {}}`, want: `unknown field "floors"`},
 		{name: "another schema", text: `{"schema": 2}`, want: "is schema 2, and this command reads schema 1"},
+		{name: "a second record after it", text: fixtureRecord + fixtureRecord, want: "text follows the record"},
+		{name: "other text after it", text: fixtureRecord + "x\n", want: "text follows the record"},
+		{name: "a closing brace after it", text: fixtureRecord + "}\n", want: "text follows the record"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

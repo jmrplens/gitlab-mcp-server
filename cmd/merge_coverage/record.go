@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -192,7 +193,8 @@ func writeRecord(name string, rec *record) error {
 // loadRecord reads the record at name. A record that does not exist yet,
 // which is the state before the first complete run is recorded, is reported
 // as not found rather than as an error; one that cannot be read, is not the
-// layout this command writes, or is another schema, is refused.
+// layout this command writes, has text after it, or is another schema, is
+// refused.
 func loadRecord(name string) (*record, bool, error) {
 	data, err := os.ReadFile(name)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -209,13 +211,18 @@ func loadRecord(name string) (*record, bool, error) {
 }
 
 // decodeRecord reads a record in the layout this command writes, refusing a
-// field the layout does not have and any other schema.
+// field the layout does not have, any text after the record but white space,
+// since the gate would hold the packages to the first of two records and
+// leave the rest unread, and any other schema.
 func decodeRecord(data []byte) (*record, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var rec record
 	if err := dec.Decode(&rec); err != nil {
 		return nil, err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("text follows the record, and this command writes the record alone in its file")
 	}
 	if rec.Schema != recordSchema {
 		return nil, fmt.Errorf("the record is schema %d, and this command reads schema %d", rec.Schema, recordSchema)
