@@ -74,7 +74,9 @@ var now = time.Now
 // newRecord takes the record of the merge for the packages of rows: the runs
 // sources names, each package as rows measured it, and every declaration of
 // those packages the runs reached into, read from the source on disk. It
-// refuses a source that is not the one the profiles measured.
+// refuses a package no offline profile carries, since the gate holds the
+// offline half alone to the record and could never measure it, and a source
+// that is not the one the profiles measured.
 func (c *coverage) newRecord(rows []row, sources []source) (*record, error) {
 	rec := &record{
 		Schema: recordSchema,
@@ -82,6 +84,9 @@ func (c *coverage) newRecord(rows []row, sources []source) (*record, error) {
 	}
 	measured := map[string]bool{}
 	for _, r := range rows {
+		if !r.present[offlineHalf] {
+			return nil, fmt.Errorf("no offline profile carries %s, and the gate holds the offline half alone to the record, so it could never check a record of it", r.pkg)
+		}
 		measured[r.pkg] = true
 		rec.Packages = append(rec.Packages, recordPackage{
 			Package:        goprogram.TrimModulePath(r.pkg),

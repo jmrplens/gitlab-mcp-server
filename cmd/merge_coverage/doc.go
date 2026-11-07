@@ -89,7 +89,9 @@
 // the lines are relative, so its doc comment reworded, or a comment or code
 // changed elsewhere in the file, leaves a declaration standing, and an edit
 // of its own text, a comment inside it included, drops it: the runs ran the
-// old code, and what they reached in it says nothing about the new.
+// old code, and what they reached in it says nothing about the new. A
+// package no offline profile carries is refused, since the gate holds the
+// offline half alone to the record and could never measure it.
 //
 // # The gate
 //

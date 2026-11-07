@@ -13,6 +13,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"os"
 	"path/filepath"
@@ -325,20 +326,30 @@ func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
 }
 
 // TestRunMain_WriteRecord_Refusals_ExitOne holds a record the command cannot
-// build, because the source is not the one the profiles measured, or cannot
-// write, to status 1 and the reason.
+// build, because the source is not the one the profiles measured or a
+// package is one the offline half does not carry, which the gate could then
+// never check, or cannot write, to status 1 and the reason.
 func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
+	modelevalBlock := modelevalPkg + "/c.go:3.11,4.7 2 1\n"
 	tests := []struct {
-		name       string
-		recordPath func(dir string) string
-		source     string
-		want       string
+		name            string
+		recordPath      func(dir string) string
+		source          string
+		offline, online string
+		want            string
 	}{
 		{
 			name:       "a source the profiles did not measure",
 			recordPath: func(dir string) string { return filepath.Join(dir, "record.json") },
 			source:     "package fixture\n",
 			want:       "no declaration of the file holds the block at 4.17,5.7",
+		},
+		{
+			name:       "a package only the runs carry",
+			recordPath: func(dir string) string { return filepath.Join(dir, "record.json") },
+			offline:    strings.Replace(recordOffline, modelevalBlock, "", 1),
+			online:     recordOnline + modelevalBlock,
+			want:       "no offline profile carries " + modelevalPkg + ", and the gate holds the offline half alone to the record",
 		},
 		{
 			name:       "a record it cannot write",
@@ -354,16 +365,21 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 			}
 			writeTree(t, files)
 			dir := t.TempDir()
+			offline, online := cmp.Or(tc.offline, recordOffline), cmp.Or(tc.online, recordOnline)
+			recordPath := tc.recordPath(dir)
 			args := []string{
 				"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
-				"-offline", writeProfile(t, dir, "offline.out", recordOffline),
-				"-online", writeProfile(t, dir, "online.out", recordOnline),
-				"-write-record", tc.recordPath(dir),
+				"-offline", writeProfile(t, dir, "offline.out", offline),
+				"-online", writeProfile(t, dir, "online.out", online),
+				"-write-record", recordPath,
 			}
 			var stdout, stderr bytes.Buffer
 
 			if code := runMain(args, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), tc.want) {
 				t.Errorf("runMain() = %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
+			}
+			if _, err := os.Stat(recordPath); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("a refused record left %s behind (stat error %v)", recordPath, err)
 			}
 		})
 	}
