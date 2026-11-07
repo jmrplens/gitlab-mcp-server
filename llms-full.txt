@@ -6358,13 +6358,13 @@ Action guidance:
 - discussion_note_update: Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body. Only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id.
 - discussion_reply: Reply to an existing merge request discussion thread by adding a note. Use this after mr_review.discussion_list or mr_review.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - discussion_resolve: Resolve or unresolve a merge request discussion thread. Set resolved=true to mark the thread resolved or resolved=false to reopen it. Only resolvable (thread) discussions can be toggled.
-- draft_note_create: Create a pending draft review note on a merge request. Omit position for a general comment. Include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.
+- draft_note_create: Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's new_path/old_path. A text position (the default) also needs new_line or old_line on a diff line. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.
 - draft_note_delete: Discard a pending draft note so it is never published. Destructive and irreversible. Only the draft's author can delete it.
 - draft_note_get: Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.
 - draft_note_list: List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.
 - draft_note_publish: Publish one pending draft note, turning it into a regular merge request note visible to everyone. Cannot be undone. Only the draft's author can publish it.
 - draft_note_publish_all: Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Optionally post a summary note with it (note, internal) and record the caller's reviewer state (reviewer_state: requested_changes or reviewed, which is not an approval). Cannot be undone. Review with mr_review.draft_note_list first.
-- draft_note_update: Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.
+- draft_note_update: Edit the body, the inline position or both of a pending draft note before it is published. Give note, position or both. The one left out is kept as the draft has it. Only the draft's author can update it.
 - note_create: Add a general comment (note) to a merge request. Use when the task asks to comment on, reply to, or annotate an existing MR. Set internal=true for a confidential note visible only to project members.
 - note_delete: Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation.
 - note_get: Get one merge request note by params.note_id. Use when the task references a specific comment or note ID on an MR.
@@ -6384,7 +6384,7 @@ Parameter guidance:
 - diff_versions_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
-- discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line.
+- discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion. Avoid: Every position needs start_sha and head_sha from the MR diff refs and the file's new_path or old_path. By position_type: text (the default) also needs new_line or old_line on a line of the MR diff, image needs width, height, x and y in whole pixels and no line, and file needs both old_path and new_path and no line. Omit position entirely for a thread that is not tied to the diff.
 - discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
@@ -6410,7 +6410,7 @@ Parameter guidance:
 - discussion_resolve.resolved: resolve_flag. Source: Boolean: true resolves the thread, false reopens it. Avoid: resolved is a boolean toggle, not a note body. Only resolvable thread discussions can be resolved.
 - draft_note_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_create.note: comment_body. Source: The Markdown review comment the user wants to draft.
-- draft_note_create.position: diff_position. Source: Inline diff location for a code comment. Mirror the MR diff SHAs and the target file path and line. Avoid: Omit position entirely for a general MR comment. Only set it to anchor the note to a changed line.
+- draft_note_create.position: diff_position. Source: Inline diff location for a review comment, from mr_review.changes_get: the MR diff SHAs and the target file's path, plus a line for a text position. Avoid: Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped.
 - draft_note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_delete.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_delete.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
@@ -9370,7 +9370,7 @@ Parameter guidance:
 - commit_discussion_add_note.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - commit_discussion_create.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
-- commit_discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line.
+- commit_discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion. Avoid: Every position needs start_sha and head_sha and the file's new_path or old_path from the commit diff. By position_type: text also needs new_line or old_line on a line of the commit diff, and file needs both old_path and new_path and no line. An image position cannot be sent by this action, which carries no image coordinates. Omit position entirely for a thread that is not tied to the diff.
 - commit_discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_delete_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
 - commit_discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
@@ -22901,14 +22901,14 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_draft_note_update
 
-Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
+Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request internal ID
-- `note` (string): Updated note body text (Markdown)
+- `note` (string): Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both
 - `note_id` (integer) (required): Draft note ID
-- `position` (object): Updated diff position for inline comments
+- `position` (object): Updated diff position for inline comments. Omit it to keep the current position. Give note, position or both
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

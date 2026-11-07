@@ -15279,7 +15279,7 @@
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: text for a line comment, image for an image coordinate comment, or file for a whole-file comment",
+              "description": "Position type: text for a line comment, which needs new_line or old_line, or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them",
               "enum": [
                 "text",
                 "image",
@@ -141328,17 +141328,17 @@
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on the image. Required for position_type=image.",
+              "description": "X coordinate of the comment on the image, in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on the image. Required for position_type=image.",
+              "description": "Y coordinate of the comment on the image, in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },
@@ -143759,6 +143759,11 @@
             },
             "position_type": {
               "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -143773,17 +143778,17 @@
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "X coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "Y coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },
@@ -144590,7 +144595,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_update",
-    "description": "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
+    "description": "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -144599,7 +144604,7 @@
           "type": "integer"
         },
         "note": {
-          "description": "Updated note body text (Markdown)",
+          "description": "Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both",
           "type": "string"
         },
         "note_id": {
@@ -144608,7 +144613,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Updated diff position for inline comments",
+          "description": "Updated diff position for inline comments. Omit it to keep the current position. Give note, position or both",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
@@ -144705,6 +144710,11 @@
             },
             "position_type": {
               "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -144719,17 +144729,17 @@
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "X coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "Y coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },

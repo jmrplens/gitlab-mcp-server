@@ -5716,7 +5716,7 @@ var table = finegrained.Table{
 		{ID: "mr_review.draft_note_list", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{605}}},
 		{ID: "mr_review.draft_note_publish", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{606}}},
 		{ID: "mr_review.draft_note_publish_all", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{607}}},
-		{ID: "mr_review.draft_note_update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{608}}, Optional: []uint32{542, 592}},
+		{ID: "mr_review.draft_note_update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{608}}, Optional: []uint32{413, 542, 592, 604}},
 		{ID: "mr_review.note_create", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{609}}},
 		{ID: "mr_review.note_delete", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{610}}},
 		{ID: "mr_review.note_get", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{611}}},

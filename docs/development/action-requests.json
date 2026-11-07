@@ -19761,6 +19761,39 @@
         },
         {
           "kind": "rest",
+          "route": "GET /version",
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "gitlab.Client.ReadVersion"
+          ],
+          "directives": [
+            "optional: the version is asked only while no read of it has answered, and is kept from the first answer on"
+          ],
+          "declaration": "outside-client-go"
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid/draft_notes/:draft_note_id",
+          "placeholders": {
+            "draft_note_id": "note_id",
+            "id": "project_id",
+            "merge_request_iid": "merge_request_iid"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "mrdraftnotes.currentDraft"
+          ],
+          "sdk_methods": [
+            "DraftNotes.GetDraftNote"
+          ],
+          "directives": [
+            "optional: the draft is read only for what the update leaves out, its body when only a position is sent, and its position when only a body is sent to an instance not known to run 19.5 or later"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/merge_requests/:merge_request_iid/draft_notes/:draft_note_id",
           "placeholders": {
             "draft_note_id": "note_id",
@@ -19779,7 +19812,7 @@
       ],
       "paths": [
         [
-          2
+          4
         ]
       ]
     },
