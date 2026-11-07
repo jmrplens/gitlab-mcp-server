@@ -402,6 +402,28 @@ func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
 	}
 }
 
+// bothPathsConfusion is the sentence the position guidance of both writes
+// asks for both of the file's paths with.
+const bothPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed."
+
+// assertBothPathsAsked checks that the old_path and new_path descriptions
+// each ask for the other path beside it, and that the create's Usage asks
+// for both paths from mr_review.changes_get.
+func assertBothPathsAsked(t *testing.T, createUsage string) {
+	t.Helper()
+	for name, want := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, want) {
+				t.Errorf("%s description = %q, want it to say %q", name, description, want)
+			}
+		})
+	}
+	if !strings.Contains(createUsage, "the file's old_path and new_path from mr_review.changes_get") {
+		t.Errorf("create usage = %q, want it to ask for both paths", createUsage)
+	}
+}
+
 // TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
 // the create and the update send a caller for the three SHAs of a position to
 // merge_request.get, whose output carries them as diff_refs, and for the
@@ -412,6 +434,11 @@ func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
 // none of its SHAs. The update replaces the position whole, so its guidance
 // and the description of the parameter itself also say what each
 // position_type needs. The update had no position guidance at all.
+//
+// Both writes, the create's Usage and the two path fields ask for both of
+// the file's paths, as GitLab documents for a text position, and say that
+// one is enough only on a file that was not renamed. They used to offer
+// either path as sufficient.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
 	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
@@ -426,20 +453,25 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			}
 			for _, want := range []string{
 				"base_sha, start_sha and head_sha are the diff_refs of merge_request.get.",
-				"The file's new_path or old_path, and a line for a text position, come from mr_review.changes_get.",
+				"The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get.",
 				"whose path repository.tree lists at head_sha.",
 			} {
 				if !strings.Contains(guidance.ValueSource, want) {
 					t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
 				}
 			}
+			if confusions := strings.Join(guidance.CommonConfusions, " "); !strings.Contains(confusions, bothPathsConfusion) {
+				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, bothPathsConfusion)
+			}
 		})
 	}
+	assertBothPathsAsked(t, byTool["gitlab_mr_draft_note_create"].Usage)
 	update := strings.Join(byTool["gitlab_mr_draft_note_update"].ParameterGuidance["position"].CommonConfusions, " ")
 	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Position")
 	description := field.Tag.Get("jsonschema")
 	for _, want := range []string{
 		"base_sha, start_sha and head_sha",
+		"the file's old_path and new_path",
 		"a new_line or old_line (text, the default)",
 		"width, height, x and y",
 		"both old_path and new_path (file)",

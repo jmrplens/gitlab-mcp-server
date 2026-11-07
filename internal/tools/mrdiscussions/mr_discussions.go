@@ -47,8 +47,8 @@ type DiffPosition struct {
 	BaseSHA      string              `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string              `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
 	HeadSHA      string              `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
-	OldPath      string              `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files). Required for position_type=file."`
-	NewPath      string              `json:"new_path,omitempty"  jsonschema:"File path after the change. Required for position_type=file."`
+	OldPath      string              `json:"old_path,omitempty"  jsonschema:"File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed. Send it with new_path. Required for position_type=file."`
+	NewPath      string              `json:"new_path,omitempty"  jsonschema:"File path after the change, from the file's entry in mr_review.changes_get. Send it with old_path. Left out, GitLab takes the file from old_path, which finds it only when it was not renamed. Required for position_type=file."`
 	OldLine      int                 `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
 	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line."`

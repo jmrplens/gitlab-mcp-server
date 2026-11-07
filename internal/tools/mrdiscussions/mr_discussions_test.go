@@ -1573,10 +1573,11 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
 			continue
 		}
-		source := spec.ParameterGuidance["position"].ValueSource
+		guidance := spec.ParameterGuidance["position"]
+		source := guidance.ValueSource
 		for _, want := range []string{
 			"base_sha, start_sha and head_sha are the diff_refs of merge_request.get,",
-			"the file's new_path or old_path and the line come from mr_review.changes_get.",
+			"the file's old_path and new_path and the line come from mr_review.changes_get.",
 			"whose path repository.tree lists at head_sha.",
 		} {
 			t.Run(want, func(t *testing.T) {
@@ -1585,9 +1586,41 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 				}
 			})
 		}
+		assertBothPathsGuidance(t, guidance)
+		for name, want := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+			t.Run(name, func(t *testing.T) {
+				field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+				if description := field.Tag.Get("jsonschema"); !strings.Contains(description, want) {
+					t.Errorf("%s description = %q, want it to say %q", name, description, want)
+				}
+			})
+		}
 		return
 	}
 	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
+}
+
+// assertBothPathsGuidance checks that the position guidance asks for both of
+// the file's paths, in its example as well, and says why one is not always
+// enough. GitLab documents both for a text position, takes one on a file the
+// diff does not rename, and finds a renamed file's lines only by both, where
+// the guidance used to offer either path as sufficient.
+func assertBothPathsGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
+	t.Helper()
+	confusions := strings.Join(guidance.CommonConfusions, " ")
+	for _, want := range []string{
+		"Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed.",
+		"finds a renamed file's lines only by both",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(confusions, want) {
+				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+			}
+		})
+	}
+	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
+		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
+	}
 }
 
 // assertDiscoveryMetadata checks one MR discussion spec against the R-META

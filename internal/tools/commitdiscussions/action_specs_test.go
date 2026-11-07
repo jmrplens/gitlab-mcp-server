@@ -133,7 +133,11 @@ func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
 // start_sha both its first parent and head_sha the commit
 // (Commit#diff_refs, DiffPositionableNote#diff_refs_match_commit). The
 // guidance used to send a caller to repository.commit_diff for the SHAs too,
-// which lists the diff's files and none of its SHAs.
+// which lists the diff's files and none of its SHAs. It also asks for both of
+// the file's paths, in its example as well: GitLab looks a commit position's
+// file up in the commit's diff by the paths it carries, as it does a merge
+// request's, so one path finds a renamed file only as a deleted or an added
+// one. It used to offer either path as sufficient.
 func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
 	detail := reflect.TypeFor[commits.DetailOutput]()
 	id, hasID := detail.FieldByName("ID")
@@ -147,7 +151,7 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 	guidance := commitDiscussionSpecsByTool(t, ActionSpecs(client))["gitlab_create_commit_discussion"].ParameterGuidance["position"]
 	for _, want := range []string{
 		"base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get,",
-		"the file's new_path or old_path and the line come from repository.commit_diff.",
+		"the file's old_path and new_path and the line come from repository.commit_diff.",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(guidance.ValueSource, want) {
@@ -155,7 +159,19 @@ func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) 
 			}
 		})
 	}
-	if confusions := strings.Join(guidance.CommonConfusions, " "); !strings.Contains(confusions, "a commit with no parent takes the all-zero SHA for base_sha and start_sha") {
-		t.Errorf("position guidance confusions = %q, want them to say what a commit with no parent takes", confusions)
+	confusions := strings.Join(guidance.CommonConfusions, " ")
+	for _, want := range []string{
+		"a commit with no parent takes the all-zero SHA for base_sha and start_sha",
+		"Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed.",
+		"finds a renamed file's lines only by both",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(confusions, want) {
+				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+			}
+		})
+	}
+	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
+		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
 	}
 }

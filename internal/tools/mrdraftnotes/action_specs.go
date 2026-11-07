@@ -161,7 +161,15 @@ var mrIIDGuidance = toolutil.ParameterGuidance{
 // diff and none of its SHAs, which the merge request answers as its
 // diff_refs, and a file outside the diff, which an image or file position may
 // name, is listed by the repository tree.
-const positionValueSource = "Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's new_path or old_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha."
+const positionValueSource = "Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha."
+
+// positionPathsConfusion asks the create and the update for both of the
+// file's paths. GitLab documents both for a text position
+// (doc/api/draft_notes.md) and takes one, but looks the file's diff up by
+// the paths the position carries, where git pairs a rename only when both of
+// its paths are given, so one path finds only a file that was not renamed
+// (toolutil.ValidateRenamedFilePosition).
+const positionPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. GitLab documents both for a text position and takes one on a file that was not renamed, but finds a renamed file's lines only by both."
 
 // noteIDGuidance is the shared parameter guidance for note_id.
 var noteIDGuidance = toolutil.ParameterGuidance{
@@ -195,7 +203,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_create": {
-		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's new_path/old_path. A text position (the default) also needs new_line or old_line on a diff line. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
+		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get. A text position (the default) also needs new_line or old_line on a diff line. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.",
 		Aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
 		Related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -209,7 +217,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			"position": {
 				SemanticRole:     "diff_position",
 				ValueSource:      positionValueSource,
-				CommonConfusions: []string{"Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped."},
+				CommonConfusions: []string{"Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped.", positionPathsConfusion},
 			},
 		},
 		Description: "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",
@@ -230,7 +238,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 			"position": {
 				SemanticRole:     "diff_position",
 				ValueSource:      positionValueSource,
-				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one."},
+				CommonConfusions: []string{"A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's old_path and new_path, and by position_type a new_line or old_line (text, the default), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one.", positionPathsConfusion},
 			},
 		},
 		Description: "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",

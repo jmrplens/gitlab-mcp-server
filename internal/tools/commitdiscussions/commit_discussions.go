@@ -66,9 +66,9 @@ type PositionInput struct {
 	StartSHA     string          `json:"start_sha" jsonschema:"Start commit SHA,required"`
 	HeadSHA      string          `json:"head_sha" jsonschema:"Head commit SHA,required"`
 	PositionType string          `json:"position_type" jsonschema:"Position type: text for a line comment, which needs new_line or old_line, or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them,required"`
-	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change"`
+	NewPath      string          `json:"new_path,omitempty" jsonschema:"File path after change, from the file's entry in repository.commit_diff. Send it with old_path"`
 	NewLine      int64           `json:"new_line,omitempty" jsonschema:"Line number after change"`
-	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change"`
+	OldPath      string          `json:"old_path,omitempty" jsonschema:"File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed. Send it with new_path"`
 	OldLine      int64           `json:"old_line,omitempty" jsonschema:"Line number before change"`
 	LineRange    *LineRangeInput `json:"line_range,omitempty" jsonschema:"Start/end line range for a multi-line text diff comment."`
 }
