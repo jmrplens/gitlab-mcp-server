@@ -1625,8 +1625,10 @@ func decodedJSON(t *testing.T, document string) any {
 // a draft on main.go:12 whose typo was fixed answered 200 without its line
 // and was published as a general comment. An image position keeps its width,
 // height and a point on the edge, which client-go's NotePosition does not
-// model, a null base commit goes as an empty one since the route requires the
-// key, and a draft with no position GitLab could place goes with none.
+// model, and goes back as numbers when GitLab stored them as the strings its
+// position schema admits. A null base commit goes as an empty one since the
+// route requires the key, and a draft with no position GitLab could place
+// goes with none.
 func TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack(t *testing.T) {
 	const anchor = `"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc"`
 	for _, tc := range []struct {
@@ -1642,6 +1644,11 @@ func TestDraftNoteUpdate_BodyAlone_SendsTheDraftsPositionBack(t *testing.T) {
 		{
 			name:   "an image position on the edge, on an instance whose version is not known",
 			stored: `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+			want:   `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
+		},
+		{
+			name: "an image position stored with its measures as strings, on 19.4", version: "19.4.1-ee",
+			stored: `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":"64","height":"32","x":"0","y":"7"}`,
 			want:   `{` + anchor + `,"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":64,"height":32,"x":0,"y":7}`,
 		},
 		{
@@ -1773,23 +1780,65 @@ func TestDraftNoteUpdate_DraftUnreadable_SendsNoUpdate(t *testing.T) {
 }
 
 // TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate verifies
-// that a draft whose position does not decode into the options the update
-// sends is reported rather than sent without its position. client-go decodes
-// the same answer without complaint, since NotePosition has no width, so the
-// fault is only seen here.
+// that a draft whose position does not read into the options the update
+// sends is reported rather than sent without its position: a measure that is
+// no number at all, a width that is not a whole number, and an x out of the
+// range of the float the options carry. client-go decodes the same answers
+// without complaint, since NotePosition has no width, x or y, so the fault is
+// only seen here.
 func TestDraftNoteUpdate_StoredPositionThatDoesNotDecode_SendsNoUpdate(t *testing.T) {
-	gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"original","position":{"base_sha":"aaa","position_type":"image","width":"wide"}}`}
+	const placed = `"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"logo.png","new_path":"logo.png","position_type":"image"`
+	for _, tc := range []struct{ name, stored string }{
+		{name: "a width that is no number", stored: `{"base_sha":"aaa","position_type":"image","width":"wide"}`},
+		{name: "a width that is not whole", stored: `{` + placed + `,"width":"64.5","height":32,"x":1,"y":2}`},
+		{name: "an x out of range", stored: `{` + placed + `,"width":64,"height":32,"x":"1e999","y":2}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"original","position":` + tc.stored + `}`}
+			client := testutil.NewTestClient(t, gitlab)
+
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
+			if err == nil {
+				t.Fatal("Update answered no error for a position that does not decode")
+			}
+			if !strings.Contains(err.Error(), "read the draft's position") {
+				t.Errorf("error = %q, want it to say the draft's position could not be read", err)
+			}
+			if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
+				t.Errorf("requests = %v, want no update sent", gitlab.requests())
+			}
+		})
+	}
+}
+
+// TestDraftNoteUpdate_PositionAlone_DoesNotReadTheStoredPosition verifies
+// that a position sent alone replaces the draft's position without the stored
+// one being decoded: the update reads the draft only for its body, so a
+// stored position this server could not send back, here a width that is no
+// number, does not stop a call that replaces it. The draft's own body still
+// goes with the new position.
+func TestDraftNoteUpdate_PositionAlone_DoesNotReadTheStoredPosition(t *testing.T) {
+	gitlab := &draftUpdateGitLab{draft: `{"id":10,"note":"current body","position":{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc",` +
+		`"old_path":"logo.png","new_path":"logo.png","position_type":"image","width":"wide","height":32,"x":1,"y":2}}`}
 	client := testutil.NewTestClient(t, gitlab)
 
-	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: "typo fixed"})
-	if err == nil {
-		t.Fatal("Update answered no error for a position that does not decode")
+	_, err := Update(t.Context(), client, UpdateInput{
+		ProjectID: "42", MRIID: 1, NoteID: 10,
+		Position: &DiffPosition{
+			BaseSHA: "aaa", StartSHA: "bbb", HeadSHA: "ccc",
+			OldPath: "logo.png", NewPath: "logo.png", PositionType: toolutil.PositionTypeFile,
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !strings.Contains(err.Error(), "read the draft's position") {
-		t.Errorf("error = %q, want it to say the draft's position could not be read", err)
+	body := gitlab.body()
+	if body["note"] != "current body" {
+		t.Errorf("note = %v, want the draft's current body", body["note"])
 	}
-	if slices.Contains(gitlab.requests(), http.MethodPut+" "+pathDraftNoteByID) {
-		t.Errorf("requests = %v, want no update sent", gitlab.requests())
+	wantPosition := decodedJSON(t, `{"base_sha":"aaa","start_sha":"bbb","head_sha":"ccc","old_path":"logo.png","new_path":"logo.png","position_type":"file"}`)
+	if !reflect.DeepEqual(body["position"], wantPosition) {
+		t.Errorf("position = %v, want the one the caller gave, %v", body["position"], wantPosition)
 	}
 }
 

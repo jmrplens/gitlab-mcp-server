@@ -5,6 +5,7 @@ package mrdraftnotes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -416,7 +417,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	keepPosition := opts.Position == nil && !client.AtLeast(ctx, keepsPositionSinceMajor, keepsPositionSinceMinor)
 	if opts.Note == nil || keepPosition {
 		//gitlab:request optional: the draft is read only for what the update leaves out, its body when only a position is sent, and its position when only a body is sent to an instance not known to run 19.5 or later
-		current, err := currentDraft(ctx, client, input)
+		current, err := currentDraft(ctx, client, input, keepPosition)
 		if err != nil {
 			return Output{}, err
 		}
@@ -436,10 +437,65 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 }
 
 // capturedDraft is what an update decodes off the captured answer to its read
-// of the draft: the position, whole, in the options the update sends it back
-// in ([currentDraft]).
+// of the draft: the position, whole and as GitLab wrote it, which
+// [currentDraft] reads as a [capturedPosition] when it is sent back. It is
+// kept raw here so the capture holds the one key client-go's DraftNote also
+// decodes, the position, rather than the keys inside it.
 type capturedDraft struct {
-	Position *gl.PositionOptions `json:"position"`
+	Position json.RawMessage `json:"position"`
+}
+
+// capturedPosition is a stored position as GitLab answers it: every key the
+// update sends back, read into the options it is sent in, except an image's
+// width, height, x and y, which are read as numbers of either JSON form.
+// GitLab's position schema (app/validators/json_schemas/position.json) takes
+// each of the four as an integer or as a string of up to ten characters, the
+// web UI's draft route stores the position JSON it is given with its types
+// (DiffPositionableNote#position=), and
+// Gitlab::Diff::Formatters::ImageFormatter answers each as stored, so a draft
+// can come back with "width":"64". The options type all four as numbers.
+// The route declares the four Integer (lib/api/draft_notes.rb) and coerces a
+// string to one, so the number sent back is what the string would have been
+// stored as.
+type capturedPosition struct {
+	gl.PositionOptions
+	Width  *json.Number `json:"width"`
+	Height *json.Number `json:"height"`
+	X      *json.Number `json:"x"`
+	Y      *json.Number `json:"y"`
+}
+
+// options returns the stored position as the options the update sends it
+// back in, with the width and height read as whole numbers and x and y as the
+// floats the options carry. A measure that is not a number of its kind, a
+// width of 64.5 for one, is an error, since the route would refuse it.
+func (p *capturedPosition) options() (*gl.PositionOptions, error) {
+	opts := p.PositionOptions
+	err := errors.Join(
+		storedMeasure(&opts.Width, "width", p.Width, json.Number.Int64),
+		storedMeasure(&opts.Height, "height", p.Height, json.Number.Int64),
+		storedMeasure(&opts.X, "x", p.X, json.Number.Float64),
+		storedMeasure(&opts.Y, "y", p.Y, json.Number.Float64),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &opts, nil
+}
+
+// storedMeasure reads one of a stored image position's measures into *dst
+// with parse, and leaves *dst nil when GitLab answered the key as null or
+// left it out, so that key is not sent back.
+func storedMeasure[T any](dst **T, name string, n *json.Number, parse func(json.Number) (T, error)) error {
+	if n == nil {
+		return nil
+	}
+	v, err := parse(*n)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", name, n.String(), err)
+	}
+	*dst = &v
+	return nil
 }
 
 // storedDraft is what an update reads of the draft it changes: the body, and
@@ -451,37 +507,52 @@ type storedDraft struct {
 }
 
 // currentDraft reads the draft an update names, for the body or the position
-// the update leaves out ([Update]).
+// the update leaves out ([Update]). withPosition says whether the position is
+// sent back. When it is not, the update sends a position of its own, and the
+// stored one is not decoded at all, so a stored position this server could
+// not send back does not stop a call that replaces it.
 //
-// The position is decoded from the captured response into the
-// PositionOptions the update sends, whose keys are the ones GitLab answers
-// with, because client-go's NotePosition carries no width, height, x or y
-// (docs/development/upstream-bugs.md) and an image draft would come back
-// without its point. A key GitLab answers as null is left out of the
-// request. GitLab answers a draft that has no position with an all-null text
-// position, and one with no start or head commit or no file is published as
-// a general comment whatever it carries ([toolutil.ValidatePositionAnchor]),
-// so neither is sent back. A base commit GitLab holds as null, which it does
-// for the diff of a branch with no merge base, is sent as an empty one,
-// since the route requires the key and an empty value is what a position
-// this server creates sends for it.
-func currentDraft(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (storedDraft, error) {
+// The position is decoded from the captured response ([capturedPosition])
+// into the PositionOptions the update sends, whose keys are the ones GitLab
+// answers with, because client-go's NotePosition carries no width, height, x
+// or y (docs/development/upstream-bugs.md) and an image draft would come back
+// without its point. A key GitLab answers as null is left out of the request.
+// GitLab answers a draft that has no position with an all-null text position,
+// and one with no start or head commit or no file is published as a general
+// comment whatever it carries ([toolutil.ValidatePositionAnchor]), so neither
+// is sent back. A base commit GitLab holds as null, which it does for the
+// diff of a branch with no merge base, is sent as an empty one, since the
+// route requires the key and an empty value is what a position this server
+// creates sends for it.
+func currentDraft(ctx context.Context, client *gitlabclient.Client, input UpdateInput, withPosition bool) (storedDraft, error) {
 	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
 	draft, _, err := client.GL().DraftNotes.GetDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(captureCtx))
 	if err != nil {
 		return storedDraft{}, toolutil.WrapErrWithStatusHint("draftNoteUpdate", err, http.StatusNotFound,
 			"the draft is read first for what the update leaves out; verify note_id with mr_review.draft_note_list; draft notes are visible only to their author until published")
 	}
+	current := storedDraft{note: draft.Note}
+	if !withPosition {
+		return current, nil
+	}
 	var answer capturedDraft
-	if err = captured.Decode(&answer); err != nil {
+	var p *capturedPosition
+	err = captured.Decode(&answer)
+	if err == nil && len(answer.Position) > 0 {
+		err = json.Unmarshal(answer.Position, &p)
+	}
+	if err != nil {
 		return storedDraft{}, fmt.Errorf("draftNoteUpdate: read the draft's position: %w", err)
 	}
-	current := storedDraft{note: draft.Note}
-	if p := answer.Position; p != nil && toolutil.ValidatePositionAnchor(deref(p.StartSHA), deref(p.HeadSHA), deref(p.OldPath), deref(p.NewPath)) == nil {
-		if p.BaseSHA == nil {
-			p.BaseSHA = new("")
-		}
-		current.position = p
+	placed := p != nil && toolutil.ValidatePositionAnchor(deref(p.StartSHA), deref(p.HeadSHA), deref(p.OldPath), deref(p.NewPath)) == nil
+	if !placed {
+		return current, nil
+	}
+	if current.position, err = p.options(); err != nil {
+		return storedDraft{}, fmt.Errorf("draftNoteUpdate: read the draft's position: %w", err)
+	}
+	if current.position.BaseSHA == nil {
+		current.position.BaseSHA = new("")
 	}
 	return current, nil
 }
