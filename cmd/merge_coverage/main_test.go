@@ -463,7 +463,10 @@ func TestRunMain_WriteRecord_WritesTheRecordBesideTheReport(t *testing.T) {
 // package is one the offline half does not carry, which the gate could then
 // never check, or cannot write, to status 1 and the reason. The run profile
 // carries the stamp of the tree as each case writes it, so what is refused
-// is the case's own reason.
+// is the case's own reason. -o is given as make e2e-support-coverage-record
+// gives it: a record refused for what it would hold leaves neither the
+// record nor the merged profile, and one refused only because it cannot be
+// written fails after the merged profile was.
 func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 	modelevalBlock := modelevalPkg + "/c.go:3.11,4.7 2 1\n"
 	tests := []struct {
@@ -472,6 +475,7 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 		source          string
 		offline, online string
 		want            string
+		mergedWritten   bool
 	}{
 		{
 			name:       "a source the profiles did not measure",
@@ -487,9 +491,10 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 			want:       "no offline profile carries " + modelevalPkg + ", and the gate holds the offline half alone to the record",
 		},
 		{
-			name:       "a record it cannot write",
-			recordPath: func(dir string) string { return filepath.Join(dir, "no-such-dir", "record.json") },
-			want:       "writing the record: ",
+			name:          "a record it cannot write",
+			recordPath:    func(dir string) string { return filepath.Join(dir, "no-such-dir", "record.json") },
+			want:          "writing the record: ",
+			mergedWritten: true,
 		},
 	}
 	for _, tc := range tests {
@@ -502,11 +507,12 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 			dir := t.TempDir()
 			writeProfile(t, dir, "online.complete", treeStamp(cmp.Or(tc.source, fixtureSource)))
 			offline, online := cmp.Or(tc.offline, recordOffline), cmp.Or(tc.online, recordOnline)
-			recordPath := tc.recordPath(dir)
+			recordPath, mergedPath := tc.recordPath(dir), filepath.Join(dir, "merged.out")
 			args := []string{
 				"-packages", "./test/e2e/internal/fixture,./test/e2e/modeleval",
 				"-offline", writeProfile(t, dir, "offline.out", offline),
 				"-online", writeProfile(t, dir, "online.out", online),
+				"-o", mergedPath,
 				"-write-record", recordPath,
 			}
 			var stdout, stderr bytes.Buffer
@@ -516,6 +522,9 @@ func TestRunMain_WriteRecord_Refusals_ExitOne(t *testing.T) {
 			}
 			if _, err := os.Stat(recordPath); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("a refused record left %s behind (stat error %v)", recordPath, err)
+			}
+			if _, err := os.Stat(mergedPath); (err == nil) != tc.mergedWritten {
+				t.Errorf("merged profile written = %t, want %t (stat error %v)", err == nil, tc.mergedWritten, err)
 			}
 		})
 	}

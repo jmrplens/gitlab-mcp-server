@@ -225,8 +225,10 @@ func importPath(spelling string) string {
 // and judges the offline half against a record when -check-record names one.
 // Otherwise it merges the profiles, writes the merged profile and the record
 // when asked, prints the report and appends it to the summary when asked. A
-// record is taken only of run profiles a complete run of this tree stamped,
-// which is settled before a profile is read or anything is written.
+// record is taken only of run profiles stamped by a complete run of the
+// packages' sources as this tree holds them, which is settled before a
+// profile is read, and a record that cannot be taken of the merge is refused
+// before the merged profile is written.
 func run(opts options, stdout io.Writer) error {
 	if opts.stamp != "" {
 		return writeStamp(opts.stamp, opts.packages)
@@ -247,18 +249,20 @@ func run(opts options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	var rec *record
+	if opts.writeRecord != "" {
+		if rec, err = cov.newRecord(rows, opts.sources); err != nil {
+			return err
+		}
+	}
 	if opts.out != "" {
 		if err = os.WriteFile(opts.out, cov.profile(), 0o600); err != nil {
 			return fmt.Errorf("writing the merged profile: %w", err)
 		}
 	}
-	if opts.writeRecord != "" {
-		rec, recErr := cov.newRecord(rows, opts.sources)
-		if recErr == nil {
-			recErr = writeRecord(opts.writeRecord, rec)
-		}
-		if recErr != nil {
-			return recErr
+	if rec != nil {
+		if writeErr := writeRecord(opts.writeRecord, rec); writeErr != nil {
+			return writeErr
 		}
 	}
 	return publish(render(opts.sources, rows), opts.summary, stdout)

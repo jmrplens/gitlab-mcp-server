@@ -94,7 +94,9 @@
 // of its own text, a comment inside it included, drops it: the runs ran the
 // old code, and what they reached in it says nothing about the new. A
 // package no offline profile carries is refused, since the gate holds the
-// offline half alone to the record and could never measure it.
+// offline half alone to the record and could never measure it. A record
+// refused for what it would hold leaves neither the record nor the merged
+// profile -o names.
 //
 // The record is taken only of complete runs of the tree it is written on.
 // -stamp writes the stamp of the packages' sources, the SHA-256 of every Go
