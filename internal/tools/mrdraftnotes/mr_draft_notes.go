@@ -362,7 +362,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	note, _, err := client.GL().DraftNotes.CreateDraftNote(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("draftNoteCreate", err, http.StatusBadRequest,
-			"note body is required; an inline position needs base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with a line (new_line for an added line, old_line for a removed one, both for an unchanged one), image width, height, x and y, file both old_path and new_path; in_reply_to_discussion_id requires existing discussion_id; resolve_discussion only valid on existing discussions")
+			"note body is required; an inline position needs base_sha, start_sha and head_sha and the file's path (send old_path and new_path), and by position_type: text its line (new_line for an added line, old_line for a removed one, both for an unchanged one) and both paths on a renamed file, image width, height, x and y, file both paths; in_reply_to_discussion_id requires existing discussion_id; resolve_discussion only valid on existing discussions")
 	}
 	return ToOutput(note), nil
 }

@@ -266,15 +266,18 @@ func TestCatalogGroupDescription_MRChangesPagination_StatesReturnAndParameters(t
 // position for a line, which an image or file position does not carry, and
 // asked for new_line or old_line where an unchanged line needs both
 // (Gitlab::Diff::File#line_for_position), and the object listed none of
-// position_type, width, height, x and y. The hint now repeats the one the
-// handlers of mr_review.discussion_create and mr_review.draft_note_create
-// return.
+// position_type, width, height, x and y. The hint then asked every text
+// position for both paths, which the check before the write asks only of a
+// text position on a file the diff renames and of a file position, a text or
+// image position on any other file being taken with one. The hint now
+// repeats the one the handlers of mr_review.discussion_create and
+// mr_review.draft_note_create return.
 func TestCatalogGroupDescription_MRReviewPosition_SaysWhatEachTypeNeeds(t *testing.T) {
 	description := catalogGroupDescription("gitlab_mr_review")
 	for _, want := range []string{
-		"400 invalid params (hint: position requires base_sha + start_sha + head_sha, and by position_type: " +
-			"text old_path + new_path and its line (new_line for an added line, old_line for a removed one, both for an unchanged one), " +
-			"image width + height + x + y, file old_path + new_path)",
+		"400 invalid params (hint: position requires base_sha + start_sha + head_sha and the file's path (send old_path + new_path), " +
+			"and by position_type: text its line (new_line for an added line, old_line for a removed one, both for an unchanged one) " +
+			"and both paths on a renamed file, image width + height + x + y, file old_path + new_path)",
 		"position object: {base_sha, start_sha, head_sha, old_path, new_path, position_type (text by default, image or file), " +
 			"new_line (added line), old_line (removed line), both lines for an unchanged line, width, height, x, y in whole pixels for an image}",
 	} {
@@ -284,8 +287,12 @@ func TestCatalogGroupDescription_MRReviewPosition_SaysWhatEachTypeNeeds(t *testi
 			}
 		})
 	}
-	if stale := "new_path/old_path + new_line/old_line"; strings.Contains(description, stale) {
-		t.Errorf("MR review description still asks every position for %q", stale)
+	for _, stale := range []string{"new_path/old_path + new_line/old_line", "text old_path + new_path"} {
+		t.Run(stale, func(t *testing.T) {
+			if strings.Contains(description, stale) {
+				t.Errorf("MR review description still asks %q", stale)
+			}
+		})
 	}
 }
 

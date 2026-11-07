@@ -192,7 +192,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateCommitDiscussion(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_create", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, start_sha and head_sha, and by position_type: text both old_path and new_path with a line of the commit's diff (new_line for an added line, old_line for a removed one, both for an unchanged one), file both old_path and new_path; verify the commit_sha exists in the project")
+			"for inline diff comments, position requires base_sha, start_sha and head_sha and the file's path (send old_path and new_path), and by position_type: text a line of the commit's diff (new_line for an added line, old_line for a removed one, both for an unchanged one) and both paths on a renamed file, file both paths; verify the commit_sha exists in the project")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {

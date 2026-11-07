@@ -410,12 +410,15 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_BadRequest_HintAsksForBothPaths holds the hint a 400 from the
-// create is answered with to a text position naming both of the file's paths,
-// as the position guidance does: GitLab finds the file in the commit's diff by
-// the paths the position carries, and a renamed file is paired only when both
-// are given.
-func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
+// TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths holds the hint a
+// 400 from the create is answered with to the path rule the position guidance
+// gives: every position needs the file's path and is sent both, a file
+// position needs both (FileFormatter#complete?), and so does a text position
+// on a file the commit renames, which GitLab finds in the commit's diff only
+// by both, while a text position on any other file is taken with one
+// (Position#file_path is new_path.presence || old_path). The hint used to ask
+// every text position for both paths.
+func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != testPathCommitDiscussions {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -425,8 +428,22 @@ func TestCreate_BadRequest_HintAsksForBothPaths(t *testing.T) {
 
 	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
 
-	if err == nil || !strings.Contains(err.Error(), "text both old_path and new_path") {
-		t.Fatalf("error = %v, want the 400 hint to ask a text position for both paths", err)
+	if err == nil {
+		t.Fatal(errExpAPIFailure)
+	}
+	for _, want := range []string{
+		"head_sha and the file's path (send old_path and new_path)",
+		"and both paths on a renamed file",
+		"file both paths",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want the 400 hint to say %q", err, want)
+			}
+		})
+	}
+	if stale := "text both old_path and new_path"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %v, still asks every text position for both paths (%q)", err, stale)
 	}
 }
 
