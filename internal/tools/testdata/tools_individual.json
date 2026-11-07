@@ -144613,7 +144613,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Updated diff position for inline comments. Omit it to keep the current position. Give note, position or both",
+          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's new_path or old_path, and by position_type a new_line or old_line (text, the default), width, height, x and y (image) or both old_path and new_path (file). Omit it to keep the current position. Give note, position or both",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
