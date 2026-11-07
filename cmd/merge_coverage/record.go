@@ -193,8 +193,8 @@ func writeRecord(name string, rec *record) error {
 // loadRecord reads the record at name. A record that does not exist yet,
 // which is the state before the first complete run is recorded, is reported
 // as not found rather than as an error; one that cannot be read, is not the
-// layout this command writes, has text after it, or is another schema, is
-// refused.
+// layout this command writes, has text after it, is another schema, or
+// counts what no package can, is refused.
 func loadRecord(name string) (*record, bool, error) {
 	data, err := os.ReadFile(name)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -213,7 +213,9 @@ func loadRecord(name string) (*record, bool, error) {
 // decodeRecord reads a record in the layout this command writes, refusing a
 // field the layout does not have, any text after the record but white space,
 // since the gate would hold the packages to the first of two records and
-// leave the rest unread, and any other schema.
+// leave the rest unread, any other schema, and a package whose counts no
+// merge leaves: fewer than no statements or none allowed, or more allowed
+// than it has, which would let it lose every statement and pass.
 func decodeRecord(data []byte) (*record, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -226,6 +228,12 @@ func decodeRecord(data []byte) (*record, error) {
 	}
 	if rec.Schema != recordSchema {
 		return nil, fmt.Errorf("the record is schema %d, and this command reads schema %d", rec.Schema, recordSchema)
+	}
+	for _, p := range rec.Packages {
+		if p.Statements < 0 || p.Unreached < 0 || p.Unreached > p.Statements {
+			return nil, fmt.Errorf("%s counts %d statements and allows %d reached by neither half, which no package can",
+				p.Package, p.Statements, p.Unreached)
+		}
 	}
 	return &rec, nil
 }

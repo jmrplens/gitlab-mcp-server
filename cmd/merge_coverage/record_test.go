@@ -266,6 +266,40 @@ func TestLoadRecord_WhiteSpaceAfterTheRecord_IsReadAsTheRecord(t *testing.T) {
 	}
 }
 
+// recordOfCounts is a record of the fixture package alone with the counts
+// given, as the reader sees one.
+func recordOfCounts(statements, unreached int) string {
+	return fmt.Sprintf(`{"schema": 1, "packages": [{"package": "test/e2e/internal/fixture", "statements": %d, "unreached": %d}]}`,
+		statements, unreached)
+}
+
+// TestLoadRecord_CountsAPackageCanHave_AreRead holds the reader to the
+// counts a merge can leave: a package of no statements, which empty
+// functions are, and one none of whose statements either half reached.
+func TestLoadRecord_CountsAPackageCanHave_AreRead(t *testing.T) {
+	tests := []struct {
+		name                  string
+		statements, unreached int
+	}{
+		{name: "no statements", statements: 0, unreached: 0},
+		{name: "every statement reached by neither half", statements: 5, unreached: 5},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeProfile(t, t.TempDir(), "record.json", recordOfCounts(tc.statements, tc.unreached))
+
+			rec, found, err := loadRecord(path)
+
+			if err != nil || !found {
+				t.Fatalf("loadRecord() = found %v, error %v; want the record", found, err)
+			}
+			if p := rec.Packages[0]; p.Statements != tc.statements || p.Unreached != tc.unreached {
+				t.Errorf("package read = %+v, want %d statements and %d allowed", p, tc.statements, tc.unreached)
+			}
+		})
+	}
+}
+
 // TestLoadRecord_RecordsItCannotUse_AreRefused holds every record the reader
 // cannot trust to an error naming the record: a path it cannot read, text
 // that is not JSON, a field the layout does not have, another schema, and
@@ -281,6 +315,18 @@ func TestLoadRecord_RecordsItCannotUse_AreRefused(t *testing.T) {
 		{name: "a second record after it", text: fixtureRecord + fixtureRecord, want: "text follows the record"},
 		{name: "other text after it", text: fixtureRecord + "x\n", want: "text follows the record"},
 		{name: "a closing brace after it", text: fixtureRecord + "}\n", want: "text follows the record"},
+		{
+			name: "fewer than no statements", text: recordOfCounts(-1, 0),
+			want: "test/e2e/internal/fixture counts -1 statements and allows 0 reached by neither half, which no package can",
+		},
+		{
+			name: "fewer than none allowed", text: recordOfCounts(5, -1),
+			want: "test/e2e/internal/fixture counts 5 statements and allows -1 reached by neither half",
+		},
+		{
+			name: "more allowed than it counts", text: recordOfCounts(5, 6),
+			want: "test/e2e/internal/fixture counts 5 statements and allows 6 reached by neither half",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

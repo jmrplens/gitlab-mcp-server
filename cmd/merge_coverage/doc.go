@@ -110,8 +110,9 @@
 // either way. Fewer statements than the record allows is a note that the
 // next record lowers it. A record that does not exist yet is the state
 // before the first complete run is recorded, and is reported as such, holding
-// nothing; one that cannot be read, has text after it, is another schema, or
-// was taken of other packages, is refused.
+// nothing; one that cannot be read, has text after it, is another schema,
+// counts what no package can (fewer than no statements or none allowed, or
+// more allowed than it has), or was taken of other packages, is refused.
 //
 // It exits 0 when it reported, or the gate passed, 1 when a profile or the
 // record could not be read or merged, a package could not be measured, the
