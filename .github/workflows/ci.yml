@@ -1220,10 +1220,6 @@ jobs:
       # action specs, scripts/check-spec-conditions.sh, in a throwaway git
       # repository against a stand-in recipe, and holds the reason it gives a
       # package it could not measure.
-      # scripts/check_em_dash_sh_test.py runs the description gate,
-      # scripts/check-em-dash.sh, over titles and bodies written to disk and
-      # once through a stand-in gh, and holds it to refusing a command that
-      # makes GitHub skip workflows.
       # scripts/smoke_test_image_sh_test.py runs the image smoke test against
       # a stand-in docker, and holds it to refusing an image without this
       # repository's LICENSE or without third-party notices for its platform.
@@ -1301,6 +1297,14 @@ jobs:
           # this branch with its merge base, which a shallow clone has no
           # commits to compute.
           fetch-depth: 0
+      # The gate is cmd/audit_pr_text, so this job sets Go up, the way the
+      # DCO job does: the toolchain and its cache take about nine seconds
+      # there, and the command builds from that cache in about one, where a
+      # binary built once and handed over would make this job wait for the
+      # job that builds it.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
       - name: Check the lines this change adds
         env:
           # On a pull request, the base commit its event names, which for a
@@ -1403,10 +1407,13 @@ jobs:
         with:
           persist-credentials: false
           # Cone mode, so the repository root comes with it and the Makefile
-          # target below is reachable without the rest of the tree.
+          # target below is reachable without the rest of the tree. The
+          # description gate imports nothing outside the standard library and
+          # its two directories, so they and go.mod are all it builds from.
           sparse-checkout: |
             .github/scripts
-            scripts
+            cmd/audit_pr_text
+            cmd/internal/committext
       - name: Decide
         env:
           RESULTS: ${{ toJSON(needs) }}
@@ -1437,6 +1444,15 @@ jobs:
       # caught by the next run, which is what re-running CI before a merge is
       # for. always(), so a failure elsewhere neither hides it nor costs the
       # verdict above its printout.
+      #
+      # The gate is cmd/audit_pr_text, so Go is set up here, under the same
+      # condition, rather than handed over as a binary another job builds:
+      # this step must run whatever happened to the job that would build it,
+      # and the toolchain with its cache costs about nine seconds.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        if: always() && github.event_name == 'pull_request'
+        with:
+          go-version-file: go.mod
       - name: Check the pull request description
         if: always() && github.event_name == 'pull_request'
         env:
