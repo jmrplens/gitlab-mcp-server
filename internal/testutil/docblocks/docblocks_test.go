@@ -30,9 +30,19 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 3}},
 		},
 		{
+			name: "a tab after the language separates it from the key",
+			src:  "```nginx\te2e=nginx\nserver {}\n```\n",
+			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
 			name: "a fence with no key",
 			src:  "```bash\necho hi\n```\n",
 			want: []Block{{Lang: "bash", Body: "echo hi\n", Line: 1}},
+		},
+		{
+			name: "a fence with no info string",
+			src:  "```\necho hi\n```\n",
+			want: []Block{{Body: "echo hi\n", Line: 1}},
 		},
 		{
 			name: "a tilde fence",
@@ -298,6 +308,11 @@ func TestPageBlock_KeyNotServedOnce_IsRefused(t *testing.T) {
 			name:    "a key the twin carries twice",
 			english: keyed, spanish: keyed + "\n" + keyed, key: "nginx",
 			want: ErrDuplicateKey, names: []string{"nginx", filepath.Join("es", "guide.mdx")},
+		},
+		{
+			name:    "the empty key, which an unkeyed fence on each page does not carry",
+			english: keyed + "\n```bash\nls\n```\n", spanish: keyed + "\n```bash\nls\n```\n", key: "",
+			want: ErrUnknownKey, names: []string{"guide.mdx"},
 		},
 	}
 	for _, tt := range tests {

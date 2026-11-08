@@ -144,10 +144,12 @@ func TestProxyGuide_Nginx(t *testing.T) {
 			if tc.held {
 				wait = heldWait
 			}
-			frame, err := firstListenFrame(t, through, map[string]string{"PRIVATE-TOKEN": "glpat-compressed"}, wait)
+			// The reader returns no frame but the listen's acknowledgement, so
+			// the control that streams passes only on that one.
+			frame, err := listenAcknowledgement(t, through, map[string]string{"PRIVATE-TOKEN": "glpat-compressed"}, wait)
 			switch {
 			case tc.held && !errors.Is(err, errStreamHeld):
-				t.Errorf("through a compressing nginx that buffers, the listen's first event = %q (%v), want nothing while the stream is open: "+
+				t.Errorf("through a compressing nginx that buffers, the listen's acknowledgement = %q (%v), want nothing while the stream is open: "+
 					"the stream assertion cannot tell a proxy that holds the stream from one that does not", truncate(frame), err)
 			case !tc.held && err != nil:
 				t.Errorf("through a compressing nginx with proxy_buffering off: %v; the line no longer keeps nginx flushing each event, and the guide says it does", err)
@@ -198,13 +200,14 @@ func TestApplyEdits_TableNotMatchingTheBlock_IsRefused(t *testing.T) {
 		t.Parallel()
 		got, err := applyEdits(block, []edit{
 			{old: "listen 443 ssl;", new: "listen 8080 ssl;", count: 1},
-			{old: "127.0.0.1:8080", new: "127.0.0.1:9", count: 2},
+			{old: "8080", new: "9", count: 2},
 		})
 		if err != nil {
 			t.Fatalf("applyEdits: %v", err)
 		}
-		// The first edit writes 8080 into the block; a second pass would
-		// have rewritten it, and the count it was checked with would no
+		// The first edit writes a third 8080 into the block, which the
+		// second edit's token matches: a second pass would have rewritten it
+		// too, and the count the second edit was checked with would no
 		// longer describe what was served.
 		if want := "listen 8080 ssl;\nserver 127.0.0.1:9;\nserver 127.0.0.1:9;\n"; got != want {
 			t.Errorf("applyEdits = %q, want %q", got, want)

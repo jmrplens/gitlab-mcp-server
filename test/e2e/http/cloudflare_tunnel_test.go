@@ -224,8 +224,8 @@ func startQuickTunnel(t *testing.T) quickTunnel {
 		t.Fatalf("could not start %s (%v):\n%s", cloudflaredImage, err, out)
 	}
 	// The cleanup removes it, and a run the timeout or an interrupt ends
-	// runs none. Removed by its own name only: another run's container can
-	// be alive beside it.
+	// runs none. Removed by the ID its own run was given, and by hand by its
+	// own name only: another run's container can be alive beside it.
 	t.Logf("%s keeps a public trycloudflare.com address open until it is removed; if this run is interrupted: docker rm -f %s", name, name)
 	host := awaitQuickTunnel(t, name)
 	resolver := newTunnelResolver(time.Now().Add(quickTunnelDNSWait))

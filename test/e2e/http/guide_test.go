@@ -211,12 +211,31 @@ func skipNotice(test, reason string) string {
 }
 
 // requireDocker ends the calling test unless Docker is present and usable:
-// a skip, or a failure where dockerMustRun says Docker is expected.
+// a skip, or a failure where dockerMustRun says Docker is expected. A policy
+// that is neither value fails the case wherever it runs (dockerPrecheck).
 func requireDocker(t *testing.T) {
 	t.Helper()
-	if err := dockerUnusable(t.Context()); err != nil {
-		environmentUnavailablef(t, "%v", err)
+	refused, unusable := dockerPrecheck(t.Context(), os.Getenv(dockerPolicyVar), dockerUnusable)
+	if refused != nil {
+		t.Fatalf("%v; a Docker case reads the policy before it asks Docker, so a value that is neither fails here whether or not Docker works", refused)
 	}
+	if unusable != nil {
+		environmentUnavailablef(t, "%v", unusable)
+	}
+}
+
+// dockerPrecheck is requireDocker's decision: refused is a policy that is
+// neither value, and unusable is why probe says Docker cannot run a case.
+//
+// The policy is read before probe is asked. Read only once Docker could not
+// run a case, as environmentUnavailablef reads it, a misspelled policy went
+// unnoticed on every run where Docker worked, which is every run of the job
+// that states it.
+func dockerPrecheck(ctx context.Context, policy string, probe func(context.Context) error) (refused, unusable error) {
+	if _, err := dockerMustRun(policy); err != nil {
+		return err, nil
+	}
+	return nil, probe(ctx)
 }
 
 // dockerUnusable says why Docker cannot run a case here, or returns nil when
@@ -280,14 +299,18 @@ func startContainer(t *testing.T, name, image string, mounts []string, args ...s
 
 // runContainer is startContainer without the decision: it returns what docker
 // run printed and why it failed, for a case that does not skip, and removes
-// the container when the test ends once it has started.
+// the container its run created when the test ends.
 //
-// Only once it has started: a run refused because the name is taken leaves
+// The one its run created, by the ID Docker writes to the --cidfile once it
+// has created a container, and whether or not the container then started: a
+// run whose start the runtime refuses leaves a created container behind,
+// while a run refused because the name is taken created nothing and leaves
 // the name to the container that holds it, which another case started and
 // still needs.
 func runContainer(t *testing.T, name, image string, mounts []string, args ...string) ([]byte, error) {
 	t.Helper()
-	runArgs := []string{"run", "-d", "--name", name, "--network", "host"}
+	cidFile := filepath.Join(t.TempDir(), "cid")
+	runArgs := []string{"run", "-d", "--cidfile", cidFile, "--name", name, "--network", "host"}
 	for _, mount := range mounts {
 		runArgs = append(runArgs, "-v", mount)
 	}
@@ -296,21 +319,22 @@ func runContainer(t *testing.T, name, image string, mounts []string, args ...str
 	runCtx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
-	if err != nil {
-		return out, err
+	if cid, readErr := os.ReadFile(cidFile); readErr == nil && len(cid) > 0 { //#nosec G304 -- the file docker run was just told to write, in this test's own directory
+		id := string(cid)
+		t.Cleanup(func() {
+			rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer rmCancel()
+			// Logged rather than failed, so a daemon slow to remove a
+			// container does not fail a case that passed; with the name,
+			// because the container a failed removal leaves behind can be the
+			// quick tunnel's, and its public address stays open until it is
+			// removed.
+			if rmOut, rmErr := exec.CommandContext(rmCtx, "docker", "rm", "-f", id).CombinedOutput(); rmErr != nil {
+				t.Logf("docker rm -f %s (%s): %v: %s; remove it by hand", id, name, rmErr, strings.TrimSpace(string(rmOut)))
+			}
+		})
 	}
-	t.Cleanup(func() {
-		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer rmCancel()
-		// Logged rather than failed, so a daemon slow to remove a container
-		// does not fail a case that passed; named, because the container a
-		// failed removal leaves behind can be the quick tunnel's, and its
-		// public address stays open until it is removed.
-		if rmOut, rmErr := exec.CommandContext(rmCtx, "docker", "rm", "-f", name).CombinedOutput(); rmErr != nil {
-			t.Logf("docker rm -f %s: %v: %s; remove it by hand", name, rmErr, strings.TrimSpace(string(rmOut)))
-		}
-	})
-	return out, nil
+	return out, err
 }
 
 // containerLogs returns what a container has written, for a failure message.
@@ -609,13 +633,7 @@ func startServerOnFreePort(t *testing.T, flags ...string) (int, *server) {
 func runOnce(t *testing.T, image string, mounts []string, args ...string) (string, error) {
 	t.Helper()
 	requireDocker(t)
-	pullCtx, pullCancel := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer pullCancel()
-	if exec.CommandContext(pullCtx, "docker", "image", "inspect", image).Run() != nil {
-		if out, err := exec.CommandContext(pullCtx, "docker", "pull", "-q", image).CombinedOutput(); err != nil {
-			environmentUnavailablef(t, "could not pull %s (%v):\n%s", image, err, out)
-		}
-	}
+	requireImage(t, image)
 	runArgs := []string{"run", "--rm", "--network", "none"}
 	for _, mount := range mounts {
 		runArgs = append(runArgs, "-v", mount)
@@ -626,6 +644,19 @@ func runOnce(t *testing.T, image string, mounts []string, args ...string) (strin
 	defer runCancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
 	return string(out), err
+}
+
+// requireImage pulls image unless Docker already has it, and ends the test
+// as the environment's doing when the pull fails.
+func requireImage(t *testing.T, image string) {
+	t.Helper()
+	pullCtx, pullCancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer pullCancel()
+	if exec.CommandContext(pullCtx, "docker", "image", "inspect", image).Run() != nil {
+		if out, err := exec.CommandContext(pullCtx, "docker", "pull", "-q", image).CombinedOutput(); err != nil {
+			environmentUnavailablef(t, "could not pull %s (%v):\n%s", image, err, out)
+		}
+	}
 }
 
 // guideProse returns the one paragraph of an English page that contains
@@ -916,8 +947,20 @@ const streamGrace = 10 * time.Second
 // the stream was open.
 var errStreamHeld = errors.New("the acknowledgement did not arrive while the stream was open")
 
-// firstListenFrame opens a listen through srv and returns the first data
-// frame, or errStreamHeld when none arrives within wait.
+// listenAcknowledged is the method of the notification a granted listen is
+// answered with.
+const listenAcknowledged = "notifications/subscriptions/acknowledged"
+
+// listenAcknowledgement opens a listen through srv and returns the data frame
+// that acknowledges it, or errStreamHeld when no event at all arrives within
+// wait.
+//
+// The first frame is not always that one: the server may write
+// notifications/resources/list_changed on the stream before it
+// (sseFrameContaining), and that frame crossed the proxy just as well, so a
+// frame that is not the acknowledgement is passed over rather than taken for
+// the answer. Events that crossed with no acknowledgement among them are an
+// error of their own, never errStreamHeld, since the proxy held nothing.
 //
 // The wait covers the response headers as well as the frame: a proxy that
 // compresses the body sends neither until it has enough to compress, and a
@@ -929,7 +972,7 @@ var errStreamHeld = errors.New("the acknowledgement did not arrive while the str
 // host: a stream that crossed the proxy at once was reported held, and the
 // control that must see one held could pass on that time alone. A tools/list
 // with the same headers pays for it before the wait starts.
-func firstListenFrame(t *testing.T, srv *server, headers map[string]string, wait time.Duration) (string, error) {
+func listenAcknowledgement(t *testing.T, srv *server, headers map[string]string, wait time.Duration) (string, error) {
 	t.Helper()
 	if warm := srv.do(t, mcpPOST(headers)); warm.status != http.StatusOK {
 		return "", fmt.Errorf("tools/list with the listen's headers answered %d before the listen was sent, want 200: %s", warm.status, truncate(warm.body))
@@ -969,17 +1012,25 @@ func firstListenFrame(t *testing.T, srv *server, headers map[string]string, wait
 	// The reader ends the frames when the wait does, since the deadline
 	// cancels the body it reads.
 	stream := readStream(ctx, resp, cancel)
-	select {
-	case frame, open := <-stream.frames:
-		if open {
-			return frame, nil
+	var passed []string
+	for {
+		select {
+		case frame, open := <-stream.frames:
+			switch {
+			case open && strings.Contains(frame, listenAcknowledged):
+				return frame, nil
+			case open:
+				passed = append(passed, truncate(frame))
+			case len(passed) > 0:
+				return "", fmt.Errorf("the stream carried %d event(s) and no acknowledgement (%s)", len(passed), strings.Join(passed, "; "))
+			case ctx.Err() != nil:
+				return "", fmt.Errorf("headers and no event after %v: %w", wait, errStreamHeld)
+			default:
+				return "", errors.New("the stream ended before any event, which a listen does not do")
+			}
+		case readErr := <-stream.failure:
+			return "", fmt.Errorf("reading the stream: %w", readErr)
 		}
-		if ctx.Err() != nil {
-			return "", fmt.Errorf("headers and no event after %v: %w", wait, errStreamHeld)
-		}
-		return "", errors.New("the stream ended before any event, which a listen does not do")
-	case readErr := <-stream.failure:
-		return "", fmt.Errorf("reading the stream: %w", readErr)
 	}
 }
 
@@ -988,12 +1039,8 @@ func firstListenFrame(t *testing.T, srv *server, headers map[string]string, wait
 // still open.
 func assertStreamIsNotHeld(t *testing.T, srv *server, headers map[string]string) {
 	t.Helper()
-	frame, err := firstListenFrame(t, srv, headers, streamGrace)
-	if err != nil {
+	if _, err := listenAcknowledgement(t, srv, headers, streamGrace); err != nil {
 		t.Fatalf("a subscriptions/listen through the proxy: %v; a proxy that buffers turns a live stream into one delivery at the end, and this stream does not end", err)
-	}
-	if !strings.Contains(frame, "notifications/subscriptions/acknowledged") {
-		t.Errorf("the first event through the proxy is %s, want the listen's acknowledgement", truncate(frame))
 	}
 }
 
@@ -1102,6 +1149,197 @@ func TestDockerMustRun_PolicyTheJobStates_DecidesFailOrSkip(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDockerPrecheck_PolicyNeitherValue_IsRefusedBeforeDockerIsAsked holds
+// requireDocker to reading the policy first. A misspelled policy used to be
+// read only once Docker could not run a case, so it went unnoticed on every
+// run where Docker worked, which is every run of the job that states it.
+func TestDockerPrecheck_PolicyNeitherValue_IsRefusedBeforeDockerIsAsked(t *testing.T) {
+	t.Parallel()
+	errNoDaemon := errors.New("docker is installed but not usable")
+	tests := []struct {
+		name         string
+		policy       string
+		probe        error
+		wantRefused  bool
+		wantUnusable error
+		wantAsked    bool
+	}{
+		{name: "a misspelled policy where Docker works", policy: "Required", wantRefused: true},
+		{name: "a misspelled policy where Docker does not work", policy: "yes", probe: errNoDaemon, wantRefused: true},
+		{name: "required where Docker works", policy: dockerRequired, wantAsked: true},
+		{name: "unset where Docker does not work", policy: "", probe: errNoDaemon, wantUnusable: errNoDaemon, wantAsked: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			asked := false
+			refused, unusable := dockerPrecheck(t.Context(), tt.policy, func(context.Context) error {
+				asked = true
+				return tt.probe
+			})
+			if (refused != nil) != tt.wantRefused {
+				t.Errorf("refused = %v, want a refusal: %v", refused, tt.wantRefused)
+			}
+			if refused != nil && !strings.Contains(refused.Error(), dockerPolicyVar) {
+				t.Errorf("refused = %v, want it to name %s", refused, dockerPolicyVar)
+			}
+			if !errors.Is(unusable, tt.wantUnusable) {
+				t.Errorf("unusable = %v, want %v", unusable, tt.wantUnusable)
+			}
+			if asked != tt.wantAsked {
+				t.Errorf("Docker asked = %v, want %v: the policy is read before Docker, and a refused one asks it nothing", asked, tt.wantAsked)
+			}
+		})
+	}
+}
+
+// TestRunContainer_RunRefused_RemovesTheContainerItCreatedAndNoOther holds
+// runContainer's cleanup to the one container its own run created.
+//
+// Docker creates a container before it starts it, so a run whose start the
+// runtime refuses leaves a created container behind, and the cleanup used to
+// be registered only once a run had succeeded: every such run left one on the
+// host. A run refused because the name is taken created nothing, and the
+// container holding the name belongs to whoever started it, so removing by
+// name would take another case's container.
+func TestRunContainer_RunRefused_RemovesTheContainerItCreatedAndNoOther(t *testing.T) {
+	t.Parallel()
+	requireDocker(t)
+	requireImage(t, nginxImage)
+
+	t.Run("a run whose start is refused", func(t *testing.T) {
+		t.Parallel()
+		name := scratchContainerName("unstartable")
+		// A file mounted over /etc: Docker creates the container and the
+		// runtime refuses to start it.
+		file := writeContainerFile(t, containerDir(t), "not-a-directory", "x\n")
+		// Not parallel: its cleanups have to have run when it returns, which
+		// is what the check below reads.
+		t.Run("the case that ran it", func(t *testing.T) {
+			if out, err := runContainer(t, name, nginxImage, []string{file + ":/etc:ro"}); err == nil {
+				t.Fatalf("docker run with a file over /etc started a container, and this case needs one whose start is refused:\n%s", out)
+			}
+		})
+		if id := containerID(t, name); id != "" {
+			removeContainer(t, id)
+			t.Errorf("%s (%.12s) is still on the host after the case that ran it ended: its start was refused, and the cleanup did not remove the container the run created", name, id)
+		}
+	})
+
+	t.Run("a run refused because the name is taken", func(t *testing.T) {
+		t.Parallel()
+		name := scratchContainerName("taken")
+		out, err := exec.CommandContext(t.Context(), "docker", "create", "--name", name, nginxImage).Output()
+		if err != nil {
+			t.Fatalf("docker create --name %s: %v", name, err)
+		}
+		holder := strings.TrimSpace(string(out))
+		t.Cleanup(func() { removeContainer(t, holder) })
+		t.Run("the case that ran it", func(t *testing.T) {
+			if runOut, runErr := runContainer(t, name, nginxImage, nil); runErr == nil {
+				t.Fatalf("docker run reused the name %s, which another container holds:\n%s", name, runOut)
+			}
+		})
+		if id := containerID(t, name); id != holder {
+			t.Errorf("the container named %s is %q after the refused run, want the one that held the name, %s: the cleanup removed a container its run did not create", name, id, holder)
+		}
+	})
+}
+
+// scratchContainerName is a container name no other case and no other run
+// picks.
+func scratchContainerName(kind string) string {
+	return "gitlab-mcp-httpe2e-scratch-" + kind + "-" + strings.ToLower(rand.Text())
+}
+
+// containerID returns the ID of the container named name, or "" when there is
+// none.
+func containerID(t *testing.T, name string) string {
+	t.Helper()
+	out, err := exec.CommandContext(t.Context(), "docker", "container", "inspect", "-f", "{{.Id}}", name).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// removeContainer removes the container with the given ID, logging rather
+// than failing when Docker cannot.
+func removeContainer(t *testing.T, id string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput(); err != nil {
+		t.Logf("docker rm -f %s: %v: %s; remove it by hand", id, err, strings.TrimSpace(string(out)))
+	}
+}
+
+// TestListenAcknowledgement_EventsBeforeIt_ArePassedOver holds the reader
+// every stream assertion goes through to the listen's own answer.
+//
+// The server may write notifications/resources/list_changed on a listen's
+// stream before the acknowledgement (sseFrameContaining says the same of the
+// subscription cases), and a reader that took the first frame for the answer
+// failed a stream that had crossed the proxy at once, as a run of the LAN
+// case did. A stream that carries events and never the acknowledgement is
+// not one the proxy held, so it is not reported as held either.
+func TestListenAcknowledgement_EventsBeforeIt_ArePassedOver(t *testing.T) {
+	t.Parallel()
+	const (
+		listChanged  = `{"jsonrpc":"2.0","method":"notifications/resources/list_changed"}`
+		acknowledged = `{"jsonrpc":"2.0","method":"notifications/subscriptions/acknowledged","params":{}}`
+	)
+	tests := []struct {
+		name   string
+		frames []string
+		want   string
+		held   bool
+	}{
+		{name: "a list_changed written before the acknowledgement", frames: []string{listChanged, acknowledged}, want: acknowledged},
+		{name: "the acknowledgement alone", frames: []string{acknowledged}, want: acknowledged},
+		{name: "no event while the stream is open", held: true},
+		{name: "events and never the acknowledgement", frames: []string{listChanged}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			frame, err := listenAcknowledgement(t, listenStandIn(t, tt.frames), nil, 500*time.Millisecond)
+			switch {
+			case tt.want != "" && (err != nil || frame != tt.want):
+				t.Errorf("the listen's answer = %q, %v; want %q", frame, err, tt.want)
+			case tt.held && !errors.Is(err, errStreamHeld):
+				t.Errorf("the listen's answer = %q, %v; want an error wrapping %q", frame, err, errStreamHeld)
+			case tt.want == "" && !tt.held && (err == nil || errors.Is(err, errStreamHeld)):
+				t.Errorf("the listen's answer = %q, %v; want an error that is not %q, since events did cross", frame, err, errStreamHeld)
+			}
+		})
+	}
+}
+
+// listenStandIn is a server that answers a tools/list with 200 and a listen
+// with frames, in order, holding the stream open afterwards as a listen does.
+func listenStandIn(t *testing.T, frames []string) *server {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Mcp-Method") != "subscriptions/listen" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flush := http.NewResponseController(w).Flush
+		_ = flush()
+		for _, frame := range frames {
+			_, _ = fmt.Fprintf(w, "event: message\ndata: %s\n\n", frame)
+			_ = flush()
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(ts.Close)
+	return &server{baseURL: ts.URL, client: ts.Client()}
 }
 
 // TestRecordSkip_SkippedCases_AppendOneLineEach holds the notices file a job

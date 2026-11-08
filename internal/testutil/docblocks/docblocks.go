@@ -143,9 +143,13 @@ func closes(line, fence string) bool {
 }
 
 // fenceInfo reads a fence's info string into a block with no body yet.
+//
+// The language ends at the first space or tab, as CommonMark ends an info
+// string's first word and check-i18n-code.mjs splits it, so a tab after the
+// language does not fold the options into it.
 func fenceInfo(info string, line int) (Block, error) {
-	lang, options, _ := strings.Cut(info, " ")
-	block := Block{Lang: lang, Info: strings.TrimSpace(options), Line: line}
+	options := strings.TrimLeftFunc(info, func(r rune) bool { return r != ' ' && r != '\t' })
+	block := Block{Lang: info[:len(info)-len(options)], Info: strings.TrimSpace(options), Line: line}
 	for _, option := range splitOptions(block.Info) {
 		value, ok := strings.CutPrefix(option, keyOption)
 		if !ok {
@@ -249,10 +253,12 @@ func (p *Page) Block(key string) (Block, error) {
 }
 
 // only returns the blocks of one page that carry key, refusing more than one.
+// A fence with no e2e option carries no key, so it never matches, the empty
+// key included.
 func only(blocks []Block, path, key string) ([]Block, error) {
 	var found []Block
 	for _, block := range blocks {
-		if block.Key == key {
+		if block.Key != "" && block.Key == key {
 			found = append(found, block)
 		}
 	}
