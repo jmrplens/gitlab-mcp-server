@@ -1092,6 +1092,7 @@ var witnessDeclared = map[string]string{
 	"toolutil.ProjectExtra.duo_sast_fp_detection_enabled":                     "kept-for-presence 1",
 	"toolutil.ProjectExtra.duo_sast_vr_workflow_enabled":                      "kept-for-presence 1",
 	"toolutil.ProjectExtra.duo_secret_detection_fp_enabled":                   "kept-for-presence 1",
+	"users.serviceAccountExtra.external":                                      "kept-for-presence 1",
 	"toolutil.MemberExtra.group_saml_identity":                                "kept-for-sibling-pairing 3",
 	"toolutil.MemberExtra.public_email":                                       "kept-for-sibling-pairing 1",
 	"toolutil.MergeRequestExtra.work_in_progress":                             "kept-for-sibling-pairing 1",
@@ -1111,12 +1112,13 @@ var witnessDeclared = map[string]string{
 // reason a predicate on the pinned SDK says: the approval state's two
 // timestamps and its pending rules, which client-go decodes as GitLab sends
 // them, had been retired already. client-go v3.31 to v3.38 model thirty more,
-// and on the v3.38.1 pin twenty-seven of them are read off the SDK's decode
+// and on the v3.38.1 pin twenty-six of them are read off the SDK's decode
 // and their captures retired (the plan limits and their history, a
 // pipeline's archived, a registry repository's size and delete path, a
-// storage move's error message, a service account's external), while the
-// three Duo flags of a project are kept for their presence, which the SDK's
-// plain booleans cannot tell from false. A reader that hands back an object
+// storage move's error message), while the three Duo flags of a project and
+// an instance service account's external, which an instance before 19.5
+// leaves out, are kept for their presence, which the SDK's plain booleans
+// cannot tell from false. A reader that hands back an object
 // from inside the answer is paired at that object's depth, and every struct a
 // capture is decoded into is paired or has no SDK half. The resource and
 // prompt packages capture too, and their pairings are read where they make

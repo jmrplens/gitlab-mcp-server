@@ -386,9 +386,9 @@ func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 			Email:            "bot@x.test",
 			PublicEmail:      "public@x.test",
 			UnconfirmedEmail: "pending@x.test",
-			External:         true,
+			External:         new(true),
 		},
-		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test", External: false},
+		{ID: 8, Username: "deploy-bot", Name: "Deploy Bot", PublicEmail: "deploy@x.test", External: new(false)},
 	}
 	if !reflect.DeepEqual(out.Accounts, want) {
 		t.Errorf("accounts = %+v, want %+v", out.Accounts, want)
@@ -426,6 +426,46 @@ func TestServiceAccounts_UndecodablePublicEmail_IsAnError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.call(); err == nil || !strings.Contains(err.Error(), tc.op) {
 				t.Errorf("error = %v, want the failed read of the captured answer under %s", err, tc.op)
+			}
+		})
+	}
+}
+
+// TestServiceAccounts_ExternalLeftOut_IsAbsentRatherThanInternal verifies
+// that both service account handlers publish no external flag for an account
+// whose answer leaves the key out, as an instance before GitLab 19.5 answers,
+// rather than reporting the account as internal: client-go's ServiceAccount
+// models the key as a plain bool, which reads a key left out as false, so the
+// flag is read off the captured response.
+func TestServiceAccounts_ExternalLeftOut_IsAbsentRatherThanInternal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"username":"svc"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"username":"svc"}]`)
+	}))
+	cases := []struct {
+		name string
+		call func() ([]ServiceAccountOutput, error)
+	}{
+		{"list", func() ([]ServiceAccountOutput, error) {
+			out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
+			return out.Accounts, err
+		}},
+		{"update", func() ([]ServiceAccountOutput, error) {
+			out, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{ServiceAccountID: 5, Name: "svc"})
+			return []ServiceAccountOutput{out}, err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			accounts, err := tc.call()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(accounts) != 1 || accounts[0].ID != 5 || accounts[0].External != nil {
+				t.Errorf("accounts = %+v, want account 5 with no External, since GitLab sent none", accounts)
 			}
 		})
 	}
@@ -679,7 +719,7 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 	if out.PublicEmail != "shown@example.com" {
 		t.Errorf("out.PublicEmail = %q, want shown@example.com", out.PublicEmail)
 	}
-	if !out.External {
+	if out.External == nil || !*out.External {
 		t.Errorf("out.External = %v, want the true GitLab sent", out.External)
 	}
 }

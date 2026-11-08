@@ -19,8 +19,11 @@ import (
 
 // ServiceAccountOutput represents a service account, the keys
 // lib/api/entities/service_account.rb sends. PublicEmail comes from the
-// UserSafe that entity inherits and is read off the captured response, since
-// client-go's ServiceAccount has no field for it.
+// UserSafe that entity inherits and External from the entity itself, which
+// sends it on every account from GitLab 19.5; both are read off the captured
+// response, the first since client-go's ServiceAccount has no field for it
+// and the second since the plain bool it models from v3.32.0 reads the key an
+// older instance leaves out as false.
 type ServiceAccountOutput struct {
 	ID               int64  `json:"id"`
 	Username         string `json:"username"`
@@ -29,17 +32,19 @@ type ServiceAccountOutput struct {
 	PublicEmail      string `json:"public_email,omitempty"`
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
 	// External is whether the account is an external user, who can reach
-	// only the projects and groups it is a member of. The entity sends it on
-	// every account from GitLab 19.5, and client-go's ServiceAccount models
-	// it from v3.32.0.
-	External bool `json:"external"`
+	// only the projects and groups it is a member of, absent from an older
+	// instance's answer rather than reported as internal.
+	External *bool `json:"external,omitempty"`
 }
 
-// serviceAccountExtra is what lib/api/entities/service_account.rb sends that
-// client-go's ServiceAccount does not model: the public email of the
-// lib/api/entities/user_safe.rb it inherits.
+// serviceAccountExtra is what this server reads of
+// lib/api/entities/service_account.rb off the captured response: the public
+// email of the lib/api/entities/user_safe.rb it inherits, which client-go's
+// ServiceAccount does not model, and its own external flag, which it models
+// as a plain bool that cannot tell a key left out from one sent as false.
 type serviceAccountExtra struct {
 	PublicEmail string `json:"public_email"`
+	External    *bool  `json:"external"`
 }
 
 // ServiceAccountListOutput holds one page of the instance's service accounts
@@ -130,7 +135,7 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 			Email:            a.Email,
 			PublicEmail:      extras[i].PublicEmail,
 			UnconfirmedEmail: a.UnconfirmedEmail,
-			External:         a.External,
+			External:         extras[i].External,
 		})
 	}
 	return ServiceAccountListOutput{Accounts: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
@@ -182,7 +187,7 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 		Email:            account.Email,
 		PublicEmail:      extra.PublicEmail,
 		UnconfirmedEmail: account.UnconfirmedEmail,
-		External:         account.External,
+		External:         extra.External,
 	}, nil
 }
 

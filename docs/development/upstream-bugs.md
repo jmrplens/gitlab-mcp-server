@@ -402,7 +402,7 @@ readable without opening the tracker:
 | 130 | client-go | [The wiki search decodes GitLab's blobs into wiki pages](#the-wiki-search-decodes-gitlabs-blobs-into-wiki-pages) | No | No | No | No | Yes, `search.wiki` reads its page from the captured response |
 | 131 | gitlab-org/gitlab | [The REST code search answers an exact-search name match with the path as its snippet](#the-rest-code-search-answers-an-exact-search-name-match-with-the-path-as-its-snippet) | No; the search page's version of it was closed | No | No | No | Yes, the code and wiki search Markdown reads a result whose snippet is its own path as a path match and fences nothing |
 | 132 | client-go | [SearchOptions models neither num_context_lines nor regex](#searchoptions-models-neither-num_context_lines-nor-regex) | Yes | Yes, [gitlab-org/api/client-go!3063](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3063), closed unmerged on 2026-10-21; to go out again in a small merge request, not opened yet | No | No | Yes, `search.code` adds both to the query through a request option, each only when set |
-| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: six keys read from the captured response, `external` of a group and of a project service account among them, the instance service account's `external` read off the SDK since the v3.38.1 pin; the merge request author's `bot` and the parameters not yet |
+| 133 | client-go | [Seven response keys and twelve parameters GitLab 19.5 added](#seven-response-keys-and-twelve-parameters-gitlab-195-added-that-client-go-does-not-model) | No, by us; by another contributor, for the instance service account's `external`, [gitlab-org/api/client-go#2310](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2310), closed by the merge, and for the group's two SHA keys, [gitlab-org/api/client-go#2321](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2321), open | Partly, theirs: [gitlab-org/api/client-go!3102](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3102), merged, for that key and its two parameters, and [gitlab-org/api/client-go!3117](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3117), open, for the two group keys | **Partly, v3.32.0**, not ours: `external` on the instance `ServiceAccount` and on its create and update options; v3.40.0 adds none of the rest; this server pins it since the bump to v3.38.1 | No | Partial: six keys read from the captured response, `external` of a group and of a project service account among them, and the instance service account's `external` kept captured for its presence since the v3.38.1 pin; the merge request author's `bot` and the parameters not yet |
 | 134 | client-go | [The rate limit backoff ignores `Retry-After` on a 429](#the-rate-limit-backoff-ignores-retry-after-on-a-429) | Yes, by the merge request | Yes, [gitlab-org/api/client-go!3147](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3147), open; GitLab Duo approved it on 2026-10-21 after we fixed its finding; on 2026-10-26 a client-go maintainer asked how callers that fail fast on these 429s keep doing so, a client-go code owner preferred an opt-in now and the new default in a later major, and we made it opt-in that day, which reset GitLab Duo's approval, and asked for review again; not reviewed since | No; v3.40.0 still reads `Ratelimit-Reset` alone | No; this server replaces client-go's backoff with its own | Not needed |
 | 135 | client-go | [`UpdateSettingsOptions` models twenty-six settings the update route does not take](#updatesettingsoptions-models-twenty-six-settings-the-update-route-does-not-take) | No | No | No | No | Yes, `admin.settings_update` refuses them by name before anything is sent, as it refuses a key client-go does not model |
 | 136 | client-go | [`ListTopicsOptions` and `CreateTopicOptions` model no `organization_id`](#listtopicsoptions-and-createtopicoptions-model-no-organization_id) | Yes, by another contributor, [gitlab-org/api/client-go#2313](https://gitlab.com/gitlab-org/api/client-go/-/work_items/2313) | Yes, theirs, [gitlab-org/api/client-go!3105](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3105), open | No | No | None; `admin.topic_list` and `admin.topic_create` act on the organization GitLab resolves for the request |
@@ -8375,13 +8375,14 @@ test that each reaches the query only when set.
   v3.38.1, read on 2026-10-21: no struct below gained one of the keys, and no
   option struct one of the parameters. The merged key is a plain `bool`, which
   reads the key an instance before 19.5 leaves out as `false`. The capture in
-  `users` published `external` only when GitLab sent it, and at the bump to
-  v3.38.1 it retired instead of staying for that difference: the instance
-  service account list and update read `ServiceAccount.External`, publish it
-  as a plain `bool` like the SDK, and so report an account an instance before
-  19.5 answers for as internal, and the two `upstream` declarations R-PARAM
-  held for the create and update parameter are gone, so the parameter is a
-  plain `not_offered` finding until the two actions offer it.
+  `users` publishes `external` only when GitLab sent it, and at the bump to
+  v3.38.1 it stays for that difference, declared `kept-for-presence` in the
+  sdk scope as a project's Duo flags are: the instance service account list
+  and update read the flag off the captured response, so an account an
+  instance before 19.5 answers for carries no `external` rather than reading
+  as internal. The two `upstream` declarations R-PARAM held for the create
+  and update parameter are gone, so the parameter is a plain `not_offered`
+  finding until the two actions offer it.
   `GroupServiceAccount` and `ProjectServiceAccount` still declare no
   `external` there. v3.40.0, read on 2026-10-31, models none of the rest
   either.
@@ -8406,10 +8407,11 @@ test that each reaches the query only when set.
   packages, `CapturedSSHCertificate` and `CapturedSSHCertificates` for a
   group's SSH certificates, and `CapturedRunner` for a runner's details. Each
   is absent from an older instance's answer rather than published as off or
-  empty. They retire when the structs carry the keys, as `users`' own capture
-  of the instance service account's `external` did at the v3.38.1 pin;
-  `external` stays captured on the group and project accounts, whose structs
-  do not carry it.
+  empty. They retire when the structs carry the keys in a form that can tell
+  a key left out from one sent as off: the instance service account's
+  `external`, which `ServiceAccount` carries from v3.32.0 as a plain `bool`,
+  stays captured in `users` for its presence, and `external` stays captured
+  on the group and project accounts, whose structs do not carry it.
 
 **What**: every key below is absent from the 19.4.1-ee live record and
 present in the 19.5.0-ee one (`docs/development/gitlab-api-live.json`), and

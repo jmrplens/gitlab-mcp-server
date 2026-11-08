@@ -228,10 +228,24 @@ func projectFlagCapture(key, field string) captureDeclaration {
 	}
 }
 
+// serviceAccountExternalReason is why an instance service account's external
+// flag is read off the capture.
+const serviceAccountExternalReason = "lib/api/entities/service_account.rb sends the flag on every account from GitLab 19.5 and an older instance's answer leaves it out, while client-go's ServiceAccount, which models it from v3.32.0, decodes the key left out as false, a value a 19.5 answer also carries for an internal account"
+
+// serviceAccountExternal declares the instance service account's external
+// flag kept for its presence.
+var serviceAccountExternal = captureDeclaration{
+	Type: "users.serviceAccountExtra", Key: "external", Category: keptForPresence,
+	Predicates: []waits.Predicate{waits.FieldKind{Type: "ServiceAccount", Field: "External", Kind: "bool"}},
+	Reason:     serviceAccountExternalReason,
+}
+
 // presenceCaptures are the keys an answer leaves out where client-go decodes
 // a value that is not a pointer: a Community Edition answer's approval state,
-// and a project's Duo flags outside the license that sends them.
+// a project's Duo flags outside the license that sends them, and an instance
+// service account's external flag before 19.5.
 var presenceCaptures = []captureDeclaration{
+	serviceAccountExternal,
 	presenceCapture("approvals_left", "ApprovalsLeft", "int64"),
 	presenceCapture("approvals_required", "ApprovalsRequired", "int64"),
 	presenceCapture("description", "Description", "string"),
