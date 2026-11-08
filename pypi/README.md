@@ -61,6 +61,8 @@ gh attestation verify "$(uvx --from jmrplens-gitlab-mcp-server python -c 'import
 
 Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for the full reference.
 
+The binary verifies GitLab's certificate against the host's CA store. On a Linux host with none, such as a minimal container image, every connection fails with `x509: certificate signed by unknown authority`, gitlab.com's included: install `ca-certificates`, or set `SSL_CERT_FILE` to a PEM bundle that holds the instance's CA. `GITLAB_MCP_SKIP_TLS_VERIFY=true` turns verification off, and is only for a self-signed certificate nothing can be made to trust.
+
 ## Platform support
 
 Wheels are published for Linux (glibc), macOS and Windows on amd64 and arm64. On musl systems such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server` instead.

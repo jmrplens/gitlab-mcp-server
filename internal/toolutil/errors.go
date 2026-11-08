@@ -60,6 +60,19 @@ const DestinationRefusedMessage = "this server refused to connect to that addres
 // TLS failure sends the caller to check a connection that was never made.
 const RequestPathRefusedMessage = `this server refused a path argument with a "." or ".." segment, so the request never left the process`
 
+// tlsFailureMessage is [ClassifyError]'s sentence for a request whose TLS
+// handshake failed.
+//
+// It names the trust store first and turning verification off last. A
+// certificate signed by an authority the host does not trust is most often a
+// host with no CA store at all, a minimal container image for one, which then
+// fails on gitlab.com's certificate as on a private CA's, and the fix there is
+// the store or SSL_CERT_FILE, which Go reads on Linux and the BSDs. Skipping
+// verification is for a self-signed certificate nothing can be made to trust.
+const tlsFailureMessage = "TLS/SSL handshake failed. If the host has no CA certificates or does not trust the instance's CA, " +
+	"install ca-certificates (or the instance's CA) or set SSL_CERT_FILE to a PEM bundle that holds it; " +
+	"only for a self-signed certificate nothing can be made to trust, set GITLAB_MCP_SKIP_TLS_VERIFY=true"
+
 // RequestPathRefusedHint is the next step offered with a request path
 // refusal: the path is built from the action's arguments, so what changes the
 // outcome is the argument the segment came from, and the cause names the path
@@ -279,8 +292,11 @@ func ClassifyError(err error) string {
 	if isTimeout(err) {
 		return "Request to GitLab timed out. The server may be overloaded or unreachable"
 	}
+	// The trust store comes first (issue 1592): a host with no CA store, a
+	// minimal container image for one, fails on every certificate, a public
+	// CA's included, and turning verification off there is the wrong fix.
 	if isTLSError(err) {
-		return "TLS/SSL handshake failed. If using self-signed certificates, set GITLAB_MCP_SKIP_TLS_VERIFY=true"
+		return tlsFailureMessage
 	}
 
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {

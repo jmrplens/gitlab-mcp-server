@@ -48,6 +48,13 @@ self-managed instance. Every flag and variable (HTTP mode, OAuth, read-only and
 safe modes, tool surfaces, tiers) is documented in the
 [configuration reference](https://docs.jmrp.io/gitlab-mcp-server/configuration/).
 
+The binary verifies GitLab's certificate against the host's CA store. On a Linux
+host with none, such as a minimal container image, every connection fails with
+`x509: certificate signed by unknown authority`, gitlab.com's included: install
+`ca-certificates`, or set `SSL_CERT_FILE` to a PEM bundle that holds the
+instance's CA. `GITLAB_MCP_SKIP_TLS_VERIFY=true` turns verification off, and is
+only for a self-signed certificate nothing can be made to trust.
+
 ## Updating
 
 `npm update -g @jmrp.io/gitlab-mcp-server`. The server never replaces its own

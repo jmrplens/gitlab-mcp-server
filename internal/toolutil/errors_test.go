@@ -135,12 +135,22 @@ func TestClassifyError_DNS(t *testing.T) {
 	}
 }
 
-// TestClassifyError_TLS verifies detection of TLS/certificate errors.
+// TestClassifyError_TLS verifies detection of TLS/certificate errors, and that
+// the sentence names the trust store and SSL_CERT_FILE before turning
+// verification off (issue 1592): a host with no CA store fails on every
+// certificate, and skipping verification is the wrong fix there.
 func TestClassifyError_TLS(t *testing.T) {
 	err := errors.New("Get https://gitlab.example.com: x509: certificate signed by unknown authority")
 	got := ClassifyError(err)
-	if !strings.Contains(got, "TLS") {
-		t.Errorf("ClassifyError(TLS) = %q, want 'TLS'", got)
+	if !strings.HasPrefix(got, "TLS/SSL handshake failed.") {
+		t.Errorf("ClassifyError(TLS) = %q, want the TLS sentence", got)
+	}
+	store, file, skip := strings.Index(got, "install ca-certificates"), strings.Index(got, "SSL_CERT_FILE"), strings.Index(got, "GITLAB_MCP_SKIP_TLS_VERIFY=true")
+	if store < 0 || file < 0 || skip < 0 {
+		t.Fatalf("ClassifyError(TLS) = %q, want the CA store, SSL_CERT_FILE and the skip variable named", got)
+	}
+	if store > skip || file > skip {
+		t.Errorf("ClassifyError(TLS) = %q, want the CA store and SSL_CERT_FILE named before turning verification off", got)
 	}
 }
 
