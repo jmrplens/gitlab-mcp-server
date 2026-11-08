@@ -2410,7 +2410,7 @@ jobs:
     # winget-pkgs and of this repository to build the manifests.
     #
     # WINGET_TOKEN is a classic personal access token of the maintainer's
-    # with the scopes public_repo and workflow, set on 2026-11-04, after
+    # with the scopes repo and workflow, set on 2026-11-04, after
     # 3.4.0; the release after 3.4.0 is the first to submit with it, and
     # until it does, the cause below is probable rather than proven. The one
     # set on 2026-08-27 was fine-grained, and GitHub documents that a
@@ -2434,9 +2434,9 @@ jobs:
       # writes upstream's .github/workflows files into the fork, and GitHub
       # refuses that to a token without the scope with HTTP 422 ("refusing
       # to allow a Personal Access Token to create or update workflow ...
-      # without workflow scope"), as it did on 2.7.4. repo covers public_repo
-      # but does not stand in for it here, since it reaches every private
-      # repository of the account as well.
+      # without workflow scope"), as it did on 2.7.4. repo covers public_repo,
+      # and it is the only way to get both: GitHub's form for a classic token
+      # checks repo as soon as workflow is checked.
       #
       # GitHub answers GET /user with a classic token's scopes in
       # X-OAuth-Scopes, and with that header absent or empty for a
@@ -2499,12 +2499,13 @@ jobs:
               $scopes = @(($values -join ',') -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
               if ($scopes.Count -eq 0) {
                 $header = if ($null -eq $values) { 'no X-OAuth-Scopes header' } else { 'an empty X-OAuth-Scopes header' }
-                $problem = "GitHub answered GET /user for WINGET_TOKEN with $header, which means a fine-grained token (or a classic one with no scope at all), and a fine-grained token cannot open the pull request on microsoft/winget-pkgs. Set WINGET_TOKEN to a classic personal access token with the public_repo and workflow scopes."
+                $problem = "GitHub answered GET /user for WINGET_TOKEN with $header, which means a fine-grained token (or a classic one with no scope at all), and a fine-grained token cannot open the pull request on microsoft/winget-pkgs. Set WINGET_TOKEN to a classic personal access token with the workflow scope, which GitHub's form gives with repo."
               } else {
-                $missing = @($needed.Keys | Where-Object { $scopes -notcontains $_ })
+                # repo includes public_repo (and GitHub's form checks it with workflow).
+                $missing = @($needed.Keys | Where-Object { $scopes -notcontains $_ -and -not ($_ -eq 'public_repo' -and $scopes -contains 'repo') })
                 if ($missing.Count -gt 0) {
                   $reasons = @($missing | ForEach-Object { "$_ ($($needed[$_]))" }) -join ' and '
-                  $problem = "WINGET_TOKEN's scopes (X-OAuth-Scopes: $($scopes -join ', ')) lack $reasons. Add the missing scope to it, or set WINGET_TOKEN to a classic personal access token with both public_repo and workflow."
+                  $problem = "WINGET_TOKEN's scopes (X-OAuth-Scopes: $($scopes -join ', ')) lack $reasons. Add the missing scope to it, or set WINGET_TOKEN to a classic personal access token with the workflow scope, which GitHub's form gives with repo."
                 } else {
                   Write-Output "WINGET_TOKEN holds both scopes the job needs (X-OAuth-Scopes: $($scopes -join ', '))."
                 }
