@@ -148,7 +148,8 @@ func TestUpstreamReferences_EachSpellingGitLabResolves_IsFound(t *testing.T) {
 // TestDescription_AnUpstreamReference_FailsAndIsNamed verifies the rule in
 // the gate: a reference in the title or in the body fails the run, its line
 // is listed, and the failure names each reference, the register row to name
-// instead, and how to write an item of another forge so that it passes.
+// instead, how to write an item of another forge so that it passes, and how a
+// Dependabot pull request's description is cut and its run repeated.
 func TestDescription_AnUpstreamReference_FailsAndIsNamed(t *testing.T) {
 	t.Parallel()
 
@@ -161,6 +162,10 @@ func TestDescription_AnUpstreamReference_FailsAndIsNamed(t *testing.T) {
 		"docs/development/upstream-bugs.md",
 		"such as a GitHub issue as\nowner/repo#N or repo#N, is refused too",
 		"write it as its github.com URL, which passes, or name it in words",
+		"A Dependabot pull request fails here when its description copies a\ndependency's release notes, changelog or commit list",
+		"Keep what Dependabot writes outside its <details>\nblocks, delete the blocks",
+		"editing a description starts no run",
+		"    gh pr edit <number> --body-file <file>\n    gh run rerun <run id> --failed\n",
 		"Re-check with: make check-pr-description",
 	); len(absent) > 0 {
 		t.Errorf("output lacks %q:\n%s", absent, output)

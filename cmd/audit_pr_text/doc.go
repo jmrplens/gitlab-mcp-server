@@ -76,6 +76,14 @@
 // message as plain text when it extracts mentions. File content is out of its
 // scope: pages cite upstream items however they need to.
 //
+// A pull request Dependabot opens usually fails the rule, since its
+// description copies each dependency's release notes, changelog and commit
+// list, which name that dependency's own items. Dependabot is not exempt,
+// because those are exactly the references a squash merge would land in
+// main; the failure says how the description is cut before the merge, and
+// that the failed jobs are re-run afterwards, since editing a description
+// starts no run.
+//
 // A branch with no pull request open passes, having no description to land.
 // A gh that is missing, and a description that cannot be read, fail and say
 // so, because a check that cannot read what it judges must not report that

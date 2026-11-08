@@ -324,7 +324,9 @@ how pull request 832 carried one in permanently.
 `
 
 // upstreamFailure is what an upstream reference in the description costs,
-// its %s standing for the references found, one per line (issue 1477).
+// its %s standing for the references found, one per line (issue 1477), and
+// how a Dependabot pull request, whose description copies what names them, is
+// cut before its merge.
 const upstreamFailure = `
 FAIL: the pull request title or body names an item of another project or group the way GitLab resolves it:
 
@@ -343,6 +345,16 @@ write it as its github.com URL, which passes, or name it in words.
 Then edit the description:
 
     gh pr edit <number>
+
+A Dependabot pull request fails here when its description copies a
+dependency's release notes, changelog or commit list, which name the
+dependency's own items. Keep what Dependabot writes outside its <details>
+blocks, delete the blocks, write the rest back and re-run the failed jobs,
+right before the merge: editing a description starts no run, and Dependabot
+can write its description again when it updates the pull request.
+
+    gh pr edit <number> --body-file <file>
+    gh run rerun <run id> --failed
 `
 
 // skipFailureText is what a skip command in the description costs.
