@@ -1442,7 +1442,7 @@ func retiredByTheBump() map[int][]waits.Predicate {
 // UpdateGroupIssueBoardOptions the list switches and MergeRequests has
 // CancelAutoMerge, and from v3.40.1 ListGroupMilestonesOptions spells
 // include_descendants as GitLab does. On v3.30.0 every predicate of those rows
-// held. On the v3.40.3 pin none does, so the entries are gone with the
+// held. From the v3.40.3 pin none does, so the entries are gone with the
 // workarounds they held: no entry names any of the rows and no workaround stands
 // at any of their sites, since each now calls the SDK. One predicate of row 34
 // holds still and is not asked here: ImportStatus keeps CreateAt, deprecated and
@@ -1536,7 +1536,7 @@ type witnessCaller struct {
 // options and wait on client-go like the upload and certificate lists, and
 // the project hook forwarder is called with the struct and verb each hook
 // action sends, which R-PARAM reads in place of its any. The bump stack
-// updates this list, and on the v3.40.3 pin it holds the Terraform state
+// updates this list, and from the v3.40.3 pin it holds the Terraform state
 // lock and unlock too, whose methods take no options either.
 //
 // It reads the report as plain JSON and spells the forms as the report does,

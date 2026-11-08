@@ -1221,7 +1221,7 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 }
 
 // witnessIdentifierArguments is what the witness expects of every integer a
-// handler hands a client-go parameter of type any on v3.40.3: by site,
+// handler hands a client-go parameter of type any on v3.44.0: by site,
 // method and input field, its status and the record's route and
 // placeholder, spelled as the report spells them.
 var witnessIdentifierArguments = map[string]string{
@@ -1237,7 +1237,7 @@ var witnessIdentifierArguments = map[string]string{
 	"jobtokenscope.RemoveProjectAllowlist JobTokenScope.RemoveProjectFromJobScopeAllowList jobtokenscope.RemoveProjectAllowlistInput.ProjectID": "id_only  DELETE /projects/:id/job_token_scope/allowlist/:target_project_id id id",
 }
 
-// witnessSDKNarrowed is what the witness expects client-go v3.40.3 to
+// witnessSDKNarrowed is what the witness expects client-go v3.44.0 to
 // narrow: each method and parameter that takes an int64 where the record
 // says the group's, the project's or the user's ID or path is taken, every
 // one of them called by a handler, answered by a declaration and read from an
@@ -1272,7 +1272,7 @@ type identifiersWitness struct {
 	}
 }
 
-// TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3403
+// TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3440
 // is the witness on the real tree. GitLab takes the ID or the username of a
 // user at GET /users/:id/events, /users/:user_id/status and
 // /users/:user_id/keys, and client-go takes any there. On v3.30.0
@@ -1287,14 +1287,17 @@ type identifiersWitness struct {
 // custom attributes and repository storage moves of a group, a project or a
 // user taking an int64 where the record says an ID or a path, and each is
 // answered by the action that reads a name into its ID before the call. The
-// pin moved from v3.30.0 to v3.40.3 without changing that list; it changes
-// only when client-go widens those parameters, which turns their
-// declarations stale too.
+// pin moved from v3.30.0 to v3.40.3 and then to v3.44.0 without changing
+// that list; it changes only when client-go widens those parameters, which
+// turns their declarations stale too. The two group methods v3.44.0 adds,
+// the Markdown upload and the removal of a project shared with a group, take
+// the group as any, and group.group_upload and group.shared_project_delete
+// hand it the ID or path the caller wrote, so neither adds an integer.
 //
 // It reads the report as plain JSON and spells what it expects, so copied
 // on its own into a tree that has no such section it compiles and fails
 // there, which is the point.
-func TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3403(t *testing.T) {
+func TestRun_Repository_HandsAnIntegerOnlyWhereGitLabTakesAnIDAtClientGoV3440(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
