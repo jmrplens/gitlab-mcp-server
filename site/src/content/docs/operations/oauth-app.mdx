@@ -258,11 +258,11 @@ Every client in the "No" rows still works. OAuth mode accepts a personal access 
 
 GitLab.com's authorization server advertises an RFC 7591 registration endpoint (`/oauth/register`), so a client that supports Dynamic Client Registration (DCR) registers itself without you creating anything. That path does not work with this server, and the reason is worth knowing.
 
-**GitLab built DCR for its own MCP server.** A dynamically registered client is given the `mcp` scope whatever it asks for, and a token with that scope reaches GitLab's built-in MCP endpoint and nothing else. Every action of this server is a REST or GraphQL call, so the server refuses such a token at the door, with `403` and `insufficient_scope`, since it carries neither `read_api` nor `api`.
+**GitLab built DCR for its own MCP server.** A dynamically registered client is given the `mcp` scope whatever it asks for, and a token with that scope reaches GitLab's built-in MCP endpoint and nothing else. Every action of this server is a REST or GraphQL call, so the server refuses such a token at the door, with `403` and `insufficient_scope`, since it carries neither `read_api` nor `api`. The refusal says what to do about it: its body adds that reauthorizing a client that registered itself changes nothing and that the client needs the client ID of the application the resource documentation describes, and its challenge names that page, the one published as `resource_documentation`, as `error_uri`.
 
 So **a pre-registered application with `api` or `read_api` is mandatory**, and its Application ID is configured in each client. A client that cannot be given a static client ID (Zed and JetBrains today) cannot use the OAuth path against GitLab at all, and sends a personal access token as Bearer instead.
 
-GitLab does not implement Client ID Metadata Documents (CIMD) either, the mechanism the MCP authorization specification now prefers over DCR, which it deprecates. It is tracked upstream in [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069).
+GitLab does not implement Client ID Metadata Documents (CIMD) either, the mechanism the MCP authorization specification now prefers over DCR, which it deprecates. It is being built upstream in [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069), and the design under review gives a CIMD client the `mcp` scope as it gives a DCR client, so CIMD will not remove the need for a pre-registered application. A deployment that [admits only its own application](#admitting-only-your-own-application) would refuse a CIMD client in any case, since GitLab creates a separate application for each one.
 
 ## Actions an OAuth access token is not served
 

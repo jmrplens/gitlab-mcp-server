@@ -1479,6 +1479,10 @@ func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
 	defer gitlab.Close()
 
 	srv := oauthServer(t, gitlab.URL)
+	// The page the refusal names for a client that registered itself, the one
+	// that carries the client ID to configure (issue 1592): the same page the
+	// metadata document publishes, read from it rather than written down.
+	page := publishedResourceDocumentation(t, srv)
 
 	// More attempts than the authentication-failure budget allows. If any of
 	// them were charged, the address would be locked out and the status would
@@ -1501,6 +1505,12 @@ func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
 		}
 		if strings.Contains(challenge, `error="invalid_token"`) {
 			t.Errorf("challenge %q tells the client to discard a working credential", challenge)
+		}
+		if !strings.Contains(challenge, `error_uri="`+page+`"`) {
+			t.Errorf("challenge %q does not name the page the document publishes, %q", challenge, page)
+		}
+		if !strings.Contains(got.body, "A client that registered itself with GitLab is granted only GitLab's mcp scope") {
+			t.Errorf("the refusal does not tell a client that registered itself where its client ID goes; got: %s", got.body)
 		}
 	}
 }
