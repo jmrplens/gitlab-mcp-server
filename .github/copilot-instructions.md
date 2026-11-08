@@ -22,6 +22,9 @@ gitlab-mcp-server/
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
 │   ├── audit_doc_tool_names/ # Every `gitlab_*` name the docs mention exists on the surface it claims (make check-doc-tool-names)
+│   ├── audit_doc_links/ # Local links and site links of the documentation resolve, anchors included (make check-doc-links)
+│   ├── audit_pr_text/ # Em dashes a branch adds; what a pull request description may not carry (make check-em-dash, make check-pr-description)
+│   ├── crash_aware_tests/ # The cross-platform unit suite: a Go runtime crash told from a failing test and rerun once
 │   ├── audit_dynamic_aliases/ # Dynamic-toolset alias governance
 │   ├── audit_e2e_coverage/ # What the e2e suite dispatched, and the catalog actions it never reached (make audit-e2e-coverage, make check-e2e-static)
 │   ├── audit_edition_tier/ # Doc-grounded licensing tier vs binary gating
@@ -66,7 +69,7 @@ gitlab-mcp-server/
 │   ├── gen_third_party_notices/ # THIRD_PARTY_NOTICES from the release binaries' build information, the packages they link and the module cache (GoReleaser's sboms, the Dockerfile, make mcpb)
 │   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger
 │   ├── gen_model_results/  # Folds a model evaluation run's shards into the published record
-│   └── internal/           # Helpers shared by the commands (actionrequests, apidocs, auditshared, docgen, mcpsurface, sdkroutes)
+│   └── internal/           # Helpers shared by the commands (actionrequests, apidocs, auditshared, committext, docgen, docwalk, mcpsurface, sdkroutes)
 ├── internal/
 │   ├── config/             # Configuration loading (dotenv files, flags, env vars, HTTP env overlay)
 │   ├── edition/            # Licensing tier model (Free/Premium/Ultimate)

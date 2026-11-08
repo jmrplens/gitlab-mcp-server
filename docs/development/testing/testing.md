@@ -189,7 +189,7 @@
 | events                  |         67 |          2 |   100.0% |         2 |
 | externalstatuschecks    |         66 |          3 |   100.0% |         8 |
 | featureflags            |         53 |          5 |   100.0% |         5 |
-| features                |         22 |          2 |    97.7% |         4 |
+| features                |         22 |          2 |   100.0% |         4 |
 | ffuserlists             |         34 |          3 |   100.0% |         5 |
 | files                   |        101 |          2 |   100.0% |         8 |
 | freezeperiods           |         45 |          3 |   100.0% |         5 |
@@ -346,7 +346,7 @@
 | cmd/audit_dco                             |   100.0% |
 | cmd/audit_dead_consts                     |   100.0% |
 | cmd/audit_discovery_completeness          |   100.0% |
-| cmd/audit_doc_links                       |      n/a |
+| cmd/audit_doc_links                       |   100.0% |
 | cmd/audit_doc_tool_names                  |   100.0% |
 | cmd/audit_dynamic_aliases                 |   100.0% |
 | cmd/audit_e2e_coverage                    |   100.0% |
@@ -362,7 +362,7 @@
 | cmd/audit_meta_descriptions               |   100.0% |
 | cmd/audit_metrics                         |   100.0% |
 | cmd/audit_plugin_manifests                |   100.0% |
-| cmd/audit_pr_text                         |      n/a |
+| cmd/audit_pr_text                         |   100.0% |
 | cmd/audit_readonly_graphql                |   100.0% |
 | cmd/audit_sdk_context                     |   100.0% |
 | cmd/audit_site_headers                    |   100.0% |
@@ -376,7 +376,7 @@
 | cmd/audit_tokens                          |   100.0% |
 | cmd/audit_vex                             |   100.0% |
 | cmd/bench_resources                       |   100.0% |
-| cmd/crash_aware_tests                     |      n/a |
+| cmd/crash_aware_tests                     |   100.0% |
 | cmd/format_md_tables                      |    98.2% |
 | cmd/fuzz_targets                          |   100.0% |
 | cmd/gen_action_catalog_manifest           |   100.0% |
@@ -405,7 +405,7 @@
 | cmd/internal/auditshared                  |   100.0% |
 | cmd/internal/committext                   |      n/a |
 | cmd/internal/docgen                       |   100.0% |
-| cmd/internal/docwalk                      |      n/a |
+| cmd/internal/docwalk                      |   100.0% |
 | cmd/internal/fileheader                   |      n/a |
 | cmd/internal/golist                       |   100.0% |
 | cmd/internal/goprogram                    |   100.0% |
@@ -529,7 +529,7 @@
 | events                  |   100.0% |
 | externalstatuschecks    |   100.0% |
 | featureflags            |   100.0% |
-| features                |    97.7% |
+| features                |   100.0% |
 | ffuserlists             |   100.0% |
 | files                   |   100.0% |
 | freezeperiods           |   100.0% |
