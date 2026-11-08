@@ -9,7 +9,6 @@ package httpe2e
 
 import (
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
 	"testing"
@@ -63,10 +62,9 @@ func guideApacheModules(t *testing.T) string {
 }
 
 // guideApache is the guide's VirtualHost, served on the port and with the
-// upstream a case chooses and any further edits a control makes to it. Its
-// certificate lines are served as printed: the case mounts its certificate
-// where they read it.
-func guideApache(cert *publicCert, extra ...edit) documentedProxy {
+// upstream a case chooses. Its certificate lines are served as printed: the
+// case mounts its certificate where they read it.
+func guideApache(cert *publicCert) documentedProxy {
 	return documentedProxy{
 		name:  "apache",
 		roots: cert.pool,
@@ -75,11 +73,10 @@ func guideApache(cert *publicCert, extra ...edit) documentedProxy {
 		start: func(t *testing.T, upstream int) (string, int) {
 			t.Helper()
 			port := freePort(t)
-			edits := append([]edit{
-				{old: "<VirtualHost *:443>", new: fmt.Sprintf("<VirtualHost *:%d>", port), count: 1},
-				{old: "http://127.0.0.1:8080/", new: fmt.Sprintf("http://127.0.0.1:%d/", upstream), count: 2},
-			}, extra...)
-			block := guideBlock(t, remoteDeploymentPage, "apache", edits...)
+			block := guideBlock(t, remoteDeploymentPage, "apache",
+				edit{old: "<VirtualHost *:443>", new: fmt.Sprintf("<VirtualHost *:%d>", port), count: 1},
+				edit{old: "http://127.0.0.1:8080/", new: fmt.Sprintf("http://127.0.0.1:%d/", upstream), count: 2},
+			)
 
 			dir := containerDir(t)
 			name := fmt.Sprintf("gitlab-mcp-httpe2e-guide-apache-%d", port)
@@ -94,20 +91,15 @@ func guideApache(cert *publicCert, extra ...edit) documentedProxy {
 }
 
 // TestProxyGuide_Apache serves the guide's VirtualHost under a base
-// configuration that loads only the modules the guide names, holds it to the
-// requirement table with the X-Forwarded-For pairing mod_proxy_http's own
-// header gives it, and checks what the guide says flushpackets=on is for.
+// configuration that loads only the modules the guide names, and holds it to
+// the requirement table with the X-Forwarded-For pairing mod_proxy_http's own
+// header gives it.
+//
+// The stream row is held on the block as printed, which sets no flush option:
+// the guide used to set flushpackets=on and say the stream needed it, a copy
+// without it streamed just as well, and mod_proxy_http never reads it, so the
+// guide dropped it and says why.
 func TestProxyGuide_Apache(t *testing.T) {
 	t.Parallel()
-	cert := newPublicCert(t)
-
-	assertProxyRequirements(t, guideApache(cert))
-
-	t.Run("without flushpackets the stream still flows", func(t *testing.T) {
-		t.Parallel()
-		gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
-		unflushed := guideApache(cert, edit{old: " flushpackets=on", new: "", count: 1})
-		through := unflushed.behind(t, "--gitlab-url="+gitlab.url, "--public-url=https://"+publicHost).from(t, clientForHeaders)
-		assertStreamIsNotHeld(t, through, map[string]string{"PRIVATE-TOKEN": "glpat-unflushed"})
-	})
+	assertProxyRequirements(t, guideApache(newPublicCert(t)))
 }

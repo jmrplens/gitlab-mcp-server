@@ -20,9 +20,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,629 |
+| Total test functions                                  | 23,630 |
 | Unit test functions                                   | 21,898 |
-| E2E test functions                                    |  1,731 |
+| E2E test functions                                    |  1,732 |
 | cmd test functions                                    |  5,886 |
 | Test files (internal/)                                |    760 |
 | Test files (cmd/)                                     |    480 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,745 | 58.2% |
 | `TestFunc` (no underscore)             |    901 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,983 | 38.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,984 | 38.0% |
 
 ## Test Distribution
 
@@ -50,9 +50,9 @@
 | Core packages           |          4,253 |        263 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,306 |        480 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,731 |        449 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| E2E integration         |          1,732 |        449 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,886 |        480 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,629** |  **1,689** |                                                                                                 |
+| **Total**               |     **23,630** |  **1,689** |                                                                                                 |
 
 ### Core Packages
 

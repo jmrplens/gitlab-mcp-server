@@ -763,20 +763,22 @@ servicio.
     SSLCertificateKeyFile /etc/letsencrypt/live/mcp.example.com/privkey.pem
 
     ProxyPreserveHost On
-    ProxyPass        / http://127.0.0.1:8080/ flushpackets=on timeout=3600 connectiontimeout=10
+    ProxyPass        / http://127.0.0.1:8080/ timeout=3600 connectiontimeout=10
     ProxyPassReverse / http://127.0.0.1:8080/
 
     RequestHeader set X-Forwarded-Proto "https"
 </VirtualHost>
 ```
 
-`flushpackets=on` envía cada trozo del cuerpo de la respuesta en cuanto lo lee
-del servidor. Sin ella `mod_proxy_http` vacía igualmente cada vez que el
-servidor no tiene nada más que enviar en ese momento, que es cada evento que
-escribe un stream tranquilo, así que httpd 2.4 entrega el stream de las dos
-formas; la opción hace de eso un ajuste y no una cuestión de tiempos.
-`timeout=3600` es el timeout de lectura de esta ruta, distinto del `Timeout`
-global del servidor.
+El bloque no pone ninguna opción de vaciado, y el stream no la necesita:
+`mod_proxy_http` pasa al cliente lo que ha leído cada vez que su siguiente
+lectura del servidor tendría que esperar, que es tras cada evento que escribe
+un stream, así que httpd 2.4 entrega cada evento en cuanto se escribe.
+`flushpackets=on` no cambiaría eso: la
+[referencia de `ProxyPass`](https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass)
+dice que solo tiene efecto en `mod_proxy_ajp` y `mod_proxy_fcgi`, y
+`mod_proxy_http` nunca la lee. `timeout=3600` es el timeout de lectura de esta
+ruta, distinto del `Timeout` global del servidor.
 
 Deja la autenticación al servidor MCP, así que nada de esto debería estar tras
 `Require valid-user`; Apache reenvía `Authorization` al upstream cuando no la

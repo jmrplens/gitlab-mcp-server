@@ -35,6 +35,14 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 1}},
 		},
 		{
+			// micromark, which renders the site, ends the language only at a
+			// space or a tab, and the site check refuses a fence holding any
+			// other white space rather than read it differently.
+			name: "a nonbreaking space after the language is part of it, as micromark reads it",
+			src:  "```nginx e2e=nginx\nserver {}\n```\n",
+			want: []Block{{Lang: "nginx e2e=nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
 			name: "a fence with no key",
 			src:  "```bash\necho hi\n```\n",
 			want: []Block{{Lang: "bash", Body: "echo hi\n", Line: 1}},

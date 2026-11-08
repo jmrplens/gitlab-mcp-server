@@ -739,19 +739,21 @@ same service.
     SSLCertificateKeyFile /etc/letsencrypt/live/mcp.example.com/privkey.pem
 
     ProxyPreserveHost On
-    ProxyPass        / http://127.0.0.1:8080/ flushpackets=on timeout=3600 connectiontimeout=10
+    ProxyPass        / http://127.0.0.1:8080/ timeout=3600 connectiontimeout=10
     ProxyPassReverse / http://127.0.0.1:8080/
 
     RequestHeader set X-Forwarded-Proto "https"
 </VirtualHost>
 ```
 
-`flushpackets=on` sends each piece of the response body on as soon as it is
-read from the server. Without it `mod_proxy_http` still flushes whenever the
-server has nothing more to send at once, which is every event a quiet stream
-writes, so httpd 2.4 delivers the stream either way; the option makes that a
-setting rather than a matter of timing. `timeout=3600` is this route's read
-timeout, separate from the server-wide `Timeout`.
+The block sets no flush option, and the stream needs none: `mod_proxy_http`
+passes what it has read on to the client whenever its next read from the
+server would wait, which is after every event a stream writes, so httpd 2.4
+delivers each event as it is written. `flushpackets=on` would not change that:
+the [`ProxyPass` reference](https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass)
+says it is in effect only for `mod_proxy_ajp` and `mod_proxy_fcgi`, and
+`mod_proxy_http` never reads it. `timeout=3600` is this route's read timeout,
+separate from the server-wide `Timeout`.
 
 Leave authentication to the MCP server, so nothing here should sit behind
 `Require valid-user`; Apache forwards `Authorization` upstream when it is not

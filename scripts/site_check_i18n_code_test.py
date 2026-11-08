@@ -257,6 +257,10 @@ class CheckI18nCodeTest(unittest.TestCase):
         self.blocks("text", "~~~\nA\n", "~~~\nB\n")
         self.assert_refused("the text block differs from English outside comments", "en 10: A", "es 10: B")
 
+    def test_a_tab_separates_a_fence_language_from_its_options_as_a_space_does(self):
+        self.blocks("nginx\te2e=nginx", "server {}\n", "server {}\n", es_info="nginx e2e=nginx")
+        self.assert_passes()
+
     def test_a_spanish_page_with_no_english_twin_is_left_to_the_parity_check(self):
         self.blocks("bash", "make\n", "make\n")
         write(os.path.join(self.site, "src", "content", "docs", "es", "orphan.mdx"), page(block("bash", "otra cosa\n")))
@@ -420,6 +424,29 @@ class CheckI18nCodeTest(unittest.TestCase):
     def test_other_fence_options_must_agree(self):
         self.blocks('bash {2} title="x"', "a\nb\n", "a\nb\n", es_info='bash {1} title="y"')
         self.assert_refused("the fence options differ", "en: {2}", "es: {1}")
+
+    def test_white_space_in_a_fence_other_than_a_space_or_a_tab_is_refused(self):
+        # micromark, the parser that renders the site, ends a fence's language
+        # only at a space or a tab, so a nonbreaking space folds the options
+        # into the language: the page shows an unknown language, and
+        # internal/testutil/docblocks, which reads fences as micromark does,
+        # finds no e2e= key on the fence. Splitting on any white space, this
+        # check used to read the language and the key and pass the page.
+        for name, char in [("nonbreaking space", " "), ("narrow nonbreaking space", " "), ("ideographic space", "　")]:
+            with self.subTest(char=name):
+                self.blocks("nginx" + char + "e2e=nginx", "server {}\n", "server {}\n")
+                self.assert_refused(
+                    "\n  page.mdx:8: the fence holds U+%04X" % ord(char),
+                    "\n  es/page.mdx:8: the fence holds U+%04X" % ord(char),
+                    "only at a space or a tab",
+                )
+        with self.subTest(where="inside a title"):
+            self.blocks('bash title="a b"', "make\n", "make\n")
+            self.assert_refused("\n  page.mdx:8: the fence holds U+00A0", "\n  es/page.mdx:8: the fence holds U+00A0")
+        with self.subTest(where="the Spanish fence only"):
+            self.blocks("nginx e2e=nginx", "server {}\n", "server {}\n", es_info="nginx e2e=nginx")
+            output = self.assert_refused("\n  es/page.mdx:8: the fence holds U+00A0")
+            self.assertNotIn("\n  page.mdx:8: the fence holds", output)
 
     def test_language_must_agree(self):
         self.blocks("bash", "make\n", "make\n", es_info="sh")

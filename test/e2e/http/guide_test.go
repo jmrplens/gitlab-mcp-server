@@ -320,21 +320,44 @@ func runContainer(t *testing.T, name, image string, mounts []string, args ...str
 	defer cancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
 	if cid, readErr := os.ReadFile(cidFile); readErr == nil && len(cid) > 0 { //#nosec G304 -- the file docker run was just told to write, in this test's own directory
-		id := string(cid)
-		t.Cleanup(func() {
-			rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer rmCancel()
-			// Logged rather than failed, so a daemon slow to remove a
-			// container does not fail a case that passed; with the name,
-			// because the container a failed removal leaves behind can be the
-			// quick tunnel's, and its public address stays open until it is
-			// removed.
-			if rmOut, rmErr := exec.CommandContext(rmCtx, "docker", "rm", "-f", id).CombinedOutput(); rmErr != nil {
-				t.Logf("docker rm -f %s (%s): %v: %s; remove it by hand", id, name, rmErr, strings.TrimSpace(string(rmOut)))
-			}
-		})
+		removeWhenDone(t, string(cid), name, dockerRemove)
 	}
 	return out, err
+}
+
+// cleanupReporter is what removeWhenDone needs of a test: a cleanup to
+// register and a failure to report.
+type cleanupReporter interface {
+	Helper()
+	Cleanup(f func())
+	Errorf(format string, args ...any)
+}
+
+// dockerRemove removes the container with the given ID, returning what
+// docker printed.
+func dockerRemove(ctx context.Context, id string) ([]byte, error) {
+	return exec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput()
+}
+
+// removeWhenDone removes the container with the given ID when the test ends,
+// with remove, and fails the test when it cannot.
+//
+// Failed rather than logged: a container left behind holds its port on the
+// host network for the next run, the quick tunnel's keeps a public
+// trycloudflare.com address open until it is removed, and only a failed run
+// makes test-e2e-cloudflare-tunnel remove what the case named, while
+// test-e2e-http's testdox output prints no log of a case that passed. The
+// failure names the container, so it can be removed by hand.
+func removeWhenDone(t cleanupReporter, id, name string, remove func(ctx context.Context, id string) ([]byte, error)) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if out, err := remove(ctx, id); err != nil {
+			t.Errorf("removing the container %s (%.12s) the case started: %v: %s; it is still on the host: docker rm -f %s",
+				name, id, err, strings.TrimSpace(string(out)), name)
+		}
+	})
 }
 
 // containerLogs returns what a container has written, for a failure message.
@@ -951,6 +974,22 @@ var errStreamHeld = errors.New("the acknowledgement did not arrive while the str
 // answered with.
 const listenAcknowledged = "notifications/subscriptions/acknowledged"
 
+// acknowledgesListen reports whether a data frame is the JSON-RPC
+// notification acknowledging a listen. The method is compared, not the
+// frame's text: another notification can carry the same words in its
+// params, and taking it for the answer would pass a stream whose
+// acknowledgement never crossed the proxy.
+func acknowledgesListen(frame string) bool {
+	var message struct {
+		JSONRPC string `json:"jsonrpc"`
+		Method  string `json:"method"`
+	}
+	if err := json.Unmarshal([]byte(frame), &message); err != nil {
+		return false
+	}
+	return message.JSONRPC == "2.0" && message.Method == listenAcknowledged
+}
+
 // listenAcknowledgement opens a listen through srv and returns the data frame
 // that acknowledges it, or errStreamHeld when no event at all arrives within
 // wait.
@@ -1017,7 +1056,7 @@ func listenAcknowledgement(t *testing.T, srv *server, headers map[string]string,
 		select {
 		case frame, open := <-stream.frames:
 			switch {
-			case open && strings.Contains(frame, listenAcknowledged):
+			case open && acknowledgesListen(frame):
 				return frame, nil
 			case open:
 				passed = append(passed, truncate(frame))
@@ -1218,8 +1257,15 @@ func TestRunContainer_RunRefused_RemovesTheContainerItCreatedAndNoOther(t *testi
 		// Not parallel: its cleanups have to have run when it returns, which
 		// is what the check below reads.
 		t.Run("the case that ran it", func(t *testing.T) {
-			if out, err := runContainer(t, name, nginxImage, []string{file + ":/etc:ro"}); err == nil {
+			out, err := runContainer(t, name, nginxImage, []string{file + ":/etc:ro"})
+			if err == nil {
 				t.Fatalf("docker run with a file over /etc started a container, and this case needs one whose start is refused:\n%s", out)
+			}
+			// Read before this case's cleanups run: a run Docker refused
+			// before it created anything leaves the check below nothing to
+			// find, and it would pass with no cleanup exercised.
+			if containerID(t, name) == "" {
+				t.Fatalf("docker run with a file over /etc created no container (%v), and this case needs one created and then refused its start:\n%s", err, out)
 			}
 		})
 		if id := containerID(t, name); id != "" {
@@ -1248,31 +1294,120 @@ func TestRunContainer_RunRefused_RemovesTheContainerItCreatedAndNoOther(t *testi
 	})
 }
 
+// TestRemoveWhenDone_RemovalFails_FailsTheCase holds runContainer's cleanup
+// to failing the case whose container it could not remove.
+//
+// It used to log the failure and let the case pass, so a run of
+// test-e2e-cloudflare-tunnel whose cleanup could not remove the quick
+// tunnel's container ended with status 0. The target removes what the case
+// named only after a run that failed, so the tunnel's public address stayed
+// open with nothing on the screen but a log line.
+func TestRemoveWhenDone_RemovalFails_FailsTheCase(t *testing.T) {
+	t.Parallel()
+	const (
+		id   = "4f1c0de"
+		name = "gitlab-mcp-httpe2e-guide-cloudflared-40000"
+	)
+	tests := []struct {
+		name      string
+		removeErr error
+		wantFail  bool
+	}{
+		{name: "a removal Docker refuses", removeErr: errors.New("exit status 1"), wantFail: true},
+		{name: "a removal Docker makes", removeErr: nil, wantFail: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			reporter := &recordingReporter{}
+			var removed []string
+			removeWhenDone(reporter, id, name, func(_ context.Context, got string) ([]byte, error) {
+				removed = append(removed, got)
+				return []byte("Error response from daemon: could not kill container"), tt.removeErr
+			})
+			if len(removed) != 0 {
+				t.Fatalf("the container was removed before the test ended: %v", removed)
+			}
+			reporter.runCleanups()
+			if !slices.Equal(removed, []string{id}) {
+				t.Errorf("removed %v, want the run's container by its ID, %s, once", removed, id)
+			}
+			switch {
+			case tt.wantFail && len(reporter.failures) != 1:
+				t.Errorf("failures = %q, want one: a container the cleanup could not remove fails the case", reporter.failures)
+			case tt.wantFail && !strings.Contains(reporter.failures[0], "docker rm -f "+name):
+				t.Errorf("failure = %q, want it to name the command that removes %s by hand", reporter.failures[0], name)
+			case !tt.wantFail && len(reporter.failures) != 0:
+				t.Errorf("failures = %q, want none for a container that was removed", reporter.failures)
+			}
+		})
+	}
+}
+
+// recordingReporter is a cleanupReporter that keeps its cleanups and
+// failures for the test to read.
+type recordingReporter struct {
+	cleanups []func()
+	failures []string
+}
+
+func (r *recordingReporter) Helper() {}
+
+func (r *recordingReporter) Cleanup(f func()) { r.cleanups = append(r.cleanups, f) }
+
+func (r *recordingReporter) Errorf(format string, args ...any) {
+	r.failures = append(r.failures, fmt.Sprintf(format, args...))
+}
+
+// runCleanups runs the cleanups in the order testing.T runs them, the last
+// registered first.
+func (r *recordingReporter) runCleanups() {
+	for _, f := range slices.Backward(r.cleanups) {
+		f()
+	}
+}
+
 // scratchContainerName is a container name no other case and no other run
 // picks.
 func scratchContainerName(kind string) string {
 	return "gitlab-mcp-httpe2e-scratch-" + kind + "-" + strings.ToLower(rand.Text())
 }
 
-// containerID returns the ID of the container named name, or "" when there is
-// none.
+// containerID returns the ID of the container named name, or "" when Docker
+// says there is none. A Docker that cannot answer fails the test, so a failed
+// question is never read as a container that is gone: docker container
+// inspect fails the same way for both, and docker ps answers an empty list
+// for the one and fails only for the other.
 func containerID(t *testing.T, name string) string {
 	t.Helper()
-	out, err := exec.CommandContext(t.Context(), "docker", "container", "inspect", "-f", "{{.Id}}", name).Output()
+	filter := "name=" + name
+	out, err := exec.CommandContext(t.Context(), "docker", "ps", "--all", "--no-trunc",
+		"--filter", filter, "--format", "{{.ID}} {{.Names}}").Output()
 	if err != nil {
-		return ""
+		var stderr []byte
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+			stderr = exit.Stderr
+		}
+		t.Fatalf("asking Docker for the container named %s: %v: %s", name, err, strings.TrimSpace(string(stderr)))
 	}
-	return strings.TrimSpace(string(out))
+	// The filter matches part of a name, so the name is compared here.
+	for line := range strings.Lines(string(out)) {
+		id, names, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if slices.Contains(strings.Split(names, ","), name) {
+			return id
+		}
+	}
+	return ""
 }
 
-// removeContainer removes the container with the given ID, logging rather
-// than failing when Docker cannot.
+// removeContainer removes the container with the given ID, failing the test
+// when Docker cannot, as removeWhenDone does.
 func removeContainer(t *testing.T, id string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput(); err != nil {
-		t.Logf("docker rm -f %s: %v: %s; remove it by hand", id, err, strings.TrimSpace(string(out)))
+	if out, err := dockerRemove(ctx, id); err != nil {
+		t.Errorf("docker rm -f %s: %v: %s; it is still on the host", id, err, strings.TrimSpace(string(out)))
 	}
 }
 
@@ -1284,12 +1419,15 @@ func removeContainer(t *testing.T, id string) {
 // subscription cases), and a reader that took the first frame for the answer
 // failed a stream that had crossed the proxy at once, as a run of the LAN
 // case did. A stream that carries events and never the acknowledgement is
-// not one the proxy held, so it is not reported as held either.
+// not one the proxy held, so it is not reported as held either. A frame is the
+// acknowledgement by its method: one that only quotes the method's name in its
+// params used to be taken for it.
 func TestListenAcknowledgement_EventsBeforeIt_ArePassedOver(t *testing.T) {
 	t.Parallel()
 	const (
 		listChanged  = `{"jsonrpc":"2.0","method":"notifications/resources/list_changed"}`
 		acknowledged = `{"jsonrpc":"2.0","method":"notifications/subscriptions/acknowledged","params":{}}`
+		quoting      = `{"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info","data":"notifications/subscriptions/acknowledged"}}`
 	)
 	tests := []struct {
 		name   string
@@ -1301,6 +1439,8 @@ func TestListenAcknowledgement_EventsBeforeIt_ArePassedOver(t *testing.T) {
 		{name: "the acknowledgement alone", frames: []string{acknowledged}, want: acknowledged},
 		{name: "no event while the stream is open", held: true},
 		{name: "events and never the acknowledgement", frames: []string{listChanged}},
+		{name: "a notification quoting the method, then the acknowledgement", frames: []string{quoting, acknowledged}, want: acknowledged},
+		{name: "a notification quoting the method and never the acknowledgement", frames: []string{quoting}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -144,9 +144,12 @@ func closes(line, fence string) bool {
 
 // fenceInfo reads a fence's info string into a block with no body yet.
 //
-// The language ends at the first space or tab, as CommonMark ends an info
-// string's first word and check-i18n-code.mjs splits it, so a tab after the
-// language does not fold the options into it.
+// The language ends at the first space or tab, as micromark, which renders
+// the site, ends an info string's first word, so a tab after the language
+// does not fold the options into it and a nonbreaking space does.
+// check-i18n-code.mjs splits the same way and refuses a fence holding any
+// other white space, so a key such a fence hides fails the site check before
+// a test asks for it.
 func fenceInfo(info string, line int) (Block, error) {
 	options := strings.TrimLeftFunc(info, func(r rune) bool { return r != ' ' && r != '\t' })
 	block := Block{Lang: info[:len(info)-len(options)], Info: strings.TrimSpace(options), Line: line}
