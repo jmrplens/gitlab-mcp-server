@@ -5,14 +5,26 @@
 
 // file_utils_unix.go opens caller-supplied local paths without following a
 // symlink at the leaf, which is the containment the surrounding checks in
-// file_utils.go describe but cannot enforce on their own.
+// file_utils.go describe but cannot enforce on their own, and refuses an
+// import archive whose permission bits let somebody else write it.
 
 package toolutil
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 )
+
+// refuseWritableArchive returns canonicalPath, or refuses an import archive
+// that its group or the world may write, since anybody it lets in could replace
+// the archive's contents before the import reads them.
+func refuseWritableArchive(canonicalPath string, info os.FileInfo) (string, error) {
+	if info.Mode().Perm()&0o022 != 0 {
+		return "", fmt.Errorf("archive %s must not be group/world-writable", canonicalPath)
+	}
+	return canonicalPath, nil
+}
 
 // openLeafNoFollow opens path for reading and refuses a symlink at the leaf.
 //

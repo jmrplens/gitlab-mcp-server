@@ -20,7 +20,7 @@ import (
 // because mintty on Windows is not a character device and a double-click there
 // is exactly the case this exists for.
 func isInteractiveTerminal() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
+	return isTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
 }
 
 // needsFirstRunGuidance reports whether a start is somebody running stdio mode
@@ -37,10 +37,17 @@ func needsFirstRunGuidance(useHTTP bool, interactive func() bool, getenv func(st
 		(getenv("GITLAB_TOKEN") == "" || getenv("GITLAB_URL") == "")
 }
 
-// isCygwinTerminal is isatty's Cygwin test, held as a variable because it is
-// false on every platform but Windows, so the half of the guard that answers
-// for mintty can only be driven there or through this seam.
-var isCygwinTerminal = isatty.IsCygwinTerminal
+// isTerminal and isCygwinTerminal are isatty's two terminal tests, held as
+// variables so every platform's tests can answer them. A test can hand the
+// process a terminal only on Linux, through a pseudo-terminal, so elsewhere the
+// first test was never true and main's guard never let the screen through
+// (issue 1212). The Cygwin test is false on every platform but Windows, so the
+// half of the guard that answers for mintty can only be driven there or
+// through its seam.
+var (
+	isTerminal       = isatty.IsTerminal
+	isCygwinTerminal = isatty.IsCygwinTerminal
+)
 
 // firstRunGuidance explains what this program is to somebody who has started it
 // by hand, and waits before returning.

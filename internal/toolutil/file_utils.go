@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -65,6 +64,17 @@ var (
 	statResolved         = os.Stat
 	openResolved         = openLeafNoFollow
 	evalAncestorSymlinks = filepath.EvalSymlinks
+)
+
+// workingDir and absPath are os.Getwd and filepath.Abs, which fail when the
+// process's working directory cannot be read. A test can arrange that only on
+// Linux, by removing the directory under the process: Windows will not remove
+// it, and macOS still answers from its name cache. They are package variables
+// so that every platform's tests take the branches that refuse a relative path
+// then (issue 1212).
+var (
+	workingDir = os.Getwd
+	absPath    = filepath.Abs
 )
 
 // localFilesystemAllowed reports whether tool handlers may name paths on the
@@ -241,7 +251,7 @@ func CanonicalLocalFilePath(path string) (string, error) {
 	if err := requireLocalFilesystemAccess("file_path", "content_base64"); err != nil {
 		return "", err
 	}
-	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	absolutePath, err := absPath(filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("resolve file path: %w", err)
 	}
@@ -325,7 +335,7 @@ func canonicalDownloadOutputPath(path string) (string, error) {
 	if err := requireLocalFilesystemAccess("output_path", ""); err != nil {
 		return "", err
 	}
-	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	absolutePath, err := absPath(filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("resolve output path: %w", err)
 	}
@@ -394,7 +404,8 @@ func outsideAllowedDirsError(kind, canonicalPath, envName string) error {
 // CanonicalImportArchivePath validates a local GitLab export archive path and
 // returns the canonical path resolved through symlinks. Archives must be regular
 // .tar.gz files under the current working directory, the OS temporary directory,
-// or a directory listed in GITLAB_MCP_ALLOWED_IMPORT_DIRS.
+// or a directory listed in GITLAB_MCP_ALLOWED_IMPORT_DIRS, and on Unix neither
+// their group nor the world may write them.
 func CanonicalImportArchivePath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("archive path is required")
@@ -405,7 +416,7 @@ func CanonicalImportArchivePath(path string) (string, error) {
 		return "", err
 	}
 
-	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	absolutePath, err := absPath(filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("resolve archive path: %w", err)
 	}
@@ -424,23 +435,14 @@ func CanonicalImportArchivePath(path string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("archive %s is not a regular file", canonicalPath)
 	}
-	if archiveHasUnsafePermissions(runtime.GOOS, info) {
-		return "", fmt.Errorf("archive %s must not be group/world-writable", canonicalPath)
-	}
 
 	if !pathWithinAllowedImportDirs(canonicalPath) {
 		return "", fmt.Errorf("archive %s is outside allowed import directories; use the current working directory, the OS temp directory, or set %s", canonicalPath, ImportArchiveAllowlistEnv)
 	}
-	return canonicalPath, nil
-}
-
-// archiveHasUnsafePermissions reports whether an archive is group or world
-// writable, on an operating system whose permission bits say so. goos is
-// runtime.GOOS in the one caller, and a parameter so the Windows answer, where
-// the bits Go reports are synthesized and carry no such meaning, can be asked
-// on any host.
-func archiveHasUnsafePermissions(goos string, info os.FileInfo) bool {
-	return goos != "windows" && info.Mode().Perm()&0o022 != 0
+	// Last, so an archive outside the roots is refused without a word about
+	// its permissions, and in the platform halves, because only a Unix mode
+	// says who else may write the file (issue 1212).
+	return refuseWritableArchive(canonicalPath, info)
 }
 
 func pathWithinAllowedImportDirs(canonicalPath string) bool {
@@ -488,7 +490,7 @@ func allowedLocalDirs(setting string) []string {
 		configured bool
 	}
 	dirs := []dirEntry{}
-	if cwd, err := os.Getwd(); err == nil && filepath.Dir(cwd) != cwd && !skipHomeAsImplicitRoot(cwd) {
+	if cwd, err := workingDir(); err == nil && filepath.Dir(cwd) != cwd && !skipHomeAsImplicitRoot(cwd) {
 		dirs = append(dirs, dirEntry{path: cwd})
 	}
 	dirs = append(dirs, dirEntry{path: os.TempDir()})
@@ -564,7 +566,7 @@ func canonicalDirPath(dir string) (string, error) {
 	if dir == "" {
 		return "", errors.New("empty directory")
 	}
-	absoluteDir, err := filepath.Abs(filepath.Clean(dir))
+	absoluteDir, err := absPath(filepath.Clean(dir))
 	if err != nil {
 		return "", err
 	}
