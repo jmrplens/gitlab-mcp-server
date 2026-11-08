@@ -200,10 +200,11 @@ func TestCheck_EveryBrokenLink_IsReportedAtOnce(t *testing.T) {
 	t.Parallel()
 
 	code, output := checkLinks(t, site+"/nope/", site+"/configuration/#nope", site+"/llms-nope.txt")
-	for _, want := range []string{"no site page serves /nope", "no Starlight anchor #nope", "no file the site serves /llms-nope.txt"} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output lacks %q:\n%s", want, output)
-		}
+	reported := strings.Contains(output, "no site page serves /nope") &&
+		strings.Contains(output, "no Starlight anchor #nope") &&
+		strings.Contains(output, "no file the site serves /llms-nope.txt")
+	if !reported {
+		t.Errorf("output does not report all three broken links:\n%s", output)
 	}
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)

@@ -75,9 +75,11 @@ func TestFiles_BelowARoot_LeavesOutWhatIsNotTheRepositorysDocumentation(t *testi
 
 	root := t.TempDir()
 	plant(t, root, "kept.md", "")
-	for _, name := range []string{"node_modules/pkg/README.md", "dist/modeleval/run.md", "plan/draft.md", ".cache/page.md", "site/dist/page.md"} {
-		plant(t, root, name, "")
-	}
+	plant(t, root, "node_modules/pkg/README.md", "")
+	plant(t, root, "dist/modeleval/run.md", "")
+	plant(t, root, "plan/draft.md", "")
+	plant(t, root, ".cache/page.md", "")
+	plant(t, root, "site/dist/page.md", "")
 	plant(t, root, "worktree/.git", "gitdir: /elsewhere/.git/worktrees/one")
 	plant(t, root, "worktree/copy.md", "")
 	files, err := Files([]string{root})
