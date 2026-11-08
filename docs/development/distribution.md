@@ -256,15 +256,15 @@ manifests point at the release assets themselves. The `make` targets run the
 same scripts by hand, and each package target takes the directory of release
 binaries as a variable (`NPM_BINARIES`, `PYPI_BINARIES`, `NUGET_BINARIES`).
 
-| Channel  | Assemble                                    | Validate                                                                                                  | Publish                                                                                                 | Release job    |
-| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------- |
-| npm      | `make gen-npm` (`scripts/build-npm.mjs`)    | `make validate-npm` in a `node:24` container, `make validate-npm-local` on a runner                       | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand                         | `npm`          |
-| PyPI     | `make gen-pypi` (`scripts/build_pypi.py`)   | `make validate-pypi` in a `python:3.14-slim` container, `make validate-pypi-local` on a runner            | `scripts/publish-pypi.sh --trusted-publishing`; `make publish-pypi-dry` and `make publish-pypi` by hand | `pypi`         |
-| NuGet    | `make gen-nuget` (`scripts/build_nuget.py`) | `make validate-nuget` in the .NET SDK container pinned by digest, `make validate-nuget-local` on a runner | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand                   | `nuget`        |
-| Homebrew | `scripts/update-homebrew-tap.sh`            | The script's `--dry-run`, in a rehearsal                                                                  | The same script pushes the formula to `jmrplens/homebrew-tap`                                           | `homebrew`     |
-| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                      | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork               | `winget`       |
-| Registry | `scripts/update-server-json-sha.sh`         | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact             | `mcp-publisher publish`                                                                                 | `mcp-registry` |
-| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                 | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done           | none           |
+| Channel  | Assemble                                    | Validate                                                                                                  | Publish                                                                                                                       | Release job    |
+| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| npm      | `make gen-npm` (`scripts/build-npm.mjs`)    | `make validate-npm` in a `node:24` container, `make validate-npm-local` on a runner                       | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand                                               | `npm`          |
+| PyPI     | `make gen-pypi` (`scripts/build_pypi.py`)   | `make validate-pypi` in a `python:3.14-slim` container, `make validate-pypi-local` on a runner            | `scripts/publish-pypi.sh --trusted-publishing`; `make publish-pypi-dry` and `make publish-pypi` by hand                       | `pypi`         |
+| NuGet    | `make gen-nuget` (`scripts/build_nuget.py`) | `make validate-nuget` in the .NET SDK container pinned by digest, `make validate-nuget-local` on a runner | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand                                         | `nuget`        |
+| Homebrew | `scripts/update-homebrew-tap.sh`            | The script's `--dry-run`, in a rehearsal                                                                  | The same script pushes the formula to `jmrplens/homebrew-tap`                                                                 | `homebrew`     |
+| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                      | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork, unless one is open or merged there | `winget`       |
+| Registry | `scripts/update-server-json-sha.sh`         | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact             | `mcp-publisher publish`                                                                                                       | `mcp-registry` |
+| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                 | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done                                 | none           |
 
 `scripts/verify_published_packages.py` (the `verify-published` job) reads the
 npm, PyPI and NuGet packages back out of their registries and compares the
@@ -331,6 +331,22 @@ failed submission red with an `::error` naming the version and komac's
 causes; the flag alone is what hid those three failures behind a green job.
 No other job of the release waits on the `winget` job, so a red one stops no
 other channel.
+
+Anyone can submit a version to `microsoft/winget-pkgs`, and a community bot
+has submitted every 3.x version of this package, from an hour and a half to
+under two days after its release (3.4.0 as `microsoft/winget-pkgs#468042`).
+Before it writes anything, the job searches that repository's pull requests
+with its own token and submits nothing when one for the version is open or
+merged, matching the identifier and the version as whole words of the title,
+so that 3.4.0 is found neither in 3.4.01 nor in 13.4.0; a notice names the
+pull request it stepped aside for. One closed without a merge, or one whose
+title starts with `Remove`, does not count. When the search answers, komac
+runs with `--skip-pr-check`, because its own check ends a run in CI without
+a word on a pull request of any state, a closed one included. When the
+search fails, it warns and the job submits anyway, keeping komac's check as
+the guard against a duplicate, and a run that ends without the line komac
+prints for the pull request it created is a warning. A rehearsal runs the
+search for the version it reads and says what a release would do.
 
 The container image is pushed by the `docker` job, which builds each platform
 on its own, runs it (`scripts/smoke-test-image.sh`) and, before the
