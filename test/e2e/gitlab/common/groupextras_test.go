@@ -260,3 +260,34 @@ func shareProjectWithGroup(e *harness.Env, project fixture.Project, group fixtur
 		e.T.Fatalf("sharing project %d with group %d through client-go: %v", project.ID, group.ID, err)
 	}
 }
+
+// TestGroupSharedProjects_Delete_RemovesTheShareFromTheGroupsSide shares a
+// project of each surface's own into a group of its own, finds it in the
+// group's shared projects, removes the share through the group, and checks
+// that the group lists it no longer and that a second removal is refused as
+// a share the group does not hold.
+func TestGroupSharedProjects_Delete_RemovesTheShareFromTheGroupsSide(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("host"))
+		project := fixture.NewProject(e, fixture.WithNamePrefix("guest"))
+		params := map[string]any{"group_id": group.IDParam()}
+
+		shareProjectWithGroup(e, project, group)
+		shared := harness.Do[groups.SharedProjectsListOutput](s, actionGroupSharedProjects, params)
+		if !containsID(groupProjectIDs(shared.Projects), project.ID) {
+			e.T.Fatalf("the group lists the shared projects %v, want project %d among them", groupProjectIDs(shared.Projects), project.ID)
+		}
+
+		removal := withParams(params, map[string]any{"project_id": project.ID})
+		harness.DoVoid(s, actionGroupSharedProjectDelete, removal)
+		remaining := harness.Do[groups.SharedProjectsListOutput](s, actionGroupSharedProjects, params)
+		if containsID(groupProjectIDs(remaining.Projects), project.ID) {
+			e.T.Errorf("the group still lists project %d after its share was removed", project.ID)
+		}
+		refused := harness.Refused(s, actionGroupSharedProjectDelete, removal, harness.FailureNotFound)
+		assertMentions(e, "a second removal of the share", refused, "group.shared_projects")
+	})
+}

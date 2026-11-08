@@ -355,7 +355,9 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1093 = 1091 + runner.reset_token_by_token and
+		// 1095 = 1093 + group.group_upload and
+		// group.shared_project_delete (Free, client-go v3.42.0). The 1093
+		// was 1091 + runner.reset_token_by_token and
 		// runner.router_discovery (Free, client-go v3.18.0). The
 		// 1091 was 1088 + project.milestone_promote,
 		// pipeline.resource_group_current_job (Free) and
@@ -367,7 +369,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		// 1073 was 1065 + 7 work item saved view actions (get/list/create/
 		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 		// + 1 Dependency Firewall package evaluation (Premium).
-		const expectedTools = 1093
+		const expectedTools = 1095
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -383,8 +385,10 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 872 = 870 + runner.reset_token_by_token and
-		// runner.router_discovery (Free, client-go v3.18.0). The 870 was
+		// 874 = 872 + group.group_upload and group.shared_project_delete
+		// (Free, client-go v3.42.0). The 872 was 870 +
+		// runner.reset_token_by_token and runner.router_discovery (Free,
+		// client-go v3.18.0). The 870 was
 		// 868 + project.milestone_promote and
 		// pipeline.resource_group_current_job (Free, client-go v3.18.0 and
 		// v3.19.0). The 868 was 866 + group.service_account_get and
@@ -397,7 +401,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 872
+		const expectedTools = 874
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
