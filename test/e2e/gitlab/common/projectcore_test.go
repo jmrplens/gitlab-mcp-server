@@ -57,7 +57,8 @@ func projectGroupIDs(groups []projects.ProjectGroupOutput) []int64 {
 
 // TestProjectReads_FixtureProject_ListsAndDescribes reads one shared
 // project on every surface through every read the project tool offers
-// beside get: the listings it appears in, filtered down to it by name; the
+// beside get: the listings it appears in, filtered down to it by name and,
+// on the project list, by the updated bounds as well; the
 // users, groups, starrers and forks it has, which are the run's user and
 // nothing else for a fresh personal project; its languages, its fetch
 // statistics and the storage shard it lives on.
@@ -77,6 +78,7 @@ func TestProjectReads_FixtureProject_ListsAndDescribes(t *testing.T) {
 		if !containsID(projectIDsOf(listed.Projects), project.ID) {
 			e.T.Errorf("the membership listing searched for %q holds %v, want project %d", project.Name, projectIDsOf(listed.Projects), project.ID)
 		}
+		assertUpdatedBoundsFilter(e, s, project)
 		owned := harness.Do[projects.ListOutput](s, actionProjectListUserProjects, map[string]any{"user_id": user.Username, "search": project.Name})
 		if !containsID(projectIDsOf(owned.Projects), project.ID) {
 			e.T.Errorf("the projects of %s searched for %q hold %v, want project %d", user.Username, project.Name, projectIDsOf(owned.Projects), project.ID)
@@ -107,6 +109,30 @@ func TestProjectReads_FixtureProject_ListsAndDescribes(t *testing.T) {
 			e.T.Errorf("repository_storage_get answered %+v, want project %d on a named shard", storage, project.ID)
 		}
 	})
+}
+
+// longPast is a time before any project the run creates was last updated.
+const longPast = "2000-01-01T00:00:00Z"
+
+// assertUpdatedBoundsFilter lists the project by name with the updated
+// bounds GitLab 19.5 takes on the project list only beside
+// order_by=updated_at: a lower bound long past keeps the project, and an
+// upper bound long past leaves it out, so the instance read both bounds
+// rather than answering the unfiltered list.
+func assertUpdatedBoundsFilter(e *harness.Env, s *harness.Session, project fixture.Project) {
+	e.T.Helper()
+	listed := func(bound string) []int64 {
+		answer := harness.Do[projects.ListOutput](s, actionProjectList, map[string]any{
+			"membership": true, "search": project.Name, "order_by": "updated_at", bound: longPast,
+		})
+		return projectIDsOf(answer.Projects)
+	}
+	if after := listed("updated_after"); !containsID(after, project.ID) {
+		e.T.Errorf("the listing updated after %s holds %v, want project %d", longPast, after, project.ID)
+	}
+	if before := listed("updated_before"); containsID(before, project.ID) {
+		e.T.Errorf("the listing updated before %s holds %v, want project %d left out", longPast, before, project.ID)
+	}
 }
 
 // assertLanguagesAddUp reads the project's languages and holds them to what

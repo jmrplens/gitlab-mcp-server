@@ -541,6 +541,9 @@ type ListInput struct {
 	IncludeHidden            *bool  `json:"include_hidden,omitempty"            jsonschema:"Include hidden projects in results (administrators only)"`
 	IDAfter                  int64  `json:"id_after,omitempty"                  jsonschema:"Return projects with ID greater than this value"`
 	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value"`
+	TopicID                  int64  `json:"topic_id,omitempty"                  jsonschema:"Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic"`
+	UpdatedAfter             string `json:"updated_after,omitempty"             jsonschema:"Return projects last updated on or after this time (ISO 8601 format). GitLab takes it only with order_by=updated_at"`
+	UpdatedBefore            string `json:"updated_before,omitempty"            jsonschema:"Return projects last updated on or before this time (ISO 8601 format). GitLab takes it only with order_by=updated_at"`
 
 	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
 	Active               *bool             `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
@@ -1353,10 +1356,20 @@ func (input ListInput) toFilter() userProjectFilter {
 		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		CustomAttributes: input.CustomAttributes,
-		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+		CustomAttributes: input.CustomAttributes, TopicID: input.TopicID,
+		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
+
+// errUpdatedFilterOrder is what a project list asked for updated_after or
+// updated_before in an order other than updated_at is answered with, before
+// any request is made. GET /projects refuses the pair otherwise with 400
+// "`updated_at` filter and `updated_at` sorting must be paired"
+// (validate_updated_at_order_and_filter!, lib/api/projects.rb at v19.5.0-ee),
+// and order_by defaults to created_at, so leaving it out is refused too. The
+// user and fork lists that take the same filters do not pair them.
+var errUpdatedFilterOrder = errors.New("updated_after and updated_before need order_by=updated_at, which GitLab pairs with them on this list and answers any other order, its default created_at included, with 400")
 
 // applyListOrder sets the order_by column and the sort direction on a
 // gl.ListOptions, leaving unset values untouched, for the project lists whose
@@ -1379,6 +1392,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts, err := buildListOpts(input)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("projectList: %w", err)
+	}
+	if (opts.UpdatedAfter != nil || opts.UpdatedBefore != nil) && input.OrderBy != "updated_at" {
+		return ListOutput{}, fmt.Errorf("projectList: %w", errUpdatedFilterOrder)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx), toolutil.KeysetContinuation(input.KeysetPaginationInput))
@@ -2090,6 +2106,9 @@ type ListForksInput struct {
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"              jsonschema:"Include hidden forks in results"`
 	IDAfter                  int64             `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value"`
 	IDBefore                 int64             `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value"`
+	TopicID                  int64             `json:"topic_id,omitempty"                    jsonschema:"Return forks having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic"`
+	UpdatedAfter             string            `json:"updated_after,omitempty"               jsonschema:"Return forks last updated on or after this time (ISO 8601 format)"`
+	UpdatedBefore            string            `json:"updated_before,omitempty"              jsonschema:"Return forks last updated on or before this time (ISO 8601 format)"`
 	Active                   *bool             `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
 	Imported                 *bool             `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
 	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
@@ -2132,8 +2151,9 @@ func (input ListForksInput) toFilter() userProjectFilter {
 		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		CustomAttributes: input.CustomAttributes,
-		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+		CustomAttributes: input.CustomAttributes, TopicID: input.TopicID,
+		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
 
@@ -3267,6 +3287,9 @@ type userProjectFilterInput struct {
 	LastActivityBefore       string            `json:"last_activity_before,omitempty"        jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
 	IDAfter                  int64             `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value"`
 	IDBefore                 int64             `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value"`
+	TopicID                  int64             `json:"topic_id,omitempty"           jsonschema:"Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic"`
+	UpdatedAfter             string            `json:"updated_after,omitempty"      jsonschema:"Return projects last updated on or after this time (ISO 8601 format)"`
+	UpdatedBefore            string            `json:"updated_before,omitempty"     jsonschema:"Return projects last updated on or before this time (ISO 8601 format)"`
 	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"      jsonschema:"Include projects marked/scheduled for deletion. Default false."`
 	IncludeHidden            *bool             `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
 	Active                   *bool             `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
@@ -3307,7 +3330,8 @@ var errKeysetOrderNotID = errors.New("GitLab pages projects by keyset only in id
 
 // buildUserProjectOpts centralizes option building for user-scoped project
 // listings, refusing a keyset request in any order but id
-// ([errKeysetOrderNotID]) and a last-activity bound that does not parse.
+// ([errKeysetOrderNotID]) and a last-activity or last-update bound that does
+// not parse.
 func buildUserProjectOpts(f userProjectFilter) (*gl.ListProjectsOptions, error) {
 	if f.Pagination == "keyset" && f.PageToken == "" && f.OrderBy != "id" {
 		return nil, errKeysetOrderNotID
@@ -3340,9 +3364,14 @@ func buildUserProjectOpts(f userProjectFilter) (*gl.ListProjectsOptions, error) 
 	if f.WithProgrammingLanguage != "" {
 		opts.WithProgrammingLanguage = new(f.WithProgrammingLanguage)
 	}
+	if f.TopicID > 0 {
+		opts.TopicID = new(f.TopicID)
+	}
 	if err := toolutil.ParseTimeInputs(
 		toolutil.TimeInput{Field: "last_activity_after", Value: f.LastActivityAfter, Dest: &opts.LastActivityAfter},
 		toolutil.TimeInput{Field: "last_activity_before", Value: f.LastActivityBefore, Dest: &opts.LastActivityBefore},
+		toolutil.TimeInput{Field: "updated_after", Value: f.UpdatedAfter, Dest: &opts.UpdatedAfter},
+		toolutil.TimeInput{Field: "updated_before", Value: f.UpdatedBefore, Dest: &opts.UpdatedBefore},
 	); err != nil {
 		return nil, err
 	}

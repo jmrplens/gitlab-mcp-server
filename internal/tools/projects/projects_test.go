@@ -6963,6 +6963,14 @@ func TestHandlers_DateThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
 			_, err := ListUserProjects(ctx, client, ListUserProjectsInput{UserID: "7", LastActivityBefore: "not-a-date"})
 			return err
 		}},
+		{"list_updated_after", "updated_after", func() error {
+			_, err := List(ctx, client, ListInput{OrderBy: "updated_at", UpdatedAfter: "not-a-date"})
+			return err
+		}},
+		{"list_forks_updated_before", "updated_before", func() error {
+			_, err := ListForks(ctx, client, ListForksInput{ProjectID: "42", UpdatedBefore: "not-a-date"})
+			return err
+		}},
 		{"share", "expires_at", func() error {
 			_, err := ShareProjectWithGroup(ctx, client, ShareProjectInput{ProjectID: "42", GroupID: 10, GroupAccess: 30, ExpiresAt: "not-a-date"})
 			return err
@@ -10910,4 +10918,111 @@ func TestCreate_AvatarItCannotRead_IsRefusedBeforeAnyRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProjectLists_TopicIDAndUpdatedBounds_ReachTheQuery verifies the three
+// filters client-go's ListProjectsOptions models from v3.44.0 reach the query
+// of each list that sends those options and whose route declares them: the
+// project list, a project's forks, and a user's own and starred projects. The
+// bounds go out as the time the caller wrote, and topic_id as the ID.
+func TestProjectLists_TopicIDAndUpdatedBounds_ReachTheQuery(t *testing.T) {
+	const after, before = "2026-01-02T03:04:05Z", "2026-02-03T04:05:06Z"
+	cases := []struct {
+		name, path string
+		call       func(*gitlabclient.Client) error
+	}{
+		{"list", "/api/v4/projects", func(c *gitlabclient.Client) error {
+			_, err := List(t.Context(), c, ListInput{OrderBy: "updated_at", TopicID: 9, UpdatedAfter: after, UpdatedBefore: before})
+			return err
+		}},
+		{"forks", "/api/v4/projects/42/forks", func(c *gitlabclient.Client) error {
+			_, err := ListForks(t.Context(), c, ListForksInput{ProjectID: "42", TopicID: 9, UpdatedAfter: after, UpdatedBefore: before})
+			return err
+		}},
+		{"user_projects", "/api/v4/users/7/projects", func(c *gitlabclient.Client) error {
+			_, err := ListUserProjects(t.Context(), c, ListUserProjectsInput{UserID: "7", TopicID: 9, UpdatedAfter: after, UpdatedBefore: before})
+			return err
+		}},
+		{"starred", "/api/v4/users/7/starred_projects", func(c *gitlabclient.Client) error {
+			_, err := ListUserStarredProjects(t.Context(), c, ListUserStarredProjectsInput{UserID: "7", TopicID: 9, UpdatedAfter: after, UpdatedBefore: before})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var query url.Values
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != tc.path {
+					t.Errorf("unexpected request %s %s, want GET %s", r.Method, r.URL.Path, tc.path)
+					http.NotFound(w, r)
+					return
+				}
+				query = r.URL.Query()
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			if err := tc.call(client); err != nil {
+				t.Fatalf("%s: unexpected error: %v", tc.name, err)
+			}
+			for key, want := range map[string]string{"topic_id": "9", "updated_after": after, "updated_before": before} {
+				if got := query.Get(key); got != want {
+					t.Errorf("%s query %s = %q, want %q", tc.name, key, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestBuildUserProjectOpts_LeavesTopicIDUnsentWhenNotGiven verifies an ID of
+// zero, which names no topic, sends no topic_id rather than topic_id=0, and
+// that leaving both updated bounds out sends neither.
+func TestBuildUserProjectOpts_LeavesTopicIDUnsentWhenNotGiven(t *testing.T) {
+	opts, err := buildUserProjectOpts(userProjectFilter{})
+	if err != nil {
+		t.Fatalf("buildUserProjectOpts() error = %v", err)
+	}
+	if opts.TopicID != nil || opts.UpdatedAfter != nil || opts.UpdatedBefore != nil {
+		t.Errorf("an empty filter set topic_id %v, updated_after %v and updated_before %v, want none of them", opts.TopicID, opts.UpdatedAfter, opts.UpdatedBefore)
+	}
+	opts, err = buildUserProjectOpts(userProjectFilter{TopicID: 1})
+	if err != nil {
+		t.Fatalf("buildUserProjectOpts() error = %v", err)
+	}
+	if opts.TopicID == nil || *opts.TopicID != 1 {
+		t.Errorf("topic_id = %v, want 1, the smallest ID a topic has", opts.TopicID)
+	}
+}
+
+// TestList_UpdatedBoundWithoutTheUpdatedAtOrder_IsRefusedBeforeAnyRequest
+// verifies the project list asks for order_by=updated_at beside either
+// updated bound before it sends anything, since GET /projects answers the
+// pair in any other order with 400 and order_by defaults to created_at. The
+// forks list, whose route does not pair them, sends either bound in any
+// order.
+func TestList_UpdatedBoundWithoutTheUpdatedAtOrder_IsRefusedBeforeAnyRequest(t *testing.T) {
+	const bound = "2026-01-02T03:04:05Z"
+	cases := []struct {
+		name  string
+		input ListInput
+	}{
+		{name: "after_in_the_default_order", input: ListInput{UpdatedAfter: bound}},
+		{name: "before_in_another_order", input: ListInput{UpdatedBefore: bound, OrderBy: "name"}},
+		{name: "both_in_another_order", input: ListInput{UpdatedAfter: bound, UpdatedBefore: bound, OrderBy: "created_at"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := List(t.Context(), client, tc.input)
+			if !errors.Is(err, errUpdatedFilterOrder) || !strings.HasPrefix(err.Error(), "projectList: ") {
+				t.Errorf("List(%+v) error = %v, want the projectList refusal naming order_by=updated_at", tc.input, err)
+			}
+		})
+	}
+	t.Run("forks_take_either_order", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		}))
+		if _, err := ListForks(t.Context(), client, ListForksInput{ProjectID: "42", UpdatedAfter: bound, OrderBy: "name"}); err != nil {
+			t.Errorf("ListForks() error = %v, want the fork list sent in any order", err)
+		}
+	})
 }
