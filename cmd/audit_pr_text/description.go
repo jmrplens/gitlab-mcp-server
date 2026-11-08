@@ -326,7 +326,7 @@ how pull request 832 carried one in permanently.
 // upstreamFailure is what an upstream reference in the description costs,
 // its %s standing for the references found, one per line (issue 1477).
 const upstreamFailure = `
-FAIL: the pull request title or body names an item of another project the way GitLab resolves it:
+FAIL: the pull request title or body names an item of another project or group the way GitLab resolves it:
 
 %s
 
@@ -335,7 +335,12 @@ on main, and the GitLab mirror of this repository reads that message like any
 commit pushed to it: GitLab adds a "mentioned in commit" note to every item a
 message names that way, on somebody else's project, and main cannot be
 rewritten to take it back. Name the row of docs/development/upstream-bugs.md
-that records the item instead, then edit the description:
+that records the item instead.
+
+An item of another forge written the same way, such as a GitHub issue as
+owner/repo#N, is refused too, since GitLab reads it as a project's path of
+its own: write it as its github.com URL, which passes, or name it in words.
+Then edit the description:
 
     gh pr edit <number>
 `

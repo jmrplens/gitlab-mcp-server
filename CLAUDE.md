@@ -23,12 +23,13 @@
 > to skip workflows (a bracketed skip ci or one of the four other commands GitHub
 > documents, or a skip-checks trailer), not even quoted in backticks: the squash commit of #1094 carried one, and
 > main ran no CI and the v3.1.0 tag on it no release. Nor does it name an item of
-> another project the way GitLab resolves it (`group/project!N`, `group/project#N`,
-> nested groups included, or a gitlab.com merge request or issue URL): the GitLab
-> mirror reads the squash commit and notes the mention on that item for good, so a
-> description names the row of `docs/development/upstream-bugs.md` instead, and a
-> bare `#N` stays for this repository's own items. `make check-pr-description`
-> refuses both ([Static Analysis](docs/development/static-analysis.md#the-em-dash-gate)).
+> another project or group the way GitLab resolves it (`group/project!N`,
+> `group/project#N`, an epic's `group&N`, nested groups included, or a gitlab.com
+> merge request, issue, work item or epic URL): the GitLab mirror reads the squash
+> commit and notes the mention on that item for good, so a description names the row
+> of `docs/development/upstream-bugs.md` instead, writes a GitHub issue as its URL
+> rather than `owner/repo#N`, and keeps a bare `#N` for this repository's own items.
+> `make check-pr-description` refuses both ([Static Analysis](docs/development/static-analysis.md#the-em-dash-gate)).
 >
 > **Every commit is signed off** (`git commit -s`): a `Signed-off-by:` trailer naming
 > its author certifies the Developer Certificate of Origin, and the `dco` job of CI

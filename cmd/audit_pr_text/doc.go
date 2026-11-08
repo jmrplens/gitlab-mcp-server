@@ -54,17 +54,22 @@
 // of cmd/audit_supply_chain alike.
 //
 // It also refuses a reference GitLab resolves to an item of another project
-// (issue 1477): a project's path, nested groups included, followed by !N or
-// #N, and a full gitlab.com URL to a merge request or an issue. The GitLab
-// mirror of this repository reads the squash commit like any commit pushed to
-// it, and GitLab adds a "mentioned in commit" note to every item a message
-// names that way, on somebody else's project; main cannot be rewritten to
-// take it back. A description names the row of
-// docs/development/upstream-bugs.md that records the item instead. A bare #N
-// names this repository's own items and passes. The rule reads the whole
-// title and body, code spans included, since GitLab reads a commit message as
-// plain text when it extracts mentions. File content is out of its scope:
-// pages cite upstream items however they need to.
+// or group (issue 1477): a project's path, nested groups included, followed
+// by !N or #N; a group's path followed by &N for an epic; either path opened
+// by the / of an absolute one; the bracketed [issue:], [work_item:] and
+// [epic:] forms with a path; and a full gitlab.com URL to a merge request, an
+// issue, an incident, a work item or an epic, with or without the /-/ before
+// the route and at a group's address too. The GitLab mirror of this
+// repository reads the squash commit like any commit pushed to it, and GitLab
+// adds a "mentioned in commit" note to every item a message names that way,
+// on somebody else's project; main cannot be rewritten to take it back. A
+// description names the row of docs/development/upstream-bugs.md that records
+// the item instead. An item of another forge written the same way, such as a
+// GitHub issue as owner/repo#N, is refused too, and its github.com URL
+// passes. A bare #N names this repository's own items and passes. The rule
+// reads the whole title and body, code spans included, since GitLab reads a
+// commit message as plain text when it extracts mentions. File content is out
+// of its scope: pages cite upstream items however they need to.
 //
 // A branch with no pull request open passes, having no description to land.
 // A gh that is missing, and a description that cannot be read, fail and say
