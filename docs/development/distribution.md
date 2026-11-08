@@ -325,12 +325,16 @@ and the pull request was refused with `Resource not accessible by personal
 access token` (issue 1665). `public_repo` is the scope komac asks for, and
 `workflow` is the fork sync's, since merging upstream writes winget-pkgs'
 `.github/workflows` files into the fork, which GitHub refuses to a token
-without that scope (HTTP 422 on 2.7.4). The submission runs under
-`continue-on-error`, so that the job's last step still runs and turns a
-failed submission red with an `::error` naming the version and komac's
-causes; the flag alone is what hid those three failures behind a green job.
-No other job of the release waits on the `winget` job, so a red one stops no
-other channel.
+without that scope (HTTP 422 on 2.7.4). The job's first step checks both,
+in a rehearsal too: it reads the scopes GitHub lists for the token in the
+`X-OAuth-Scopes` header of `GET /user` and fails with an `::error` naming
+the one missing, or saying the token is fine-grained, or classic with no
+scope, when that header is absent or empty, before anything is installed
+or written. The submission runs under `continue-on-error`, so that the
+job's last step still runs and turns a failed submission red with an
+`::error` naming the version and komac's causes; the flag alone is what hid
+those three failures behind a green job. No other job of the release waits
+on the `winget` job, so a red one stops no other channel.
 
 Anyone can submit a version to `microsoft/winget-pkgs`, and a community bot
 has submitted every 3.x version of this package, from an hour and a half to

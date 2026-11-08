@@ -2376,9 +2376,10 @@ jobs:
     # A rehearsal runs this job too, and everything in it but the three steps
     # that write and the last one, which reads the submission's outcome: the
     # fork sync, the submission, the cleanup and that step are skipped, and
-    # komac builds the manifests dry instead. The lookup of a pull request
-    # already open or merged for the version reads only, so it runs and says
-    # what a release would do.
+    # komac builds the manifests dry instead. The check of WINGET_TOKEN's
+    # scopes and the lookup of a pull request already open or merged for the
+    # version read only, so both run, and the lookup says what a release
+    # would do.
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       WINGET_IDENTIFIER: jmrplens.gitlab-mcp-server
@@ -2402,13 +2403,14 @@ jobs:
     # jmrplens/winget-pkgs fork, unless a pull request for the version is
     # already open or merged there.
     #
-    # Every write authenticates with WINGET_TOKEN. The job's own token reads
-    # only public data: the release this run names, winget-pkgs' pull
-    # requests for the version, and in a rehearsal what komac reads of
+    # Every write authenticates with WINGET_TOKEN, and so does the first
+    # step, which reads with it only the token's own scopes. The job's own
+    # token reads only public data: the release this run names, winget-pkgs'
+    # pull requests for the version, and in a rehearsal what komac reads of
     # winget-pkgs and of this repository to build the manifests.
     #
     # WINGET_TOKEN is a classic personal access token of the maintainer's
-    # with the scopes public_repo and workflow, set on 2026-11-04, after
+    # with the scopes repo and workflow, set on 2026-11-04, after
     # 3.4.0; the release after 3.4.0 is the first to submit with it, and
     # until it does, the cause below is probable rather than proven. The one
     # set on 2026-08-27 was fine-grained, and GitHub documents that a
@@ -2416,14 +2418,106 @@ jobs:
     # is not a member of: komac created its branch on the fork, and the pull
     # request on microsoft/winget-pkgs was refused with "Resource not
     # accessible by personal access token" on 3.2.0, 3.3.0 and 3.4.0 (issue
-    # 1665). public_repo is the scope komac asks for, for the branch and the
-    # pull request. workflow is the fork sync's: merge-upstream writes
-    # upstream's .github/workflows files into the fork, and GitHub refuses
-    # that to a token without the scope (HTTP 422, "refusing to allow a
-    # Personal Access Token to create or update workflow ... without
-    # workflow scope", on 2.7.4).
+    # 1665). The first step refuses a token without both scopes, and says
+    # why each is needed.
     permissions: {}
     steps:
+      # The first step, and it runs in a rehearsal too, since it only reads:
+      # a WINGET_TOKEN that cannot open the winget pull request stops the job
+      # here, with an error naming what it lacks, before anything is
+      # installed, built or written. It has to be a classic personal access
+      # token with two scopes. public_repo is the pull request's: komac
+      # pushes its branch to the jmrplens/winget-pkgs fork and opens the pull
+      # request on microsoft/winget-pkgs, which a fine-grained token cannot
+      # open on a repository its user is not a member of, the probable cause
+      # of the refusals above. workflow is the fork sync's: merge-upstream
+      # writes upstream's .github/workflows files into the fork, and GitHub
+      # refuses that to a token without the scope with HTTP 422 ("refusing
+      # to allow a Personal Access Token to create or update workflow ...
+      # without workflow scope"), as it did on 2.7.4. repo covers public_repo,
+      # and it is the only way to get both: GitHub's form for a classic token
+      # checks repo as soon as workflow is checked.
+      #
+      # GitHub answers GET /user with a classic token's scopes in
+      # X-OAuth-Scopes, and with that header absent or empty for a
+      # fine-grained token, whose permissions no header lists; a token it
+      # does not accept is a 401. The token goes from this step's environment
+      # into the Authorization header and nowhere else: not into the URL, not
+      # into GITHUB_OUTPUT, and nothing prints the request. A secret holding
+      # white space, which no token does, is refused before it is sent, so
+      # no exception can quote it as an invalid header, and any message the
+      # step writes has the token replaced all the same.
+      - name: Check that WINGET_TOKEN can open the winget pull request
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          # A workflow command's message ends at a line break and reads % as
+          # the start of an escape.
+          function Format-Message([string] $text) { $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A') }
+          $ProgressPreference = 'SilentlyContinue'
+          $token = $env:WINGET_TOKEN
+          $needed = [ordered] @{
+            public_repo = "komac's branch on the jmrplens/winget-pkgs fork and the pull request on microsoft/winget-pkgs"
+            workflow = "the fork sync, which writes upstream's .github/workflows files into the fork"
+          }
+          $problem = $null
+          $response = $null
+          if (-not $token) {
+            $problem = 'WINGET_TOKEN is empty: the secret is not set for this repository.'
+          } elseif ($token -match '\s') {
+            $problem = 'WINGET_TOKEN holds white space or a line break, which no GitHub token does: set the secret again.'
+          } else {
+            $request = @{
+              Uri = 'https://api.github.com/user'
+              Headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+              SkipHttpErrorCheck = $true
+              TimeoutSec = 30
+            }
+            try {
+              $response = Invoke-WebRequest @request
+            } catch {
+              $problem = "GET /user did not answer, so WINGET_TOKEN could not be checked: $($_.Exception.Message)"
+            }
+          }
+          if ($null -ne $response) {
+            $status = [int] $response.StatusCode
+            if ($status -ne 200) {
+              $detail = $null
+              try { $detail = ($response.Content | ConvertFrom-Json).message } catch { }
+              $problem = "GitHub answered GET /user with HTTP $status"
+              if ($detail) { $problem += " ($detail)" }
+              if ($status -eq 401) {
+                $problem += ': WINGET_TOKEN is expired, revoked or not a token GitHub knows.'
+              } else {
+                $problem += ', so WINGET_TOKEN could not be checked.'
+              }
+            } else {
+              $values = $null
+              foreach ($name in @($response.Headers.Keys)) {
+                if ($name -eq 'X-OAuth-Scopes') { $values = @($response.Headers[$name]) }
+              }
+              $scopes = @(($values -join ',') -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+              if ($scopes.Count -eq 0) {
+                $header = if ($null -eq $values) { 'no X-OAuth-Scopes header' } else { 'an empty X-OAuth-Scopes header' }
+                $problem = "GitHub answered GET /user for WINGET_TOKEN with $header, which means a fine-grained token (or a classic one with no scope at all), and a fine-grained token cannot open the pull request on microsoft/winget-pkgs. Set WINGET_TOKEN to a classic personal access token with the workflow scope, which GitHub's form gives with repo."
+              } else {
+                # repo includes public_repo (and GitHub's form checks it with workflow).
+                $missing = @($needed.Keys | Where-Object { $scopes -notcontains $_ -and -not ($_ -eq 'public_repo' -and $scopes -contains 'repo') })
+                if ($missing.Count -gt 0) {
+                  $reasons = @($missing | ForEach-Object { "$_ ($($needed[$_]))" }) -join ' and '
+                  $problem = "WINGET_TOKEN's scopes (X-OAuth-Scopes: $($scopes -join ', ')) lack $reasons. Add the missing scope to it, or set WINGET_TOKEN to a classic personal access token with the workflow scope, which GitHub's form gives with repo."
+                } else {
+                  Write-Output "WINGET_TOKEN holds both scopes the job needs (X-OAuth-Scopes: $($scopes -join ', '))."
+                }
+              }
+            }
+          }
+          if ($problem) {
+            if ($token) { $problem = $problem.Replace($token, '***') }
+            Write-Output "::error title=WINGET_TOKEN cannot open the winget pull request::$(Format-Message $problem)"
+            exit 1
+          }
+
       # Not under continue-on-error: a binary that does not hash to the
       # recorded digest is the one failure this job must never hide.
       - name: Install komac
