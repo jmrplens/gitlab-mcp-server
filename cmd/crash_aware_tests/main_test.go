@@ -11,9 +11,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,7 +53,7 @@ func standIn(dir string, args []string) int {
 	}
 	run := strings.TrimSuffix(filepath.Base(args[1]), ".json")
 	if data, readErr := os.ReadFile(filepath.Join(dir, run+".json")); readErr == nil {
-		if os.WriteFile(args[1], data, 0o600) != nil {
+		if os.WriteFile(args[1], data, 0o600) != nil { //#nosec G703 -- the --jsonfile path the test's own run named, below a t.TempDir
 			return 127
 		}
 	}
@@ -83,24 +86,59 @@ type result struct {
 	dir     string
 }
 
+// recorded reads one recorded stream under testdata/.
+func recorded(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+// plant writes one file of the stand-in's instructions: name under dir.
+func plant(t *testing.T, dir, name string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil { //#nosec G703 -- a t.TempDir and a name these tests spell
+		t.Fatal(err)
+	}
+}
+
+// onlyOnPath leaves PATH holding one directory, which holds a program named
+// name that is never started, and returns the path a lookup of name finds
+// there. It changes the process's PATH, so a test calling it does not run in
+// parallel.
+func onlyOnPath(t *testing.T, name string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		// A lookup on Windows finds a program by an extension PATHEXT
+		// lists, never by its bare name.
+		name += ".exe"
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, nil, 0o700); err != nil { //#nosec G306 G703 -- a program the lookup must find executable, below the test's own t.TempDir
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	return path
+}
+
+// absentCommand answers the gotestsum seam with a program that is not there.
+func absentCommand(ctx context.Context, absent string, args []string) *exec.Cmd {
+	return exec.CommandContext(ctx, absent, args...) //#nosec G204,G702 -- a path below a t.TempDir that holds no file, so nothing starts
+}
+
 // runWith runs the command over ./... with -count=1, gotestsum answered by
 // the stand-in as s scripts it, and a job summary file to append to.
 func runWith(t *testing.T, s suite) result {
 	t.Helper()
 	standin := t.TempDir()
 	for run, name := range s.streams {
-		data, err := os.ReadFile(filepath.Join("testdata", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(standin, run+".json"), data, 0o600); err != nil {
-			t.Fatal(err)
-		}
+		plant(t, standin, run+".json", recorded(t, name))
 	}
 	for run, status := range s.statuses {
-		if err := os.WriteFile(filepath.Join(standin, run+".status"), []byte(strconv.Itoa(status)), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		plant(t, standin, run+".status", []byte(strconv.Itoa(status)))
 	}
 	useStandIn(t, standin)
 
@@ -334,17 +372,15 @@ func TestRun_AStreamThatCannotBeRead_Fails(t *testing.T) {
 
 // TestRun_GotestsumThatCannotStart_Fails verifies that a gotestsum that is
 // not there is a failure that says so, the first run and the rerun alike.
+// gotestsum is missing the way it is on a machine without it, the real seam
+// looking it up on a PATH that holds none, so the test changes PATH and does
+// not run in parallel.
 func TestRun_GotestsumThatCannotStart_Fails(t *testing.T) {
-	absent := filepath.Join(t.TempDir(), "gotestsum")
-	previous := gotestsumCommand
-	t.Cleanup(func() { gotestsumCommand = previous })
-	gotestsumCommand = func(ctx context.Context, args []string) *exec.Cmd {
-		return exec.CommandContext(ctx, absent, args...)
-	}
+	t.Setenv("PATH", t.TempDir())
 
 	var stdout, stderr bytes.Buffer
 	code := run(t.Context(), []string{t.TempDir(), "./..."}, "", &stdout, &stderr)
-	if code != 1 || !strings.HasPrefix(stderr.String(), "ERROR: run gotestsum: ") {
+	if code != 1 || !strings.HasPrefix(stderr.String(), "ERROR: run gotestsum: find gotestsum: ") {
 		t.Errorf("exit %d, stderr %q, want 1 and the start error", code, stderr.String())
 	}
 }
@@ -354,19 +390,13 @@ func TestRun_GotestsumThatCannotStart_Fails(t *testing.T) {
 // rerun, and every package is reported with no stream.
 func TestRun_ARerunThatCannotStart_FailsWithNoStream(t *testing.T) {
 	standin := t.TempDir()
-	data, err := os.ReadFile(filepath.Join("testdata", "crash.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(standin, "first.json"), data, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	plant(t, standin, "first.json", recorded(t, "crash.json"))
 	useStandIn(t, standin)
 	standinCommand := gotestsumCommand
 	absent := filepath.Join(t.TempDir(), "gotestsum")
 	gotestsumCommand = func(ctx context.Context, args []string) *exec.Cmd {
 		if strings.HasSuffix(args[1], "rerun.json") {
-			return exec.CommandContext(ctx, absent, args...)
+			return absentCommand(ctx, absent, args)
 		}
 		return standinCommand(ctx, args)
 	}
@@ -388,13 +418,7 @@ func TestRun_ARerunThatCannotStart_FailsWithNoStream(t *testing.T) {
 // the run goes on to the same exit, and the warning is printed once.
 func TestRun_ASummaryThatCannotBeWritten_IsWarnedAboutOnce(t *testing.T) {
 	standin := t.TempDir()
-	data, err := os.ReadFile(filepath.Join("testdata", "failing.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(standin, "first.json"), data, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	plant(t, standin, "first.json", recorded(t, "failing.json"))
 	useStandIn(t, standin)
 
 	summary := filepath.Join(t.TempDir(), "missing", "summary.md")
@@ -408,25 +432,30 @@ func TestRun_ASummaryThatCannotBeWritten_IsWarnedAboutOnce(t *testing.T) {
 	}
 }
 
+// TestRun_OffCI_ReportsOnStdoutAlone verifies that with no job summary
+// named, the report is printed and nothing else is attempted.
+func TestRun_OffCI_ReportsOnStdoutAlone(t *testing.T) {
+	standin := t.TempDir()
+	plant(t, standin, "first.json", recorded(t, "rerun-fail.json"))
+	useStandIn(t, standin)
+
+	var stdout, stderr bytes.Buffer
+	code := run(t.Context(), []string{t.TempDir(), "./..."}, "", &stdout, &stderr)
+	if code != 1 || stderr.Len() != 0 || !strings.HasSuffix(stdout.String(), "- `"+toolutil+"`\n  - TestWrapErr\n") {
+		t.Errorf("exit %d, stdout %q, stderr %q, want 1, the report and nothing on stderr", code, stdout.String(), stderr.String())
+	}
+}
+
 // TestRun_ACrashLineCarryingAPipe_KeepsTheTableReadable verifies that a
 // pipe in a crash line is escaped in its table cell, where GitHub would
 // otherwise read it as the end of the cell.
 func TestRun_ACrashLineCarryingAPipe_KeepsTheTableReadable(t *testing.T) {
 	standin := t.TempDir()
-	first := streamOf(t,
+	plant(t, standin, "first.json", streamOf(t,
 		event{Action: "output", Package: server, Output: "fatal error: bad | pointer\n"},
 		event{Action: "fail", Package: server},
-	)
-	if err := os.WriteFile(filepath.Join(standin, "first.json"), first, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join("testdata", "rerun-pass.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(standin, "rerun.json"), data, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	))
+	plant(t, standin, "rerun.json", recorded(t, "rerun-pass.json"))
 	useStandIn(t, standin)
 
 	summary := filepath.Join(t.TempDir(), "summary.md")
@@ -476,13 +505,29 @@ func TestRun_TheCommandLine_IsRefusedWhenItNamesNoSuite(t *testing.T) {
 }
 
 // TestGotestsumCommand_RunsGotestsumFromThePath verifies the seam's own
-// answer, the program CI installs with go install tool, without starting it.
+// answer, the program CI installs with go install tool, without starting it:
+// the gotestsum a lookup finds on PATH, run by its absolute path with the
+// arguments as given. It changes PATH, so it does not run in parallel.
 func TestGotestsumCommand_RunsGotestsumFromThePath(t *testing.T) {
-	t.Parallel()
+	gotestsum := onlyOnPath(t, "gotestsum")
 
 	cmd := gotestsumCommand(t.Context(), []string{"--jsonfile", "x.json", "--", "./..."})
-	if got := strings.Join(cmd.Args, " "); got != "gotestsum --jsonfile x.json -- ./..." {
-		t.Errorf("command %q, want gotestsum with the arguments as given", got)
+	if cmd.Err != nil || cmd.Path != gotestsum || !slices.Equal(cmd.Args, []string{gotestsum, "--jsonfile", "x.json", "--", "./..."}) {
+		t.Errorf("command %q at %q (error %v), want %s with the arguments as given", cmd.Args, cmd.Path, cmd.Err, gotestsum)
+	}
+}
+
+// TestGotestsumCommand_NoGotestsumOnPath_IsTheLookupsFailure verifies that
+// gotestsum is found on PATH before it is run, and that a PATH holding none
+// is the error running the command returns: the lookup's failure rather than
+// a gotestsum that ran and exited. It changes PATH, so it does not run in
+// parallel.
+func TestGotestsumCommand_NoGotestsumOnPath_IsTheLookupsFailure(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := gotestsumCommand(t.Context(), []string{"--version"}).Run()
+	if !errors.Is(err, exec.ErrNotFound) || !strings.HasPrefix(err.Error(), "find gotestsum: ") {
+		t.Errorf("running gotestsumCommand() with no gotestsum on PATH = %v, want the lookup's failure", err)
 	}
 }
 
