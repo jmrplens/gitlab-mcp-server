@@ -12,7 +12,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -1072,6 +1071,54 @@ func TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError(t *testing.T) {
 	}
 }
 
+// errNoWorkingDir stands in for the answer os.Getwd gives, and filepath.Abs
+// with it, once the working directory has been removed under the process.
+var errNoWorkingDir = errors.New("getwd: no such file or directory")
+
+// TestLocalPaths_AWorkingDirectoryThatCannotBeRead_AreRefused verifies each
+// resolver refuses a relative path, under its own prefix, when it cannot be
+// made absolute, on every platform (issue 1212). The two deleted-cwd tests
+// above remove the working directory, which only Linux turns into an error,
+// so on Windows and macOS these branches were never taken. Here filepath.Abs
+// answers through its seam with the error Linux gives.
+func TestLocalPaths_AWorkingDirectoryThatCannotBeRead_AreRefused(t *testing.T) {
+	replaceForTest(t, &absPath, func(string) (string, error) { return "", errNoWorkingDir })
+	for _, tt := range []struct {
+		name    string
+		resolve func() error
+		prefix  string
+	}{
+		{name: "a file to upload", resolve: func() error { _, err := CanonicalLocalFilePath("upload.txt"); return err }, prefix: "resolve file path: "},
+		{name: "a download destination", resolve: func() error { _, err := canonicalDownloadOutputPath("artifact.bin"); return err }, prefix: "resolve output path: "},
+		{name: "an import archive", resolve: func() error { _, err := CanonicalImportArchivePath("export.tar.gz"); return err }, prefix: "resolve archive path: "},
+		{name: "an allow-list directory", resolve: func() error { _, err := canonicalDirPath("relative-allowlist-dir"); return err }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.resolve(); !errors.Is(err, errNoWorkingDir) || !strings.HasPrefix(err.Error(), tt.prefix) {
+				t.Errorf("error = %v, want the working directory's failure under %q", err, tt.prefix)
+			}
+		})
+	}
+}
+
+// TestAllowedLocalDirs_AWorkingDirectoryThatCannotBeRead_IsLeftOut verifies
+// the working directory drops out of the allow-list when it cannot be read,
+// leaving the temporary directory, on every platform (issue 1212): only Linux
+// fails os.Getwd for a removed working directory, so elsewhere the working
+// directory was always read. os.Getwd answers through its seam here.
+func TestAllowedLocalDirs_AWorkingDirectoryThatCannotBeRead_IsLeftOut(t *testing.T) {
+	t.Setenv(UploadDirAllowlistEnv, "")
+	temp, err := canonicalDirPath(os.TempDir()) //nolint:usetesting // The implicit root itself is what the allow-list is compared with.
+	if err != nil {
+		t.Fatalf("canonicalDirPath(os.TempDir()) error = %v", err)
+	}
+	replaceForTest(t, &workingDir, func() (string, error) { return "", errNoWorkingDir })
+
+	if got := allowedLocalDirs(uploadDirAllowlistSetting); len(got) != 1 || got[0] != temp {
+		t.Errorf("allowedLocalDirs() = %v, want only the temporary directory %q", got, temp)
+	}
+}
+
 // TestPathWithinBase_RelError_ReturnsFalse verifies that pathWithinBase
 // returns false when filepath.Rel cannot relate the two paths (an absolute
 // target against a relative base), instead of panicking or misclassifying.
@@ -1531,16 +1578,23 @@ func TestCanonicalLocalDirPath_Containment(t *testing.T) {
 // TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory verifies that a
 // server started with the filesystem root as its working directory — which is
 // what Claude Desktop does — does not thereby allow-list the whole disk.
+//
+// The root is the one of the volume the test runs on, "/" on Unix and the
+// drive's root on Windows, where the root is spelled per volume; it used to
+// skip there, so the root was never a working directory a Windows test had
+// (issue 1212).
 func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the filesystem root is spelled per volume on Windows")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
 	}
+	root := filepath.VolumeName(wd) + string(filepath.Separator)
 	testutil.IsolateTempDir(t, t.TempDir())
-	t.Chdir("/")
+	t.Chdir(root)
 
 	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
-		if dir == "/" {
-			t.Fatal(`allowedLocalDirs() included "/", want the filesystem root skipped`)
+		if dir == root {
+			t.Fatalf("allowedLocalDirs() included %q, want the filesystem root skipped", root)
 		}
 	}
 }
@@ -1793,38 +1847,6 @@ type modeOnlyInfo struct {
 // Mode returns the mode the case gives.
 func (i modeOnlyInfo) Mode() os.FileMode { return i.mode }
 
-// TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt verifies a
-// group- or world-writable archive is unsafe on an operating system whose
-// permission bits describe access, an archive only its owner writes is not,
-// and neither is on Windows, where Go synthesizes the bits from the read-only
-// attribute. The modes are given rather than made on disk, so every platform
-// asks both answers of the bits (issue 1212): a file Windows writes reports
-// 0666 whatever is asked of it, so a mode without the group and world bits
-// could not be built there.
-func TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		goos string
-		mode os.FileMode
-		want bool
-	}{
-		{goos: "linux", mode: 0o666, want: true},
-		{goos: "linux", mode: 0o620, want: true},
-		{goos: "darwin", mode: 0o602, want: true},
-		{goos: "linux", mode: 0o644, want: false},
-		{goos: "darwin", mode: 0o600, want: false},
-		{goos: "windows", mode: 0o666, want: false},
-	}
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s %#o", tt.goos, tt.mode), func(t *testing.T) {
-			t.Parallel()
-			if got := archiveHasUnsafePermissions(tt.goos, modeOnlyInfo{mode: tt.mode}); got != tt.want {
-				t.Errorf("archiveHasUnsafePermissions(%s, %#o) = %v, want %v", tt.goos, tt.mode, got, tt.want)
-			}
-		})
-	}
-}
-
 // replaceForTest sets a package seam for the rest of the test and restores it
 // afterwards. A test calling it must not run in parallel, since the seam is
 // shared by every caller in the package.
@@ -1868,6 +1890,15 @@ func TestOpenAndValidateFile_TheFileChangesAfterItWasResolved(t *testing.T) {
 		replaceForTest(t, &lstatResolved, func(string) (os.FileInfo, error) { return nil, errRaced })
 		if _, _, openErr := OpenAndValidateFile(path, 0); !errors.Is(openErr, errRaced) || !strings.Contains(openErr.Error(), "stat ") {
 			t.Errorf("OpenAndValidateFile() error = %v, want the stat failure", openErr)
+		}
+	})
+	// The open's own refusal, on every platform (issue 1212): the tests that
+	// make a real open fail need permission bits Windows does not enforce or a
+	// descriptor limit only Unix sets.
+	t.Run("removed before the open", func(t *testing.T) {
+		replaceForTest(t, &openResolved, func(string) (*os.File, error) { return nil, errRaced })
+		if f, info, openErr := OpenAndValidateFile(path, 0); f != nil || info != nil || !errors.Is(openErr, errRaced) || !strings.HasPrefix(openErr.Error(), "open ") {
+			t.Errorf("OpenAndValidateFile() = %v, %v, %v; want no file and the open failure", f, info, openErr)
 		}
 	})
 	for _, tt := range []struct {

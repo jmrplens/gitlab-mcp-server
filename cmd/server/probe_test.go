@@ -657,6 +657,36 @@ func TestPeerWorkingDir_ReadsARunningProcess(t *testing.T) {
 	}
 }
 
+// TestPeerWorkingDir_ThisProcessAndAPidNoProcessCanHave covers the same read
+// on every platform (issue 1212). The test above starts /bin/sleep, which
+// Windows does not have, so there the read was never made at all. This
+// process is running on every system, and its working directory is the one
+// os.Getwd reports; a negative pid names no process anywhere, and the lookup
+// refuses it before reading anything. The two directories are compared as
+// files, since a platform may spell the same one differently (a trailing
+// separator on Windows, a resolved symbolic link on macOS).
+func TestPeerWorkingDir_ThisProcessAndAPidNoProcessCanHave(t *testing.T) {
+	t.Parallel()
+	want, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	got, err := peerWorkingDir(pid32(t, os.Getpid()))
+	if err != nil {
+		t.Fatalf("peerWorkingDir of this process: %v", err)
+	}
+	gotInfo, gotErr := os.Stat(got)
+	wantInfo, wantErr := os.Stat(want)
+	if gotErr != nil || wantErr != nil || !os.SameFile(gotInfo, wantInfo) {
+		t.Errorf("peerWorkingDir of this process = %q, want %q (stat errors: %v, %v)", got, want, gotErr, wantErr)
+	}
+
+	if dir, impossibleErr := peerWorkingDir(-1); impossibleErr == nil {
+		t.Errorf("peerWorkingDir(-1) = %q, want an error", dir)
+	}
+}
+
 // TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget pins the bound
 // on a whole run.
 //

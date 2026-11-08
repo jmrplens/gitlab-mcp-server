@@ -118,6 +118,17 @@ func TestInferTransport_StdinShape_DecidesTheTransport(t *testing.T) {
 			wantHTTP: false,
 			wantWhy:  "pipe",
 		},
+		// Neither a pipe nor a file, so it is compared with the null device,
+		// and it is not that either. The character device below answers the
+		// same comparison with /dev/zero, which Windows does not have, so there
+		// the comparison was only ever made with the null device itself (issue
+		// 1212). A directory is this shape on every platform.
+		{
+			name:     "a directory is neither a client nor the null device",
+			path:     dir,
+			wantHTTP: false,
+			wantWhy:  "stdin is d",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.skip {
@@ -152,6 +163,24 @@ func TestInferTransport_CharacterDeviceThatIsNotNull_ChoosesStdio(t *testing.T) 
 	gotHTTP, why := inferTransport()
 	if gotHTTP {
 		t.Errorf("a character device that is not %s chose HTTP; a terminal has this shape (reason: %s)", os.DevNull, why)
+	}
+}
+
+// TestInferTransport_TheProcessStdinIsAnAnonymousPipe_ChoosesStdio covers the
+// shape an MCP client really hands the process, on every platform (issue
+// 1212). The pipe case above points stdin at a FIFO, which Windows cannot
+// make, so there the pipe branch was never taken. The pipe os.Pipe makes is
+// the kind a client's spawn connects, and every platform reports it as a
+// named pipe; it is read through the default seam, off os.Stdin itself.
+func TestInferTransport_TheProcessStdinIsAnAnonymousPipe_ChoosesStdio(t *testing.T) {
+	heldOpenStdin(t)
+
+	gotHTTP, why := inferTransport()
+	if gotHTTP {
+		t.Errorf("a pipe on stdin chose HTTP; every MCP client connects one (reason: %s)", why)
+	}
+	if !strings.Contains(why, "pipe") {
+		t.Errorf("reason = %q, want it to name the pipe", why)
 	}
 }
 

@@ -402,6 +402,28 @@ func TestFindPeers_AProcessThatVanishedAfterTheListing_IsSkipped(t *testing.T) {
 	}
 }
 
+// TestFindPeers_APidNoProcessCanHave_IsSkipped covers the same skip on every
+// platform (issue 1212). The test above needs a child that has exited, which
+// it makes with /bin/sleep, and Windows has none, so there the name read never
+// failed. A negative pid names no process on any system, so reading its name
+// fails everywhere, as it does for a process that has gone.
+func TestFindPeers_APidNoProcessCanHave_IsSkipped(t *testing.T) {
+	withArgv0(t, filepath.Join(t.TempDir(), peerName(t)))
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() ([]*process.Process, error) {
+		return []*process.Process{{Pid: -1}}, nil
+	}
+
+	peers, err := findPeers()
+	if err != nil {
+		t.Fatalf("findPeers() error = %v, want nil: a process with no name to read is not a failure", err)
+	}
+	if len(peers) != 0 {
+		t.Errorf("findPeers() = %d peer(s), want none: the only listed process has no name to match", len(peers))
+	}
+}
+
 // TestForceKillPeers_ReportsWhatItDid covers the phase after the grace period,
 // in both of its outcomes.
 //
