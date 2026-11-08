@@ -57,7 +57,7 @@ on:
         default: ""
         type: string
       gate:
-        description: "The GOBCO_GATE the script runs with. all holds every condition; beyond:linux/amd64 holds only the files linux/amd64 does not build, as ci.yml's legs do. The figures are the same under either."
+        description: "The GOBCO_GATE the script runs with. all holds every condition, as ci.yml's legs do; beyond:linux/amd64 holds only the files linux/amd64 does not build. The figures are the same under either."
         default: all
         type: choice
         options:

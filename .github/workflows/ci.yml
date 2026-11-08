@@ -1564,13 +1564,16 @@ jobs:
       # measured by nothing (issue 1017). Not on Linux, which builds none of
       # them.
       #
-      # It gates on what only this platform can measure: GOBCO_GATE fails the
-      # leg on a condition not evaluated both ways in a file this platform
-      # builds and linux/amd64 does not, and prints and passes one in a file
-      # Linux builds too, which the local gate before a commit measures and no
-      # CI step does. Holding those here as well would fail a leg over a test
-      # the platform skips, for a condition already measured both ways. The
-      # figure for a whole package on Windows or macOS is conditions.yml's,
+      # It gates on every condition of both packages, GOBCO_GATE=all, as the
+      # local gate does on Linux (issue 1212). It used to gate only on the
+      # files this platform builds and linux/amd64 does not, and print and
+      # pass a condition in a file Linux builds too, because a test the
+      # platform skipped left such a condition one-way here while Linux
+      # measured it both ways. Each of those conditions is now evaluated both
+      # ways on every platform by a test that runs there, or sits in a file
+      # only the platform that uses it builds, so a condition this leg leaves
+      # one-way is one nothing measures on this platform, and fails it. The
+      # figure for a whole package on any system is conditions.yml's,
       # dispatched by hand, which runs this same script and fails on no figure.
       #
       # Through bash and the script itself rather than make, which
@@ -1597,7 +1600,7 @@ jobs:
         if: matrix.os != 'ubuntu-latest'
         shell: bash
         env:
-          GOBCO_GATE: beyond:linux/amd64
+          GOBCO_GATE: all
           GOBCO_TEST_FLAGS: -timeout=30m
         run: |
           status=0
