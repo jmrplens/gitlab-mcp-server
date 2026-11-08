@@ -1505,17 +1505,18 @@ jobs:
       #
       # Through the crash-aware runner rather than a bare go test: the Windows
       # leg dies inside the Go runtime now and then, for a reason recorded in
-      # the script and in issue 467, and the runner tells that crash apart
-      # from a failing test, reruns only the crashed package, and puts the
-      # outcome in the job summary. A failing test fails the leg as before.
-      # Flags carry their value in the same word, which is how the runner
-      # tells them from packages.
+      # cmd/crash_aware_tests and in issue 467, and the runner tells that
+      # crash apart from a failing test, reruns only the crashed package, and
+      # puts the outcome in the job summary. A failing test fails the leg as
+      # before. Flags carry their value in the same word, which is how the
+      # runner tells them from packages. It is a Go command, so the step runs
+      # in each platform's default shell and the Windows leg needs neither
+      # bash nor jq to read its own verdict.
       - name: Install gotestsum
         # The tools go.mod's tool directive names, gotestsum and govulncheck,
         # at the versions go.mod requires and go.sum pins by hash.
         run: go install tool
       - name: Unit suite
-        shell: bash
         # The same freshness answer the coverage job passes. This job asks the
         # platform question and none of the generated-artifact ones, but the
         # suite it runs carries a handful of tests that compare a committed
@@ -1524,7 +1525,7 @@ jobs:
         # policy exempts, three times over (issue 644).
         env:
           GITLAB_MCP_TEST_SNAPSHOT_PARITY: ${{ env.FRESHNESS }}
-        run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/... ./internal/...
+        run: go run ./cmd/crash_aware_tests/ test-results/unit-suite -count=1 -timeout=30m ./cmd/... ./internal/...
       # The go test -json streams the runner read its verdict from, kept only
       # when the leg failed. The log shows what gotestsum chose to print, and
       # for a package whose binary stopped mid-run that is fourteen test names
@@ -1653,7 +1654,7 @@ jobs:
   # for a reason recorded where the job is defined: the platform matrix has a
   # Windows leg that crashes inside the Go runtime now and then, tracked in
   # https://github.com/jmrplens/gitlab-mcp-server/issues/467. Its unit suite
-  # runs through .github/scripts/go-test-crash-aware.sh, which reruns a
+  # runs through cmd/crash_aware_tests, which reruns a
   # crashed package alone and records the crash in the job summary, so a red
   # leg now means a failing test or a package that crashed twice. It is
   # printed so a red one is seen; it becomes a deciding result once a run of

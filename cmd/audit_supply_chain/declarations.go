@@ -210,7 +210,6 @@ type scriptDeclaration struct {
 // it goes.
 var pendingPorts = map[int]string{
 	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
-	5:  "a command that tells a runtime crash from a failing test in a go test -json stream",
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
 	7:  "the Orbit fixture setup and indexer wait beside cmd/gen_orbit_record",
 	8:  "the SonarCloud scan beside the coverage command",
@@ -232,7 +231,6 @@ var declaredScripts = map[string]scriptDeclaration{
 		category: scriptJobGlue,
 		reason:   "retries cosign's keyless signing in release.yml's sign-attest job when the ambient OIDC endpoint answers with an error body, around the cosign the job installed",
 	},
-	".github/scripts/go-test-crash-aware.sh": {category: scriptPortPending, item: 5},
 	".github/scripts/needs-verdict.sh": {
 		category: scriptJobGlue,
 		reason:   "reads the needs context in ci.yml's checks job and in its ci job, the required CI verdict, two sparse fan-ins that set up no toolchain",
