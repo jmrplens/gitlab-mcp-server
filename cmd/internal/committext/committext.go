@@ -7,8 +7,8 @@ import "regexp"
 
 // EmDash is U+2014, the character nothing written in this repository uses:
 // not code, not a comment, not documentation, not a commit message. It is
-// built from its code point, since a formatter rewrites an escape in a
-// string literal into the character itself.
+// built from its code point, so this package does not carry the character it
+// refuses.
 const EmDash = string(rune(0x2014))
 
 // SkipCommand matches the five bracketed commands GitHub documents for

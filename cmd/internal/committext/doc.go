@@ -14,6 +14,6 @@
 // refuses more than it must and lets nothing more through. One definition is
 // one place to get that right (issue 1114, item 11).
 //
-// The characters are written as escapes, so this package does not carry what
-// it refuses.
+// The em dash is built from its code point, so this package does not carry
+// the character it refuses.
 package committext
