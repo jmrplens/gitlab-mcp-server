@@ -475,8 +475,8 @@ func livePeers() ([]probePeer, error) {
 
 // processCommandLine is a listed process's pid and the command line it was
 // started with.
-func processCommandLine(p *process.Process) (int32, []string, error) {
-	args, err := p.CmdlineSlice()
+func processCommandLine(p *process.Process) (pid int32, args []string, err error) {
+	args, err = p.CmdlineSlice()
 	return p.Pid, args, err
 }
 

@@ -1031,7 +1031,7 @@ func TestAllowedLocalDirs_ATempDirThatDoesNotExist_IsSkippedSilently(t *testing.
 		t.Setenv(name, missingTemp)
 	}
 	t.Setenv(UploadDirAllowlistEnv, "")
-	if got := os.TempDir(); got != missingTemp {
+	if got := os.TempDir(); got != missingTemp { //nolint:usetesting // What os.TempDir reads is the premise under test, not a directory to write into.
 		t.Fatalf("os.TempDir() = %q, want %q from the variables this test set", got, missingTemp)
 	}
 	var logged bytes.Buffer
