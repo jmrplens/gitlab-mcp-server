@@ -10,28 +10,36 @@ import (
 )
 
 // upstreamURL matches a full gitlab.com URL to a merge request, an issue, an
-// incident, a work item or an epic, up to its number: GitLab reads such a URL
-// in a commit message as a reference to that item, whatever project or group
-// it belongs to. GitLab's link patterns take the /-/ before the route as
-// optional and read a group's address (groups/<path>) for a work item or an
-// epic, so the path before the route is any run of segments, the - among
-// them. The reference is the first group.
-var upstreamURL = regexp.MustCompile(`(?i)\b(https?://gitlab\.com/(?:[\w.-]+/)+(?:merge_requests|issues(?:/incident)?|work_items|epics)/\d+)`)
+// incident, a work item or an epic, up to its number, and to a commit, up to
+// its SHA of seven to sixty-four hexadecimal digits (GitLab's SHA pattern,
+// SHA-256 included): GitLab reads such a URL in a commit message as a
+// reference to that item, whatever project or group it belongs to, and a
+// commit's mentions include the commits it names. GitLab's link patterns take
+// the /-/ before the route as optional and read a group's address
+// (groups/<path>) for a work item or an epic, so the path before the route is
+// any run of segments, the - among them. The reference is the first group.
+var upstreamURL = regexp.MustCompile(`(?i)\b(https?://gitlab\.com/(?:[\w.-]+/)+(?:(?:merge_requests|issues(?:/incident)?|work_items|epics)/\d+|commit/[0-9a-f]{7,64}))`)
 
 // upstreamPath matches a reference GitLab resolves across projects: a
 // project's full path, its groups and nested groups included, followed by !N
-// for a merge request or #N for an issue or a work item, and a group's full
-// path followed by &N for an epic. Either may open with the / GitLab reads as
+// for a merge request; a path of one segment or more followed by #N for an
+// issue or a work item; and a group's full path followed by &N for an epic.
+// One segment before #N is enough because GitLab reads the #N of a work item
+// after a namespace's full path, which a top-level group's name alone is, and
+// looks that path up as written. Before !N it is not: a merge request takes a
+// project's path, and a project named alone belongs to the namespace of the
+// project the commit is in. Any of them may open with the / GitLab reads as
 // the start of an absolute path. The path must not continue one already
 // started, so a URL or a longer path is not read from its middle; the
 // reference itself is the first group.
-var upstreamPath = regexp.MustCompile(`(?:^|[^\w./-])(/?(?:[\w.-]+(?:/[\w.-]+)+[!#]|[\w.-]+(?:/[\w.-]+)*&)\d+)\b`)
+var upstreamPath = regexp.MustCompile(`(?:^|[^\w./-])(/?(?:[\w.-]+(?:/[\w.-]+)+!|[\w.-]+(?:/[\w.-]+)*[#&])\d+)\b`)
 
 // upstreamBracketed matches the bracketed spelling GitLab resolves as well:
 // [issue:<path>/N], [work_item:<path>/N] and [epic:<path>/N]. An issue's path
 // needs a group and a project to leave the namespace of the project the
-// commit is in, as with #N; a work item or an epic can belong to a group,
-// whose path alone names it. The reference is the first group.
+// commit is in, as with !N; a work item or an epic can belong to a group,
+// whose path alone names it, as with #N and &N. The reference is the first
+// group.
 var upstreamBracketed = regexp.MustCompile(`(\[(?:issue:/?[\w.-]+(?:/[\w.-]+)+|(?:work_item|epic):/?[\w.-]+(?:/[\w.-]+)*)/\d+\])`)
 
 // upstreamSpellings are the three spellings, each holding the reference as
@@ -39,11 +47,14 @@ var upstreamBracketed = regexp.MustCompile(`(\[(?:issue:/?[\w.-]+(?:/[\w.-]+)+|(
 var upstreamSpellings = []*regexp.Regexp{upstreamURL, upstreamPath, upstreamBracketed}
 
 // upstreamReferences returns the references to another project's or group's
-// merge requests, issues, work items and epics that line carries, in the
-// order it carries them and each once. A bare #N or !N is not one, and
-// neither is a project's path alone before it: GitLab resolves those in the
+// merge requests, issues, work items, epics and commits that line carries, in
+// the order it carries them and each once. A bare #N or !N is not one, and
+// neither is a project's path alone before !N: GitLab resolves those in the
 // project the commit is in, or in its namespace, which for this repository is
-// its own mirror's.
+// its own mirror's. A path alone before #N is one, since GitLab reads it as a
+// top-level group as well. A commit named as group/project@sha is not looked
+// for, although GitLab reads it too: that is how a workflow pins a GitHub
+// action, and the messages of main's history carry such pins.
 func upstreamReferences(line string) []string {
 	type found struct {
 		at  int

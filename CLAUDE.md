@@ -24,11 +24,12 @@
 > documents, or a skip-checks trailer), not even quoted in backticks: the squash commit of #1094 carried one, and
 > main ran no CI and the v3.1.0 tag on it no release. Nor does it name an item of
 > another project or group the way GitLab resolves it (`group/project!N`,
-> `group/project#N`, an epic's `group&N`, nested groups included, or a gitlab.com
-> merge request, issue, work item or epic URL): the GitLab mirror reads the squash
+> `group/project#N`, a top-level group's work item `group#N`, an epic's `group&N`,
+> nested groups included, or a gitlab.com merge request, issue, work item, epic or
+> commit URL): the GitLab mirror reads the squash
 > commit and notes the mention on that item for good, so a description names the row
 > of `docs/development/upstream-bugs.md` instead, writes a GitHub issue as its URL
-> rather than `owner/repo#N`, and keeps a bare `#N` for this repository's own items.
+> rather than `owner/repo#N` or `repo#N`, and keeps a bare `#N` for this repository's own items.
 > `make check-pr-description` refuses both ([Static Analysis](docs/development/static-analysis.md#the-em-dash-gate)).
 >
 > **Every commit is signed off** (`git commit -s`): a `Signed-off-by:` trailer naming

@@ -338,8 +338,8 @@ rewritten to take it back. Name the row of docs/development/upstream-bugs.md
 that records the item instead.
 
 An item of another forge written the same way, such as a GitHub issue as
-owner/repo#N, is refused too, since GitLab reads it as a project's path of
-its own: write it as its github.com URL, which passes, or name it in words.
+owner/repo#N or repo#N, is refused too, since GitLab reads the path as its own:
+write it as its github.com URL, which passes, or name it in words.
 Then edit the description:
 
     gh pr edit <number>
