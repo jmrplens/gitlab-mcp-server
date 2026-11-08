@@ -445,7 +445,7 @@ go run ./cmd/format_md_tables/ --check
 (cd site && pnpm -s run i18n:check)   # every English page has its Spanish twin, and the reverse; code blocks match outside comments
 (cd site && pnpm -s run facts:check && pnpm -s run chips:check && pnpm -s run llms:check)
 (cd site && pnpm -s run build && pnpm -s run lint)   # the whole site gate; lint reads the build
-node scripts/check-doc-links.mjs   # from the root: tracked local links and site URLs, anchors included
+go run ./cmd/audit_doc_links/   # from the root: local links and site URLs, anchors included
 
 # MCP Inspector (interactive tool testing UI at http://127.0.0.1:6274)
 make inspector                             # compile + launch Inspector via stdio

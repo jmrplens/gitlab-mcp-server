@@ -898,18 +898,18 @@ jobs:
         with:
           path: ~/.npm/_npx
           key: npx-mcpb-${{ steps.mcpb.outputs.version }}
-      # Node-based freshness gates live here rather than beside the Go gates,
-      # which have no Node toolchain. check-doc-links resolves every relative
-      # link in tracked Markdown, so it needs the working tree, not just the Go
-      # module.
-      - name: Check documentation local links
-        run: make check-doc-links
       # check-mcpb derives the per-OS manifests with cmd/release_packages,
       # which imports nothing outside this module, so the toolchain is the
-      # only download.
+      # only download. The mcpb CLI it runs is what keeps Node in this job.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
+      # The link check rides beside the Markdown lint because both read every
+      # page: cmd/audit_doc_links resolves every relative link and every link
+      # to the documentation site against the working tree, so it needs the
+      # pages and the site's sources, not just the Go module.
+      - name: Check documentation local links
+        run: make check-doc-links
       - name: Check Claude Desktop extension manifest
         run: make check-mcpb
 
@@ -1226,10 +1226,6 @@ jobs:
       # scripts/npm_cli_js_test.py runs the npm launcher against a stand-in
       # server and holds it to passing signals on, and to stopping the server
       # when the shell npm runs it through dies, with the runner's node.
-      # scripts/check_doc_links_test.py runs the link checker,
-      # scripts/check-doc-links.mjs, in a throwaway git repository holding a
-      # stand-in site, and holds it to refusing a link to a site page, a
-      # heading or a served file that is not there, under both addresses.
       # scripts/site_normalize_html_test.py runs the site's post-build pass,
       # site/scripts/normalize-html.mjs, over a stand-in dist/ tree, and holds
       # it to failing the build on a redirect page whose target the site does

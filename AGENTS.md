@@ -120,8 +120,9 @@ runs the Go freshness gates (`check-llms`, `check-tool-reference`,
 `check-lhm-manifest`, `check-site-stats`, `check-testing-docs` and
 `check-md-tables` among them, beside `check-server-json`, `check-openplugin`,
 `check-footprint` and `check-action-catalog-manifest`), the `analyze-md` job
-runs markdownlint over every `.md` and `.mdx` file and the two gates that need
-Node (`check-doc-links`, `check-mcpb`), `site-lint` runs the site's static
+runs markdownlint over every `.md` and `.mdx` file, the link check that reads
+every page (`check-doc-links`) and the gate that needs Node (`check-mcpb`),
+`site-lint` runs the site's static
 checks and `site-build` builds the site and checks what it wrote. Adding a new
 `check-*` target means adding it to one of those jobs. The README statistics, since removed, and
 `check-footprint` sat stale on `main` for several releases precisely because
