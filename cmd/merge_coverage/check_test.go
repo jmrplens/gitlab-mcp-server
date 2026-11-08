@@ -238,6 +238,34 @@ func TestCheck_Verdicts(t *testing.T) {
 	}
 }
 
+// TestDroppedIn_Packages_CountTheirOwnDeclarations holds the count each
+// verdict is given to the dropped declarations of its own package, named as
+// the record names it: the module's root package by the empty name, whose
+// files the record names with no directory, a package below it by its
+// directory, and a package with no dropped declaration of its own at none.
+func TestDroppedIn_Packages_CountTheirOwnDeclarations(t *testing.T) {
+	gone := []dropped{
+		{file: "root.go", declaration: "func Root", why: whyChanged},
+		{file: "test/e2e/modeleval/c.go", declaration: "func C", why: whyGone},
+	}
+	tests := []struct {
+		name string
+		pkg  string
+		want int
+	}{
+		{name: "the module's root package", pkg: "", want: 1},
+		{name: "a package below the root", pkg: "test/e2e/modeleval", want: 1},
+		{name: "a package with none dropped", pkg: "test/e2e/internal/fixture", want: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := droppedIn(gone, tc.pkg); got != tc.want {
+				t.Errorf("droppedIn(%q) = %d, want %d", tc.pkg, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCheck_Failures_TwoPackagesJoined holds a gate that fails for two
 // packages to one error naming both, in the order asked.
 func TestCheck_Failures_TwoPackagesJoined(t *testing.T) {

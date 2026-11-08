@@ -129,11 +129,16 @@ func verdict(r row, p recordPackage, droppedHere int, deferred bool) (string, bo
 const staleNote = " The record predates the package (recorded declarations that no longer match: %d; statements now and in the record: %d and %d), so below a stack's top this is a note: the top records a complete run of its tree."
 
 // droppedIn counts the dropped declarations of one package, named as the
-// record names it.
+// record names it, the module's root package by the empty name the record
+// gives it.
 func droppedIn(gone []dropped, pkg string) int {
 	n := 0
 	for _, d := range gone {
-		if path.Dir(d.file) == pkg {
+		dir := path.Dir(d.file)
+		if dir == "." {
+			dir = ""
+		}
+		if dir == pkg {
 			n++
 		}
 	}
