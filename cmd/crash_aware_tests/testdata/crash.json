@@ -1,0 +1,18 @@
+{"Time":"2026-09-12T10:00:00.000000Z","Action":"start","Package":"example.com/m/alpha"}
+{"Time":"2026-09-12T10:00:00.010000Z","Action":"run","Package":"example.com/m/alpha","Test":"TestAlpha"}
+{"Time":"2026-09-12T10:00:00.010300Z","Action":"pass","Package":"example.com/m/alpha","Test":"TestAlpha","Elapsed":0}
+{"Time":"2026-09-12T10:00:00.010400Z","Action":"output","Package":"example.com/m/alpha","Output":"PASS\n"}
+{"Time":"2026-09-12T10:00:00.010600Z","Action":"pass","Package":"example.com/m/alpha","Elapsed":0.012}
+{"Time":"2026-09-12T10:00:01.000000Z","Action":"start","Package":"example.com/m/server"}
+{"Time":"2026-09-12T10:00:01.010000Z","Action":"run","Package":"example.com/m/server","Test":"TestServeHTTP"}
+{"Time":"2026-09-12T10:00:01.010100Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"=== RUN   TestServeHTTP\n"}
+{"Time":"2026-09-12T10:00:03.000000Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"Exception 0xc0000005 0x0 0x7ffb2c1d4e10 0x7ffb2c1d4e10\n"}
+{"Time":"2026-09-12T10:00:03.000100Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"fatal error: unexpected signal during runtime execution\n"}
+{"Time":"2026-09-12T10:00:03.000200Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"[signal 0xc0000005 code=0x0 addr=0x0 pc=0x7ffb2c1d4e10]\n"}
+{"Time":"2026-09-12T10:00:03.000300Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"fatal error: unexpected signal during runtime execution\n"}
+{"Time":"2026-09-12T10:00:03.100000Z","Action":"output","Package":"example.com/m/server","Output":"FAIL\texample.com/m/server\t2.100s\n"}
+{"Time":"2026-09-12T10:00:03.100100Z","Action":"fail","Package":"example.com/m/server","Elapsed":2.1}
+{"Time":"2026-09-12T10:00:04.000000Z","Action":"start","Package":"example.com/m/toolutil"}
+{"Time":"2026-09-12T10:00:04.010000Z","Action":"run","Package":"example.com/m/toolutil","Test":"TestWrapErr"}
+{"Time":"2026-09-12T10:00:04.010100Z","Action":"run","Package":"example.com/m/toolutil","Test":"TestFinishToolResult"}
+{"Time":"2026-09-12T10:00:04.721000Z","Action":"fail","Package":"example.com/m/toolutil","Elapsed":0.721}

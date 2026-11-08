@@ -1,0 +1,8 @@
+{"Time":"2026-09-12T10:05:00.000000Z","Action":"start","Package":"example.com/m/server"}
+{"Time":"2026-09-12T10:05:00.010000Z","Action":"run","Package":"example.com/m/server","Test":"TestServeHTTP"}
+{"Time":"2026-09-12T10:05:02.000000Z","Action":"pass","Package":"example.com/m/server","Test":"TestServeHTTP","Elapsed":2}
+{"Time":"2026-09-12T10:05:02.000100Z","Action":"pass","Package":"example.com/m/server","Elapsed":2.01}
+{"Time":"2026-09-12T10:05:03.000000Z","Action":"start","Package":"example.com/m/toolutil"}
+{"Time":"2026-09-12T10:05:03.010000Z","Action":"run","Package":"example.com/m/toolutil","Test":"TestWrapErr"}
+{"Time":"2026-09-12T10:05:03.020000Z","Action":"pass","Package":"example.com/m/toolutil","Test":"TestWrapErr","Elapsed":0.01}
+{"Time":"2026-09-12T10:05:03.030000Z","Action":"pass","Package":"example.com/m/toolutil","Elapsed":0.03}
