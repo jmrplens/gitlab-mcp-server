@@ -16033,7 +16033,9 @@ resolves no boundary, which the merge request leaves as a separate question.
   any other undeclared type. The undeclared set the record holds beside the
   list is computed with the image's own `graphql_object_type?`, which
   `cmd/gen_api_live/introspect.rb` loads from the image and calls rather than
-  copies ([issue 1492](https://github.com/jmrplens/gitlab-mcp-server/issues/1492)):
+  copies, keeping the rule by name only when the image ships no such method
+  or one that does not take a name and a type
+  ([issue 1492](https://github.com/jmrplens/gitlab-mcp-server/issues/1492)):
   the record taken from 19.5.0 leaves the three out as that release's list
   does, and one taken from 19.6 or later computes them, as the list GitLab
   ships from then on names them, with no change to the script at the re-pin.
