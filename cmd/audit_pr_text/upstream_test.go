@@ -43,6 +43,17 @@ func TestUpstreamReferences_EachSpellingGitLabResolves_IsFound(t *testing.T) {
 			line: "a/b!1 and c/d#2 and a/b!1 again",
 			want: []string{"a/b!1", "c/d#2"},
 		},
+		{
+			name: "two URLs on one line",
+			line: "https://gitlab.com/a/b/-/issues/1 and https://gitlab.com/c/d/-/merge_requests/2",
+			want: []string{"https://gitlab.com/a/b/-/issues/1", "https://gitlab.com/c/d/-/merge_requests/2"},
+		},
+		{
+			name: "a path before a URL, in the line's order",
+			line: "x/y#3 then https://gitlab.com/a/b/-/issues/4",
+			want: []string{"x/y#3", "https://gitlab.com/a/b/-/issues/4"},
+		},
+		{name: "a number running into a word", line: "a/b#12abc"},
 		{name: "a bare issue number", line: "Closes #1477, refs #1114."},
 		{name: "a bare merge request number", line: "like !12 here"},
 		{name: "a path with no number", line: "gitlab-org/gitlab is the project"},

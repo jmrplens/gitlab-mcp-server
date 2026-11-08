@@ -53,6 +53,19 @@
 // cmd/internal/committext, for this command and for the release notes rule
 // of cmd/audit_supply_chain alike.
 //
+// It also refuses a reference GitLab resolves to an item of another project
+// (issue 1477): a project's path, nested groups included, followed by !N or
+// #N, and a full gitlab.com URL to a merge request or an issue. The GitLab
+// mirror of this repository reads the squash commit like any commit pushed to
+// it, and GitLab adds a "mentioned in commit" note to every item a message
+// names that way, on somebody else's project; main cannot be rewritten to
+// take it back. A description names the row of
+// docs/development/upstream-bugs.md that records the item instead. A bare #N
+// names this repository's own items and passes. The rule reads the whole
+// title and body, code spans included, since GitLab reads a commit message as
+// plain text when it extracts mentions. File content is out of its scope:
+// pages cite upstream items however they need to.
+//
 // A branch with no pull request open passes, having no description to land.
 // A gh that is missing, and a description that cannot be read, fail and say
 // so, because a check that cannot read what it judges must not report that

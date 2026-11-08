@@ -75,6 +75,24 @@ type findings struct {
 	dashes   []string
 	injected []string
 	skips    []string
+	// upstream holds the locations of the upstream references, and
+	// references the references themselves, each once.
+	upstream   []string
+	references []string
+}
+
+// addUpstream records that the text at location carries the upstream
+// references refs, when it carries any.
+func (f *findings) addUpstream(location string, refs []string) {
+	if len(refs) == 0 {
+		return
+	}
+	f.upstream = append(f.upstream, location)
+	for _, ref := range refs {
+		if !slices.Contains(f.references, ref) {
+			f.references = append(f.references, ref)
+		}
+	}
 }
 
 // runDescription judges the pull request title and body and returns the exit
@@ -104,12 +122,13 @@ func runDescription(ctx context.Context, env func(string) string, stdout, stderr
 	report(stdout, stderr, f.dashes, dashFailure)
 	report(stdout, stderr, f.injected, injectedFailure)
 	report(stdout, stderr, f.skips, skipFailureText)
-	if len(f.dashes)+len(f.injected)+len(f.skips) > 0 {
+	report(stdout, stderr, f.upstream, fmt.Sprintf(upstreamFailure, "    "+strings.Join(f.references, "\n    ")))
+	if len(f.dashes)+len(f.injected)+len(f.skips)+len(f.upstream) > 0 {
 		fmt.Fprintln(stderr)
 		fmt.Fprintln(stderr, "Re-check with: make check-pr-description")
 		return 1
 	}
-	fmt.Fprintln(stdout, "OK: the title and body carry no em dash, no injected block and no skip command.")
+	fmt.Fprintln(stdout, "OK: the title and body carry no em dash, no injected block, no skip command and no upstream reference.")
 	return 0
 }
 
@@ -228,12 +247,14 @@ func gh(ctx context.Context, args ...string) (string, error) {
 // once per kind of finding, as "body:N:text".
 func judgeDescription(d description) findings {
 	var f findings
+	titleLocation := "title: " + d.title
 	if strings.Contains(d.title, committext.EmDash) {
-		f.dashes = append(f.dashes, "title: "+d.title)
+		f.dashes = append(f.dashes, titleLocation)
 	}
 	if anyLine(d.title, committext.SkipCommand.MatchString) {
-		f.skips = append(f.skips, "title: "+d.title)
+		f.skips = append(f.skips, titleLocation)
 	}
+	f.addUpstream(titleLocation, upstreamReferences(d.title))
 	for i, line := range strings.Split(d.body, "\n") {
 		// A description edited in the browser comes back from the API with
 		// Windows line endings.
@@ -248,6 +269,7 @@ func judgeDescription(d description) findings {
 		if committext.SkipCommand.MatchString(line) || committext.SkipChecksTrailer.MatchString(line) {
 			f.skips = append(f.skips, location)
 		}
+		f.addUpstream(location, upstreamReferences(line))
 	}
 	return f
 }
@@ -299,6 +321,23 @@ again on the next one.
 It matters because a squash merge copies the description into main's history,
 where editing the pull request afterwards does not reach the commit. That is
 how pull request 832 carried one in permanently.
+`
+
+// upstreamFailure is what an upstream reference in the description costs,
+// its %s standing for the references found, one per line (issue 1477).
+const upstreamFailure = `
+FAIL: the pull request title or body names an item of another project the way GitLab resolves it:
+
+%s
+
+This repository squash merges, so the description becomes the commit message
+on main, and the GitLab mirror of this repository reads that message like any
+commit pushed to it: GitLab adds a "mentioned in commit" note to every item a
+message names that way, on somebody else's project, and main cannot be
+rewritten to take it back. Name the row of docs/development/upstream-bugs.md
+that records the item instead, then edit the description:
+
+    gh pr edit <number>
 `
 
 // skipFailureText is what a skip command in the description costs.
