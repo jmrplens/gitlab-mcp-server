@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
@@ -30,18 +31,25 @@ func stampPath(profile string) string {
 
 // sourcesStamp returns the stamp of the packages as the tree holds them: a
 // line for every Go file of each package's directory that is not a test, the
-// module's root package's directory being the module root, the packages in
-// the order given and the files by name, each with the SHA-256 of its bytes
-// and its path below the module root, in sha256sum's format, so sha256sum -c
-// checks a stamp from the module root. A file a build constraint leaves out
-// is stamped too, so a stamp is never laxer than the build.
+// module's root package's directory being the module root, each package once
+// and by directory whatever order they are given in, as go test -coverpkg
+// takes them in any, and the files by name, each with the SHA-256 of its
+// bytes and its path below the module root, in sha256sum's format, so
+// sha256sum -c checks a stamp from the module root. A file a build
+// constraint leaves out is stamped too, so a stamp is never laxer than the
+// build.
 func sourcesStamp(packages []string) ([]byte, error) {
-	var stamp bytes.Buffer
+	dirs := make([]string, 0, len(packages))
 	for _, pkg := range packages {
 		dir := goprogram.TrimModulePath(pkg)
 		if dir == "" {
 			dir = "."
 		}
+		dirs = append(dirs, dir)
+	}
+	slices.Sort(dirs)
+	var stamp bytes.Buffer
+	for _, dir := range slices.Compact(dirs) {
 		entries, err := os.ReadDir(filepath.FromSlash(dir))
 		if err != nil {
 			return nil, fmt.Errorf("stamping the sources of %s: %w", dir, err)

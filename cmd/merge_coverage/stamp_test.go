@@ -36,7 +36,7 @@ func TestStampPath_NamesTheStampBesideTheProfile(t *testing.T) {
 // TestSourcesStamp_Packages_ListEverySourceButTheTests pins the stamp of a
 // tree whose fixture package holds a second source, a test, a file that is
 // not Go and a package of its own below it: every source of each package, the
-// packages in the order given and the files by name, and nothing else.
+// packages by directory and the files by name, and nothing else.
 func TestSourcesStamp_Packages_ListEverySourceButTheTests(t *testing.T) {
 	const second = "package fixture\n\nfunc B() {}\n"
 	writeTree(t, map[string]string{
@@ -82,6 +82,51 @@ func TestSourcesStamp_ModuleRootPackage_IsStampedFromTheRoot(t *testing.T) {
 	run := []source{{path: filepath.Join(dir, "e2e-ce-coverprofile.out"), half: onlineHalf}}
 	if checkErr := checkStamps(run, packages); checkErr != nil {
 		t.Errorf("checkStamps() with the root package's stamp = %v, want nil", checkErr)
+	}
+}
+
+// TestSourcesStamp_PackagesInAnyOrder_StampTheSameSources holds the stamp to
+// the packages it lists and not to the order -packages names them in, which
+// go test -coverpkg does not depend on either: the packages named the other
+// way round, or one of them twice, stamp the same sources the same way.
+func TestSourcesStamp_PackagesInAnyOrder_StampTheSameSources(t *testing.T) {
+	writeTree(t, nil)
+	want := treeStamp(fixtureSource)
+	tests := []struct {
+		name     string
+		packages []string
+	}{
+		{name: "in the order the Makefile names them", packages: recordPackages},
+		{name: "the other way round", packages: []string{modelevalPkg, fixturePkg}},
+		{name: "one of them twice", packages: []string{modelevalPkg, fixturePkg, modelevalPkg}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sourcesStamp(tc.packages)
+			if err != nil {
+				t.Fatalf("sourcesStamp() error = %v", err)
+			}
+			if string(got) != want {
+				t.Errorf("stamp =\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestCheckStamps_PassStampedWithThePackagesInAnotherOrder_IsTheTrees holds a
+// record to the sources a pass stamped and not to the order the two named the
+// packages in: a pass the runner stamped with E2E_COVERPKG naming them the
+// other way round from the record's -packages is still the tree's.
+func TestCheckStamps_PassStampedWithThePackagesInAnotherOrder_IsTheTrees(t *testing.T) {
+	writeTree(t, nil)
+	dir := t.TempDir()
+	run := filepath.Join(dir, "e2e-ce-coverprofile.out")
+	if err := writeStamp(stampPath(run), []string{modelevalPkg, fixturePkg}); err != nil {
+		t.Fatalf("writeStamp() error = %v", err)
+	}
+
+	if err := checkStamps([]source{{path: run, half: onlineHalf}}, recordPackages); err != nil {
+		t.Errorf("checkStamps() = %v, want nil", err)
 	}
 }
 

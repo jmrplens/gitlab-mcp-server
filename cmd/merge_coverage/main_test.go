@@ -311,8 +311,8 @@ func stampLine(file, text string) string {
 }
 
 // treeStamp is the stamp of the fixture tree with the fixture package's a.go
-// holding source: that file, then modeleval's c.go, the packages in the
-// order -packages names them.
+// holding source: that file, then modeleval's c.go, the packages by
+// directory.
 func treeStamp(source string) string {
 	return stampLine("test/e2e/internal/fixture/a.go", source) + stampLine("test/e2e/modeleval/c.go", modelevalSource)
 }
