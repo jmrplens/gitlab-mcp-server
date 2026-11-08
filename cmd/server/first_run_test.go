@@ -172,6 +172,54 @@ func TestIsInteractiveTerminal_ACygwinTerminal_IsAPerson(t *testing.T) {
 	}
 }
 
+// TestNeedsFirstRunGuidance_DecidesFromTheTransportTheTerminalAndBothValues
+// covers the guard main runs before anything else, on every platform (issue
+// 1212). It used to be inline in main, where only the Linux test that gives
+// the process a pseudo-terminal reached its two environment checks, so on
+// Windows and macOS neither was ever evaluated. The screen is for a person
+// who started stdio mode by hand without the two values it needs: either one
+// missing is enough, HTTP mode never shows it, and a pipe never does.
+func TestNeedsFirstRunGuidance_DecidesFromTheTransportTheTerminalAndBothValues(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		useHTTP     bool
+		interactive bool
+		env         map[string]string
+		want        bool
+		// asksTerminal is whether the terminal is asked at all: HTTP mode
+		// decides without it.
+		asksTerminal bool
+	}{
+		{name: "a person, nothing configured", interactive: true, asksTerminal: true, want: true},
+		{name: "a person, only the token", interactive: true, asksTerminal: true, env: map[string]string{"GITLAB_TOKEN": "glpat-x"}, want: true},
+		{name: "a person, only the URL", interactive: true, asksTerminal: true, env: map[string]string{"GITLAB_URL": "https://gitlab.example.com"}, want: true},
+		{
+			name: "a person, both configured", interactive: true, asksTerminal: true,
+			env: map[string]string{"GITLAB_TOKEN": "glpat-x", "GITLAB_URL": "https://gitlab.example.com"},
+		},
+		{name: "a client on a pipe, nothing configured", asksTerminal: true},
+		{name: "HTTP mode, nothing configured", useHTTP: true, interactive: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			asked := false
+			interactive := func() bool {
+				asked = true
+				return tt.interactive
+			}
+			getenv := func(name string) string { return tt.env[name] }
+			if got := needsFirstRunGuidance(tt.useHTTP, interactive, getenv); got != tt.want {
+				t.Errorf("needsFirstRunGuidance() = %v, want %v", got, tt.want)
+			}
+			if asked != tt.asksTerminal {
+				t.Errorf("the terminal was asked: %v, want %v", asked, tt.asksTerminal)
+			}
+		})
+	}
+}
+
 // TestExecutableName_FallsBackToTheProjectName pins the fallback rather than the
 // happy path, because the happy path is whatever the test binary is called.
 // The name is printed for the reader to type, so an empty string would leave

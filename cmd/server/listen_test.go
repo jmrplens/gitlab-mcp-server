@@ -456,14 +456,12 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 		name    string
 		path    string
 		wantErr string
-		// posixOnly marks a case whose premise the platform has to supply, and
-		// which therefore cannot be built everywhere. The refusal each one
-		// pins is still a property of this server; what is POSIX-specific is
-		// the way the case arranges for it. Kept in the table rather than
-		// split into a constrained file, because these four are one question,
-		// "which paths must listenUnix refuse", and reading them apart is
-		// worse than reading them with a skip.
-		posixOnly string
+		// wantErrWindows is what Windows refuses the same path with, where
+		// it differs. Each of these paths is refused there too, by the bind
+		// rather than by a check of ours, and running them there is what
+		// evaluates the bind's failure on Windows at all (issue 1212): they
+		// used to be skipped, and no other test makes that bind fail.
+		wantErrWindows string
 	}{
 		{
 			name:    "its directory does not exist",
@@ -476,10 +474,10 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			wantErr: "--http-addr",
 			// Windows reports a path under a regular file as ERROR_PATH_NOT_FOUND,
 			// which Errno.Is maps to fs.ErrNotExist, so lstat answers "nothing
-			// there" rather than the ENOTDIR this leans on. Answering an absent
-			// path with "nothing to clear" is correct; it just cannot be told
-			// apart from the case being built here.
-			posixOnly: "only POSIX distinguishes ENOTDIR from ENOENT, so a path under a file reads as simply absent here",
+			// there" rather than the ENOTDIR this leans on, and the directory,
+			// a file, stats. Answering an absent path with "nothing to clear" is
+			// correct; the bind under a file is what refuses it there.
+			wantErrWindows: "listening on unix socket",
 		},
 		{
 			name:    "the path is already something else",
@@ -500,15 +498,16 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			// with "bind: invalid argument" rather than our sentence. Nothing
 			// is bound that should not be; the operator just gets the worse
 			// message.
-			posixOnly: "the length guard exists to cover a staging-and-link bind that only the POSIX path does",
+			wantErrWindows: "listening on unix socket",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if tt.posixOnly != "" && runtime.GOOS == "windows" {
-				t.Skip(tt.posixOnly)
+			want := tt.wantErr
+			if tt.wantErrWindows != "" && runtime.GOOS == "windows" {
+				want = tt.wantErrWindows
 			}
 
 			listener, err := listenHTTP(t.Context(), tt.path, config.DefaultSocketMode)
@@ -517,10 +516,30 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 				_ = listener.Close()
 				t.Fatalf("listenHTTP(%q) bound a path it must refuse", tt.path)
 			}
-			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("error = %q, want it to say %q", err, tt.wantErr)
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err, want)
 			}
 		})
+	}
+}
+
+// TestListenHTTP_UnixSocketWithoutAMode_BindsOnEveryPlatform covers the zero
+// mode, which a Config assembled without the flag carries, on every platform
+// (issue 1212): the default is taken and the socket is bound. What the mode
+// then is on disk is a POSIX property, held in listen_unix_test.go; Windows
+// has no bits to compare, and was the platform on which the zero case was
+// never evaluated.
+func TestListenHTTP_UnixSocketWithoutAMode_BindsOnEveryPlatform(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(socketDir(t), "zero.sock")
+	listener, err := listenHTTP(t.Context(), path, 0)
+	if err != nil {
+		t.Fatalf("listenHTTP with a zero mode: %v", err)
+	}
+	defer listener.Close()
+	if info, statErr := os.Stat(path); statErr != nil || info.Mode()&fs.ModeSocket == 0 {
+		t.Fatalf("the bound path is not a socket: %v", statErr)
 	}
 }
 

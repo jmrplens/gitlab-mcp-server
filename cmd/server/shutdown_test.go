@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,6 +87,103 @@ func TestShutdownGracePeriod_IsTheFiveSecondsTheReferenceDocuments(t *testing.T)
 	}
 }
 
+// fakePeer is a peer stopPeers can be pointed at on any platform: it stops on
+// Terminate or ignores it, as told, and records what it was asked. Windows
+// ends a real peer with TerminateProcess, which no process can decline, so the
+// wedged peer that reaches the grace period and the kill cannot be built
+// there from a real process (issue 1212); this one can.
+type fakePeer struct {
+	stopsOnTerm bool
+	running     atomic.Bool
+	terminated  atomic.Bool
+	killed      atomic.Bool
+}
+
+// newFakePeer is a running fake peer that stops on Terminate or ignores it.
+func newFakePeer(stopsOnTerm bool) *fakePeer {
+	p := &fakePeer{stopsOnTerm: stopsOnTerm}
+	p.running.Store(true)
+	return p
+}
+
+// Terminate records the request and stops the peer if it heeds one.
+func (p *fakePeer) Terminate() error {
+	p.terminated.Store(true)
+	if p.stopsOnTerm {
+		p.running.Store(false)
+	}
+	return nil
+}
+
+// IsRunning reports whether the peer is still running.
+func (p *fakePeer) IsRunning() (bool, error) { return p.running.Load(), nil }
+
+// Kill records the kill and stops the peer.
+func (p *fakePeer) Kill() error {
+	p.killed.Store(true)
+	p.running.Store(false)
+	return nil
+}
+
+// TestStopPeers_EachWayAPeerGoes_IsReportedAndKilledOnlyWhenWedged covers the
+// two phases of --shutdown on every platform (issue 1212): peers that stop on
+// the request are reported terminated at the first poll, a peer that ignores
+// it is counted alive at a poll, killed once the grace period lapses and
+// reported, and a peer that stops between the last poll and the deadline is
+// left alone by the kill and reported terminated. The grace periods are
+// chosen against the 200ms poll: well past it where a poll has to land first,
+// and below it where the deadline has to come before any poll.
+func TestStopPeers_EachWayAPeerGoes_IsReportedAndKilledOnlyWhenWedged(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		stopsOnTerm []bool
+		grace       time.Duration
+		say         string
+		wantKilled  []bool
+	}{
+		{
+			name: "every peer stops on the request", stopsOnTerm: []bool{true, true}, grace: time.Minute,
+			say: "shutdown: all instances terminated\n", wantKilled: []bool{false, false},
+		},
+		{
+			name: "a wedged peer is killed after the grace period", stopsOnTerm: []bool{true, false}, grace: 450 * time.Millisecond,
+			say: "shutdown: force-killed 1 instance(s)\n", wantKilled: []bool{false, true},
+		},
+		{
+			name: "a peer gone before the deadline is not killed", stopsOnTerm: []bool{true}, grace: time.Millisecond,
+			say: "shutdown: all instances terminated\n", wantKilled: []bool{false},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			fakes := make([]*fakePeer, 0, len(tt.stopsOnTerm))
+			peers := make([]shutdownPeer, 0, len(tt.stopsOnTerm))
+			for _, stops := range tt.stopsOnTerm {
+				fake := newFakePeer(stops)
+				fakes = append(fakes, fake)
+				peers = append(peers, fake)
+			}
+			var said bytes.Buffer
+			if code := stopPeers(peers, &said, tt.grace); code != 0 {
+				t.Errorf("stopPeers() = %d, want 0", code)
+			}
+			if said.String() != tt.say {
+				t.Errorf("stopPeers said %q, want %q", said.String(), tt.say)
+			}
+			for i, fake := range fakes {
+				if !fake.terminated.Load() {
+					t.Errorf("peer %d was never asked to terminate", i)
+				}
+				if got := fake.killed.Load(); got != tt.wantKilled[i] {
+					t.Errorf("peer %d killed: %v, want %v", i, got, tt.wantKilled[i])
+				}
+			}
+		})
+	}
+}
+
 // TestCountAlive_CountsOnlyProcessesStillRunning covers the poll's predicate.
 //
 // It decides when the graceful phase is over, so a count that never reaches
@@ -137,7 +235,7 @@ func TestCountAlive_CountsOnlyProcessesStillRunning(t *testing.T) {
 			if tt.withGone {
 				procs = append(procs, gone())
 			}
-			if got := countAlive(procs); got != tt.want {
+			if got := countAlive(shutdownPeersOf(procs)); got != tt.want {
 				t.Errorf("countAlive = %d, want %d", got, tt.want)
 			}
 		})
@@ -336,7 +434,7 @@ func TestForceKillPeers_ReportsWhatItDid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var said bytes.Buffer
-			forceKillPeers(tt.peers, &said)
+			forceKillPeers(shutdownPeersOf(tt.peers), &said)
 			if said.String() != tt.want {
 				t.Errorf("forceKillPeers said %q, want %q", said.String(), tt.want)
 			}

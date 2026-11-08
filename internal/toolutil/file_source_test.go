@@ -147,6 +147,35 @@ func TestReadFileOrBase64_TruncatedReadReturnsWrappedError(t *testing.T) {
 	}
 }
 
+// TestReadFileOrBase64_AReadShorterThanItsStat_ReturnsWrappedError is the
+// short read above on every platform (issue 1212). The sysfs quirk exists on
+// Linux alone, so on Windows and macOS the read's failure was never reached.
+// Here the descriptor the open hands back is positioned at its end, the way a
+// file that shrank between the stat and the read leaves it: the stat still
+// promises every byte, and the read finds none.
+func TestReadFileOrBase64_AReadShorterThanItsStat_ReturnsWrappedError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "upload.txt")
+	if err := os.WriteFile(path, []byte("twelve bytes"), 0o600); err != nil {
+		t.Fatalf("write the upload: %v", err)
+	}
+	replaceForTest(t, &openResolved, func(name string) (*os.File, error) {
+		f, err := openLeafNoFollow(name)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = f.Seek(0, io.SeekEnd); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		return f, nil
+	})
+
+	_, err := ReadFileOrBase64("op", path, "")
+	if err == nil || !strings.HasPrefix(err.Error(), "op: reading file:") {
+		t.Fatalf("ReadFileOrBase64() error = %v, want the read failure prefixed with %q", err, "op: reading file:")
+	}
+}
+
 // TestFileOrBase64_Base64SizeLimit verifies the content_base64 branch honors
 // the configured MaxFileSize, so inline payloads cannot bypass the limit that
 // OpenAndValidateFile enforces on file_path sources.

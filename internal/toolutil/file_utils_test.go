@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -1016,6 +1017,38 @@ func TestAllowedLocalDirs_ImplicitRootsThatCannotBeResolved_AreSkipped(t *testin
 	}
 }
 
+// TestAllowedLocalDirs_ATempDirThatDoesNotExist_IsSkippedSilently covers the
+// temporary directory dropping out of the allow-list, on every platform
+// (issue 1212): the test above needs a working directory Linux alone lets it
+// remove, so on Windows and macOS an implicit root that cannot be resolved was
+// never reached. The variable os.TempDir reads is TMPDIR on Unix and TMP, then
+// TEMP, on Windows, so all three name a directory that is not there. An
+// implicit root the operator never named is dropped without a warning; only a
+// configured one is warned about.
+func TestAllowedLocalDirs_ATempDirThatDoesNotExist_IsSkippedSilently(t *testing.T) {
+	missingTemp := filepath.Join(t.TempDir(), "no-such-temp")
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, missingTemp)
+	}
+	t.Setenv(UploadDirAllowlistEnv, "")
+	if got := os.TempDir(); got != missingTemp {
+		t.Fatalf("os.TempDir() = %q, want %q from the variables this test set", got, missingTemp)
+	}
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+
+	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
+		if strings.Contains(dir, "no-such-temp") {
+			t.Errorf("allowedLocalDirs() kept %q, a temporary directory that does not exist", dir)
+		}
+	}
+	if strings.Contains(logged.String(), "skipping invalid allowlist directory") {
+		t.Errorf("an implicit root the operator never named was warned about:\n%s", logged.String())
+	}
+}
+
 // TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError is the same deleted
 // working directory put to the upload and download resolvers, which make a
 // relative path absolute the same way and must refuse the same way rather
@@ -1750,27 +1783,45 @@ func TestLocalFilesystemAllowedFor_FollowsTheTransport(t *testing.T) {
 	}
 }
 
+// modeOnlyInfo is a FileInfo carrying only a mode, for a judgement that reads
+// nothing else.
+type modeOnlyInfo struct {
+	os.FileInfo
+	mode os.FileMode
+}
+
+// Mode returns the mode the case gives.
+func (i modeOnlyInfo) Mode() os.FileMode { return i.mode }
+
 // TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt verifies a
-// group- and world-writable archive is unsafe on an operating system whose
-// permission bits describe access, and not on Windows, where Go synthesizes
-// them from the read-only attribute.
+// group- or world-writable archive is unsafe on an operating system whose
+// permission bits describe access, an archive only its owner writes is not,
+// and neither is on Windows, where Go synthesizes the bits from the read-only
+// attribute. The modes are given rather than made on disk, so every platform
+// asks both answers of the bits (issue 1212): a file Windows writes reports
+// 0666 whatever is asked of it, so a mode without the group and world bits
+// could not be built there.
 func TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "archive.tar.gz")
-	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
-		t.Fatalf("write archive: %v", err)
+	t.Parallel()
+	tests := []struct {
+		goos string
+		mode os.FileMode
+		want bool
+	}{
+		{goos: "linux", mode: 0o666, want: true},
+		{goos: "linux", mode: 0o620, want: true},
+		{goos: "darwin", mode: 0o602, want: true},
+		{goos: "linux", mode: 0o644, want: false},
+		{goos: "darwin", mode: 0o600, want: false},
+		{goos: "windows", mode: 0o666, want: false},
 	}
-	if err := os.Chmod(path, 0o666); err != nil { //nolint:gosec // The group- and world-writable mode is the fixture under judgement.
-		t.Fatalf("chmod archive: %v", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat archive: %v", err)
-	}
-	if !archiveHasUnsafePermissions("linux", info) {
-		t.Error("archiveHasUnsafePermissions(linux, 0666) = false, want true")
-	}
-	if archiveHasUnsafePermissions("windows", info) {
-		t.Error("archiveHasUnsafePermissions(windows, 0666) = true, want false")
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s %#o", tt.goos, tt.mode), func(t *testing.T) {
+			t.Parallel()
+			if got := archiveHasUnsafePermissions(tt.goos, modeOnlyInfo{mode: tt.mode}); got != tt.want {
+				t.Errorf("archiveHasUnsafePermissions(%s, %#o) = %v, want %v", tt.goos, tt.mode, got, tt.want)
+			}
+		})
 	}
 }
 

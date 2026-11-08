@@ -6,8 +6,57 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 )
+
+// TestStdinIsNullUnder_ReadsTheDescriptorLink covers the procfs read with a
+// fake root: a link to the null device, a link elsewhere, and no process. It
+// moved here with the function, which only Linux builds (issue 1212).
+func TestStdinIsNullUnder_ReadsTheDescriptorLink(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mk := func(pid, target string) {
+		dir := filepath.Join(root, pid, "fd")
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(dir, "0")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("10", os.DevNull)
+	mk("11", "pipe:[12345]")
+
+	cases := []struct {
+		name    string
+		pid     int32
+		want    bool
+		wantErr bool
+	}{
+		{name: "the null device", pid: 10, want: true},
+		{name: "a pipe", pid: 11, want: false},
+		{name: "no such process", pid: 12, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := stdinIsNullUnder(root, tc.pid)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("stdinIsNullUnder(%d) = %v, want an error", tc.pid, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("stdinIsNullUnder(%d): %v", tc.pid, err)
+			}
+			if got != tc.want {
+				t.Errorf("stdinIsNullUnder(%d) = %v, want %v", tc.pid, got, tc.want)
+			}
+		})
+	}
+}
 
 // TestPeerStdinIsNull_ReadsTheProcessFileDescriptor covers the procfs read
 // behind a discovered --transport auto instance, against real children
