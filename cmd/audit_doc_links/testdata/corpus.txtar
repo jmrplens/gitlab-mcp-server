@@ -1,0 +1,234 @@
+# A tree the link check is held to: each file follows a "-- path --" line.
+# corpus.golden is what scripts/check-doc-links.mjs printed over it.
+-- .claude/agents/a.md --
+# Agent
+-- docs/dir/README.md --
+# Sub readme
+
+## Section A
+-- docs/file.txt --
+x
+-- docs/headings.md --
+# Headings Page
+
+## Foo
+
+## Foo
+
+## Foo 1
+
+## Configuración del ¿servidor?
+
+## Emoji 👩‍💻 dev
+
+## The `make check` target (v2.0)
+
+## Link [inside](https://example.com) heading and ![img](x.png) too
+
+## Comment <!-- hidden --> here <!--<!-- nested -->-->
+
+## Tag <b>bold</b> <span class="x">span</span>
+
+## Emphasis _word_ and __strong__ and audit_md_escaping name
+
+## Mixed _a_b_ and snake_case_ value and _x__
+
+## Trailing hashes ##
+
+## Ref [label][ref] here
+
+Setext One
+==========
+
+Setext | Table
+-------|------
+
+Setext Two
+----------
+
+-
+-
+
+<a id="explicit-anchor"></a>
+<h3 id="html-heading">Html</h3>
+
+```text
+## Not a heading in a fence
+```
+
+````markdown
+```
+## Still in the outer fence
+```
+## Also inside
+````
+
+## After Fences
+
+~~~
+## tilde fence
+~~~
+
+    ## indented code is not code here
+
+#NotHeading
+
+####### Seven
+
+## Numbers 1.2.3 and 100%
+
+## Ünïcödé Ñ heading
+-- docs/sub/deep.md --
+# Sub
+
+## Deep
+-- docs/sub/links.md --
+# Links
+
+[up](../headings.md#foo-1) [up2](../../README.md#readme) [sib](deep.md#deep) [bad](../headings.md#nope) [cr](deep.md#deep)
+-- docs/sub/with space.md --
+# Spaced
+-- .github/x/page.md --
+# Gh
+
+## Gh Section
+-- plan/draft.md --
+[broken](nope.md)
+-- README.md --
+# Readme
+
+- [a](docs/headings.md#headings-page)
+- [a](docs/headings.md#foo)
+- [a](docs/headings.md#foo-1)
+- [a](docs/headings.md#foo-2)
+- [a](docs/headings.md#foo-1-1)
+- [a](docs/headings.md#configuración-del-servidor)
+- [a](docs/headings.md#configuraci%C3%B3n-del-servidor)
+- [a](docs/headings.md#emoji-👩‍💻-dev)
+- [a](docs/headings.md#emoji--dev)
+- [a](docs/headings.md#the-make-check-target-v20)
+- [a](docs/headings.md#link-inside-heading-and-img-too)
+- [a](docs/headings.md#comment--here-)
+- [a](docs/headings.md#comment--here)
+- [a](docs/headings.md#tag-bold-span)
+- [a](docs/headings.md#emphasis-word-and-strong-and-audit_md_escaping-name)
+- [a](docs/headings.md#mixed-a_b-and-snake_case_-value-and-_x__)
+- [a](docs/headings.md#mixed-_a_b_-and-snake_case_-value-and-_x__)
+- [a](docs/headings.md#mixed-a_b-and-snake_case-value-and-x)
+- [a](docs/headings.md#trailing-hashes)
+- [a](docs/headings.md#ref-label-here)
+- [a](docs/headings.md#setext-one)
+- [a](docs/headings.md#setext--table)
+- [a](docs/headings.md#setext-two)
+- [a](docs/headings.md#explicit-anchor)
+- [a](docs/headings.md#html-heading)
+- [a](docs/headings.md#not-a-heading-in-a-fence)
+- [a](docs/headings.md#still-in-the-outer-fence)
+- [a](docs/headings.md#also-inside)
+- [a](docs/headings.md#after-fences)
+- [a](docs/headings.md#tilde-fence)
+- [a](docs/headings.md#indented-code-is-not-code-here)
+- [a](docs/headings.md#notheading)
+- [a](docs/headings.md#seven)
+- [a](docs/headings.md#numbers-123-and-100)
+- [a](docs/headings.md#ünïcödé-ñ-heading)
+- [a](docs/headings.md#-)
+- [a](docs/headings)
+- [a](docs/dir#section-a)
+- [a](docs/dir/#section-a)
+- [a](docs/dir#nope)
+- [a](docs/sub/deep#deep)
+- [a](docs/sub/with%20space.md)
+- [a](<docs/sub/with space.md>)
+- [a](docs/sub/deep.md?x=1#deep)
+- [a](docs/missing.md)
+- [a](docs/file.txt#L12)
+- [a](#readme)
+- [a](#nope)
+- [a](.github/x/page.md#gh-section)
+- [a](.claude/agents/a.md#agent)
+- [t](docs/headings.md "a title")
+- [r1]
+- `[code](not/a/link.md)`
+- ``[code `x`](nope2.md)`` and `[y](nope3.md)` and ``a`b``
+- [u](url) [p](path) [t](<{x}>) [m](mailto:a@b.c) [h](https://example.com/x) [root](/route)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#environment-variables)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#foo-1)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#foo-1-1)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#foo-2)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#emoji--dev)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#emoji-👩‍💻-dev)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#configuración)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#setext-site)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/configuration/#_top)
+- [s](https://jmrplens.github.io/gitlab-mcp-server/install/#pick-a-channel)
+- [s](https://jmrp.io/docs/gitlab-mcp-server/es/configuration/#variables-de-entorno)
+- [s](https://docs.jmrp.io/gitlab-mcp-server)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/?ref=x)
+- [s](https://docs.jmrp.io/gitlab-mcp-server-other/x/)
+- [s](HTTPS://DOCS.JMRP.IO/gitlab-mcp-server/nope/)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/img/a.svg)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/img/b.svg)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/llms-server.txt)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/es/llms.txt)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/sitemap-0.xml)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/../README.md)
+- [s](https://docs.jmrp.io/gitlab-mcp-server/%E2%82%AC/)
+
+[r1]: docs/headings.md#setext-two
+[r2]: <docs/nope-ref.md>
+[^1]: docs/footnote-nope.md
+
+```
+[fenced](fenced-nope.md)
+```
+-- site/public/img/a.svg --
+<svg/>
+-- site/scripts/gen-llms.mjs --
+const R = [
+	{ name: "llms.txt", publishAs: "llms-server.txt" },
+];
+-- site/src/content/docs/configuration.mdx --
+---
+title: Configuration
+description: A page
+---
+
+## Environment variables
+
+## Foo
+
+## Foo
+
+## Foo 1
+
+## Emoji 👩‍💻 dev
+
+## Configuración
+
+Setext Site
+-----------
+-- site/src/content/docs/es/configuration.mdx --
+---
+title: Configuración
+---
+
+## Variables de entorno
+-- site/src/content/docs/index.mdx --
+---
+title: Home
+---
+
+Welcome.
+-- site/src/content/docs/install/index.mdx --
+---
+title: Install
+---
+
+## Pick a channel
+-- site/src/content/docs/linker.mdx --
+---
+title: X
+---
+
+[x](../../../../docs/headings.md#foo) [y](./configuration.mdx#foo-1-1) [z](./configuration.mdx#nope)
