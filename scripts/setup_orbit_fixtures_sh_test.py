@@ -121,7 +121,7 @@ def existing_fixtures(namespace="plens1"):
         )
     ]
     return {
-        "GET " + API + "/groups/" + encoded: {"id": 1},
+        "GET " + API + "/groups/" + encoded: {"id": 1, "full_path": namespace},
         "GET " + API + "/projects/" + encoded + "%2Fkg-fixtures": {"id": KG_ID},
         "GET " + API + "/projects/" + encoded + "%2Fsecurity-fixtures": {"id": SEC_ID},
         "GET " + API + "/projects/%d" % KG_ID: {"id": KG_ID, "visibility": "public"},
@@ -155,6 +155,10 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.body_log = os.path.join(self.tmp, "curl-body.log")
         self.routes = os.path.join(self.tmp, "routes")
         self.env = dict(os.environ)
+        # Every existing project is reconciled against this, and the docs tell
+        # a contributor with a private group to export it: a case that needs a
+        # value sets its own, so the caller's must not reach the others.
+        self.env.pop("ORBIT_FIXTURES_VISIBILITY", None)
         self.env.update(
             {
                 "PATH": bindir + os.pathsep + os.environ["PATH"],
@@ -298,11 +302,15 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         kinds = {a["file_path"]: a["action"] for a in actions}
         self.assertEqual(kinds.pop("README.md"), "update")
         self.assertEqual(set(kinds.values()), {"create"})
+        # The committed bytes, as the script sends them: an uncommitted edit
+        # under the fixture is the usual state while working on it.
         base = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures")
         for action in actions:
             self.assertEqual(action["encoding"], "base64")
-            with open(os.path.join(base, action["file_path"]), "rb") as f:
-                self.assertEqual(base64.b64decode(action["content"]), f.read(), action["file_path"])
+            committed = subprocess.run(
+                ["git", "show", "HEAD:./" + action["file_path"]], cwd=base, check=True, stdout=subprocess.PIPE,
+            ).stdout
+            self.assertEqual(base64.b64decode(action["content"]), committed, action["file_path"])
         self.assertIn("replaced README.md", result.stderr)
 
     def test_a_readme_beside_other_files_is_left_alone(self):
@@ -441,8 +449,14 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         with open(self.log + ".query") as f:
             trees = [line for line in f if "/repository/tree " in line]
         self.assertTrue(trees)
+        # Without recursive=true GitLab lists the top level alone, and every
+        # nested fixture file would read as missing; per_page=100 is the page
+        # size the loop counts a full page by.
         for line in trees:
-            self.assertIn("ref=main", line)
+            query = line.split(" ", 1)[1].strip().split("&")
+            self.assertIn("ref=main", query)
+            self.assertIn("recursive=true", query)
+            self.assertIn("per_page=100", query)
 
     def test_a_directory_does_not_stand_in_for_a_file(self):
         routes = existing_fixtures()
@@ -567,6 +581,44 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
         self.assertFalse(os.path.exists(self.log), "the refusal must come before any API call")
+
+    def test_a_private_visibility_is_refused_under_the_jmrp_oss_root(self):
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "jmrp-oss"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed under jmrp-oss:", result.stderr)
+        self.assertFalse(os.path.exists(self.log), "the refusal must come before any API call")
+
+    def test_a_private_visibility_is_refused_for_a_group_id_under_jmrp_oss(self):
+        # GET /groups/:id takes a numeric id as well as a path, so the guard on
+        # the namespace as written cannot see jmrp-oss in it; the group GitLab
+        # resolves is checked again before anything is written.
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "134059988"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        routes = existing_fixtures("134059988")
+        routes["GET " + API + "/groups/134059988"] = {"id": 134059988, "full_path": "jmrp-oss/orbit-fixtures"}
+        routes["POST " + API + "/projects"] = {"id": 99}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn(
+            "ORBIT_FIXTURES_VISIBILITY=private is not allowed under jmrp-oss/orbit-fixtures:", result.stderr
+        )
+        self.assertEqual([r["path"] for r in self.requests("GET")], [API + "/groups/134059988"])
+        for method in ("POST", "PUT", "DELETE"):
+            self.assertEqual(self.requests(method), [], "the refusal must come before any %s call" % method)
+
+    def test_a_group_answer_without_its_full_path_stops_the_run(self):
+        # The resolved guard reads full_path; an answer that lacks it must stop
+        # the run rather than let the guard pass on nothing.
+        routes = existing_fixtures()
+        routes["GET " + API + "/groups/plens1"] = {"id": 1}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("did not resolve to a group with an id and a full_path", result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("GET")], [API + "/groups/plens1"])
+        for method in ("POST", "PUT", "DELETE"):
+            self.assertEqual(self.requests(method), [])
 
     def test_the_visibility_is_json_encoded_in_the_update_body(self):
         # A configured visibility carrying JSON syntax must stay one string in

@@ -130,7 +130,8 @@ ORBIT_FIXTURES_NAMESPACE=mynamespace \
 The script is **idempotent**: it checks for existing resources through
 the API and leaves those in place. A project that already exists is
 reconciled rather than skipped: every fixture file git tracks that it
-lacks is added in one commit, and then its visibility is set. A project
+lacks is added in one commit, with the bytes committed at `HEAD` rather
+than the working tree's, and then its visibility is set. A project
 holding GitLab's README alone, which is what a first push that failed
 leaves, takes the fixture's README in that commit too, and one
 provisioned before the `LICENSE` existed takes the `LICENSE`. A rerun
@@ -141,7 +142,10 @@ full path with every slash encoded. It creates the projects public, as
 `jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
 private group of your own, since GitLab refuses a public project in a
 private group: a non-public visibility is refused outright under
-`jmrp-oss`, which allows one private project. `make orbit-setup-fixtures`
+`jmrp-oss`, which allows one private project, whether the namespace
+names it by its path, in any case, or by a numeric group id, since the
+group GitLab resolves is checked again before anything is written.
+`make orbit-setup-fixtures`
 and `make test-e2e-gitlab-com` hand the setting on from their command
 line, else the environment, else `.env`.
 

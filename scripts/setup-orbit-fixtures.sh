@@ -77,20 +77,28 @@ NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-jmrp-oss/orbit-fixtures}"
 # OSI license: a project re-provisioned private there would break the rule.
 VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-public}"
 
-# #1533: jmrp-oss allows exactly one private project, and these fixtures are
-# public. Refuse a non-public visibility up front: the script now sets the
-# visibility of projects it did not create, so a typo would flip both fixtures.
-# GitLab resolves paths case-insensitively, so the guard compares lowercased,
-# or JMRP-OSS/... would reach the same projects and skip the check.
-case "$(printf '%s' "$NAMESPACE" | tr '[:upper:]' '[:lower:]')" in
-  jmrp-oss | jmrp-oss/*)
-    if [ "$VISIBILITY" != "public" ]; then
-      echo "error: ORBIT_FIXTURES_VISIBILITY=$VISIBILITY is not allowed under $NAMESPACE:" >&2
-      echo "       jmrp-oss allows one private project, and these fixtures must be public." >&2
-      exit 2
-    fi
-    ;;
-esac
+# refuse_non_public_under_jmrp_oss GROUP_PATH
+#   #1533: jmrp-oss allows exactly one private project, and these fixtures are
+#   public. A non-public visibility is refused there: the script now sets the
+#   visibility of projects it did not create, so a typo would flip both
+#   fixtures. GitLab resolves paths case-insensitively, so the guard compares
+#   lowercased, or JMRP-OSS/... would reach the same projects and skip it.
+refuse_non_public_under_jmrp_oss() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    jmrp-oss | jmrp-oss/*)
+      if [ "$VISIBILITY" != "public" ]; then
+        echo "error: ORBIT_FIXTURES_VISIBILITY=$VISIBILITY is not allowed under $1:" >&2
+        echo "       jmrp-oss allows one private project, and these fixtures must be public." >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
+# Up front, on the namespace as written, so that a refusal sends nothing. The
+# group GitLab resolves it to is checked again below, before anything is
+# written, since a numeric group id names jmrp-oss without spelling it.
+refuse_non_public_under_jmrp_oss "$NAMESPACE"
 
 API="$GITLAB_URL/api/v4"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -194,10 +202,21 @@ NAMESPACE_ENC=$(printf %s "$NAMESPACE" | python3 -c 'import sys,urllib.parse; pr
 # straight into python3: OpenSSF Scorecard's Pinned-Dependencies check reads
 # a download utility piped into an interpreter as a script fetched and run,
 # whatever the interpreter does with it, and the answer here is the group's
-# JSON, which no version, checksum or digest could pin.
-NAMESPACE_ID=$(api_get "/groups/$NAMESPACE_ENC" \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-echo "    namespace id: $NAMESPACE_ID"
+# JSON, which no version, checksum or digest could pin. The group's full_path
+# comes with its id, and an answer without either stops the run: the guard
+# below must never be skipped because the path was not there to read.
+NAMESPACE_GROUP=$(api_get "/groups/$NAMESPACE_ENC" \
+  | python3 -c 'import sys,json
+group = json.load(sys.stdin)
+full_path = group.get("full_path") if isinstance(group, dict) else None
+if not isinstance(full_path, str) or not full_path or not group.get("id"):
+    sys.exit("error: the namespace did not resolve to a group with an id and a full_path: " + json.dumps(group))
+print(group["id"])
+print(full_path)')
+NAMESPACE_ID=${NAMESPACE_GROUP%%$'\n'*}
+NAMESPACE_FULL_PATH=${NAMESPACE_GROUP#*$'\n'}
+echo "    namespace id: $NAMESPACE_ID ($NAMESPACE_FULL_PATH)"
+refuse_non_public_under_jmrp_oss "$NAMESPACE_FULL_PATH"
 
 # ─── Project creation (pushes local source tree via git) ───────────────
 
