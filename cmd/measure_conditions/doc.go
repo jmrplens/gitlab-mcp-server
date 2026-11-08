@@ -15,11 +15,10 @@
 // Windows or macOS had no way to be taken except by hand on a machine of that
 // system, so the figures quoted for internal/toolutil in pull request 1206
 // came from a Windows virtual machine and nobody could repeat them on macOS at
-// all. Nor
-// was there a figure for the tree as a whole, which is what the OpenSSF Best
-// Practices criterion test_branch_coverage80 asks for. The workflow runs the
-// same script on each runner a dispatch names, and this command is everything
-// around that script:
+// all. Nor was there a figure for the tree as a whole, which is what the
+// OpenSSF Best Practices criterion test_branch_coverage80 asks for. The
+// workflow runs the same script on each runner a dispatch names, and this
+// command is everything around that script:
 //
 //	measure_conditions plan -packages <list> -systems <list> -gate <gate> [-mode <mode>] [-tree]
 //	measure_conditions measure -packages <list> -system <runner> -records <dir>

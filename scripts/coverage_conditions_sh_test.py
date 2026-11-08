@@ -1367,7 +1367,7 @@ class CoverageConditionsTest(unittest.TestCase):
         # needs on Windows.
         with open(CI_WORKFLOW, encoding="utf-8") as fh:
             text = fh.read()
-        step = re.search(r"^      - name: Condition coverage of the platform halves\n((?:        .*\n|\n)+)",
+        step = re.search(r"^      - name: Condition coverage of cmd/server and internal/toolutil\n((?:        .*\n|\n)+)",
                          text, re.MULTILINE)
         self.assertIsNotNone(step, "the cross-platform gobco step is missing")
         body = step.group(1)
