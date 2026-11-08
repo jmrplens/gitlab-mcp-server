@@ -67,6 +67,15 @@ func TestProbe_ExplicitTarget(t *testing.T) {
 			t.Fatalf("--probe %s exited %d, want 0: %s", srv.baseURL, code, said)
 		}
 	})
+	// The base URL as a browser shows it, with its trailing slash, used to
+	// ask / and report this healthy server unhealthy with its 404 (finding
+	// D4 of issue 529).
+	t.Run("the listener answers to its URL with a trailing slash", func(t *testing.T) {
+		code, said := runProbe(t, srv.baseURL+"/")
+		if code != 0 {
+			t.Fatalf("--probe %s/ exited %d, want 0: %s", srv.baseURL, code, said)
+		}
+	})
 	t.Run("host:port is enough", func(t *testing.T) {
 		code, said := runProbe(t, strings.TrimPrefix(srv.baseURL, "http://"))
 		if code != 0 {
@@ -93,6 +102,14 @@ func TestProbe_ExplicitTarget(t *testing.T) {
 		code, _ := runProbe(t, "nope")
 		if code != 2 {
 			t.Fatalf("--probe nope exited %d, want 2", code)
+		}
+	})
+	// Its slashes used to read it as a socket path, so the probe dialed a
+	// file that is not there and exited 1, calling the server unhealthy.
+	t.Run("a URL of a scheme the probe does not speak", func(t *testing.T) {
+		code, said := runProbe(t, "ftp://127.0.0.1/health")
+		if code != 2 {
+			t.Fatalf("--probe ftp://... exited %d, want 2: %s", code, said)
 		}
 	})
 }

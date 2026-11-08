@@ -209,6 +209,13 @@ func probeTargetFor(addr, tlsCert string) probeTarget {
 // parseProbeTarget reads a target given on the command line: an http or https
 // URL, unix:<path> or a bare path for a socket, or host:port for plain HTTP.
 //
+// A URL's path is asked as it is written, unless it ends in a slash or names
+// nothing: then it names the directory the health endpoint is under, so
+// http://host:9090/ asks /health and https://host/gitlab/ asks /gitlab/health.
+// A target written with its trailing slash, the way a browser shows a base
+// URL, used to ask / and report a healthy server unhealthy with its 404
+// (finding D4 of issue 529). A target naming any other scheme is no target.
+//
 // Written as a chain of returns rather than a tagless switch, whose case
 // expressions carry no statement counter for the mutation gate to see.
 func parseProbeTarget(s string) (probeTarget, error) {
@@ -222,13 +229,19 @@ func parseProbeTarget(s string) (probeTarget, error) {
 			return probeTarget{}, fmt.Errorf("%q is not a URL with a host", s)
 		}
 		path := u.Path
-		if path == "" {
-			path = probeHealthPath
+		if path == "" || strings.HasSuffix(path, "/") {
+			path = strings.TrimRight(path, "/") + probeHealthPath
 		}
 		return probeTarget{scheme: u.Scheme, addr: u.Host, path: path}, nil
 	}
 	if path, ok := strings.CutPrefix(s, "unix:"); ok {
 		return parseProbeTarget(path)
+	}
+	// A URL of a scheme the probe does not speak is refused as no target,
+	// before its slashes read it as a socket path and the probe dials a file
+	// that is not there and reports the server unhealthy.
+	if strings.Contains(s, "://") {
+		return probeTarget{}, fmt.Errorf("%q names a scheme the probe does not speak: give an http:// or https:// URL", s)
 	}
 	if isUnixSocketAddr(s) {
 		return probeTarget{scheme: "unix", addr: s, path: probeHealthPath}, nil

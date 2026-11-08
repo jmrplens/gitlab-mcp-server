@@ -148,7 +148,10 @@ func TestProbeTargetFor_FollowsTheListener(t *testing.T) {
 
 // TestParseProbeTarget_AcceptsTheDocumentedForms covers the explicit target:
 // URLs with and without a path, unix sockets in both spellings, host:port,
-// and the refusals.
+// and the refusals. A URL whose path ends in a slash names the directory the
+// health endpoint is under (finding D4 of issue 529): the base URL written
+// with its trailing slash asks /health rather than /, which a healthy server
+// answers 404, and a prefix with one asks the health endpoint under it.
 func TestParseProbeTarget_AcceptsTheDocumentedForms(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -158,7 +161,10 @@ func TestParseProbeTarget_AcceptsTheDocumentedForms(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "http URL", in: "http://127.0.0.1:9090", want: "http://127.0.0.1:9090/health"},
+		{name: "http URL with a trailing slash", in: "http://127.0.0.1:9090/", want: "http://127.0.0.1:9090/health"},
+		{name: "http URL with doubled slashes", in: "http://127.0.0.1:9090//", want: "http://127.0.0.1:9090/health"},
 		{name: "https URL with its own path", in: "https://mcp.internal:8443/gitlab/health", want: "https://mcp.internal:8443/gitlab/health"},
+		{name: "https URL with a prefix ending in a slash", in: "https://mcp.internal:8443/gitlab/", want: "https://mcp.internal:8443/gitlab/health"},
 		{name: "unix prefix", in: "unix:/run/mcp.sock", want: "unix:/run/mcp.sock/health"},
 		{name: "bare socket path", in: "/run/mcp.sock", want: "unix:/run/mcp.sock/health"},
 		{name: "host:port", in: "0.0.0.0:9090", want: "http://127.0.0.1:9090/health"},
@@ -167,6 +173,8 @@ func TestParseProbeTarget_AcceptsTheDocumentedForms(t *testing.T) {
 		{name: "a URL without a host", in: "http://", wantErr: true},
 		{name: "a URL that does not parse", in: "http://[::1", wantErr: true},
 		{name: "a bare word", in: "localhost", wantErr: true},
+		{name: "a scheme the probe does not speak", in: "ht!tp://x", wantErr: true},
+		{name: "a socket path behind an unknown scheme", in: "unix:ftp://host/health", wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
