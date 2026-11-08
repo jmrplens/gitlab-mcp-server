@@ -2374,8 +2374,9 @@ jobs:
     # until now, so a failed verification still submitted the manifest.
     needs: [preflight, release, verify-published]
     # A rehearsal runs this job too, and everything in it but the three steps
-    # that write: the fork sync, the submission and the cleanup are skipped,
-    # and komac builds the manifests dry instead.
+    # that write and the last one, which reads the submission's outcome: the
+    # fork sync, the submission, the cleanup and that step are skipped, and
+    # komac builds the manifests dry instead.
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       WINGET_IDENTIFIER: jmrplens.gitlab-mcp-server
@@ -2399,19 +2400,36 @@ jobs:
     # only public data: the release this run names, and in a rehearsal what
     # komac reads of winget-pkgs and of this repository to build the
     # manifests.
+    #
+    # WINGET_TOKEN is a classic personal access token of the maintainer's
+    # with the scopes public_repo and workflow, set on 2026-11-04, after
+    # 3.4.0; the release after 3.4.0 is the first to submit with it, and
+    # until it does, the cause below is probable rather than proven. The one
+    # set on 2026-08-27 was fine-grained, and GitHub documents that a
+    # fine-grained token cannot contribute to a public repository its owner
+    # is not a member of: komac created its branch on the fork, and the pull
+    # request on microsoft/winget-pkgs was refused with "Resource not
+    # accessible by personal access token" on 3.2.0, 3.3.0 and 3.4.0 (issue
+    # 1665). public_repo is the scope komac asks for, for the branch and the
+    # pull request. workflow is the fork sync's: merge-upstream writes
+    # upstream's .github/workflows files into the fork, and GitHub refuses
+    # that to a token without the scope (HTTP 422, "refusing to allow a
+    # Personal Access Token to create or update workflow ... without
+    # workflow scope", on 2.7.4).
     permissions: {}
     steps:
       # Publishes a version-update PR to microsoft/winget-pkgs via the
       # jmrplens/winget-pkgs fork.
       #
       # The fork MUST be synced first: komac creates its branch on the fork,
-      # and a stale fork fails with "Ref cannot be created", which the
-      # submission's continue-on-error then hides. That exact combination
-      # silently skipped the 2.7.2 and 2.7.3 submissions (fork 24 days
-      # behind). This step is deliberately blocking: if the sync fails
-      # (409 divergence, 422), the submission would fail against the stale
-      # fork anyway and hide it. A red winget job is the visibility that
-      # was missing, and nothing downstream depends on this job.
+      # and a stale fork fails with "Ref cannot be created". Behind the
+      # submission's continue-on-error, when no step after it reported the
+      # failure, that exact combination silently skipped the 2.7.2 and 2.7.3
+      # submissions (fork 24 days behind). This step is deliberately
+      # blocking: if the sync fails (409 divergence, 422), the submission
+      # would fail against the stale fork anyway. A red winget job is the
+      # visibility that was missing, and no other job of this workflow needs
+      # this one.
       - name: Sync winget-pkgs fork with upstream
         if: env.REHEARSAL != 'true'
         env:
@@ -2477,11 +2495,17 @@ jobs:
       # variables are left out: KOMAC_CREATED_WITH and its URL, which would
       # stamp every manifest and the pull request with "WinGet Releaser", a
       # tool this job no longer runs; without them komac names itself and
-      # its version. continue-on-error is kept from the step that ran the
-      # action, which carried it so that a hiccup of Microsoft's validation
-      # service leaves the release green; it now covers only this step and
-      # the cleanup, so a failed install or a release with no Windows
-      # installer turns the job red instead of being hidden with them.
+      # its version.
+      #
+      # continue-on-error is kept so that the steps after this one run, and
+      # the last of them turns a failed submission into a red job that names
+      # the version and komac's cause. The flag came from the step that ran
+      # the action, which carried it so that a hiccup of Microsoft's
+      # validation service would leave the release green, and on its own it
+      # hid a submission that failed on every release from 3.2.0 to 3.4.0
+      # (issue 1665). komac writes its error report to stderr, one numbered
+      # line per cause and in color, so the report goes to a file, is printed
+      # after komac exits, and its causes are this step's output.
       - name: Submit the version to winget-pkgs
         id: submit
         if: env.REHEARSAL != 'true'
@@ -2492,7 +2516,18 @@ jobs:
           VERSION: ${{ steps.installers.outputs.version }}
           URLS: ${{ steps.installers.outputs.urls }}
         run: |
-          & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ')
+          $report = Join-Path $env:RUNNER_TEMP 'komac-errors.txt'
+          & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ') 2> $report
+          $code = $LASTEXITCODE
+          $lines = @()
+          if (Test-Path -LiteralPath $report) { $lines = @(Get-Content -LiteralPath $report) }
+          $lines
+          if ($code -ne 0) {
+            $causes = @($lines -replace '\e\[[0-9;]*m' -match '^\s*\d+: ' -replace '^\s*\d+: +')
+            if ($causes.Count -eq 0) { $causes = @("komac exited with code $code") }
+            "cause=$($causes.Trim() -join '; ')" >> $env:GITHUB_OUTPUT
+          }
+          exit $code
 
       # Deletes the fork's branches whose pull request was merged. The action
       # ran it only after a submission that succeeded, since a composite stops
@@ -2527,3 +2562,26 @@ jobs:
           URLS: ${{ steps.installers.outputs.urls }}
         run: |
           & $env:KOMAC update $env:WINGET_IDENTIFIER --version $env:VERSION --submit --urls @($env:URLS -split ' ') --dry-run
+
+      # The last step, so that a submission that failed turns the job red
+      # with its version and its cause, read from the submission's output,
+      # where a reader of the run sees them. No other job of this workflow
+      # needs this one, so every other channel has published or publishes
+      # whatever happens here, and gitlab-mirror.yml, which runs when this
+      # workflow completes, takes a failed run as it takes one that
+      # succeeded. In a rehearsal the submission is skipped, and so is this
+      # step.
+      - name: Fail the job when the submission failed
+        if: steps.submit.outcome == 'failure'
+        env:
+          VERSION: ${{ steps.installers.outputs.version }}
+          CAUSE: ${{ steps.submit.outputs.cause }}
+        run: |
+          $cause = $env:CAUSE
+          if (-not $cause) { $cause = 'the step failed before komac reported a cause; its log has the rest' }
+          $message = "$env:WINGET_IDENTIFIER $env:VERSION was not submitted to microsoft/winget-pkgs: $cause. No other channel waits on this job, and it can be re-run once the cause is fixed."
+          # A workflow command's message ends at a line break and reads % as
+          # the start of an escape.
+          $message = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Output "::error title=winget submission failed::$message"
+          exit 1
