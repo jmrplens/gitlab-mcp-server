@@ -81,7 +81,7 @@ func (s SDK) embeddedClientGo(st *types.Struct) *types.Named {
 func (s SDK) embeddedClientGoStructs(st *types.Struct) iter.Seq[*types.Named] {
 	return func(yield func(*types.Named) bool) {
 		seen := map[*types.Struct]bool{}
-		for level := []*types.Struct{st}; len(level) > 0; {
+		for level := []*types.Struct{st}; len(level) != 0; {
 			var found []*types.Named
 			found, level = s.embeddedLevel(level, seen)
 			for _, named := range found {
@@ -99,7 +99,10 @@ func (s SDK) embeddedClientGoStructs(st *types.Struct) iter.Seq[*types.Named] {
 // struct seen records is not read again, and is recorded once read.
 func (s SDK) embeddedLevel(level []*types.Struct, seen map[*types.Struct]bool) (found []*types.Named, next []*types.Struct) {
 	for _, current := range level {
-		if current == nil || seen[current] {
+		if current == nil {
+			continue
+		}
+		if seen[current] {
 			continue
 		}
 		seen[current] = true
@@ -156,18 +159,7 @@ func (s SDK) collectEmbeddedNeeds(local *types.Struct, shadowing bool, walk embe
 	for i := range local.NumFields() {
 		field := structField{v: local.Field(i), tag: reflect.StructTag(local.Tag(i))}
 		if field.promoted() {
-			named := s.clientGoStruct(field.v.Type())
-			switch {
-			case named == walk.sdkNamed:
-				// The root's keys are the half client-go carries.
-			case named != nil:
-				// Client-go's other struct is client-go's either way: a key
-				// both carry alike needs nothing.
-				other, _ := named.Underlying().(*types.Struct)
-				s.collectEmbeddedNeeds(other, false, walk)
-			default:
-				s.collectEmbeddedNeeds(s.localStruct(field.v.Type()), shadowing, walk)
-			}
+			s.collectPromotedNeeds(field, shadowing, walk)
 			continue
 		}
 		written, _ := field.encoding(EncoderJSON)
@@ -176,6 +168,23 @@ func (s SDK) collectEmbeddedNeeds(local *types.Struct, shadowing bool, walk embe
 		}
 		s.addNeed(field, written.name, sdkStruct, shadowing, walk.root, walk.prefix, walk.needs)
 	}
+}
+
+// collectPromotedNeeds records what an embedded field promotes: nothing for
+// the root, whose keys are the half client-go carries, what client-go's other
+// struct carries, which is client-go's either way, so a key both carry alike
+// needs nothing, and what a struct of the package's own carries.
+func (s SDK) collectPromotedNeeds(field structField, shadowing bool, walk embeddedWalk) {
+	named := s.clientGoStruct(field.v.Type())
+	if named == walk.sdkNamed {
+		return
+	}
+	if named != nil {
+		other, _ := named.Underlying().(*types.Struct)
+		s.collectEmbeddedNeeds(other, false, walk)
+		return
+	}
+	s.collectEmbeddedNeeds(s.localStruct(field.v.Type()), shadowing, walk)
 }
 
 // addNeed records what one key local carries needs. A key carried with
