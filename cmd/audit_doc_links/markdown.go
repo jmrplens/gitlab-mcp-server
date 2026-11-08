@@ -117,7 +117,9 @@ func codeSpanAt(line string, i int) (end, fence int, ok bool) {
 			continue
 		}
 		for closing := body + 1; closing+open <= len(line); closing++ {
-			if closing-body > 1 && line[closing-1] == '`' {
+			// A body ends with a character other than a backtick; one of a
+			// single character is the one checked above.
+			if line[closing-1] == '`' {
 				continue
 			}
 			if strings.Count(line[closing:closing+open], "`") == open && (closing+open == len(line) || line[closing+open] != '`') {

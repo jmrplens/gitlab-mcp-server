@@ -40,7 +40,7 @@ var siteTree = map[string]string{
 	"site/src/content/docs/es/configuration.mdx":  "---\ntitle: Configuración\n---\n\n## Variables de entorno\n\nTexto.\n",
 	"site/public/robots.txt":                      "User-agent: *\n",
 	"site/public/benchmarks/en/latency.light.svg": "<svg/>\n",
-	"site/scripts/gen-llms.mjs":                   "const REFERENCE_FILES = [\n\t{ name: \"llms.txt\", publishAs: \"llms-server.txt\" },\n];\n",
+	"site/scripts/gen-llms.mjs":                   "const REFERENCE_FILES = [\n\t{ name: \"llms.txt\", publishAs: \"llms-server.txt\" },\n\t{ name: \"llms-full.txt\", publishAs: \"llms-full-server.txt\" },\n];\n",
 	"docs/guide.md":                               "# Guide\n\n## Usage\n",
 	"docs/folder/README.md":                       "# Folder\n\n## Inside\n",
 	"docs/index-only/index.mdx":                   "# Index\n\n## Here\n",
@@ -160,6 +160,7 @@ func TestCheck_TheFilesTheSiteServes_Pass(t *testing.T) {
 		site+"/llms.txt",
 		site+"/es/llms.txt",
 		site+"/llms-server.txt",
+		site+"/llms-full-server.txt",
 		pages+"/sitemap-index.xml",
 		site+"/sitemap-0.xml",
 	)

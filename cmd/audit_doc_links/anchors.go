@@ -92,12 +92,12 @@ var starlight = dialect{
 func slugBase(text string, joinControl bool) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(text) {
-		switch {
-		case r == ' ':
+		if r == ' ' {
 			b.WriteByte('-')
-		case r == '-' || unicode.In(r, unicode.L, unicode.M, unicode.Nd, unicode.Nl, unicode.Pc):
-			b.WriteRune(r)
-		case joinControl && unicode.Is(unicode.Join_Control, r):
+			continue
+		}
+		if r == '-' || unicode.In(r, unicode.L, unicode.M, unicode.Nd, unicode.Nl, unicode.Pc) ||
+			(joinControl && unicode.Is(unicode.Join_Control, r)) {
 			b.WriteRune(r)
 		}
 	}
@@ -225,7 +225,9 @@ func emphasisAt(text string, i int) (content string, end int, ok bool) {
 	if text[i] != '_' {
 		return "", 0, false
 	}
-	if before, _ := utf8.DecodeLastRuneInString(text[:i]); i > 0 && isWordRune(before) {
+	// At the start of the text there is no rune before, which decodes as
+	// utf8.RuneError, no word rune.
+	if before, _ := utf8.DecodeLastRuneInString(text[:i]); isWordRune(before) {
 		return "", 0, false
 	}
 	for _, open := range []int{2, 1} {
@@ -243,7 +245,9 @@ func emphasisAt(text string, i int) (content string, end int, ok bool) {
 			if after > len(text) || strings.Count(text[closing:after], "_") != width {
 				continue
 			}
-			if next, _ := utf8.DecodeRuneInString(text[after:]); after < len(text) && isWordRune(next) {
+			// At the end of the text the rune after decodes as
+			// utf8.RuneError, no word rune either.
+			if next, _ := utf8.DecodeRuneInString(text[after:]); isWordRune(next) {
 				continue
 			}
 			return text[start:closing], after, true

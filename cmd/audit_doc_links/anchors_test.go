@@ -102,10 +102,11 @@ func TestHeadingText_IsWhatAReaderSees(t *testing.T) {
 }
 
 // TestCollectAnchors_EveryHeadingShape_IsRead verifies the headings a page
-// carries: ATX, Setext under equals and under dashes, an explicit id or name
-// on any element, and what is not a heading: a row of dashes under a table
-// line, a dash under an empty list item, indented code, a hash with no space,
-// seven hashes, the frontmatter's title and anything in a fence.
+// carries: ATX, Setext under equals and under dashes, equals under a line
+// carrying a pipe, an explicit id or name on any element, and what is not a
+// heading: a row of dashes under a line carrying a pipe, which is a table, a
+// dash under an empty list item, indented code, a hash with no space, seven
+// hashes, the frontmatter's title and anything in a fence.
 func TestCollectAnchors_EveryHeadingShape_IsRead(t *testing.T) {
 	t.Parallel()
 
@@ -114,6 +115,8 @@ func TestCollectAnchors_EveryHeadingShape_IsRead(t *testing.T) {
 		"Setext One\n==========\n\n" +
 		"Setext Two\n----------\n\n" +
 		"a | b\n--|--\n\n" +
+		"c | d\n=====\n\n" +
+		"e | f\n-----\n\n" +
 		"-\n-\n\n" +
 		"> quote\n---\n\n" +
 		"<a id=\"explicit\"></a> <span name='named'>x</span>\n\n" +
@@ -122,7 +125,7 @@ func TestCollectAnchors_EveryHeadingShape_IsRead(t *testing.T) {
 		"####### seven\n\n" +
 		"```\n## fenced\n```\n" +
 		"#\n"
-	want := []string{"", "explicit", "named", "setext-one", "setext-two", "title"}
+	want := []string{"", "c--d", "explicit", "named", "setext-one", "setext-two", "title"}
 	if got := anchorList(page, gitHub); !slices.Equal(got, want) {
 		t.Errorf("anchors %q, want %q", got, want)
 	}

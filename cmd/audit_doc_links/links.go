@@ -230,11 +230,9 @@ func readSiteGeneratedFiles(root string) map[string]bool {
 // The page is looked for inside the directory rather than by letting the
 // candidate list run on, because the next candidates are "<dir>.md" and
 // "<dir>.mdx", siblings of the directory rather than anything a reader of
-// that link would be shown.
+// that link would be shown. A file holds no README or index, so a file is
+// its own page.
 func pageOf(resolved string) string {
-	if info, err := os.Stat(resolved); err != nil || !info.IsDir() { //#nosec G703 -- a path a link of the repository's documentation names, only stated
-		return resolved
-	}
 	for _, name := range []string{readmePage, indexMDPage, indexMDXPage} {
 		if candidate := filepath.Join(resolved, name); exists(candidate) {
 			return candidate
