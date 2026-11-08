@@ -19,9 +19,9 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docwalk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // docRoots are the trees whose Markdown mentions are audited.
@@ -79,10 +79,11 @@ var osExit = os.Exit
 // compiles in, and a branch nothing reaches is a branch nothing holds.
 var buildIDs = actionids.Build
 
-// walkDir walks a documentation tree. It is a variable because the walk's own
-// error, a directory that cannot be listed, cannot be produced for a process
-// that ignores directory permissions, which is what the checks run as.
-var walkDir = filepath.WalkDir
+// docFiles lists the documentation of a set of roots. It is a variable
+// because the walk's own error, a directory that cannot be listed, cannot be
+// produced for a process that ignores directory permissions, which is what
+// the checks run as.
+var docFiles = docwalk.Files
 
 func main() {
 	check := flag.Bool("check", false, "exit non-zero when the docs name a tool the server does not register or an action ID the catalog does not publish, or when a declaration excuses neither")
@@ -276,36 +277,22 @@ func (s *docScan) scanDocs(roots []string) error {
 	return nil
 }
 
-// scanRoot scans one entry of docRoots, which may be a single file or a tree.
+// scanRoot scans one entry of docRoots, which may be a single file or a
+// tree. Which files a tree holds is cmd/internal/docwalk's answer, the one
+// the link check reads too: the root is entered whatever it is called, and
+// below it the walk leaves out dependencies, build output, the untracked plan
+// area, dot-directories and other checkouts.
 func (s *docScan) scanRoot(root string) error {
-	info, err := os.Stat(root)
+	files, err := docFiles([]string{root})
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
-	if !info.IsDir() {
-		return s.scanFile(root)
+	for _, path := range files {
+		if scanErr := s.scanFile(path); scanErr != nil {
+			return scanErr
+		}
 	}
-
-	return walkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			// The root is entered whatever it is called, so a root that is
-			// itself a checkout or a dot-directory is still scanned.
-			if path != root && (d.Name() == "node_modules" || sourcewalk.SkipDirBelowRoot(path)) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
-			return nil
-		}
-		return s.scanFile(path)
-	})
+	return nil
 }
 
 // scanFile records the unregistered tool names and the unresolvable action IDs

@@ -804,17 +804,17 @@ func TestScanRoot_ARootThatCannotBeStatted_FailsRatherThanBeingSkipped(t *testin
 	}
 }
 
-// TestScanRoot_TheWalksOwnError_IsReturned verifies the error the walk hands
-// its callback, which a directory that cannot be listed produces, ends the
-// scan with that error. The walk is replaced because a process that ignores
+// TestScanRoot_TheWalksOwnError_IsReturned verifies the error the walk
+// returns, which a directory that cannot be listed produces, ends the scan
+// with that error. The walk is replaced because a process that ignores
 // directory permissions cannot be made to produce it, and
 // TestScanRoot_ADirectoryThatCannotBeListed_FailsRatherThanBeingSkipped skips
-// for such a process.
+// for such a process; cmd/internal/docwalk holds the walk itself to it.
 func TestScanRoot_TheWalksOwnError_IsReturned(t *testing.T) {
-	restore := walkDir
-	t.Cleanup(func() { walkDir = restore })
+	restore := docFiles
+	t.Cleanup(func() { docFiles = restore })
 	unlisted := errors.New("unlisted")
-	walkDir = func(root string, fn fs.WalkDirFunc) error { return fn(root, nil, unlisted) }
+	docFiles = func([]string) ([]string, error) { return nil, unlisted }
 
 	if err := newStubScan().scanRoot(t.TempDir()); !errors.Is(err, unlisted) {
 		t.Errorf("scanRoot = %v, want the walk's own error", err)
