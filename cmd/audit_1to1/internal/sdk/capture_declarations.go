@@ -229,10 +229,24 @@ var serviceAccountExternal = captureDeclaration{
 	Reason:     serviceAccountExternalReason,
 }
 
+// groupSHAReason is why a group's two SHA settings are read off the capture.
+const groupSHAReason = "lib/api/entities/group_detail.rb sends the setting on a group read on its own from GitLab 19.5, and neither a list row nor an older instance's answer carries it, while client-go's Group, which models it from v3.42.0, decodes the key an answer leaves out as false, a value a 19.5 answer also carries"
+
+// groupSHACapture declares a SHA setting of the group detail entity kept for
+// its presence.
+func groupSHACapture(key, field string) captureDeclaration {
+	return captureDeclaration{
+		Type: "toolutil.GroupDetailExtra", Key: key, Category: keptForPresence,
+		Predicates: []waits.Predicate{waits.FieldKind{Type: "Group", Field: field, Kind: "bool"}},
+		Reason:     groupSHAReason,
+	}
+}
+
 // presenceCaptures are the keys an answer leaves out where client-go decodes
 // a value that is not a pointer: a Community Edition answer's approval state,
-// a project's flags outside the license that sends them, and an instance
-// service account's external flag before 19.5.
+// a project's flags outside the license that sends them, an instance service
+// account's external flag before 19.5, and a group's SHA settings outside the
+// detail entity and before 19.5.
 var presenceCaptures = []captureDeclaration{
 	serviceAccountExternal,
 	presenceCapture("approvals_left", "ApprovalsLeft", "int64"),
@@ -252,6 +266,8 @@ var presenceCaptures = []captureDeclaration{
 	projectFlagCapture("duo_sast_vr_workflow_enabled", "DuoSASTVRWorkflowEnabled", duoFlagReason),
 	projectFlagCapture("duo_secret_detection_fp_enabled", "DuoSecretDetectionFPEnabled", duoFlagReason),
 	projectFlagCapture("only_allow_merge_if_all_status_checks_passed", "OnlyAllowMergeIfAllStatusChecksPassed", statusChecksFlagReason),
+	groupSHACapture("lock_require_sha_for_merge", "LockRequireSHAForMerge"),
+	groupSHACapture("require_sha_for_merge", "RequireSHAForMerge"),
 }
 
 // confidentialReason is why a note's confidential is read off the capture.
