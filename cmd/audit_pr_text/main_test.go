@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -50,10 +49,8 @@ func TestRun_TheCommandLine_IsReadAsTheScriptReadIt(t *testing.T) {
 func TestUsage_NamesBothSubcommandsAndTheirVariables(t *testing.T) {
 	t.Parallel()
 
-	for _, want := range []string{"audit_pr_text diff [BASE_REF]", "audit_pr_text description", "$EM_DASH_BASE", "$PR_NUMBER", "PR_TITLE_FILE", "PR_BODY_FILE"} {
-		if !strings.Contains(usage, want) {
-			t.Errorf("usage lacks %q", want)
-		}
+	if absent := lacking(usage, "audit_pr_text diff [BASE_REF]", "audit_pr_text description", "$EM_DASH_BASE", "$PR_NUMBER", "PR_TITLE_FILE", "PR_BODY_FILE"); len(absent) > 0 {
+		t.Errorf("usage lacks %q", absent)
 	}
 }
 

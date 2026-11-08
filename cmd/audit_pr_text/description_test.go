@@ -104,14 +104,23 @@ func TestDescription_ACleanDescription_Passes(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d, want 0\n%s", code, output)
 	}
-	for _, want := range []string{
+	if absent := lacking(output,
 		"Judging the pull request title and body (files on disk).",
 		"OK: the title and body carry no em dash, no injected block and no skip command.",
-	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output lacks %q:\n%s", want, output)
+	); len(absent) > 0 {
+		t.Errorf("output lacks %q:\n%s", absent, output)
+	}
+}
+
+// lacking returns the fragments output does not carry, in their order.
+func lacking(output string, fragments ...string) []string {
+	var absent []string
+	for _, fragment := range fragments {
+		if !strings.Contains(output, fragment) {
+			absent = append(absent, fragment)
 		}
 	}
+	return absent
 }
 
 // TestDescription_EachSkipCommandInTheBody_FailsAndNamesItsLine verifies
@@ -249,10 +258,8 @@ func TestDescription_AnEmDash_Fails(t *testing.T) {
 	t.Parallel()
 
 	code, output := judgeFiles(t, "A title "+committext.EmDash+" here", "first\na sentence "+committext.EmDash+" with a dash\n")
-	for _, want := range []string{"carries an em dash", "title: A title " + committext.EmDash + " here", "body:2:a sentence "} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output lacks %q:\n%s", want, output)
-		}
+	if absent := lacking(output, "carries an em dash", "title: A title "+committext.EmDash+" here", "body:2:a sentence "); len(absent) > 0 {
+		t.Errorf("output lacks %q:\n%s", absent, output)
 	}
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
@@ -292,10 +299,8 @@ func TestDescription_EveryFinding_IsReportedInOneRun(t *testing.T) {
 	t.Parallel()
 
 	code, output := judgeFiles(t, "A title "+committext.EmDash, "commits with "+skipCI+"\n## Summary by CodeRabbit\n")
-	for _, want := range []string{"carries an em dash", "carries a block a review bot generated", skipFailure, "Re-check with: make check-pr-description"} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output lacks %q:\n%s", want, output)
-		}
+	if absent := lacking(output, "carries an em dash", "carries a block a review bot generated", skipFailure, "Re-check with: make check-pr-description"); len(absent) > 0 {
+		t.Errorf("output lacks %q:\n%s", absent, output)
 	}
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
@@ -407,17 +412,15 @@ func TestDescription_ReadThroughTheAPIWithCRLFLineEndings_IsJudged(t *testing.T)
 	if got := calls(t, dir); got != "api repos/owner/repo/pulls/7\n" {
 		t.Errorf("gh was asked %q, want the one api call", got)
 	}
-	for _, want := range []string{
+	if absent := lacking(output,
 		"owner/repo#7, read from the API just now",
-		"body:2:the fixture commits with " + skipCI + "\n",
+		"body:2:the fixture commits with "+skipCI+"\n",
 		// The trailer ends in a carriage return in the payload, which an
 		// anchor on the end of the value would miss.
 		"body:4:skip-checks: true\n",
 		skipFailure,
-	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output lacks %q:\n%s", want, output)
-		}
+	); len(absent) > 0 {
+		t.Errorf("output lacks %q:\n%s", absent, output)
 	}
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
