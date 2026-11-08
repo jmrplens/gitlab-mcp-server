@@ -188,8 +188,9 @@ stamp_complete_run() {
 }
 
 # keep_complete_run_stamps gives each pending stamp of a run the stamp's own
-# name when the run ended with status 0, which for a complete run means both
-# passes passed and the gate held every skip to a declaration, and removes it
+# name when the run ended with status 0, which for a complete run means its
+# main pass passed, and on ce its final pass (final_pass_test names none for
+# ee), and the gate held every skip to a declaration, and removes it
 # otherwise. A stamp beside a run profile therefore says a complete run wrote
 # the profile from the sources it lists.
 #

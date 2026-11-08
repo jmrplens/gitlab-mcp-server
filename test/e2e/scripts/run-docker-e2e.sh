@@ -67,22 +67,23 @@
 # run leaves no stream, which the skip gate then reports. It records no calls:
 # the coverage record is the main pass's, joined with the main pass's stream.
 #
-# With E2E_COVERPKG naming packages, both passes build their test binaries
-# with -coverpkg naming them and write the statements of those packages the
-# tests reached to a profile beside their other reports, <stem>-coverprofile.out
-# and <stem>-final-coverprofile.out. What is measured this way is the suite's
-# own code, the support packages its tests import (issue 1461), and not the
-# server, whose statements E2E_COVER_DIR collects from the children. Both
-# profiles are removed before anything starts, and make e2e-support-coverage
-# merges every one the report directory holds with the profile the packages'
-# offline tests write. A complete run also stamps the sources of those
-# packages before each pass builds, the SHA-256 of every source file of them,
-# and keeps the stamp beside the pass's profile, as <stem>-coverprofile.complete
-# and <stem>-final-coverprofile.complete, only once the run ended with status
-# 0: make e2e-support-coverage-record takes no run profile without a stamp
-# that is the tree's, so a record is only ever of complete runs of the
-# packages' sources the tree it is written on holds. The scenarios, the
-# harness and the server that drive them are not stamped.
+# With E2E_COVERPKG naming packages, the main pass and a final pass build
+# their test binaries with -coverpkg naming them and write the statements of
+# those packages the tests reached to a profile beside their other reports,
+# <stem>-coverprofile.out and, on ce, <stem>-final-coverprofile.out. What is
+# measured this way is the suite's own code, the support packages its tests
+# import (issue 1461), and not the server, whose statements E2E_COVER_DIR
+# collects from the children. Both profiles are removed before anything
+# starts, and make e2e-support-coverage merges every one the report directory
+# holds with the profile the packages' offline tests write. A complete run
+# also stamps the sources of those packages before each pass builds, the
+# SHA-256 of every source file of them, and keeps the stamp beside the pass's
+# profile, as <stem>-coverprofile.complete and <stem>-final-coverprofile.complete,
+# only once the run ended with status 0: make e2e-support-coverage-record
+# takes no run profile without a stamp that is the tree's, so a record is
+# only ever of complete runs of the packages' sources the tree it is written
+# on holds. The scenarios, the harness and the server that drive them are not
+# stamped.
 #
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the
@@ -514,8 +515,9 @@ if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
 fi
 
 # The stamps of a complete run's profiles take their own names only now, when
-# the run's status says it was complete: both passes passed and the gate held
-# every skip to a declaration. A run that ended otherwise keeps its profiles,
+# the run's status says it was complete: the main pass passed, and the final
+# pass on a runtime that makes one, and the gate held every skip to a
+# declaration. A run that ended otherwise keeps its profiles,
 # which make e2e-support-coverage still reports, and no stamp, so
 # make e2e-support-coverage-record refuses them.
 keep_complete_run_stamps "${RUN_STATUS}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.complete" \

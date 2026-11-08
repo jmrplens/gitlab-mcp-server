@@ -86,9 +86,10 @@ func writeStamp(name string, packages []string) error {
 
 // checkStamps holds every run profile a record is taken of to the stamp of
 // the packages' sources as this tree holds them, which a complete run leaves
-// beside it. A profile with no stamp was not
-// written by a complete run: run-docker-e2e.sh keeps a pass's stamp only once
-// both passes passed and every skip was declared. A profile whose stamp is
+// beside it. A profile with no stamp was not written by a complete run:
+// run-docker-e2e.sh keeps a pass's stamp only once the run's main pass passed,
+// and on CE its final pass, which an EE run does not make, and every skip was
+// declared. A profile whose stamp is
 // not the tree's was written from other sources, and the record would credit
 // what the run reached in them to the declarations the tree holds now, whose
 // blocks can be where the old ones were while the code differs.
