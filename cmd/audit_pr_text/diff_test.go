@@ -9,6 +9,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,9 +67,6 @@ func commit(t *testing.T, dir string, files map[string]*string) string {
 	return git(t, dir, "rev-parse", "HEAD")
 }
 
-// text is the address of s, for commit's file map.
-func text(s string) *string { return &s }
-
 // newRepository creates a repository whose first commit holds every path
 // the gate excludes, as this tree does, plus files, and returns it with that
 // commit, the base every case diffs against.
@@ -77,11 +76,9 @@ func newRepository(t *testing.T, files map[string]*string) (dir, base string) {
 	git(t, dir, "init", "--quiet")
 	all := map[string]*string{}
 	for _, path := range excludedPaths {
-		all[path] = text("generated\n")
+		all[path] = new("generated\n")
 	}
-	for name, content := range files {
-		all[name] = content
-	}
+	maps.Copy(all, files)
 	return dir, commit(t, dir, all)
 }
 
@@ -99,8 +96,8 @@ func checkDiff(t *testing.T, dir string, vars map[string]string, args ...string)
 func TestDiff_ABranchAddingNoEmDash_Passes(t *testing.T) {
 	t.Parallel()
 
-	dir, base := newRepository(t, map[string]*string{"README.md": text("one\n")})
-	commit(t, dir, map[string]*string{"README.md": text("one\ntwo, with a comma\n")})
+	dir, base := newRepository(t, map[string]*string{"README.md": new("one\n")})
+	commit(t, dir, map[string]*string{"README.md": new("one\ntwo, with a comma\n")})
 	code, stdout, stderr := checkDiff(t, dir, nil, base)
 	if code != 0 || stdout != "OK: no line added between "+base+" and HEAD carries an em dash.\n" || stderr != "" {
 		t.Errorf("exit %d, stdout %q, stderr %q, want 0 and the OK line", code, stdout, stderr)
@@ -113,11 +110,11 @@ func TestDiff_ABranchAddingNoEmDash_Passes(t *testing.T) {
 func TestDiff_AddedLinesCarryingAnEmDash_AreReportedWhereTheyAre(t *testing.T) {
 	t.Parallel()
 
-	dir, base := newRepository(t, map[string]*string{"docs/a.md": text("one\ntwo\nthree\n")})
+	dir, base := newRepository(t, map[string]*string{"docs/a.md": new("one\ntwo\nthree\n")})
 	commit(t, dir, map[string]*string{
-		"docs/a.md":   text("one\ntwo " + dash + " inserted\nthree\nfour " + dash + "\n"),
-		"cmd/x/x.go":  text("package x\n\n// A comment " + dash + " here.\n"),
-		"docs/new.md": text("clean\n"),
+		"docs/a.md":   new("one\ntwo " + dash + " inserted\nthree\nfour " + dash + "\n"),
+		"cmd/x/x.go":  new("package x\n\n// A comment " + dash + " here.\n"),
+		"docs/new.md": new("clean\n"),
 	})
 	code, stdout, stderr := checkDiff(t, dir, nil, base)
 	want := "cmd/x/x.go:3: // A comment " + dash + " here.\n" +
@@ -140,7 +137,7 @@ func TestDiff_OnGitHubActions_AnnotatesEachFinding(t *testing.T) {
 	t.Parallel()
 
 	dir, base := newRepository(t, nil)
-	commit(t, dir, map[string]*string{"a.md": text("x " + dash + "\n")})
+	commit(t, dir, map[string]*string{"a.md": new("x " + dash + "\n")})
 	_, stdout, _ := checkDiff(t, dir, map[string]string{"GITHUB_ACTIONS": "true"}, base)
 	want := "a.md:1: x " + dash + "\n::error file=a.md,line=1::this line adds an em dash (U+2014); rewrite it\n"
 	if stdout != want {
@@ -153,9 +150,9 @@ func TestDiff_OnGitHubActions_AnnotatesEachFinding(t *testing.T) {
 func TestDiff_AnEmDashAddedAndRemovedOnTheBranch_Passes(t *testing.T) {
 	t.Parallel()
 
-	dir, base := newRepository(t, map[string]*string{"a.md": text("one\n")})
-	commit(t, dir, map[string]*string{"a.md": text("one\ntwo " + dash + "\n")})
-	commit(t, dir, map[string]*string{"a.md": text("one\ntwo, then\n")})
+	dir, base := newRepository(t, map[string]*string{"a.md": new("one\n")})
+	commit(t, dir, map[string]*string{"a.md": new("one\ntwo " + dash + "\n")})
+	commit(t, dir, map[string]*string{"a.md": new("one\ntwo, then\n")})
 	if code, stdout, stderr := checkDiff(t, dir, nil, base); code != 0 {
 		t.Errorf("exit %d, want 0\n%s%s", code, stdout, stderr)
 	}
@@ -169,16 +166,16 @@ func TestDiff_WhatTheBranchDidNotWrite_IsNotJudged(t *testing.T) {
 
 	carried := "old " + dash + " prose\nmore old prose that makes the file long enough to be found moved\nand a third line\n"
 	dir, base := newRepository(t, map[string]*string{
-		"edited.md":  text("old " + dash + " prose\nsecond\n"),
-		"moved.md":   text(carried),
-		"deleted.md": text("gone " + dash + "\n"),
+		"edited.md":  new("old " + dash + " prose\nsecond\n"),
+		"moved.md":   new(carried),
+		"deleted.md": new("gone " + dash + "\n"),
 	})
 	commit(t, dir, map[string]*string{
-		"edited.md":         text("old " + dash + " prose\nsecond, edited\n"),
+		"edited.md":         new("old " + dash + " prose\nsecond, edited\n"),
 		"moved.md":          nil,
-		"elsewhere/kept.md": text(carried),
+		"elsewhere/kept.md": new(carried),
 		"deleted.md":        nil,
-		excludedPaths[0]:    text("generated " + dash + "\n"),
+		excludedPaths[0]:    new("generated " + dash + "\n"),
 	})
 	if code, stdout, stderr := checkDiff(t, dir, nil, base); code != 0 {
 		t.Errorf("exit %d, want 0\n%s%s", code, stdout, stderr)
@@ -193,7 +190,7 @@ func TestDiff_AnAddedLineThatLooksLikeAFileHeader_IsStillJudged(t *testing.T) {
 	t.Parallel()
 
 	dir, base := newRepository(t, nil)
-	commit(t, dir, map[string]*string{"a.md": text("++ not a header\nafter " + dash + "\n")})
+	commit(t, dir, map[string]*string{"a.md": new("++ not a header\nafter " + dash + "\n")})
 	code, stdout, _ := checkDiff(t, dir, nil, base)
 	if code != 1 || stdout != "a.md:2: after "+dash+"\n" {
 		t.Errorf("exit %d, stdout %q, want 1 and the line after the look-alike", code, stdout)
@@ -207,7 +204,7 @@ func TestDiff_TheBase_IsTheArgumentThenTheVariableThenOriginMain(t *testing.T) {
 	t.Parallel()
 
 	dir, base := newRepository(t, nil)
-	commit(t, dir, map[string]*string{"a.md": text("x " + dash + "\n")})
+	commit(t, dir, map[string]*string{"a.md": new("x " + dash + "\n")})
 	head := git(t, dir, "rev-parse", "HEAD")
 
 	if code, _, _ := checkDiff(t, dir, map[string]string{"EM_DASH_BASE": base}, head); code != 0 {
@@ -224,15 +221,32 @@ func TestDiff_TheBase_IsTheArgumentThenTheVariableThenOriginMain(t *testing.T) {
 	}
 }
 
+// TestDiff_WithoutGit_FailsWithTheLookupsError verifies that a git that
+// cannot start is reported as that, with the lookup's own error, and never as
+// a base to fetch: the base is there, and it is git that is not. The
+// repository is made while git is on PATH, then PATH holds none, so the test
+// changes PATH and does not run in parallel.
+func TestDiff_WithoutGit_FailsWithTheLookupsError(t *testing.T) {
+	dir, base := newRepository(t, nil)
+	t.Setenv("PATH", t.TempDir())
+
+	code, stdout, stderr := checkDiff(t, dir, nil, base)
+	want := "ERROR: git rev-parse " + base + ": find git: "
+	if code != 1 || stdout != "" || !strings.HasPrefix(stderr, want) || strings.Contains(stderr, "cannot resolve the base commit") {
+		t.Errorf("exit %d, stdout %q, stderr %q, want 1 and stderr starting %q", code, stdout, stderr, want)
+	}
+}
+
 // TestDiff_ARangeGitCannotDiff_Fails verifies that git's own refusal is the
 // answer: two histories with no merge base have no three-dot diff.
 func TestDiff_ARangeGitCannotDiff_Fails(t *testing.T) {
 	t.Parallel()
 
 	dir, _ := newRepository(t, nil)
+	branch := git(t, dir, "symbolic-ref", "--short", "HEAD")
 	git(t, dir, "checkout", "--quiet", "--orphan", "other")
-	other := commit(t, dir, map[string]*string{"b.md": text("b\n")})
-	git(t, dir, "checkout", "--quiet", "-")
+	other := commit(t, dir, map[string]*string{"b.md": new("b\n")})
+	git(t, dir, "checkout", "--quiet", branch)
 	code, _, stderr := checkDiff(t, dir, nil, other)
 	if code != 1 || !strings.HasPrefix(stderr, "ERROR: git diff "+other+"...HEAD: ") {
 		t.Errorf("exit %d, stderr %q, want 1 and git's refusal", code, stderr)
@@ -268,8 +282,10 @@ func TestDiff_TwoBases_IsAUsageError(t *testing.T) {
 
 // TestParseDiff_EachShapeGitWrites_IsRead verifies the reader over the
 // shapes a real repository cannot always produce on every platform: a
-// quoted path, a deleted file, a pure deletion hunk, a no-newline marker and
-// a hunk header whose context carries a plus sign.
+// quoted path, a deleted file, a pure deletion hunk, a no-newline marker, a
+// hunk header whose context carries a plus sign, and a context line, which a
+// diff with more than zero lines of context carries and which counts towards
+// the new file's numbering without being judged.
 func TestParseDiff_EachShapeGitWrites_IsRead(t *testing.T) {
 	t.Parallel()
 
@@ -282,7 +298,8 @@ func TestParseDiff_EachShapeGitWrites_IsRead(t *testing.T) {
 		"diff --git \"a/odd\\tname.md\" \"b/odd\\tname.md\"\n" +
 		"--- \"a/odd\\tname.md\"\n" +
 		"+++ \"b/odd\\tname.md\"\n" +
-		"@@ -3,0 +4,2 @@ ## A heading +5\n" +
+		"@@ -3,1 +3,3 @@ ## A heading +5\n" +
+		" context " + dash + "\n" +
 		"+new " + dash + "\n" +
 		"+second " + dash + "\n" +
 		"\\ No newline at end of file\n" +
@@ -309,17 +326,32 @@ func TestParseDiff_EachShapeGitWrites_IsRead(t *testing.T) {
 		{path: `"b/bad\q.md`, line: 1, text: "unreadable path " + dash},
 	}
 	if !slices.Equal(got, want) {
-		t.Errorf("findings %q, want %q", got, want)
+		t.Errorf("findings %+v, want %+v", got, want)
 	}
 }
 
 // TestGitCommand_RunsGitInTheDirectory verifies the seam's own answer
-// without starting it.
+// without starting it: the git a lookup finds on PATH, run by its absolute
+// path in the directory given. It changes PATH, so it does not run in
+// parallel.
 func TestGitCommand_RunsGitInTheDirectory(t *testing.T) {
-	t.Parallel()
+	program := onlyOnPath(t, "git")
 
 	cmd := gitCommand(t.Context(), "/some/dir", "rev-parse", "HEAD")
-	if got := strings.Join(cmd.Args, " "); got != "git rev-parse HEAD" || cmd.Dir != "/some/dir" {
-		t.Errorf("command %q in %q, want git rev-parse HEAD in /some/dir", got, cmd.Dir)
+	if cmd.Err != nil || cmd.Path != program || !slices.Equal(cmd.Args, []string{program, "rev-parse", "HEAD"}) || cmd.Dir != "/some/dir" {
+		t.Errorf("command %q at %q in %q (error %v), want %s rev-parse HEAD in /some/dir", cmd.Args, cmd.Path, cmd.Dir, cmd.Err, program)
+	}
+}
+
+// TestGitCommand_NoGitOnPath_IsTheLookupsFailure verifies that git is found
+// on PATH before it is run, and that a PATH holding none is the error running
+// the command returns: the lookup's failure rather than a git that ran and
+// refused. It changes PATH, so it does not run in parallel.
+func TestGitCommand_NoGitOnPath_IsTheLookupsFailure(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := gitCommand(t.Context(), t.TempDir(), "--version").Run()
+	if !errors.Is(err, exec.ErrNotFound) || !strings.HasPrefix(err.Error(), "find git: ") {
+		t.Errorf("running gitCommand() with no git on PATH = %v, want the lookup's failure", err)
 	}
 }

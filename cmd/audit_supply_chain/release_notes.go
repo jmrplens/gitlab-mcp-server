@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/committext"
 )
 
 // releaseNotesDir is the repository-relative directory the written summary of
@@ -42,20 +44,9 @@ var releaseNotesDashes = []struct {
 	character string
 	name      string
 }{
-	{character: string(rune(0x2014)), name: "an em dash (U+2014)"},
+	{character: committext.EmDash, name: "an em dash (U+2014)"},
 	{character: string(rune(0x2013)), name: "an en dash (U+2013)"},
 }
-
-// skipCommand and skipChecksTrailer are the ways GitHub reads a commit message
-// as a request to skip every workflow a push triggers, matched the way
-// scripts/check-em-dash.sh matches them in a pull request description: the
-// five bracketed commands anywhere, in any case and with any spacing inside
-// the brackets, and the trailer at the start of a line only, since prose may
-// name it mid-sentence.
-var (
-	skipCommand       = regexp.MustCompile(`(?i)\[\s*(?:skip\s+ci|ci\s+skip|no\s+ci|skip\s+actions|actions\s+skip)\s*\]`)
-	skipChecksTrailer = regexp.MustCompile("(?i)^\\s*`?skip-checks\\s*:\\s*true")
-)
 
 // releaseNotesAttribution are the shapes in which a text credits an assistant
 // with writing it: a commit trailer, a footer or a line naming the assistant
@@ -372,7 +363,10 @@ func lineProblems(where, line string) []string {
 			problems = append(problems, where+": carries "+dash.name+releaseNotesFix)
 		}
 	}
-	if skipCommand.MatchString(line) || skipChecksTrailer.MatchString(line) {
+	// The ways GitHub reads a commit message as a request to skip every
+	// workflow a push triggers, matched as cmd/audit_pr_text matches them in a
+	// pull request description, from the one definition both share.
+	if committext.SkipCommand.MatchString(line) || committext.SkipChecksTrailer.MatchString(line) {
 		problems = append(problems, where+": carries a command that makes GitHub skip workflows: pasted into the pull request "+
 			"that moves VERSION, it would run no CI on the commit the release tag goes on and no release from the tag")
 	}

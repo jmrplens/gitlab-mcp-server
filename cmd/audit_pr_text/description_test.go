@@ -19,9 +19,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,6 +73,26 @@ func writeFile(t *testing.T, path string, data []byte) {
 	if err := os.WriteFile(path, data, 0o600); err != nil { //#nosec G703 -- a path below the test's own t.TempDir
 		t.Fatal(err)
 	}
+}
+
+// onlyOnPath leaves PATH holding one directory, which holds a program named
+// name that is never started, and returns the path a lookup of name finds
+// there. It changes the process's PATH, so a test calling it does not run in
+// parallel.
+func onlyOnPath(t *testing.T, name string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		// A lookup on Windows finds a program by an extension PATHEXT
+		// lists, never by its bare name.
+		name += ".exe"
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, nil, 0o700); err != nil { //#nosec G306 G703 -- a program the lookup must find executable, below the test's own t.TempDir
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	return path
 }
 
 // TestDescription_ACleanDescription_Passes verifies the passing answer, which
@@ -421,11 +444,37 @@ func TestDescription_TheRepositoryAndPullRequestGhKnows_AreJudged(t *testing.T) 
 	}
 }
 
+// TestDescription_TheTitleTheAPIAnswers_IsJudged verifies that the title is
+// read from the payload, and that a payload with no title is judged on its
+// body alone.
+func TestDescription_TheTitleTheAPIAnswers_IsJudged(t *testing.T) {
+	cases := []struct {
+		name, payload, want string
+		code                int
+	}{
+		{name: "a title with an em dash", payload: `{"title": "A title ` + committext.EmDash + `", "body": "clean"}`, code: 1, want: "title: A title " + committext.EmDash + "\n"},
+		{name: "no title", payload: `{"title": null, "body": "clean"}`, code: 0, want: "OK: the title and body carry"},
+	}
+	// sequential: each case points the one gh seam at its own stand-in
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "payload"), []byte(tc.payload))
+			useGh(t, dir)
+
+			code, output := judge(t, map[string]string{"PR_NUMBER": "7", "GITHUB_REPOSITORY": "owner/repo"})
+			if code != tc.code || !strings.Contains(output, tc.want) {
+				t.Errorf("exit %d, want %d and %q\n%s", code, tc.code, tc.want, output)
+			}
+		})
+	}
+}
+
 // TestDescription_NoPullRequestOpen_Passes verifies that a branch with no
 // pull request has no description to land, and that the gate says so.
 func TestDescription_NoPullRequestOpen_Passes(t *testing.T) {
 	cases := map[string]string{
-		"gh pr view fails":         "",
+		"gh pr view fails":          "",
 		"gh pr view prints nothing": "\n",
 	}
 	// sequential: each case points the one gh seam at its own stand-in
@@ -485,29 +534,50 @@ func TestDescription_AGhCallThatFails_FailsTheRun(t *testing.T) {
 }
 
 // TestDescription_WithoutGh_FailsAndSaysWhatElseWorks verifies that a gate
-// that cannot read the description says so, and names the rehearsal path.
+// that cannot read the description says so, and names the rehearsal path,
+// whichever of its three gh calls is the first to find gh missing: a missing
+// gh is never read as there being no pull request. gh is missing the way it
+// is on a machine without it, the real seam looking it up on a PATH that
+// holds none, so the test changes PATH and does not run in parallel.
 func TestDescription_WithoutGh_FailsAndSaysWhatElseWorks(t *testing.T) {
-	previous := ghCommand
-	t.Cleanup(func() { ghCommand = previous })
-	ghCommand = func(ctx context.Context, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "gh-that-is-not-installed-anywhere", args...)
-	}
+	t.Setenv("PATH", t.TempDir())
 
-	code, output := judge(t, map[string]string{"PR_NUMBER": "7", "GITHUB_REPOSITORY": "owner/repo"})
 	want := "ERROR: gh is needed to read the pull request description.\n" +
 		"Install it, or set PR_TITLE_FILE and PR_BODY_FILE to judge text from disk.\n"
-	if code != 1 || output != want {
-		t.Errorf("exit %d, output %q, want 1 and %q", code, output, want)
+	for name, vars := range map[string]map[string]string{
+		"gh api":       {"PR_NUMBER": "7", "GITHUB_REPOSITORY": "owner/repo"},
+		"gh pr view":   {"GITHUB_REPOSITORY": "owner/repo"},
+		"gh repo view": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if code, output := judge(t, vars); code != 1 || output != want {
+				t.Errorf("exit %d, output %q, want 1 and %q", code, output, want)
+			}
+		})
 	}
 }
 
 // TestGhCommand_RunsGhFromThePath verifies the seam's own answer without
-// starting it.
+// starting it: the gh a lookup finds on PATH, run by its absolute path with
+// the arguments as given. It changes PATH, so it does not run in parallel.
 func TestGhCommand_RunsGhFromThePath(t *testing.T) {
-	t.Parallel()
+	gh := onlyOnPath(t, "gh")
 
 	cmd := ghCommand(t.Context(), "api", "repos/o/r/pulls/1")
-	if got := strings.Join(cmd.Args, " "); got != "gh api repos/o/r/pulls/1" {
-		t.Errorf("command %q, want gh with the arguments as given", got)
+	if cmd.Err != nil || cmd.Path != gh || !slices.Equal(cmd.Args, []string{gh, "api", "repos/o/r/pulls/1"}) {
+		t.Errorf("command %q at %q (error %v), want %s with the arguments as given", cmd.Args, cmd.Path, cmd.Err, gh)
+	}
+}
+
+// TestGhCommand_NoGhOnPath_IsTheLookupsFailure verifies that gh is found on
+// PATH before it is run, and that a PATH holding none is the error running
+// the command returns: the lookup's failure, still read as a gh that is not
+// installed. It changes PATH, so it does not run in parallel.
+func TestGhCommand_NoGhOnPath_IsTheLookupsFailure(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := ghCommand(t.Context(), "--version").Run()
+	if !errors.Is(err, exec.ErrNotFound) || !strings.HasPrefix(err.Error(), "find gh: ") {
+		t.Errorf("running ghCommand() with no gh on PATH = %v, want the lookup's failure", err)
 	}
 }

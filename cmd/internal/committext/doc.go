@@ -10,7 +10,7 @@
 //
 // It exists because the two gates used to carry a copy each, and the copies
 // carried the same defect: the skip-checks trailer was matched as a prefix,
-// so "skip-checks: trueish" was refused as if GitHub would honour it, which
+// so "skip-checks: trueish" was refused as if GitHub would honor it, which
 // refuses more than it must and lets nothing more through. One definition is
 // one place to get that right (issue 1114, item 11).
 //
