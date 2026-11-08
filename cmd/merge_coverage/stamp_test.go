@@ -59,6 +59,32 @@ func TestSourcesStamp_Packages_ListEverySourceButTheTests(t *testing.T) {
 	}
 }
 
+// TestSourcesStamp_ModuleRootPackage_IsStampedFromTheRoot holds the module's
+// root package, which -packages spells ".", to the files at the module root:
+// its sources and not its test or the packages below it, each named as
+// sha256sum -c reads it from the root, and a run profile beside that stamp
+// is the tree's for a record of the same package.
+func TestSourcesStamp_ModuleRootPackage_IsStampedFromTheRoot(t *testing.T) {
+	const rootSource = "package root\n"
+	writeTree(t, map[string]string{"root.go": rootSource, "root_test.go": "package root\n"})
+	packages := []string{importPath(".")}
+	want := stampLine("root.go", rootSource)
+
+	got, err := sourcesStamp(packages)
+	if err != nil {
+		t.Fatalf("sourcesStamp() error = %v", err)
+	}
+	if string(got) != want {
+		t.Errorf("stamp =\n%s\nwant\n%s", got, want)
+	}
+	dir := t.TempDir()
+	writeProfile(t, dir, "e2e-ce-coverprofile.complete", want)
+	run := []source{{path: filepath.Join(dir, "e2e-ce-coverprofile.out"), half: onlineHalf}}
+	if checkErr := checkStamps(run, packages); checkErr != nil {
+		t.Errorf("checkStamps() with the root package's stamp = %v, want nil", checkErr)
+	}
+}
+
 // TestSourcesStamp_TreeItCannotRead_IsRefused holds a tree the stamp cannot
 // describe to an error naming the package: a package directory that is not
 // there, and a source that cannot be read, here a directory named like one.
