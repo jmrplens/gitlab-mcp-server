@@ -23,6 +23,20 @@ func isInteractiveTerminal() bool {
 	return isatty.IsTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
 }
 
+// needsFirstRunGuidance reports whether a start is somebody running stdio mode
+// by hand without the two values it needs: not HTTP mode, a terminal on
+// stdin, and GITLAB_TOKEN or GITLAB_URL missing. Either value missing is
+// enough (see main). The terminal is asked only for stdio mode.
+//
+// It takes the terminal test and the environment as functions so every
+// platform's tests drive all of it (issue 1212). Inline in main, only the
+// Linux test that gives the process a pseudo-terminal reached the two
+// environment checks, and on Windows and macOS neither was ever evaluated.
+func needsFirstRunGuidance(useHTTP bool, interactive func() bool, getenv func(string) string) bool {
+	return !useHTTP && interactive() &&
+		(getenv("GITLAB_TOKEN") == "" || getenv("GITLAB_URL") == "")
+}
+
 // isCygwinTerminal is isatty's Cygwin test, held as a variable because it is
 // false on every platform but Windows, so the half of the guard that answers
 // for mintty can only be driven there or through this seam.
