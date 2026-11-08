@@ -139,6 +139,21 @@ CI runs the gate instrumented, with no switch, which is the one place `-cover` i
 
 `make e2e-go-coverage` merges every directory holding coverage data, so a CE run and a licensed one fold into one figure, which is the honest one: a statement only the licensed catalog reaches was still reached. It writes `dist/e2e-reports/e2e-go-coverage.out`, prints the per-package table and the total, and fails rather than reporting zero when there is nothing to read, which is the shape of an uninstrumented build. Nothing is committed, no floor is applied, and the profile is never merged into `coverage.out`, which Sonar publishes as the unit suite's figure.
 
+### Go statement coverage of the support packages
+
+```bash
+make test-e2e-ce             # or test-e2e-ee; no switch, the complete runs always write it
+make e2e-support-coverage    # the offline half, merged with the runs, then the per-package table
+```
+
+The third question, about the suite's own code rather than the server's: how much of `test/e2e/internal/fixture` and `test/e2e/modeleval` the tests reach (issue 1461). Most of it is what only a GitLab reaches, the fixture builders and the sessions that start the real binary, so the packages' offline tests alone leave it out, and the complete runs are the measurement of it.
+
+`make test-e2e-ce` and `make test-e2e-ee` hand `run-docker-e2e.sh` the two packages as `E2E_COVERPKG` (the Makefile's `E2E_SUPPORT_COVERPKG`), and the script builds every test binary of the run with `-coverpkg` naming them: the main pass writes `e2e-ce-coverprofile.out` (or `e2e-ee-`) beside its other reports, and the CE run's final pass `e2e-ce-final-coverprofile.out`. Both are removed before the run starts, whether or not it writes them. What the runs test and their timeouts are unchanged; only the two packages are instrumented, in the test binaries, and nothing of the server, so it costs no build of its own and is not behind `COVER`. The suite's job in `e2e.yml` passes the same list to its CE run.
+
+`make e2e-support-coverage` runs the two packages' offline tests on the same tree, with the model evaluation's switches emptied so a `.env` cannot make them a paid run, and the on-demand sweep's (`E2E_SWEEP_MIN_AGE`, `E2E_SWEEP_PREFIX`) emptied so one exported in the shell cannot make them delete anything, and hands both halves to `cmd/merge_coverage`: every `*-coverprofile.out` in the report directory as the run half, so a CE run, its final pass and a licensed run fold into one figure. A block two profiles carry counts once, and two profiles of different versions of a file are refused, naming the file, rather than merged. It prints one row per package (the offline figure, the runs', the merged one, and the statements only the runs reached), writes the merged profile to `dist/e2e-reports/e2e-support-coverage.out`, and appends the table to `E2E_SUPPORT_SUMMARY` when that names a file, which is how `e2e.yml` puts it on the run beside an artifact of its own, `e2e-support-coverage`. It refuses to run when no run left a profile.
+
+No package the complete runs test imports `test/e2e/modeleval`, so `go test` warns that nothing being tested depends on it and the runs' column reads absent for it: its online code runs under `make modeleval-ce` and `make modeleval-ee`, which do not measure it.
+
 ## Quick Start
 
 ### Self-Hosted Mode
