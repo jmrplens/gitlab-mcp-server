@@ -3630,6 +3630,9 @@
           "classic": "api",
           "sites": [
             "features.Set"
+          ],
+          "sdk_methods": [
+            "Features.SetFeatureFlag"
           ]
         }
       ],
@@ -10341,7 +10344,10 @@
           "class": "mandatory",
           "classic": "api",
           "sites": [
-            "groupboards.newRawRequest"
+            "groupboards.UpdateGroupBoard"
+          ],
+          "sdk_methods": [
+            "GroupIssueBoards.UpdateIssueBoard"
           ]
         }
       ],
@@ -11284,6 +11290,35 @@
           ],
           "sdk_methods": [
             "GroupRelationsExport.ScheduleExport"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "group.group_upload",
+      "handlers": [
+        "groupmarkdownuploads.Upload"
+      ],
+      "classic": "api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /groups/:id/uploads",
+          "placeholders": {
+            "id": "group_id"
+          },
+          "class": "mandatory",
+          "classic": "api",
+          "sites": [
+            "groupmarkdownuploads.Upload"
+          ],
+          "sdk_methods": [
+            "GroupMarkdownUploads.UploadGroupMarkdown"
           ]
         }
       ],
@@ -13013,6 +13048,36 @@
           ],
           "sdk_methods": [
             "Groups.ShareGroupWithGroup"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "group.shared_project_delete",
+      "handlers": [
+        "groups.DeleteSharedProject"
+      ],
+      "classic": "api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "DELETE /groups/:id/shared_projects/:project_id",
+          "placeholders": {
+            "id": "group_id",
+            "project_id": "project_id"
+          },
+          "class": "mandatory",
+          "classic": "api",
+          "sites": [
+            "groups.DeleteSharedProject"
+          ],
+          "sdk_methods": [
+            "Groups.DeleteGroupSharedProject"
           ]
         }
       ],
@@ -17546,7 +17611,10 @@
           "class": "alternative",
           "classic": "api",
           "sites": [
-            "mergerequests.postCancelAutoMerge"
+            "mergerequests.cancelAutoMergeRoute"
+          ],
+          "sdk_methods": [
+            "MergeRequests.CancelAutoMerge"
           ],
           "directives": [
             "alternatives: an instance on 19.5 or later is sent cancel_auto_merge in place of the deprecated route below, which it is sent only after cancel_auto_merge answered 404"
@@ -21782,7 +21850,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "pipelineschedules.rawGetSchedule"
+            "pipelineschedules.Get"
+          ],
+          "sdk_methods": [
+            "PipelineSchedules.GetPipelineSchedule"
           ]
         }
       ],
@@ -21884,7 +21955,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "pipelineschedules.rawGetSchedule"
+            "pipelineschedules.Run"
+          ],
+          "sdk_methods": [
+            "PipelineSchedules.GetPipelineSchedule"
           ],
           "directives": [
             "mandatory: the action answers with the schedule as it stands after the run, and a failed read fails the call"
@@ -23718,7 +23792,10 @@
           "class": "mandatory",
           "classic": "api",
           "sites": [
-            "projectimportexport.rawImportFromFile"
+            "projectimportexport.ImportFromFile"
+          ],
+          "sdk_methods": [
+            "ProjectImportExport.ImportFromFile"
           ]
         }
       ],
@@ -23744,7 +23821,10 @@
           "class": "mandatory",
           "classic": "read_api",
           "sites": [
-            "projectimportexport.rawGetImportStatus"
+            "projectimportexport.GetImportStatus"
+          ],
+          "sdk_methods": [
+            "ProjectImportExport.ImportStatus"
           ]
         }
       ],

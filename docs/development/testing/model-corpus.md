@@ -25,7 +25,7 @@ which is the ground the boundary test sanctions it on.
 | ---------------------- | ----------: |
 | Cases                  |         258 |
 | Steps declared         |         464 |
-| Catalog actions named  | 313 of 1092 |
+| Catalog actions named  | 313 of 1094 |
 | Catalog domains named  |    42 of 46 |
 | Standalone tools named |           5 |
 | Worlds asked for       |    74 of 74 |
@@ -50,7 +50,7 @@ which is the ground the boundary test sanctions it on.
 | external_status_check |             4 |                      8 |
 | feature_flags         |            10 |                     10 |
 | geo                   |             4 |                      8 |
-| group                 |            61 |                    158 |
+| group                 |            61 |                    160 |
 | group_scim            |             3 |                      4 |
 | issue                 |            19 |                     71 |
 | job                   |             8 |                     25 |

@@ -30,13 +30,13 @@ A partir de Premium el grupo trae también webhooks, reglas de push, ramas y ent
 
 ## Disponibilidad
 
-Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 158:
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 160:
 
-- **Free**: 75
-- **Premium**: 153
-- **Ultimate**: 158
+- **Free**: 77
+- **Premium**: 155
+- **Ultimate**: 160
 
-Acciones de solo lectura: 68 de 158, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 68 de las 158.
+Acciones de solo lectura: 68 de 160, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 68 de las 160.
 
 ## Acciones
 
@@ -126,6 +126,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | [`group.group_milestone_update`](#groupgroup_milestone_update)                                 | Free     | `gitlab_group_milestone_update`                 |
 | [`group.group_relations_list_status`](#groupgroup_relations_list_status)                       | Free     | `gitlab_list_group_relations_export_status`     |
 | [`group.group_relations_schedule`](#groupgroup_relations_schedule)                             | Free     | `gitlab_schedule_group_relations_export`        |
+| [`group.group_upload`](#groupgroup_upload)                                                     | Free     | `gitlab_group_markdown_upload`                  |
 | [`group.group_upload_delete_by_id`](#groupgroup_upload_delete_by_id)                           | Free     | `gitlab_delete_group_markdown_upload_by_id`     |
 | [`group.group_upload_delete_by_secret`](#groupgroup_upload_delete_by_secret)                   | Free     | `gitlab_delete_group_markdown_upload_by_secret` |
 | [`group.group_upload_list`](#groupgroup_upload_list)                                           | Free     | `gitlab_list_group_markdown_uploads`            |
@@ -184,6 +185,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | [`group.service_account_pat_rotate`](#groupservice_account_pat_rotate)                         | Free     | `gitlab_group_service_account_pat_rotate`       |
 | [`group.service_account_update`](#groupservice_account_update)                                 | Free     | `gitlab_group_service_account_update`           |
 | [`group.share_with_group`](#groupshare_with_group)                                             | Free     | `gitlab_group_share_with_group`                 |
+| [`group.shared_project_delete`](#groupshared_project_delete)                                   | Free     | `gitlab_group_shared_project_delete`            |
 | [`group.shared_projects`](#groupshared_projects)                                               | Free     | `gitlab_group_shared_projects_list`             |
 | [`group.shared_with`](#groupshared_with)                                                       | Free     | `gitlab_group_shared_with_list`                 |
 | [`group.ssh_cert_create`](#groupssh_cert_create)                                               | Premium  | `gitlab_create_group_ssh_certificate`           |
@@ -1113,7 +1115,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `group.group_board_create_list`
 
-> Create a new list (column) on a group issue board from a group label. Returns: the created list with its label and scope. See also: [`group.group_board_get_list`](#groupgroup_board_get_list), [`group.group_board_update_list`](#groupgroup_board_update_list), [`group.group_board_delete_list`](#groupgroup_board_delete_list).
+> Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope and position. See also: [`group.group_board_get_list`](#groupgroup_board_get_list), [`group.group_board_update_list`](#groupgroup_board_update_list), [`group.group_board_delete_list`](#groupgroup_board_delete_list).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_board_create_list`
 - **Herramienta individual**: `gitlab_group_board_list_create`
@@ -1122,11 +1124,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Work Item: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro  | Tipo             | Requerido | Descripción                     |
-| ---------- | ---------------- | --------- | ------------------------------- |
-| `board_id` | `integer`        | sí        | Board ID                        |
-| `group_id` | `string/integer` | sí        | Group ID or path                |
-| `label_id` | `integer`        | sí        | Label ID to create a label list |
+| Parámetro                | Tipo             | Requerido | Descripción                              |
+| ------------------------ | ---------------- | --------- | ---------------------------------------- |
+| `board_id`               | `integer`        | sí        | Board ID                                 |
+| `group_id`               | `string/integer` | sí        | Group ID or path                         |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID to create an assignee list       |
+| `iteration_id` (Premium) | `integer`        | no        | Iteration ID to create an iteration list |
+| `label_id`               | `integer`        | no        | Label ID to create a label list          |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID to create a milestone list  |
 
 ### `group.group_board_delete`
 
@@ -1772,6 +1777,24 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 | `group_id` | `string/integer` | sí        | The ID or URL-encoded path of the group |
 | `batched`  | `boolean`        | no        | Whether to batch the export             |
 
+### `group.group_upload`
+
+> Upload a file (via local file_path or base64 content) to a group's Markdown attachments store. Returns: the upload's id, alt text, relative and full URLs, full path, and a Markdown embed reference. See also: [`group.group_upload_list`](#groupgroup_upload_list), [`group.group_upload_delete_by_id`](#groupgroup_upload_delete_by_id), [`group.get`](#groupget).
+
+- **Meta-herramienta**: `gitlab_group`, acción `group_upload`
+- **Herramienta individual**: `gitlab_group_markdown_upload`
+- **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Markdown Upload: Create en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
+- **Comportamiento**: escribe, no idempotente
+
+| Parámetro        | Tipo             | Requerido | Descripción                                                                                                                                                                                 |
+| ---------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `filename`       | `string`         | sí        | Name of the file to upload (e.g. diagram.png)                                                                                                                                               |
+| `group_id`       | `string/integer` | sí        | The ID or URL-encoded path of the group                                                                                                                                                     |
+| `content_base64` | `string`         | no        | Base64-encoded file content. Only one of file_path or content_base64 should be provided.                                                                                                    |
+| `file_path`      | `string`         | no        | Absolute path to a local file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided. |
+
 ### `group.group_upload_delete_by_id`
 
 > Delete a group Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: [`group.group_upload_list`](#groupgroup_upload_list), [`group.group_upload_delete_by_secret`](#groupgroup_upload_delete_by_secret).
@@ -1807,7 +1830,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 
 ### `group.group_upload_list`
 
-> List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: [`group.group_upload_delete_by_id`](#groupgroup_upload_delete_by_id), [`group.group_upload_delete_by_secret`](#groupgroup_upload_delete_by_secret), [`group.get`](#groupget).
+> List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: [`group.group_upload`](#groupgroup_upload), [`group.group_upload_delete_by_id`](#groupgroup_upload_delete_by_id), [`group.group_upload_delete_by_secret`](#groupgroup_upload_delete_by_secret), [`group.get`](#groupget).
 
 - **Meta-herramienta**: `gitlab_group`, acción `group_upload_list`
 - **Herramienta individual**: `gitlab_list_group_markdown_uploads`
@@ -1866,6 +1889,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 | `subgroup_events`              | `boolean`                                      | no        | Trigger on subgroup events                                                                                                                                   |
 | `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                                                                                                                   |
 | `token`                        | `string`                                       | no        | Secret token for payload validation                                                                                                                          |
+| `url_variables`                | `object[]`                                     | no        | Values for the \{name\} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept   |
 | `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                                                                                                              |
 | `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                                                                                                                  |
 
@@ -1962,6 +1986,7 @@ Además necesita al menos uno de estos: `user_id`; `username`.
 | `tag_push_events`              | `boolean`                                      | no        | Trigger on tag push events                                                                                                                                   |
 | `token`                        | `string`                                       | no        | Secret token for payload validation                                                                                                                          |
 | `url`                          | `string`                                       | no        | New webhook URL                                                                                                                                              |
+| `url_variables`                | `object[]`                                     | no        | Values for the \{name\} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept   |
 | `vulnerability_events`         | `boolean`                                      | no        | Trigger on vulnerability events                                                                                                                              |
 | `wiki_page_events`             | `boolean`                                      | no        | Trigger on wiki page events                                                                                                                                  |
 
@@ -2974,9 +2999,25 @@ Además necesita exactamente uno de estos: `cn`; `filter`.
 | `expires_at`                | `string`                                                  | no        | Expiration date for the share (YYYY-MM-DD)                                                                                                                                                                                                                                  |
 | `member_role_id` (Ultimate) | `integer`                                                 | no        | Custom member role the share grants (Ultimate only). Its base access level must equal group_access                                                                                                                                                                          |
 
+### `group.shared_project_delete`
+
+> Remove a project shared with a GitLab group, from the group's side. Returns: a success confirmation. See also: [`group.shared_projects`](#groupshared_projects), [`project.delete_shared_group`](/gitlab-mcp-server/es/reference/tools/project/#projectdelete_shared_group), [`project.share_with_group`](/gitlab-mcp-server/es/reference/tools/project/#projectshare_with_group), [`group.get`](#groupget).
+
+- **Meta-herramienta**: `gitlab_group`, acción `shared_project_delete`
+- **Herramienta individual**: `gitlab_group_shared_project_delete`
+- **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Project: Share en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#group))
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                        |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------------------- |
+| `group_id`   | `string/integer` | sí        | Group ID or URL-encoded path of the group the project is shared with               |
+| `project_id` | `integer`        | sí        | Numeric ID of the project shared with the group, as group.shared_projects lists it |
+
 ### `group.shared_projects`
 
-> List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: [`group.projects`](#groupprojects), [`group.shared_with`](#groupshared_with), [`group.get`](#groupget).
+> List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: [`group.projects`](#groupprojects), [`group.shared_project_delete`](#groupshared_project_delete), [`group.shared_with`](#groupshared_with), [`group.get`](#groupget).
 
 - **Meta-herramienta**: `gitlab_group`, acción `shared_projects`
 - **Herramienta individual**: `gitlab_group_shared_projects_list`

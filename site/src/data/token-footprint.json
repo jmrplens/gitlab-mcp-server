@@ -12,26 +12,26 @@
       "minimal": 1994
     },
     "reachable_actions": {
-      "free": 876,
-      "premium": 1031,
-      "ultimate": 1097
+      "free": 878,
+      "premium": 1033,
+      "ultimate": 1099
     }
   },
   "individual": {
     "free": {
-      "visible_tools": 872,
-      "tool_schema_tokens": 549577,
-      "reduction_factor_vs_dynamic": 301
+      "visible_tools": 874,
+      "tool_schema_tokens": 554452,
+      "reduction_factor_vs_dynamic": 304
     },
     "premium": {
-      "visible_tools": 1027,
-      "tool_schema_tokens": 666397,
-      "reduction_factor_vs_dynamic": 365
+      "visible_tools": 1029,
+      "tool_schema_tokens": 671581,
+      "reduction_factor_vs_dynamic": 368
     },
     "ultimate": {
-      "visible_tools": 1093,
-      "tool_schema_tokens": 706636,
-      "reduction_factor_vs_dynamic": 387
+      "visible_tools": 1095,
+      "tool_schema_tokens": 711982,
+      "reduction_factor_vs_dynamic": 390
     }
   }
 }

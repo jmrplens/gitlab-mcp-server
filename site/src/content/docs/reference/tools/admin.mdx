@@ -1093,17 +1093,38 @@ No parameters.
 - **Fine-grained token**: Plan Limit: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter                        | Type      | Mandatory | Description                                                                       |
-| -------------------------------- | --------- | --------- | --------------------------------------------------------------------------------- |
-| `plan_name`                      | `string`  | yes       | Plan name to update (e.g. default, free, bronze, silver, gold, premium, ultimate) |
-| `conan_max_file_size`            | `integer` | no        | Maximum Conan package file size in bytes                                          |
-| `generic_packages_max_file_size` | `integer` | no        | Maximum generic package file size in bytes                                        |
-| `helm_max_file_size`             | `integer` | no        | Maximum Helm chart file size in bytes                                             |
-| `maven_max_file_size`            | `integer` | no        | Maximum Maven package file size in bytes                                          |
-| `npm_max_file_size`              | `integer` | no        | Maximum NPM package file size in bytes                                            |
-| `nuget_max_file_size`            | `integer` | no        | Maximum NuGet package file size in bytes                                          |
-| `pypi_max_file_size`             | `integer` | no        | Maximum PyPI package file size in bytes                                           |
-| `terraform_module_max_file_size` | `integer` | no        | Maximum Terraform module file size in bytes                                       |
+| Parameter                               | Type      | Mandatory | Description                                                                                                                           |
+| --------------------------------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan_name`                             | `string`  | yes       | Plan name to update (e.g. default, free, bronze, silver, gold, premium, ultimate)                                                     |
+| `cargo_max_file_size`                   | `integer` | no        | Maximum Cargo package file size in bytes                                                                                              |
+| `ci_active_jobs`                        | `integer` | no        | Total number of jobs in currently active pipelines                                                                                    |
+| `ci_instance_level_variables`           | `integer` | no        | Maximum number of instance-level CI/CD variables that can be defined                                                                  |
+| `ci_needs_size_limit`                   | `integer` | no        | Maximum number of needs dependencies a job can have                                                                                   |
+| `ci_pipeline_schedules`                 | `integer` | no        | Maximum number of pipeline schedules                                                                                                  |
+| `ci_pipeline_size`                      | `integer` | no        | Maximum number of jobs in a single pipeline                                                                                           |
+| `ci_project_subscriptions`              | `integer` | no        | Maximum number of pipeline subscriptions to and from a project                                                                        |
+| `ci_registered_group_runners`           | `integer` | no        | Maximum number of runners created or active in a group during the past seven days                                                     |
+| `ci_registered_project_runners`         | `integer` | no        | Maximum number of runners created or active in a project during the past seven days                                                   |
+| `conan_max_file_size`                   | `integer` | no        | Maximum Conan package file size in bytes                                                                                              |
+| `dotenv_size`                           | `integer` | no        | Maximum size of a dotenv artifact in bytes                                                                                            |
+| `dotenv_variables`                      | `integer` | no        | Maximum number of variables in a dotenv artifact                                                                                      |
+| `enforcement_limit`                     | `integer` | no        | Maximum storage size for the root namespace enforcement, in MiB                                                                       |
+| `generic_packages_max_file_size`        | `integer` | no        | Maximum generic package file size in bytes                                                                                            |
+| `helm_max_file_size`                    | `integer` | no        | Maximum Helm chart file size in bytes                                                                                                 |
+| `maven_max_file_size`                   | `integer` | no        | Maximum Maven package file size in bytes                                                                                              |
+| `max_pipelines_per_merge_train`         | `integer` | no        | Maximum number of parallel pipelines per merge train                                                                                  |
+| `notification_limit`                    | `integer` | no        | Maximum storage size for the root namespace notifications, in MiB                                                                     |
+| `npm_max_file_size`                     | `integer` | no        | Maximum NPM package file size in bytes                                                                                                |
+| `nuget_max_file_size`                   | `integer` | no        | Maximum NuGet package file size in bytes                                                                                              |
+| `pipeline_hierarchy_size`               | `integer` | no        | Maximum number of downstream pipelines in a pipeline's hierarchy tree                                                                 |
+| `pypi_max_file_size`                    | `integer` | no        | Maximum PyPI package file size in bytes                                                                                               |
+| `service_desk_outbound_emails_per_day`  | `integer` | no        | Maximum number of outbound Service Desk emails per day, per top-level namespace. 0 for unlimited                                      |
+| `service_desk_outbound_emails_per_hour` | `integer` | no        | Maximum number of outbound Service Desk emails per hour, per top-level namespace. 0 for unlimited                                     |
+| `storage_size_limit`                    | `integer` | no        | Maximum storage size for the root namespace, in MiB                                                                                   |
+| `terraform_module_max_file_size`        | `integer` | no        | Maximum Terraform module file size in bytes                                                                                           |
+| `web_hook_calls`                        | `integer` | no        | Maximum number of times a webhook can be called per minute, per top-level namespace. 0 for unlimited                                  |
+| `web_hook_calls_low`                    | `integer` | no        | Maximum number of times a webhook can be called per minute, per top-level namespace (the low limit, GitLab.com only). 0 for unlimited |
+| `web_hook_calls_mid`                    | `integer` | no        | Maximum number of times a webhook can be called per minute, per top-level namespace (the mid limit, GitLab.com only). 0 for unlimited |
 
 ### `admin.plan_limits_get`
 
@@ -1469,7 +1490,7 @@ No parameters.
 
 ### `admin.terraform_state_lock`
 
-> Lock a Terraform state. Returns: the state with its lock acquired. See also: [`admin.terraform_state_unlock`](#adminterraform_state_unlock), [`admin.terraform_state_get`](#adminterraform_state_get).
+> Lock a Terraform state under a lock ID. Returns: the lock GitLab took, with its ID, holder and creation time. See also: [`admin.terraform_state_unlock`](#adminterraform_state_unlock), [`admin.terraform_state_get`](#adminterraform_state_get).
 
 - **Meta-tool**: `gitlab_admin`, action `terraform_state_lock`
 - **Individual tool**: `gitlab_lock_terraform_state`
@@ -1478,14 +1499,21 @@ No parameters.
 - **Fine-grained token**: Terraform State: Lock at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter    | Type             | Mandatory | Description                    |
-| ------------ | ---------------- | --------- | ------------------------------ |
-| `name`       | `string`         | yes       | Terraform state name           |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path |
+| Parameter    | Type             | Mandatory | Description                                                                                                                                                                         |
+| ------------ | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lock_id`    | `string`         | yes       | ID to take the lock under, up to 255 characters, such as a UUID, which is what terraform generates. An unlock that names the lock, and a state write while it is held, pass this ID |
+| `name`       | `string`         | yes       | Terraform state name                                                                                                                                                                |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                      |
+| `created`    | `string`         | no        | When the lock was created, as terraform writes it. GitLab records the moment it takes the lock and answers with that instead                                                        |
+| `info`       | `string`         | no        | Free text about the lock. GitLab answers it back and does not store it                                                                                                              |
+| `operation`  | `string`         | no        | Terraform operation the lock is taken for, such as OperationTypeApply. GitLab answers it back and does not store it                                                                 |
+| `path`       | `string`         | no        | Path of the state the lock covers, as terraform writes it, usually empty. GitLab answers it back and does not store it                                                              |
+| `version`    | `string`         | no        | Terraform version that takes the lock. GitLab answers it back and does not store it                                                                                                 |
+| `who`        | `string`         | no        | Who takes the lock, as terraform writes it (user@host). GitLab records the token's user as the holder and answers with that username instead                                        |
 
 ### `admin.terraform_state_unlock`
 
-> Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: [`admin.terraform_state_lock`](#adminterraform_state_lock), [`admin.terraform_state_get`](#adminterraform_state_get), [`admin.terraform_state_list`](#adminterraform_state_list).
+> Unlock a project Terraform state by project_id and state name, by the lock's lock_id or whatever its ID. Returns: whether the lock was released. See also: [`admin.terraform_state_lock`](#adminterraform_state_lock), [`admin.terraform_state_get`](#adminterraform_state_get), [`admin.terraform_state_list`](#adminterraform_state_list).
 
 - **Meta-tool**: `gitlab_admin`, action `terraform_state_unlock`
 - **Individual tool**: `gitlab_unlock_terraform_state`
@@ -1494,10 +1522,11 @@ No parameters.
 - **Fine-grained token**: Terraform State: Lock at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
-| Parameter    | Type             | Mandatory | Description                                                                                            |
-| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
-| `name`       | `string`         | yes       | Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id. |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                         |
+| Parameter    | Type             | Mandatory | Description                                                                                                                                                                                   |
+| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | `string`         | yes       | Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id.                                                                                        |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                |
+| `lock_id`    | `string`         | no        | ID the lock was taken under. GitLab releases the lock only when it matches and answers 409 when it does not. Leave it out to release the lock whatever its ID, as terraform force-unlock does |
 
 ### `admin.terraform_version_delete`
 

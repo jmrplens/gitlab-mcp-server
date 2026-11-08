@@ -4093,6 +4093,9 @@
               "pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -4267,6 +4270,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -10393,8 +10397,92 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "cargo_max_file_size": {
+          "description": "Maximum Cargo package file size in bytes",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_active_jobs": {
+          "description": "Total number of jobs in currently active pipelines",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_instance_level_variables": {
+          "description": "Maximum number of instance-level CI/CD variables that can be defined",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_needs_size_limit": {
+          "description": "Maximum number of needs dependencies a job can have",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_pipeline_schedules": {
+          "description": "Maximum number of pipeline schedules",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_pipeline_size": {
+          "description": "Maximum number of jobs in a single pipeline",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_project_subscriptions": {
+          "description": "Maximum number of pipeline subscriptions to and from a project",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_registered_group_runners": {
+          "description": "Maximum number of runners created or active in a group during the past seven days",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "ci_registered_project_runners": {
+          "description": "Maximum number of runners created or active in a project during the past seven days",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "conan_max_file_size": {
           "description": "Maximum Conan package file size in bytes",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "dotenv_size": {
+          "description": "Maximum size of a dotenv artifact in bytes",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "dotenv_variables": {
+          "description": "Maximum number of variables in a dotenv artifact",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "enforcement_limit": {
+          "description": "Maximum storage size for the root namespace enforcement, in MiB",
           "type": [
             "null",
             "integer"
@@ -10421,6 +10509,20 @@
             "integer"
           ]
         },
+        "max_pipelines_per_merge_train": {
+          "description": "Maximum number of parallel pipelines per merge train",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "notification_limit": {
+          "description": "Maximum storage size for the root namespace notifications, in MiB",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "npm_max_file_size": {
           "description": "Maximum NPM package file size in bytes",
           "type": [
@@ -10430,6 +10532,13 @@
         },
         "nuget_max_file_size": {
           "description": "Maximum NuGet package file size in bytes",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "pipeline_hierarchy_size": {
+          "description": "Maximum number of downstream pipelines in a pipeline's hierarchy tree",
           "type": [
             "null",
             "integer"
@@ -10446,8 +10555,50 @@
             "integer"
           ]
         },
+        "service_desk_outbound_emails_per_day": {
+          "description": "Maximum number of outbound Service Desk emails per day, per top-level namespace. 0 for unlimited",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "service_desk_outbound_emails_per_hour": {
+          "description": "Maximum number of outbound Service Desk emails per hour, per top-level namespace. 0 for unlimited",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "storage_size_limit": {
+          "description": "Maximum storage size for the root namespace, in MiB",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "terraform_module_max_file_size": {
           "description": "Maximum Terraform module file size in bytes",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "web_hook_calls": {
+          "description": "Maximum number of times a webhook can be called per minute, per top-level namespace. 0 for unlimited",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "web_hook_calls_low": {
+          "description": "Maximum number of times a webhook can be called per minute, per top-level namespace (the low limit, GitLab.com only). 0 for unlimited",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "web_hook_calls_mid": {
+          "description": "Maximum number of times a webhook can be called per minute, per top-level namespace (the mid limit, GitLab.com only). 0 for unlimited",
           "type": [
             "null",
             "integer"
@@ -10463,79 +10614,43 @@
       "additionalProperties": false,
       "properties": {
         "cargo_max_file_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_active_jobs": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_instance_level_variables": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_needs_size_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_pipeline_schedules": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_pipeline_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_project_subscriptions": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_registered_group_runners": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_registered_project_runners": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "conan_max_file_size": {
           "type": "integer"
         },
         "dotenv_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "dotenv_variables": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "enforcement_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "generic_packages_max_file_size": {
           "type": "integer"
@@ -10544,35 +10659,128 @@
           "type": "integer"
         },
         "limits_history": {
-          "additionalProperties": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "timestamp": {
-                  "type": "integer"
+          "additionalProperties": false,
+          "properties": {
+            "dashboard_limit_enabled_at": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
                 },
-                "user_id": {
-                  "type": "integer"
-                },
-                "username": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "integer"
-                }
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
               },
-              "required": [
-                "user_id",
-                "username",
-                "timestamp",
-                "value"
-              ],
-              "type": "object"
+              "type": [
+                "null",
+                "array"
+              ]
             },
-            "type": [
-              "null",
-              "array"
-            ]
+            "enforcement_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "notification_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "storage_size_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
           },
           "type": "object"
         },
@@ -10580,10 +10788,7 @@
           "type": "integer"
         },
         "max_pipelines_per_merge_train": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -10595,10 +10800,7 @@
           ]
         },
         "notification_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "npm_max_file_size": {
           "type": "integer"
@@ -10607,52 +10809,31 @@
           "type": "integer"
         },
         "pipeline_hierarchy_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "pypi_max_file_size": {
           "type": "integer"
         },
         "service_desk_outbound_emails_per_day": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "service_desk_outbound_emails_per_hour": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "storage_size_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "terraform_module_max_file_size": {
           "type": "integer"
         },
         "web_hook_calls": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "web_hook_calls_low": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "web_hook_calls_mid": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         }
       },
       "required": [
@@ -10663,7 +10844,28 @@
         "npm_max_file_size",
         "nuget_max_file_size",
         "pypi_max_file_size",
-        "terraform_module_max_file_size"
+        "terraform_module_max_file_size",
+        "cargo_max_file_size",
+        "ci_instance_level_variables",
+        "ci_pipeline_size",
+        "ci_active_jobs",
+        "ci_project_subscriptions",
+        "ci_pipeline_schedules",
+        "ci_needs_size_limit",
+        "ci_registered_group_runners",
+        "ci_registered_project_runners",
+        "dotenv_variables",
+        "dotenv_size",
+        "enforcement_limit",
+        "notification_limit",
+        "storage_size_limit",
+        "pipeline_hierarchy_size",
+        "max_pipelines_per_merge_train",
+        "service_desk_outbound_emails_per_hour",
+        "service_desk_outbound_emails_per_day",
+        "web_hook_calls",
+        "web_hook_calls_low",
+        "web_hook_calls_mid"
       ],
       "type": "object"
     },
@@ -19260,6 +19462,13 @@
           "description": "Email for the service account",
           "format": "email",
           "type": "string"
+        },
+        "external": {
+          "description": "Create the service account as an external user, which reaches internal and private projects only where it is a member",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "name": {
           "description": "Name for the service account",
@@ -46951,6 +47160,9 @@
         "pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -47125,6 +47337,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -47447,79 +47660,43 @@
       "additionalProperties": false,
       "properties": {
         "cargo_max_file_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_active_jobs": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_instance_level_variables": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_needs_size_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_pipeline_schedules": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_pipeline_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_project_subscriptions": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_registered_group_runners": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "ci_registered_project_runners": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "conan_max_file_size": {
           "type": "integer"
         },
         "dotenv_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "dotenv_variables": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "enforcement_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "generic_packages_max_file_size": {
           "type": "integer"
@@ -47528,35 +47705,128 @@
           "type": "integer"
         },
         "limits_history": {
-          "additionalProperties": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "timestamp": {
-                  "type": "integer"
+          "additionalProperties": false,
+          "properties": {
+            "dashboard_limit_enabled_at": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
                 },
-                "user_id": {
-                  "type": "integer"
-                },
-                "username": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "integer"
-                }
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
               },
-              "required": [
-                "user_id",
-                "username",
-                "timestamp",
-                "value"
-              ],
-              "type": "object"
+              "type": [
+                "null",
+                "array"
+              ]
             },
-            "type": [
-              "null",
-              "array"
-            ]
+            "enforcement_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "notification_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "storage_size_limit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "timestamp": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "username",
+                  "timestamp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
           },
           "type": "object"
         },
@@ -47564,10 +47834,7 @@
           "type": "integer"
         },
         "max_pipelines_per_merge_train": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -47579,10 +47846,7 @@
           ]
         },
         "notification_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "npm_max_file_size": {
           "type": "integer"
@@ -47591,52 +47855,31 @@
           "type": "integer"
         },
         "pipeline_hierarchy_size": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "pypi_max_file_size": {
           "type": "integer"
         },
         "service_desk_outbound_emails_per_day": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "service_desk_outbound_emails_per_hour": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "storage_size_limit": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "terraform_module_max_file_size": {
           "type": "integer"
         },
         "web_hook_calls": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "web_hook_calls_low": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "web_hook_calls_mid": {
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         }
       },
       "required": [
@@ -47647,7 +47890,28 @@
         "npm_max_file_size",
         "nuget_max_file_size",
         "pypi_max_file_size",
-        "terraform_module_max_file_size"
+        "terraform_module_max_file_size",
+        "cargo_max_file_size",
+        "ci_instance_level_variables",
+        "ci_pipeline_size",
+        "ci_active_jobs",
+        "ci_project_subscriptions",
+        "ci_pipeline_schedules",
+        "ci_needs_size_limit",
+        "ci_registered_group_runners",
+        "ci_registered_project_runners",
+        "dotenv_variables",
+        "dotenv_size",
+        "enforcement_limit",
+        "notification_limit",
+        "storage_size_limit",
+        "pipeline_hierarchy_size",
+        "max_pipelines_per_merge_train",
+        "service_desk_outbound_emails_per_hour",
+        "service_desk_outbound_emails_per_day",
+        "web_hook_calls",
+        "web_hook_calls_low",
+        "web_hook_calls_mid"
       ],
       "type": "object"
     },
@@ -48241,11 +48505,20 @@
           "type": "string"
         },
         "stats": {
-          "additionalProperties": {
-            "additionalProperties": {
-              "type": "integer"
+          "additionalProperties": false,
+          "properties": {
+            "fetched": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
             },
-            "type": "object"
+            "imported": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            }
           },
           "type": "object"
         }
@@ -52686,13 +52959,16 @@
   },
   {
     "name": "gitlab_get_user_status",
-    "description": "Get a user's status by ID. Returns: emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_set_user_status, gitlab_get_user.",
+    "description": "Get a user's status by ID or username. Returns: emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_set_user_status, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "user_id": {
-          "description": "The ID of the user whose status to retrieve",
-          "type": "integer"
+          "description": "The ID or username of the user whose status to retrieve",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -56167,10 +56443,14 @@
   },
   {
     "name": "gitlab_group_board_list_create",
-    "description": "Create a new list (column) on a group issue board from a group label. Returns: the created list with its label and scope. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
+    "description": "Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope and position. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "assignee_id": {
+          "description": "User ID to create an assignee list",
+          "type": "integer"
+        },
         "board_id": {
           "description": "Board ID",
           "type": "integer"
@@ -56182,15 +56462,22 @@
             "integer"
           ]
         },
+        "iteration_id": {
+          "description": "Iteration ID to create an iteration list",
+          "type": "integer"
+        },
         "label_id": {
           "description": "Label ID to create a label list",
+          "type": "integer"
+        },
+        "milestone_id": {
+          "description": "Milestone ID to create a milestone list",
           "type": "integer"
         }
       },
       "required": [
         "board_id",
-        "group_id",
-        "label_id"
+        "group_id"
       ],
       "type": "object"
     },
@@ -60881,6 +61168,31 @@
           "format": "uri",
           "type": "string"
         },
+        "url_variables": {
+          "description": "Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Variable name, as the placeholder in the URL spells it",
+                "type": "string"
+              },
+              "value": {
+                "description": "Variable value (write-only. Masked on read)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "vulnerability_events": {
           "description": "Trigger on vulnerability events",
           "type": [
@@ -61521,6 +61833,31 @@
           "description": "New webhook URL",
           "format": "uri",
           "type": "string"
+        },
+        "url_variables": {
+          "description": "Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Variable name, as the placeholder in the URL spells it",
+                "type": "string"
+              },
+              "value": {
+                "description": "Variable value (write-only. Masked on read)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "vulnerability_events": {
           "description": "Trigger on vulnerability events",
@@ -65737,6 +66074,84 @@
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_group_markdown_upload",
+    "description": "Upload a file (via local file_path or base64 content) to a group's Markdown attachments store. Returns: the upload's id, alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_id, gitlab_group_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content_base64": {
+          "description": "Base64-encoded file content. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "Absolute path to a local file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Name of the file to upload (e.g. diagram.png)",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "The ID or URL-encoded path of the group",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "filename",
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "alt": {
+          "type": "string"
+        },
+        "full_path": {
+          "type": "string"
+        },
+        "full_url": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "markdown": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "alt",
+        "url",
+        "full_path",
+        "markdown"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -75484,8 +75899,69 @@
     }
   },
   {
+    "name": "gitlab_group_shared_project_delete",
+    "description": "Remove a project shared with a GitLab group, from the group's side. Returns: a success confirmation. See also: gitlab_group_shared_projects_list, gitlab_project_delete_shared_group, gitlab_project_share_with_group, gitlab_group_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path of the group the project is shared with",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "project_id": {
+          "description": "Numeric ID of the project shared with the group, as group.shared_projects lists it",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_id",
+        "project_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
     "name": "gitlab_group_shared_projects_list",
-    "description": "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get.",
+    "description": "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_project_delete, gitlab_group_shared_with_list, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -82528,11 +83004,20 @@
           "type": "string"
         },
         "stats": {
-          "additionalProperties": {
-            "additionalProperties": {
-              "type": "integer"
+          "additionalProperties": false,
+          "properties": {
+            "fetched": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
             },
-            "type": "object"
+            "imported": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            }
           },
           "type": "object"
         }
@@ -84058,6 +84543,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -84232,6 +84720,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -112966,6 +113455,16 @@
             "integer"
           ]
         },
+        "assignee_username": {
+          "description": "Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "author_id": {
           "description": "Filter by author user ID",
           "type": "integer"
@@ -112984,6 +113483,16 @@
           "format": "date-time",
           "type": "string"
         },
+        "deployed_after": {
+          "description": "Return MRs deployed after date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "deployed_before": {
+          "description": "Return MRs deployed before date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
         "deployment_id": {
           "description": "Deployment ID",
           "type": "integer"
@@ -112994,6 +113503,10 @@
             "null",
             "boolean"
           ]
+        },
+        "environment": {
+          "description": "Filter by MRs deployed to this environment name",
+          "type": "string"
         },
         "in": {
           "description": "Fields the search parameter matches. Accepts title, description, or both joined with a comma. Default is title,description",
@@ -113008,6 +113521,22 @@
             "null",
             "array"
           ]
+        },
+        "merge_user_id": {
+          "description": "Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username",
+          "type": "integer"
+        },
+        "merge_user_username": {
+          "description": "Filter by the username of who merged the MR. Cannot be combined with merge_user_id",
+          "type": "string"
+        },
+        "merged_after": {
+          "description": "Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "merged_before": {
+          "description": "Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -113024,6 +113553,24 @@
             "boolean"
           ]
         },
+        "not_assignee_id": {
+          "description": "Exclude MRs assigned to this user ID",
+          "type": "integer"
+        },
+        "not_assignee_username": {
+          "description": "Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "not_author_id": {
+          "description": "Exclude MRs authored by this user ID",
+          "type": "integer"
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -113037,6 +113584,22 @@
             "null",
             "array"
           ]
+        },
+        "not_milestone": {
+          "description": "Exclude MRs in this milestone (its title)",
+          "type": "string"
+        },
+        "not_my_reaction_emoji": {
+          "description": "Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_reviewer_id": {
+          "description": "Exclude MRs with this user ID as a reviewer",
+          "type": "integer"
+        },
+        "not_reviewer_username": {
+          "description": "Exclude MRs with this username as a reviewer",
+          "type": "string"
         },
         "order_by": {
           "description": "Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)",
@@ -113391,6 +113954,9 @@
               "head_pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -113565,6 +114131,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -117278,7 +117845,7 @@
   },
   {
     "name": "gitlab_list_group_markdown_uploads",
-    "description": "List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_delete_group_markdown_upload_by_id, gitlab_delete_group_markdown_upload_by_secret, gitlab_group_get.",
+    "description": "List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_group_markdown_upload, gitlab_delete_group_markdown_upload_by_id, gitlab_delete_group_markdown_upload_by_secret, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -121142,6 +121709,9 @@
               "pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -121316,6 +121886,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -123055,6 +123626,9 @@
               "pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -123229,6 +123803,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -126149,7 +126724,7 @@
   },
   {
     "name": "gitlab_list_ssh_keys_for_user",
-    "description": "List a specific user's SSH keys. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
+    "description": "List a specific user's SSH keys by ID or username. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -126177,8 +126752,11 @@
           "type": "string"
         },
         "user_id": {
-          "description": "The ID of the user",
-          "type": "integer"
+          "description": "The ID or username of the user",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -127836,7 +128414,7 @@
   },
   {
     "name": "gitlab_list_user_contribution_events",
-    "description": "List a user's contribution events. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
+    "description": "List a user's contribution events by ID or username. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -127910,8 +128488,11 @@
           "type": "string"
         },
         "user_id": {
-          "description": "The ID of the user whose events to retrieve",
-          "type": "integer"
+          "description": "The ID or username of the user whose events to retrieve",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -130459,12 +131040,32 @@
   },
   {
     "name": "gitlab_lock_terraform_state",
-    "description": "Lock a Terraform state. Returns: the state with its lock acquired. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
+    "description": "Lock a Terraform state under a lock ID. Returns: the lock GitLab took, with its ID, holder and creation time. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created": {
+          "description": "When the lock was created, as terraform writes it. GitLab records the moment it takes the lock and answers with that instead",
+          "type": "string"
+        },
+        "info": {
+          "description": "Free text about the lock. GitLab answers it back and does not store it",
+          "type": "string"
+        },
+        "lock_id": {
+          "description": "ID to take the lock under, up to 255 characters, such as a UUID, which is what terraform generates. An unlock that names the lock, and a state write while it is held, pass this ID",
+          "type": "string"
+        },
         "name": {
           "description": "Terraform state name",
+          "type": "string"
+        },
+        "operation": {
+          "description": "Terraform operation the lock is taken for, such as OperationTypeApply. GitLab answers it back and does not store it",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path of the state the lock covers, as terraform writes it, usually empty. GitLab answers it back and does not store it",
           "type": "string"
         },
         "project_id": {
@@ -130473,9 +131074,18 @@
             "string",
             "integer"
           ]
+        },
+        "version": {
+          "description": "Terraform version that takes the lock. GitLab answers it back and does not store it",
+          "type": "string"
+        },
+        "who": {
+          "description": "Who takes the lock, as terraform writes it (user@host). GitLab records the token's user as the holder and answers with that username instead",
+          "type": "string"
         }
       },
       "required": [
+        "lock_id",
         "name",
         "project_id"
       ],
@@ -130484,6 +131094,15 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created": {
+          "type": "string"
+        },
+        "info": {
+          "type": "string"
+        },
+        "lock_id": {
+          "type": "string"
+        },
         "message": {
           "type": "string"
         },
@@ -130496,13 +131115,26 @@
             "array"
           ]
         },
+        "operation": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
         "success": {
           "type": "boolean"
+        },
+        "version": {
+          "type": "string"
+        },
+        "who": {
+          "type": "string"
         }
       },
       "required": [
         "success",
-        "message"
+        "message",
+        "lock_id"
       ],
       "type": "object"
     },
@@ -135622,6 +136254,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -135796,6 +136431,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -137125,6 +137761,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -137299,6 +137938,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -145684,6 +146324,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -145858,6 +146501,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -147304,6 +147948,16 @@
             "integer"
           ]
         },
+        "assignee_username": {
+          "description": "Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "author_id": {
           "description": "Filter by author user ID",
           "type": "integer"
@@ -147353,6 +148007,10 @@
             "array"
           ]
         },
+        "in": {
+          "description": "Fields the search parameter matches: title, description, or both joined with a comma (title,description, GitLab's default)",
+          "type": "string"
+        },
         "labels": {
           "description": "Label names to filter by",
           "items": {
@@ -147362,6 +148020,22 @@
             "null",
             "array"
           ]
+        },
+        "merge_user_id": {
+          "description": "Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username",
+          "type": "integer"
+        },
+        "merge_user_username": {
+          "description": "Filter by the username of who merged the MR. Cannot be combined with merge_user_id",
+          "type": "string"
+        },
+        "merged_after": {
+          "description": "Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "merged_before": {
+          "description": "Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -147378,6 +148052,24 @@
             "boolean"
           ]
         },
+        "not_assignee_id": {
+          "description": "Exclude MRs assigned to this user ID",
+          "type": "integer"
+        },
+        "not_assignee_username": {
+          "description": "Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "not_author_id": {
+          "description": "Exclude MRs authored by this user ID",
+          "type": "integer"
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -147391,6 +148083,22 @@
             "null",
             "array"
           ]
+        },
+        "not_milestone": {
+          "description": "Exclude MRs in this milestone (its title)",
+          "type": "string"
+        },
+        "not_my_reaction_emoji": {
+          "description": "Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_reviewer_id": {
+          "description": "Exclude MRs with this user ID as a reviewer",
+          "type": "integer"
+        },
+        "not_reviewer_username": {
+          "description": "Exclude MRs with this username as a reviewer",
+          "type": "string"
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, title)",
@@ -147764,6 +148472,9 @@
               "head_pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -147938,6 +148649,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -148565,6 +149277,16 @@
             "integer"
           ]
         },
+        "assignee_username": {
+          "description": "Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "author_id": {
           "description": "Filter by author user ID",
           "type": "integer"
@@ -148583,12 +149305,26 @@
           "format": "date-time",
           "type": "string"
         },
+        "deployed_after": {
+          "description": "Return MRs deployed after date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "deployed_before": {
+          "description": "Return MRs deployed before date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
         "draft": {
           "description": "Filter by draft status (true=only drafts, false=only non-drafts)",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "environment": {
+          "description": "Filter by MRs deployed to this environment name",
+          "type": "string"
         },
         "in": {
           "description": "Scope of the search filter (e.g. title, description, or title,description)",
@@ -148603,6 +149339,22 @@
             "null",
             "array"
           ]
+        },
+        "merge_user_id": {
+          "description": "Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username",
+          "type": "integer"
+        },
+        "merge_user_username": {
+          "description": "Filter by the username of who merged the MR. Cannot be combined with merge_user_id",
+          "type": "string"
+        },
+        "merged_after": {
+          "description": "Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "merged_before": {
+          "description": "Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -148619,6 +149371,24 @@
             "boolean"
           ]
         },
+        "not_assignee_id": {
+          "description": "Exclude MRs assigned to this user ID",
+          "type": "integer"
+        },
+        "not_assignee_username": {
+          "description": "Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "not_author_id": {
+          "description": "Exclude MRs authored by this user ID",
+          "type": "integer"
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -148632,6 +149402,22 @@
             "null",
             "array"
           ]
+        },
+        "not_milestone": {
+          "description": "Exclude MRs in this milestone (its title)",
+          "type": "string"
+        },
+        "not_my_reaction_emoji": {
+          "description": "Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_reviewer_id": {
+          "description": "Exclude MRs with this user ID as a reviewer",
+          "type": "integer"
+        },
+        "not_reviewer_username": {
+          "description": "Exclude MRs with this username as a reviewer",
+          "type": "string"
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
@@ -148994,6 +149780,9 @@
               "head_pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -149168,6 +149957,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -149795,6 +150585,16 @@
             "integer"
           ]
         },
+        "assignee_username": {
+          "description": "Filter by assignee usernames: MRs assigned to all of them. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate). Cannot be combined with assignee_id",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "author_id": {
           "description": "Filter by author user ID",
           "type": "integer"
@@ -149813,12 +150613,26 @@
           "format": "date-time",
           "type": "string"
         },
+        "deployed_after": {
+          "description": "Return MRs deployed after date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "deployed_before": {
+          "description": "Return MRs deployed before date (ISO 8601)",
+          "format": "date-time",
+          "type": "string"
+        },
         "draft": {
           "description": "Filter by draft status (true=only drafts, false=only non-drafts)",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "environment": {
+          "description": "Filter by MRs deployed to this environment name",
+          "type": "string"
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
@@ -149841,6 +150655,22 @@
             "array"
           ]
         },
+        "merge_user_id": {
+          "description": "Filter by the user ID of who merged the MR. Cannot be combined with merge_user_username",
+          "type": "integer"
+        },
+        "merge_user_username": {
+          "description": "Filter by the username of who merged the MR. Cannot be combined with merge_user_id",
+          "type": "string"
+        },
+        "merged_after": {
+          "description": "Return MRs merged on or after this time (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "merged_before": {
+          "description": "Return MRs merged on or before this time (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
+        },
         "milestone": {
           "description": "Milestone title to filter by",
           "type": "string"
@@ -149856,6 +150686,24 @@
             "boolean"
           ]
         },
+        "not_assignee_id": {
+          "description": "Exclude MRs assigned to this user ID",
+          "type": "integer"
+        },
+        "not_assignee_username": {
+          "description": "Exclude MRs assigned to these usernames. GitLab takes one unless the license carries multiple assignees (Premium or Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "not_author_id": {
+          "description": "Exclude MRs authored by this user ID",
+          "type": "integer"
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -149869,6 +150717,22 @@
             "null",
             "array"
           ]
+        },
+        "not_milestone": {
+          "description": "Exclude MRs in this milestone (its title)",
+          "type": "string"
+        },
+        "not_my_reaction_emoji": {
+          "description": "Exclude MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_reviewer_id": {
+          "description": "Exclude MRs with this user ID as a reviewer",
+          "type": "integer"
+        },
+        "not_reviewer_username": {
+          "description": "Exclude MRs with this username as a reviewer",
+          "type": "string"
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
@@ -149925,6 +150789,10 @@
         "source_branch": {
           "description": "Filter by source branch name",
           "type": "string"
+        },
+        "source_project_id": {
+          "description": "Filter by the ID of the project the MR's source branch is in",
+          "type": "integer"
         },
         "state": {
           "description": "Filter by state (opened, closed, merged, all)",
@@ -150234,6 +151102,9 @@
               "head_pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -150408,6 +151279,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -151299,6 +152171,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -151473,6 +152348,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -156449,6 +157325,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -156623,6 +157502,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -157956,6 +158836,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -158130,6 +159013,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -159042,6 +159926,9 @@
         "head_pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -159216,6 +160103,7 @@
             "sha",
             "before_sha",
             "tag",
+            "archived",
             "yaml_errors",
             "coverage",
             "web_url"
@@ -167121,10 +168009,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -167136,7 +168021,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -167221,10 +168107,7 @@
           ]
         },
         "raw": {
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "value": {
           "type": "string"
@@ -167236,7 +168119,8 @@
       "required": [
         "key",
         "value",
-        "variable_type"
+        "variable_type",
+        "raw"
       ],
       "type": "object"
     },
@@ -167432,10 +168316,7 @@
           ]
         },
         "raw": {
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "value": {
           "type": "string"
@@ -167447,7 +168328,8 @@
       "required": [
         "key",
         "value",
-        "variable_type"
+        "variable_type",
+        "raw"
       ],
       "type": "object"
     },
@@ -167620,10 +168502,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -167635,7 +168514,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -167902,10 +168782,7 @@
                       "type": "string"
                     },
                     "raw": {
-                      "type": [
-                        "null",
-                        "boolean"
-                      ]
+                      "type": "boolean"
                     },
                     "value": {
                       "type": "string"
@@ -167917,7 +168794,8 @@
                   "required": [
                     "key",
                     "value",
-                    "variable_type"
+                    "variable_type",
+                    "raw"
                   ],
                   "type": "object"
                 },
@@ -168282,10 +169160,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -168297,7 +169172,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -168486,10 +169362,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -168501,7 +169374,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -168744,10 +169618,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -168759,7 +169630,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -170853,10 +171725,7 @@
                 "type": "string"
               },
               "raw": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -170868,7 +171737,8 @@
             "required": [
               "key",
               "value",
-              "variable_type"
+              "variable_type",
+              "raw"
             ],
             "type": "object"
           },
@@ -182917,6 +183787,31 @@
           "format": "uri",
           "type": "string"
         },
+        "url_variables": {
+          "description": "Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Variable name, as the placeholder in the URL spells it",
+                "type": "string"
+              },
+              "value": {
+                "description": "Variable value (write-only. Masked on read)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "vulnerability_events": {
           "description": "Trigger on vulnerability events",
           "type": [
@@ -183532,6 +184427,31 @@
           "description": "Updated webhook URL",
           "format": "uri",
           "type": "string"
+        },
+        "url_variables": {
+          "description": "Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Variable name, as the placeholder in the URL spells it",
+                "type": "string"
+              },
+              "value": {
+                "description": "Variable value (write-only. Masked on read)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "vulnerability_events": {
           "description": "Trigger on vulnerability events",
@@ -184962,6 +185882,20 @@
         },
         "topic": {
           "description": "Filter by topic name",
+          "type": "string"
+        },
+        "topic_id": {
+          "description": "Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
+          "type": "integer"
+        },
+        "updated_after": {
+          "description": "Return projects last updated on or after this time (ISO 8601 format). GitLab takes it only with order_by=updated_at",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return projects last updated on or before this time (ISO 8601 format). GitLab takes it only with order_by=updated_at",
+          "format": "date-time",
           "type": "string"
         },
         "visibility": {
@@ -186472,6 +187406,20 @@
         },
         "topic": {
           "description": "Filter by topic name",
+          "type": "string"
+        },
+        "topic_id": {
+          "description": "Return forks having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
+          "type": "integer"
+        },
+        "updated_after": {
+          "description": "Return forks last updated on or after this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return forks last updated on or before this time (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "visibility": {
@@ -188572,6 +189520,20 @@
           "description": "Filter by topic name",
           "type": "string"
         },
+        "topic_id": {
+          "description": "Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
+          "type": "integer"
+        },
+        "updated_after": {
+          "description": "Return projects last updated on or after this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return projects last updated on or before this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
         "user_id": {
           "description": "User ID or username",
           "type": [
@@ -190085,6 +191047,20 @@
           "description": "Filter by topic name",
           "type": "string"
         },
+        "topic_id": {
+          "description": "Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
+          "type": "integer"
+        },
+        "updated_after": {
+          "description": "Return projects last updated on or after this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return projects last updated on or before this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
         "user_id": {
           "description": "User ID or username",
           "type": [
@@ -191596,6 +192572,20 @@
         },
         "topic": {
           "description": "Filter by topic name",
+          "type": "string"
+        },
+        "topic_id": {
+          "description": "Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
+          "type": "integer"
+        },
+        "updated_after": {
+          "description": "Return projects last updated on or after this time (ISO 8601 format)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return projects last updated on or before this time (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "user_id": {
@@ -202907,6 +203897,27 @@
             "string"
           ]
         },
+        "duo_sast_fp_detection_enabled": {
+          "description": "Enable GitLab Duo SAST false positive detection for this project. GitLab keeps it only where the license includes GitLab Duo AI features, and drops it elsewhere",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_sast_vr_workflow_enabled": {
+          "description": "Enable the GitLab Duo SAST vulnerability resolution workflow for this project. GitLab keeps it only where the license includes GitLab Duo AI features, and drops it elsewhere",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_secret_detection_fp_enabled": {
+          "description": "Enable GitLab Duo secret detection false positive detection for this project. GitLab keeps it only where the license includes GitLab Duo AI features and the duo_secret_detection_false_positive feature flag is on, and drops it elsewhere",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "emails_disabled": {
           "description": "Disable email notifications (deprecated: use emails_enabled)",
           "type": [
@@ -208408,6 +209419,10 @@
         "repository_id": {
           "description": "Registry repository ID",
           "type": "integer"
+        },
+        "size": {
+          "description": "Include the deduplicated size of all the repository's images, in bytes. GitLab can measure it only where the container registry has its metadata database, as on GitLab.com for repositories created after 2021-11-04, and sends no size elsewhere",
+          "type": "boolean"
         },
         "tags": {
           "description": "Include tags in response",
@@ -223685,6 +224700,9 @@
               "head_pipeline": {
                 "additionalProperties": false,
                 "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
                   "before_sha": {
                     "type": "string"
                   },
@@ -223859,6 +224877,7 @@
                   "sha",
                   "before_sha",
                   "tag",
+                  "archived",
                   "yaml_errors",
                   "coverage",
                   "web_url"
@@ -234184,13 +235203,17 @@
   },
   {
     "name": "gitlab_unlock_terraform_state",
-    "description": "Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states.",
+    "description": "Unlock a project Terraform state by project_id and state name, by the lock's lock_id or whatever its ID. Returns: whether the lock was released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "confirm": {
           "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
           "type": "boolean"
+        },
+        "lock_id": {
+          "description": "ID the lock was taken under. GitLab releases the lock only when it matches and answers 409 when it does not. Leave it out to release the lock whatever its ID, as terraform force-unlock does",
+          "type": "string"
         },
         "name": {
           "description": "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id.",
@@ -235678,6 +236701,13 @@
           "description": "New email for the service account",
           "format": "email",
           "type": "string"
+        },
+        "external": {
+          "description": "Make the service account an external user (true), which reaches internal and private projects only where it is a member, or a regular one (false)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "name": {
           "description": "New name for the service account",

@@ -378,11 +378,12 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Container Repository: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: read-only, idempotent
 
-| Parameter       | Type      | Mandatory | Description                    |
-| --------------- | --------- | --------- | ------------------------------ |
-| `repository_id` | `integer` | yes       | Registry repository ID         |
-| `tags`          | `boolean` | no        | Include tags in response       |
-| `tags_count`    | `boolean` | no        | Include tags count in response |
+| Parameter       | Type      | Mandatory | Description                                                                                                                                                                                                                                        |
+| --------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository_id` | `integer` | yes       | Registry repository ID                                                                                                                                                                                                                             |
+| `size`          | `boolean` | no        | Include the deduplicated size of all the repository's images, in bytes. GitLab can measure it only where the container registry has its metadata database, as on GitLab.com for repositories created after 2021-11-04, and sends no size elsewhere |
+| `tags`          | `boolean` | no        | Include tags in response                                                                                                                                                                                                                           |
+| `tags_count`    | `boolean` | no        | Include tags count in response                                                                                                                                                                                                                     |
 
 ### `package.registry_list_group`
 
