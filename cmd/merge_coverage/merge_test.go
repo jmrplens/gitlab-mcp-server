@@ -230,7 +230,7 @@ func TestProfile_Modes_CombineCountsTheWayEachModeMeans(t *testing.T) {
 		{
 			name:    "a repeated block folds first",
 			offline: "mode: count\n" + block + "1\n" + block + "2\n" + other + "0\n",
-			online:  "mode: count\n" + other + "0\n",
+			online:  "mode: count\n" + block + "0\n" + other + "0\n",
 			want:    "mode: count\n" + block + "3\n" + other + "0\n",
 		},
 	}
@@ -264,33 +264,30 @@ func TestProfile_Fixture_WritesEveryBlockOnceInFileOrder(t *testing.T) {
 // what an overlap is: a block that starts where the previous one ends shares
 // no statement with it, a block that starts on the line the previous one ends
 // on but past its end is beside it, and blocks of two files share nothing
-// whatever their positions.
+// whatever their positions. Both halves carry the same blocks, as profiles
+// of one source do.
 func TestRead_BlocksThatOnlyMeet_AreNotAnOverlap(t *testing.T) {
-	tests := []struct{ name, offline, online string }{
+	tests := []struct{ name, blocks string }{
 		{
-			name:    "end meets start",
-			offline: "mode: set\n" + fixturePkg + "/a.go:3.10,5.2 2 1\n",
-			online:  "mode: set\n" + fixturePkg + "/a.go:5.2,7.3 1 1\n",
+			name:   "end meets start",
+			blocks: fixturePkg + "/a.go:3.10,5.2 2 1\n" + fixturePkg + "/a.go:5.2,7.3 1 1\n",
 		},
 		{
-			name:    "start past the end on its line",
-			offline: "mode: set\n" + fixturePkg + "/a.go:3.10,5.2 2 1\n",
-			online:  "mode: set\n" + fixturePkg + "/a.go:5.9,5.20 1 1\n",
+			name:   "start past the end on its line",
+			blocks: fixturePkg + "/a.go:3.10,5.2 2 1\n" + fixturePkg + "/a.go:5.9,5.20 1 1\n",
 		},
 		{
-			name:    "two files",
-			offline: "mode: set\n" + fixturePkg + "/a.go:3.10,9.2 2 1\n",
-			online:  "mode: set\n" + fixturePkg + "/b.go:4.1,5.1 1 1\n",
+			name:   "two files",
+			blocks: fixturePkg + "/a.go:3.10,9.2 2 1\n" + fixturePkg + "/b.go:4.1,5.1 1 1\n",
 		},
 		{
-			name:    "a later file starting before the earlier file ends",
-			offline: "mode: set\n" + fixturePkg + "/a.go:3.10,9.2 2 1\n",
-			online:  "mode: set\n" + fixturePkg + "/b.go:1.1,2.1 1 1\n",
+			name:   "a later file starting before the earlier file ends",
+			blocks: fixturePkg + "/a.go:3.10,9.2 2 1\n" + fixturePkg + "/b.go:1.1,2.1 1 1\n",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			readHalves(t, tc.offline, tc.online)
+			readHalves(t, "mode: set\n"+tc.blocks, "mode: set\n"+tc.blocks)
 		})
 	}
 }
@@ -299,7 +296,9 @@ func TestRead_BlocksThatOnlyMeet_AreNotAnOverlap(t *testing.T) {
 // two profiles of the same source can never say, and to naming the file, the
 // blocks and the profiles in the refusal: the same extent counting another
 // number of statements, two blocks of one file that overlap, whether across
-// two profiles or within one, and a profile that cannot be read at all.
+// two profiles or within one, a block one profile carries of a package the
+// other carries without it, which is a function or a file only one version
+// of the package has, and a profile that cannot be read at all.
 func TestRead_ProfilesThatDisagree_AreRefused(t *testing.T) {
 	a := fixturePkg + "/a.go:"
 	tests := []struct {
@@ -338,6 +337,24 @@ func TestRead_ProfilesThatDisagree_AreRefused(t *testing.T) {
 			want:    []string{"offline.out and the block at 4.1,6.1 in ", "offline.out overlap"},
 		},
 		{
+			name:    "a function deleted after the unchanged ones, still in the run profile",
+			offline: "mode: set\n" + a + "3.10,5.2 2 1\n",
+			online:  "mode: set\n" + a + "3.10,5.2 2 0\n" + a + "9.1,11.2 1 1\n",
+			want:    []string{fixturePkg + "/a.go: the block at 9.1,11.2 is in ", "online.out and not in ", "offline.out, which carries the package", "not written from the same source"},
+		},
+		{
+			name:    "a function added after the unchanged ones, not yet in the run profile",
+			offline: "mode: set\n" + a + "3.10,5.2 2 1\n" + a + "9.1,11.2 1 0\n",
+			online:  "mode: set\n" + a + "3.10,5.2 2 0\n",
+			want:    []string{fixturePkg + "/a.go: the block at 9.1,11.2 is in ", "offline.out and not in ", "online.out, which carries the package"},
+		},
+		{
+			name:    "a file of the package only one profile carries",
+			offline: "mode: set\n" + a + "3.10,5.2 2 1\n",
+			online:  "mode: set\n" + a + "3.10,5.2 2 0\n" + fixturePkg + "/gone.go:1.1,2.1 1 1\n",
+			want:    []string{fixturePkg + "/gone.go: the block at 1.1,2.1 is in ", "online.out and not in ", "offline.out, which carries the package"},
+		},
+		{
 			name:    "a profile with no mode line",
 			offline: a + "3.10,5.2 2 1\n",
 			online:  onlineProfile,
@@ -364,6 +381,31 @@ func TestRead_ProfilesThatDisagree_AreRefused(t *testing.T) {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("read() error = %q, want it to hold %q", err, want)
 				}
+			}
+		})
+	}
+}
+
+// TestMissingFrom_NamesTheFirstProfileThatLeavesTheBlockOut holds the
+// refusal of a block some profile of its package lacks to naming that
+// profile, wherever it was read among the ones carrying the package: first,
+// between two that carry the block, or last.
+func TestMissingFrom_NamesTheFirstProfileThatLeavesTheBlockOut(t *testing.T) {
+	carriers := []string{"offline.out", "ce.out", "ee.out"}
+	tests := []struct {
+		name string
+		in   []string
+		want string
+	}{
+		{name: "the first", in: []string{"ce.out", "ee.out"}, want: "offline.out"},
+		{name: "between two that carry it", in: []string{"offline.out", "ee.out"}, want: "ce.out"},
+		{name: "the last", in: []string{"offline.out", "ce.out"}, want: "ee.out"},
+		{name: "every one but one that carries it", in: []string{"ce.out"}, want: "offline.out"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := missingFrom(carriers, tc.in); got != tc.want {
+				t.Errorf("missingFrom(%q, %q) = %q, want %q", carriers, tc.in, got, tc.want)
 			}
 		})
 	}

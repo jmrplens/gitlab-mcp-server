@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,533 |
-| Unit test functions                                   | 21,820 |
+| Total test functions                                  | 23,604 |
+| Unit test functions                                   | 21,891 |
 | E2E test functions                                    |  1,713 |
-| cmd test functions                                    |  5,815 |
+| cmd test functions                                    |  5,886 |
 | Test files (internal/)                                |    759 |
-| Test files (cmd/)                                     |    473 |
+| Test files (cmd/)                                     |    480 |
 | Test files (test/e2e/)                                |    442 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,731 | 58.3% |
+| `TestFunc_Scenario` (2-part)           | 13,738 | 58.2% |
 | `TestFunc` (no underscore)             |    901 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,901 | 37.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,965 | 38.0% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,306 |        480 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,713 |        442 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,815 |        473 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,533** |  **1,674** |                                                                                                 |
+| cmd packages            |          5,886 |        480 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,604** |  **1,681** |                                                                                                 |
 
 ### Core Packages
 
@@ -415,6 +415,7 @@
 | cmd/internal/sourcegate                   |   100.0% |
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
+| cmd/merge_coverage                        |      n/a |
 | cmd/release_checks                        |   100.0% |
 | cmd/release_packages                      |   100.0% |
 | cmd/reproduce_release                     |   100.0% |
@@ -712,7 +713,7 @@ All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
 - `test/e2e/scripts/docker-images.sh`: holds the GitLab and runner images to the images their tags name today, pulling only a newer one
-- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, and names the scenario its final pass runs last
+- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, names the scenario its final pass runs last, and stamps the sources each pass of a complete run measures, keeping the stamp only once the run ended complete
 - `test/e2e/scripts/gitlab-exceptions.sh`: copies GitLab's exceptions log into the reports before the teardown deletes it
 
 ```bash
