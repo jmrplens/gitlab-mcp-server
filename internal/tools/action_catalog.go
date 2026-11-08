@@ -198,6 +198,11 @@ func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil
 	// server must not reject its own tool output over those extra properties.
 	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier, false)
 	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier, true)
+	// What was pruned from the input travels on the route, read once here, so
+	// a dispatcher refuses a call sending one of those params with the tier
+	// it needs instead of decoding it into the input type, where the field
+	// still exists, and sending it (issue 1239).
+	spec.Route.TierPruned = toolutil.TierPrunedFields(spec.Route.InputType, tier)
 	// Tier pruning may have removed properties that carried an input-schema
 	// override (e.g. an ultimate-only parameter on a Free instance). Drop those
 	// now-dangling overrides so catalog assembly does not reject them; the

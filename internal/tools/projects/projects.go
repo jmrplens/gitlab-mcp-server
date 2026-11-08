@@ -688,9 +688,15 @@ type UpdateInput struct {
 	Mirror                           *bool  `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
 	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
 	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex"`
-	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Overwrite diverged branches when mirroring"`
+	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
 	MirrorUserID                     *int64 `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
 	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead. It answers only
+	// the pull-mirror question, so it carries that question's tier.
+	Confirm bool `json:"confirm,omitempty" tier:"premium" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 
 	// Container registry cleanup (additive)
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
@@ -1838,12 +1844,24 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 }
 
 // Update modifies settings on an existing GitLab project.
+//
+// An update that leaves the pull mirror overwriting diverged branches, that
+// stores the overwrite on a mirror it leaves off, or that widens the branches
+// an overwriting mirror pulls, is confirmed first, by the guard
+// project.pull_mirror_configure goes through: PUT /projects/:id takes mirror,
+// import_url, mirror_overwrites_diverged_branches,
+// only_mirror_protected_branches and mirror_branch_regex as well, so the same
+// call made here discards the same commits. See [confirmDivergedOverwrite] for
+// which updates that covers.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
+	}
+	if err := confirmDivergedOverwrite(ctx, client, "projectUpdate", input.pullMirrorSettings()); err != nil {
+		return Output{}, err
 	}
 	opts, nulls := buildUpdateOpts(input)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)

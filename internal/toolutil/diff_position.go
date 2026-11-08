@@ -101,10 +101,10 @@ func mergeRequestPositionSnapshotMatches(ctx context.Context, client *gitlabclie
 	return true
 }
 
-// The position types GitLab's merge request discussion and draft note routes
-// accept: both declare position_type with values text, image and file
-// (lib/api/discussions.rb and lib/api/draft_notes.rb), and the tools send
-// text when the caller names none.
+// The position types GitLab's merge request and commit discussion routes and
+// its draft note routes accept: each declares position_type with values text,
+// image and file (lib/api/discussions.rb and lib/api/draft_notes.rb), and the
+// tools send text when the caller names none.
 const (
 	// PositionTypeText places a comment on a line of a text diff.
 	PositionTypeText = "text"
@@ -113,6 +113,138 @@ const (
 	// PositionTypeFile places a comment on a whole file.
 	PositionTypeFile = "file"
 )
+
+// ValidatePositionAnchor refuses a position, whatever its type, that lacks a
+// part of the anchor GitLab completes every position by: the start and head
+// commits of the diff, and the file, named by its new or its old path.
+// Gitlab::Diff::Position#complete? asks for a file path (new_path, or
+// old_path when new_path is blank) and for DiffRefs#complete?, which is
+// start_sha and head_sha, before it asks the position type's formatter for
+// the rest, and a value of blanks is not present there. The base commit is
+// not part of it, so it is not judged here.
+//
+// It runs before the check of the position type and before any request, for
+// the reason [ValidateImagePosition] gives: GitLab's answer names no field,
+// and for a draft note it is no answer at all. Grape requires base_sha,
+// start_sha and head_sha only to be present as keys, so an empty value
+// passes it.
+func ValidatePositionAnchor(startSHA, headSHA, oldPath, newPath string) error {
+	var missing []string
+	if strings.TrimSpace(startSHA) == "" {
+		missing = append(missing, "start_sha")
+	}
+	if strings.TrimSpace(headSHA) == "" {
+		missing = append(missing, "head_sha")
+	}
+	if strings.TrimSpace(newPath) == "" && strings.TrimSpace(oldPath) == "" {
+		missing = append(missing, "a path in new_path or old_path")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"a position of any type needs start_sha, head_sha and the file's new_path or old_path (missing: %s): "+
+			"GitLab places every inline comment by the start and head commits of the diff and the file it is on, "+
+			"and keeps no position without them",
+		strings.Join(missing, ", "),
+	)
+}
+
+// PositionNewPath returns the new_path a merge request position sends, nil
+// when it is left out or blank so that the key is not sent at all. GitLab
+// reads a blank new_path as absent and completes the position with old_path
+// (Position#file_path is new_path.presence || old_path), but it looks the
+// file's diff up by the paths the position carries,
+// [old_path, new_path].compact.uniq (Position#diff_options), which keeps an
+// empty string, and Gitaly passes each to git diff as a pathspec, which git
+// refuses for an empty one ("empty string is not a valid pathspec"). Sent
+// as "", a position naming only old_path failed there instead of being
+// placed.
+func PositionNewPath(newPath string) *string {
+	if strings.TrimSpace(newPath) == "" {
+		return nil
+	}
+	return &newPath
+}
+
+// ValidateRenamedFilePosition refuses a text position on a file the merge
+// request's diff renames unless it names both of the file's paths, as the
+// diff gives them. GitLab looks the file's diff up by the paths the position
+// carries ([PositionNewPath]), and git pairs a rename only when both of its
+// paths are in the pathspec, so with one of them GitLab reads the file as a
+// deleted or an added one and computes the comment's line on that diff
+// rather than on the rename the merge request shows: an unchanged line is
+// not found there at all. That is why GitLab's documentation asks a text
+// position for both paths. Swapped, the two still find the rename, since git
+// matches pathspecs in any order, but GitLab keeps the position the wrong
+// way round and takes its file from new_path (Position#file_path), the path
+// the rename removed, so the check asks for them as the diff gives them. A
+// file the diff does not rename has the same path on both sides, and either
+// path finds it, which is the old_path fallback the anchor check allows. git
+// pairs a rename only from a file the new tree no longer has to one the old
+// tree did not have, so neither path of a rename names another file of the
+// same diff. GitLab lists every file with both paths, and an entry that
+// lacks one says nothing about a rename, so it is left to GitLab, as the
+// check is advisory wherever its evidence is incomplete.
+func ValidateRenamedFilePosition(fileDiff *gl.MergeRequestDiff, oldPath, newPath string) error {
+	if fileDiff.OldPath == "" || fileDiff.NewPath == "" || fileDiff.OldPath == fileDiff.NewPath ||
+		(oldPath == fileDiff.OldPath && newPath == fileDiff.NewPath) {
+		return nil
+	}
+	return fmt.Errorf(
+		"the merge request diff renames %q to %q, and GitLab finds a renamed file's lines only by both of its paths: "+
+			"send old_path %q and new_path %q (got old_path %q, new_path %q)",
+		fileDiff.OldPath, fileDiff.NewPath, fileDiff.OldPath, fileDiff.NewPath, oldPath, newPath,
+	)
+}
+
+// ValidateTextPosition refuses a text position that names no line. GitLab
+// completes a text position only when its old_line or its new_line is present
+// (Gitlab::Diff::Formatters::TextFormatter#complete?), a line_range included,
+// whose own endpoints do not stand in for them. Which line it may be is
+// judged against the merge request's diff by [ValidateDiffPosition], when the
+// diff can be read; this check needs no request, so it holds even when that
+// one is skipped. A line is numbered from 1, so 0 is no line, as the tools
+// send none for it, and a negative number is refused: GitLab declares both
+// lines a bare Integer and takes one as present, so it saves a draft note
+// placed on line -1 and answers a discussion with a 400 about a line_code,
+// which the caller did not send. The refusal gives the line by its kind, as
+// the position guidance does, because GitLab finds an unchanged line only by
+// both of its numbers (Gitlab::Diff::File#line_for_position), so one of them
+// is not enough there.
+func ValidateTextPosition(oldLine, newLine int64) error {
+	if oldLine < 0 || newLine < 0 {
+		return fmt.Errorf(
+			"new_line and old_line are line numbers counted from 1 (got new_line %d, old_line %d): "+
+				"leave out the one the line does not have rather than sending a negative number",
+			newLine, oldLine,
+		)
+	}
+	if oldLine != 0 || newLine != 0 {
+		return nil
+	}
+	return errors.New(
+		"a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one): " +
+			"GitLab places a line comment by the line's number in the new file, in the old file or in both, " +
+			"and a line_range does not stand in for it",
+	)
+}
+
+// ImageCoordinate converts an image coordinate to the type client-go's
+// gl.PositionOptions gives x and y. GitLab declares both as integers on the
+// discussion and draft note routes (lib/api/discussions.rb and
+// lib/api/draft_notes.rb), and Grape coerces a fraction to an integer
+// without a word, so the tools take whole pixels and convert them here, where
+// a float64 holds each of them exactly. A nil coordinate stays nil, so a
+// field left out is not sent. The client-go side is recorded in
+// docs/development/upstream-bugs.md, and this retires when x and y take an
+// *int64 there.
+func ImageCoordinate(v *int64) *float64 {
+	if v == nil {
+		return nil
+	}
+	return new(float64(*v))
+}
 
 // ValidateImagePosition refuses an image position that lacks one of the four
 // fields GitLab places an image comment by. GitLab completes an image
@@ -128,7 +260,7 @@ const (
 // refused with a 400 saying the position is incomplete, and a draft note is
 // saved and later published as a general comment with its position dropped
 // (DraftNote#publish_params keeps the position only when it is complete).
-func ValidateImagePosition(width, height *int64, x, y *float64) error {
+func ValidateImagePosition(width, height, x, y *int64) error {
 	var missing []string
 	if width == nil {
 		missing = append(missing, "width")
@@ -157,7 +289,10 @@ func ValidateImagePosition(width, height *int64, x, y *float64) error {
 // (Gitlab::Diff::Formatters::FileFormatter#complete?), where a path of blanks
 // is not, and reads no line of one, so the lines of the merge request's diff
 // are not consulted. It runs before any request for the reason
-// [ValidateImagePosition] gives.
+// [ValidateImagePosition] gives. A file position may name a file outside
+// the diff, which GitLab accepts, and such a file has no entry in the diff
+// listing to take the paths from, so the refusal also names the repository
+// tree, whose one path for an unchanged file is both.
 func ValidateFilePosition(oldPath, newPath string) error {
 	var missing []string
 	if strings.TrimSpace(oldPath) == "" {
@@ -171,7 +306,9 @@ func ValidateFilePosition(oldPath, newPath string) error {
 	}
 	return fmt.Errorf(
 		"a file position needs both old_path and new_path (missing: %s): take them from the file's entry in "+
-			"mr_review.changes_get, which gives an added or a deleted file the same path in both",
+			"the diff (mr_review.changes_get for a merge request, repository.commit_diff for a commit), which "+
+			"gives an added or a deleted file the same path in both, or for a file outside the diff send the "+
+			"path repository.tree lists at head_sha as both",
 		strings.Join(missing, ", "),
 	)
 }
@@ -284,7 +421,7 @@ func ValidateDiffPosition(diffLines []DiffLine, newLine, oldLine int) error {
 		return errors.New("no diff content available for this file")
 	}
 	if newLine == 0 && oldLine == 0 {
-		return errors.New("at least one of new_line or old_line must be set")
+		return errors.New("a text position needs its line (new_line for an added line, old_line for a removed one, both for an unchanged one)")
 	}
 
 	for _, dl := range diffLines {
@@ -344,7 +481,9 @@ func validateOldLineOnlyPosition(dl DiffLine, oldLine int) (bool, error) {
 }
 
 // buildPositionError constructs a descriptive error when a line is not found
-// in the diff at all, listing the valid line ranges.
+// in the diff at all, listing the valid line ranges. Only a text position is
+// placed on a line, so the refusal offers a file position on the same file,
+// which GitLab places by its two paths alone, beside a general discussion.
 func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
 	// Zero is "no such line" here, so a range starts at the first line that
 	// has a number rather than at zero.
@@ -378,9 +517,10 @@ func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
 	}
 
 	return fmt.Errorf(
-		"position (%s) is outside the diff range. Inline comments can only be placed on lines "+
+		"position (%s) is outside the diff range. A text position can only be placed on a line "+
 			"visible in the diff context (valid new_line: %d-%d, valid old_line: %d-%d). "+
-			"To comment on code outside the diff, omit the position parameter to create a general discussion instead. "+
+			"To comment on code outside the diff, send position_type file with the file's old_path and new_path to comment on the whole file, "+
+			"or omit the position parameter to create a general discussion instead. "+
 			"See https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff",
 		target, minNew, maxNew, minOld, maxOld,
 	)

@@ -1677,6 +1677,12 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 		return nil, facts, err
 	}
 	client.SetAuthority(authority)
+	// An OAuth access token is refused by GitLab on the routes that act on the
+	// calling token itself whatever scopes it carries, so the entry's catalog
+	// leaves out what no way of it can run (issue 1238, register row
+	// AUT-009). It is the token's kind, not its scopes, so --ignore-scopes
+	// does not skip it, as it does not skip a fine-grained token's authority.
+	entryCfg.OAuthCredential = facts.OAuth
 	if p.cfg.IgnoreScopes {
 		return entryCfg, facts, nil
 	}

@@ -174,12 +174,18 @@ type createdServerKey struct {
 	// readAPIOnly belongs in the key because it changes which actions are
 	// registered and what the surface says about the ones it withheld, so a
 	// cache that ignored it handed one test the other's surface.
-	readAPIOnly     bool
-	safeMode        bool
-	metaParamSchema string
-	rateLimitRPS    float64
-	rateLimitBurst  int
-	clientCompat    bool
+	readAPIOnly bool
+	// oauthCredential and personalTokensRefused belong in it for the same
+	// reason: the first withholds what GitLab refuses an OAuth access token,
+	// and the second words the answer to a call for one (AUT-009), so a cache
+	// that ignored either handed a test another configuration's answer.
+	oauthCredential       bool
+	personalTokensRefused bool
+	safeMode              bool
+	metaParamSchema       string
+	rateLimitRPS          float64
+	rateLimitBurst        int
+	clientCompat          bool
 	// descriptionSubs keeps the cache honest for tests that set the
 	// substitution env var: createServer reads it at build time, so two
 	// builds under different values are different servers.
@@ -237,19 +243,21 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		return createServerWithin(t, client, cfg)
 	}
 	key := createdServerKey{
-		toolSurface:       cfg.ToolSurface,
-		capabilitySurface: cfg.CapabilitySurface,
-		tier:              cfg.Tier,
-		tierExplicit:      cfg.TierExplicit,
-		readOnly:          cfg.ReadOnly,
-		readAPIOnly:       cfg.ReadAPIOnly,
-		safeMode:          cfg.SafeMode,
-		metaParamSchema:   cfg.MetaParamSchema,
-		rateLimitRPS:      cfg.RateLimitRPS,
-		rateLimitBurst:    cfg.RateLimitBurst,
-		clientCompat:      clientcompat.Enabled(),
-		descriptionSubs:   os.Getenv(gatewaycompat.EnvVar),
-		language:          config.EffectiveLanguage(cfg.Language),
+		toolSurface:           cfg.ToolSurface,
+		capabilitySurface:     cfg.CapabilitySurface,
+		tier:                  cfg.Tier,
+		tierExplicit:          cfg.TierExplicit,
+		readOnly:              cfg.ReadOnly,
+		readAPIOnly:           cfg.ReadAPIOnly,
+		oauthCredential:       cfg.OAuthCredential,
+		personalTokensRefused: cfg.PersonalTokensRefused,
+		safeMode:              cfg.SafeMode,
+		metaParamSchema:       cfg.MetaParamSchema,
+		rateLimitRPS:          cfg.RateLimitRPS,
+		rateLimitBurst:        cfg.RateLimitBurst,
+		clientCompat:          clientcompat.Enabled(),
+		descriptionSubs:       os.Getenv(gatewaycompat.EnvVar),
+		language:              config.EffectiveLanguage(cfg.Language),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()
@@ -4507,6 +4515,23 @@ func TestRegisterConfiguredToolSurfaceWithCatalog_BuildFailures_AreReported(t *t
 				return forced
 			},
 			wantErr: "filter meta action catalog",
+		},
+		{
+			// The names a call naming a withheld action is matched by are
+			// part of what a meta server answers from (issue 1282), so a
+			// failure to index them fails the registration rather than leave
+			// that call answered as a value outside the tool's enum.
+			name:    "meta refuses without its action names",
+			surface: config.ToolSurfaceMeta,
+			arrange: func(t *testing.T) error {
+				t.Helper()
+				forced := errors.New("forced index failure")
+				replaceRegistrationHook(t, &metaActionKeys, func(bool, edition.Tier) (map[string]map[string]string, error) {
+					return nil, fmt.Errorf("index the meta action names: %w", forced)
+				})
+				return forced
+			},
+			wantErr: "index the meta action names",
 		},
 	}
 	for _, tc := range cases {
@@ -10982,14 +11007,14 @@ func TestCreateServer_ReadOnly_MetaSurfaceKeepsMixedDomainReads(t *testing.T) {
 	if strings.Contains(write, "issueCreate") {
 		t.Errorf("mutating meta action executed in read-only mode: %s", write)
 	}
-	// The action is not advertised in the tool's action enum, so the call is
-	// rejected during schema validation before dispatch; older builds instead
-	// answered "unknown action" from the dispatcher.
-	rejected := strings.Contains(write, "does not equal any of") ||
-		strings.Contains(strings.ToLower(write), "unknown action") ||
-		strings.Contains(strings.ToLower(write), "unsupported")
-	if !rejected {
-		t.Errorf("mutating meta action was not rejected in read-only mode: %s", write)
+	// The action is not advertised in the tool's action enum, and the call is
+	// answered with the operator's cause before schema validation, in the
+	// dynamic surface's words (issue 1282). Older builds were refused by the
+	// enum, which reads as a typo, and before that answered "unknown action"
+	// from the dispatcher.
+	const cause = `gitlab_issue: action "create" exists but is not available: this deployment is configured to withhold it`
+	if !strings.HasPrefix(write, cause) {
+		t.Errorf("mutating meta action was not answered with read-only mode as its cause: %s", write)
 	}
 }
 

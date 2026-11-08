@@ -732,31 +732,31 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 
 ## `mr_review`
 
-| Acción                             | Necesita                                                                                               | Se sirve vacío |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------- |
-| `mr_review.changes_get`            | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.diff_version_get`       | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.diff_versions_list`     | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.discussion_create`      | Merge Request: Create en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto |                |
-| `mr_review.discussion_get`         | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.discussion_list`        | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.discussion_note_delete` | Merge Request: Delete en proyecto                                                                      |                |
-| `mr_review.discussion_note_update` | Merge Request: Update en proyecto                                                                      |                |
-| `mr_review.discussion_reply`       | Merge Request: Create en proyecto                                                                      |                |
-| `mr_review.discussion_resolve`     | Merge Request: Update en proyecto                                                                      |                |
-| `mr_review.draft_note_create`      | Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto |                |
-| `mr_review.draft_note_delete`      | Merge Request: Update en proyecto                                                                      |                |
-| `mr_review.draft_note_get`         | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.draft_note_list`        | Merge Request: Read en proyecto                                                                        |                |
-| `mr_review.draft_note_publish`     | Merge Request: Update en proyecto                                                                      |                |
-| `mr_review.draft_note_publish_all` | Merge Request: Update en proyecto                                                                      |                |
-| `mr_review.draft_note_update`      | Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto |                |
-| `mr_review.note_create`            | Work Item: Create en proyecto                                                                          |                |
-| `mr_review.note_delete`            | Work Item: Delete en proyecto                                                                          |                |
-| `mr_review.note_get`               | Work Item: Read en proyecto                                                                            |                |
-| `mr_review.note_list`              | Work Item: Read en proyecto                                                                            |                |
-| `mr_review.note_update`            | Work Item: Update en proyecto                                                                          |                |
-| `mr_review.raw_diffs`              | Merge Request: Read en proyecto                                                                        |                |
+| Acción                             | Necesita                                                                                                                            | Se sirve vacío |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `mr_review.changes_get`            | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.diff_version_get`       | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.diff_versions_list`     | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.discussion_create`      | Merge Request: Create en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto                              |                |
+| `mr_review.discussion_get`         | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.discussion_list`        | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.discussion_note_delete` | Merge Request: Delete en proyecto                                                                                                   |                |
+| `mr_review.discussion_note_update` | Merge Request: Update en proyecto                                                                                                   |                |
+| `mr_review.discussion_reply`       | Merge Request: Create en proyecto                                                                                                   |                |
+| `mr_review.discussion_resolve`     | Merge Request: Update en proyecto                                                                                                   |                |
+| `mr_review.draft_note_create`      | Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto                              |                |
+| `mr_review.draft_note_delete`      | Merge Request: Update en proyecto                                                                                                   |                |
+| `mr_review.draft_note_get`         | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.draft_note_list`        | Merge Request: Read en proyecto                                                                                                     |                |
+| `mr_review.draft_note_publish`     | Merge Request: Update en proyecto                                                                                                   |                |
+| `mr_review.draft_note_publish_all` | Merge Request: Update en proyecto                                                                                                   |                |
+| `mr_review.draft_note_update`      | Merge Request: Update en proyecto. Algunas llamadas también necesitan: Metadata: Read en instancia; Merge Request: Read en proyecto |                |
+| `mr_review.note_create`            | Work Item: Create en proyecto                                                                                                       |                |
+| `mr_review.note_delete`            | Work Item: Delete en proyecto                                                                                                       |                |
+| `mr_review.note_get`               | Work Item: Read en proyecto                                                                                                         |                |
+| `mr_review.note_list`              | Work Item: Read en proyecto                                                                                                         |                |
+| `mr_review.note_update`            | Work Item: Update en proyecto                                                                                                       |                |
+| `mr_review.raw_diffs`              | Merge Request: Read en proyecto                                                                                                     |                |
 
 ## `orbit`
 
@@ -987,7 +987,7 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 | `project.transfer`                         | Project: Transfer en proyecto. Algunas llamadas también necesitan: Project: Read en proyecto; Todo: Read en usuario; Metadata: Read en instancia                                        |                |
 | `project.unarchive`                        | Project: Archive en proyecto                                                                                                                                                            |                |
 | `project.unstar`                           | Project: Update en proyecto                                                                                                                                                             |                |
-| `project.update`                           | Project: Update en proyecto                                                                                                                                                             |                |
+| `project.update`                           | Project: Update en proyecto. Algunas llamadas también necesitan: Pull Mirror: Read en proyecto                                                                                          |                |
 | `project.upload`                           | Markdown Upload: Create en proyecto                                                                                                                                                     |                |
 | `project.upload_avatar`                    | Project: Update en proyecto                                                                                                                                                             |                |
 | `project.upload_delete`                    | Markdown Upload: Delete en proyecto                                                                                                                                                     |                |

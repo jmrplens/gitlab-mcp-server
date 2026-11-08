@@ -330,7 +330,7 @@ The toolchains, and the tools a pinned action installs, are fetched from their p
 - **Unit tests** for every tool handler: use `httptest` to mock GitLab API responses
 - **Table-driven tests** with `t.Run()` subtests
 - **Test naming**: `TestToolName_Scenario_ExpectedResult`
-- **Coverage target**: CI fails when total coverage of `./cmd/...` and `./internal/...` drops below 90% (`COVERAGE_MIN` in `.github/workflows/ci.yml`); the `increase-test-coverage` skill aims at 100% for every package a change touches
+- **Coverage target**: CI fails when total coverage of `./cmd/...` and `./internal/...` drops below 90% (`COVERAGE_MIN` in `.github/workflows/ci.yml`); the `increase-test-coverage` skill aims at 100% for every package a change touches. The e2e suite's support packages, `test/e2e/internal/fixture` and `test/e2e/modeleval`, are measured with the complete runs against GitLab as well, and once a record of those runs is committed CI fails one that leaves more statements unreached than the record allows ([Test Infrastructure](docs/development/test-infrastructure.md))
 - **No external dependencies**: Unit tests must not call real GitLab APIs
 
 ### Running Tests

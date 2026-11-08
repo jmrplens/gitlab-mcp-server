@@ -67,6 +67,10 @@ type servedSets struct {
 	// GitLab serves on a public project or group, or any action phase A allows
 	// on the one release past the record that lists by the grant).
 	callable map[ActionID]struct{}
+	// excluded are the catalog actions the operator's exclusions named, the
+	// one narrowing no surface names back (AUT-004), which is what tells
+	// [Withheld] the meta surface's enum refusal is the answer it expects.
+	excluded map[ActionID]struct{}
 }
 
 // PromptSpec is one served prompt and the arguments it declares, split into
@@ -243,6 +247,9 @@ type surfaceExpectation struct {
 	// listing comparison ignores: they are pinned by behavior tests instead.
 	// The actions behind them are in actions all the same.
 	standalone []string
+	// excluded are the canonical IDs the operator's exclusions removed, as
+	// the surface's assembler resolved them.
+	excluded map[ActionID]struct{}
 }
 
 // The three assemblers the expectation is read from. They are variables so a
@@ -284,7 +291,7 @@ func assembledSurface(inst *instance, surface Surface, serverCfg *config.ServerC
 
 	switch surface {
 	case SurfaceDynamic:
-		catalog, _, err := assembleDynamicCatalog(client, serverCfg)
+		catalog, withheld, err := assembleDynamicCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, nil, fmt.Errorf("assemble the dynamic catalog: %w", err)
 		}
@@ -295,9 +302,10 @@ func assembledSurface(inst *instance, surface Surface, serverCfg *config.ServerC
 			tools:      []string{dynamictools.ExecuteActionToolName, dynamictools.FindActionToolName},
 			actions:    catalogActionIDs(catalog),
 			standalone: standalone,
+			excluded:   actionIDSet(withheld.ExcludedByName),
 		}, catalog, nil
 	case SurfaceMeta:
-		catalog, _, err := assembleMetaCatalog(client, serverCfg)
+		catalog, withheld, err := assembleMetaCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, nil, fmt.Errorf("assemble the meta catalog: %w", err)
 		}
@@ -310,9 +318,9 @@ func assembledSurface(inst *instance, surface Surface, serverCfg *config.ServerC
 		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
 			return surfaceExpectation{}, nil, standaloneErr
 		}
-		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, catalog, nil
+		return surfaceExpectation{tools: names, actions: actions, standalone: standalone, excluded: actionIDSet(withheld.ExcludedByName)}, catalog, nil
 	case SurfaceIndividual:
-		catalog, _, err := assembleIndividualCatalog(client, serverCfg)
+		catalog, excluded, err := assembleIndividualCatalog(client, serverCfg)
 		if err != nil {
 			return surfaceExpectation{}, nil, fmt.Errorf("assemble the individual catalog: %w", err)
 		}
@@ -320,7 +328,7 @@ func assembledSurface(inst *instance, surface Surface, serverCfg *config.ServerC
 		if standaloneErr := addStandaloneActions(actions, inst, serverCfg); standaloneErr != nil {
 			return surfaceExpectation{}, nil, standaloneErr
 		}
-		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, catalog, nil
+		return surfaceExpectation{tools: names, actions: actions, standalone: standalone, excluded: actionIDSet(excluded)}, catalog, nil
 	default:
 		return surfaceExpectation{}, nil, fmt.Errorf("unknown tool surface %q", surface)
 	}
@@ -486,6 +494,18 @@ func standaloneToolNames(client *gitlabclient.Client) []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// actionIDSet is a list of canonical action IDs as a set, nil for none.
+func actionIDSet(ids []string) map[ActionID]struct{} {
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make(map[ActionID]struct{}, len(ids))
+	for _, id := range ids {
+		set[ActionID(id)] = struct{}{}
+	}
+	return set
 }
 
 // catalogActionIDs returns every action a catalog holds.

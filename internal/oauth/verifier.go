@@ -769,6 +769,9 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 	if !result.answered {
 		info.Extra[ScopesAssumedKey] = true
 	}
+	if result.oauth {
+		info.Extra[IssuedByOAuthKey] = true
+	}
 
 	if cache != nil {
 		cache.Put(gitlabURL, token, info, ttl)
@@ -821,6 +824,10 @@ type introspection struct {
 	// fine-grained token's grant without asking the self endpoint again
 	// ([TokenIDKey]).
 	tokenID int64
+	// oauth records that /oauth/token/info described the token, which it does
+	// for an OAuth access token and for nothing else: the token is one
+	// ([IssuedByOAuthKey]).
+	oauth bool
 }
 
 // InstanceKey is the key of the verified [auth.TokenInfo]'s Extra under which
@@ -857,6 +864,20 @@ const TokenIDKey = "token_id"
 // it answers, instead of reading the assumption as a classic token for the
 // entry's life. It is absent whenever an endpoint answered.
 const ScopesAssumedKey = "scopes_assumed"
+
+// IssuedByOAuthKey is the key of the verified [auth.TokenInfo]'s Extra under
+// which true travels when the token is an OAuth access token: the personal
+// access token self endpoint did not describe it, and /oauth/token/info did,
+// which describes nothing else (issue 1238).
+//
+// It is what the credential kind is learned from. GitLab refuses an OAuth
+// access token, whatever scopes it carries, on the routes that act on the
+// calling token itself and on the model registry's package files, so a
+// session known to be authenticated by one is not served the actions every
+// way of which sends such a route (register row AUT-009). It is absent for a
+// personal access token, and for a token nothing described: an unknown kind
+// is served everything, the asymmetry ADR-0018 keeps.
+const IssuedByOAuthKey = "issued_by_oauth"
 
 // introspectToken returns the token's real scopes and its own expiry.
 //
@@ -902,6 +923,7 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 				expiry:         expiryFromSeconds(info["expires_in"]),
 				applicationUID: applicationUID(info["application"]),
 				answered:       true,
+				oauth:          true,
 			}
 		}
 	}

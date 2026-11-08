@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -38,21 +39,24 @@ type DiffLinePositionInput struct {
 // The four image fields are pointers, as gl.PositionOptions has them, because
 // GitLab takes 0 as a value of each: an x or a y of 0 is a point on the
 // image's edge, and a plain number could not tell it from a field left out,
-// so the coordinate was dropped from the request.
+// so the coordinate was dropped from the request. x and y are integers, as
+// GitLab declares them, where gl.PositionOptions types them as floats: Grape
+// coerced a fraction to its whole part without a word, so 12.5 placed the
+// comment at 12. [toolutil.ImageCoordinate] converts them for the request.
 type DiffPosition struct {
 	BaseSHA      string              `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
 	StartSHA     string              `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
 	HeadSHA      string              `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
-	OldPath      string              `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files). Required for position_type=file."`
-	NewPath      string              `json:"new_path"            jsonschema:"File path after the change,required"`
+	OldPath      string              `json:"old_path,omitempty"  jsonschema:"File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type=file and for a text position on a renamed file."`
+	NewPath      string              `json:"new_path,omitempty"  jsonschema:"File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type=file and for a text position on a renamed file."`
 	OldLine      int                 `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
 	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
-	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line."`
+	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line."`
 	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
-	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in pixels. Required for position_type=image."`
-	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in pixels. Required for position_type=image."`
-	X            *float64            `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image. Required for position_type=image."`
-	Y            *float64            `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image. Required for position_type=image."`
+	Width        *int64              `json:"width,omitempty"  jsonschema:"Image width in whole pixels. Required for position_type=image."`
+	Height       *int64              `json:"height,omitempty" jsonschema:"Image height in whole pixels. Required for position_type=image."`
+	X            *int64              `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
+	Y            *int64              `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image, in whole pixels. Required for position_type=image."`
 }
 
 // CreateInput defines parameters for creating a discussion (inline or general).
@@ -173,7 +177,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionCreate", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, head_sha and start_sha, and by position_type: text a valid old_path/new_path with line numbers, image width, height, x and y, file both old_path and new_path; use mr_review.changes_get to fetch the diff context")
+			"for inline diff comments, position requires base_sha, start_sha and head_sha and the file's path (send old_path and new_path), and by position_type: text its line (new_line for an added line, old_line for a removed one, both for an unchanged one) and both paths on a renamed file, image width, height, x and y, file both paths; use mr_review.changes_get to fetch the diff context")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -390,7 +394,9 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 // buildPositionOptions maps the full [DiffPosition] input onto the SDK's
 // gl.PositionOptions, mirroring every field (text line positions, multi-line
 // ranges, and image coordinate positions). When position_type is unset it
-// defaults to "text" to preserve the historical line-comment behavior.
+// defaults to "text" to preserve the historical line-comment behavior. A
+// new_path left out or blank is not sent, for the reason
+// [toolutil.PositionNewPath] gives.
 func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	positionType := p.PositionType
 	if positionType == "" {
@@ -400,7 +406,7 @@ func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
 		BaseSHA:      new(p.BaseSHA),
 		StartSHA:     new(p.StartSHA),
 		HeadSHA:      new(p.HeadSHA),
-		NewPath:      new(p.NewPath),
+		NewPath:      toolutil.PositionNewPath(p.NewPath),
 		PositionType: new(positionType),
 	}
 	if p.OldPath != "" {
@@ -417,7 +423,8 @@ func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
 	if p.LineRange != nil {
 		pos.LineRange = buildLineRangeOptions(p.LineRange)
 	}
-	pos.Width, pos.Height, pos.X, pos.Y = p.Width, p.Height, p.X, p.Y
+	pos.Width, pos.Height = p.Width, p.Height
+	pos.X, pos.Y = toolutil.ImageCoordinate(p.X), toolutil.ImageCoordinate(p.Y)
 	return pos
 }
 
@@ -456,17 +463,25 @@ func buildLinePositionOptions(p *DiffLinePositionInput) *gl.LinePositionOptions 
 	return out
 }
 
-// validatePosition judges a position by the fields GitLab reads for its
-// position_type, before the write is sent. A text position, which is what an
-// unnamed type is sent as, is judged against the lines of the merge
-// request's diff by [validateTextPosition]. An image position is judged by
-// its width, height, x and y, and a file position by its old and new paths,
-// with no request, since GitLab places neither by a line of the diff. A
+// validatePosition judges a position by the fields GitLab reads for it,
+// before the write is sent. Every position, of any type, needs its start and
+// head commits and a file path, which [toolutil.ValidatePositionAnchor]
+// checks first. A text position, which is what an unnamed type is sent as,
+// needs a line, and is then judged against the lines of the merge request's
+// diff by [validateTextPosition]. An image position is judged by its width,
+// height, x and y, and a file position by its old and new paths, with no
+// request, since GitLab places neither by a line of the diff. A
 // position_type GitLab does not declare is left to GitLab, which refuses it
 // by name.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
+	if err := toolutil.ValidatePositionAnchor(pos.StartSHA, pos.HeadSHA, pos.OldPath, pos.NewPath); err != nil {
+		return err
+	}
 	switch pos.PositionType {
 	case "", toolutil.PositionTypeText:
+		if err := toolutil.ValidateTextPosition(int64(pos.OldLine), int64(pos.NewLine)); err != nil {
+			return err
+		}
 		return validateTextPosition(ctx, client, projectID, mrIID, pos)
 	case toolutil.PositionTypeImage:
 		return toolutil.ValidateImagePosition(pos.Width, pos.Height, pos.X, pos.Y)
@@ -479,13 +494,18 @@ func validatePosition(ctx context.Context, client *gitlabclient.Client, projectI
 // validateTextPosition fetches the MR diff and validates that the given
 // position refers to a line actually present in the diff. This prevents
 // 400/500 errors from GitLab when commenting on out-of-range lines and
-// provides actionable error messages explaining what went wrong. When the
-// diff cannot be listed, or cannot be shown to be the one the position's
-// SHAs name, the check is skipped and the write that follows is judged by
-// GitLab, for the reasons [toolutil.MergeRequestDiffForPositionCheck] gives.
+// provides actionable error messages explaining what went wrong. On a file
+// the diff renames it also asks for both of the file's paths
+// ([toolutil.ValidateRenamedFilePosition]). When the diff cannot be listed,
+// or cannot be shown to be the one the position's SHAs name, the check is
+// skipped and the write that follows is judged by GitLab, for the reasons
+// [toolutil.MergeRequestDiffForPositionCheck] gives.
 func validateTextPosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
+	// GitLab takes the file from new_path unless it is blank, and from old_path
+	// otherwise (new_path.presence || old_path), so a new_path of blanks names
+	// the old_path's file, as toolutil.ValidatePositionAnchor already reads it.
 	targetPath := pos.NewPath
-	if targetPath == "" {
+	if strings.TrimSpace(targetPath) == "" {
 		targetPath = pos.OldPath
 	}
 	fileDiff, ok := toolutil.MergeRequestDiffForPositionCheck(ctx, client, projectID, mrIID, targetPath, gl.MergeRequestDiffRefs{
@@ -496,9 +516,13 @@ func validateTextPosition(ctx context.Context, client *gitlabclient.Client, proj
 	}
 	if fileDiff == nil {
 		return fmt.Errorf(
-			"file %q is not in the merge request diff. Inline comments can only be placed on changed files. "+
-				"Omit the position parameter to create a general (non-inline) discussion instead", targetPath,
+			"file %q is not in the merge request diff. A text position can only be placed on a line of a file in the diff. "+
+				"To comment on the whole file, send position_type file with the path repository.tree lists at head_sha as both old_path and new_path, "+
+				"or omit the position parameter to create a general (non-inline) discussion instead", targetPath,
 		)
+	}
+	if err := toolutil.ValidateRenamedFilePosition(fileDiff, pos.OldPath, pos.NewPath); err != nil {
+		return err
 	}
 
 	if fileDiff.Diff == "" {

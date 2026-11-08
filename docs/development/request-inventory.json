@@ -1466,6 +1466,20 @@
     {
       "package": "internal/tools",
       "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/boards/:board_id",
+      "body": [
+        "assignee_id",
+        "name"
+      ],
+      "identifiers": {
+        ":board_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/external_status_checks",
       "identifiers": {
@@ -14144,9 +14158,9 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes/:draft_note_id",
       "identifiers": {
-        ":draft_note_id": 2,
+        ":draft_note_id": 3,
         ":merge_request_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -14189,6 +14203,12 @@
         ":merge_request_id": 1,
         ":project_id": 1
       }
+    },
+    {
+      "package": "internal/tools/mrdraftnotes",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/version"
     },
     {
       "package": "internal/tools/mrnotes",
@@ -15833,15 +15853,21 @@
         "container_expiration_policy_attributes",
         "description",
         "external_authorization_classification_label",
+        "import_url",
         "issue_branch_template",
         "max_artifacts_size",
         "merge_commit_template",
         "merge_request_title_regex",
         "merge_request_title_regex_description",
         "merge_train_enforcement",
+        "mirror",
+        "mirror_branch_regex",
+        "mirror_overwrites_diverged_branches",
+        "mirror_trigger_builds",
         "mirror_user_id",
         "mr_default_title_template",
         "name",
+        "only_mirror_protected_branches",
         "reviewer_assignment_strategy",
         "squash_commit_template",
         "suggestion_commit_message",

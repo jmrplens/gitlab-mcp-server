@@ -10,8 +10,10 @@ package mrdiscussions
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -520,8 +522,74 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths holds the hint a
+// 400 from the create is answered with to the path rule the position guidance
+// and the check before the write follow: every position needs the file's path
+// and is sent both, a file position needs both (FileFormatter#complete?), and
+// so does a text position on a file the diff renames, which GitLab pairs only
+// by both, while a text or image position on any other file is taken with one
+// (Position#file_path is new_path.presence || old_path). The hint used to ask
+// every text position for both paths.
+func TestCreate_BadRequest_HintSaysWhichPositionsNeedBothPaths(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/merge_requests/1/discussions" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Body: "x"})
+
+	if err == nil {
+		t.Fatal("Create() error = nil, want the 400 with its hint")
+	}
+	for _, want := range []string{
+		"head_sha and the file's path (send old_path and new_path)",
+		"and both paths on a renamed file",
+		"file both paths",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want the 400 hint to say %q", err, want)
+			}
+		})
+	}
+	if stale := "text both old_path and new_path"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %v, still asks every text position for both paths (%q)", err, stale)
+	}
+}
+
+// lineRule is the rule the position guidance and the 400 hint give a text
+// position's line by: GitLab finds the line only where both of its numbers
+// match the diff line (Gitlab::Diff::File#line_for_position), so an unchanged
+// line needs both, and the check before the write refuses it with one when
+// it can read the diff (toolutil.ValidateDiffPosition).
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
+// TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers holds the hint
+// a 400 from the create is answered with to [lineRule]. An unchanged line
+// given one number is not found and the thread is refused for its line code,
+// and the hint used to ask for new_line or old_line, the mistake that answer
+// follows.
+func TestCreate_BadRequest_HintAsksAnUnchangedLineForBothNumbers(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
+	}))
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Body: "x"})
+
+	if err == nil || !strings.Contains(err.Error(), lineRule) {
+		t.Fatalf("error = %v, want the 400 hint to say %q", err, lineRule)
+	}
+}
+
 // TestCreate_PositionValidationError verifies Create returns the validation
-// error when an inline comment targets a file outside the MR diff.
+// error when a text position targets a file outside the MR diff.
 func TestCreate_PositionValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
@@ -549,8 +617,32 @@ func TestCreate_PositionValidationError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected position validation error")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Fatalf("error = %q, want diff validation message", err.Error())
+	checkOutsideTheDiffRefusal(t, err)
+}
+
+// checkOutsideTheDiffRefusal holds the refusal of a text position on a file
+// outside the merge request's diff to what such a file can still take. GitLab
+// reads a line, and so the diff, only for a text position (DiffNote), so an
+// image or a file position on that file is accepted, and the file, which is
+// unchanged, has the one path repository.tree lists at head_sha for both of
+// its sides. The refusal used to say that inline comments can only be placed
+// on changed files.
+func checkOutsideTheDiffRefusal(t *testing.T, err error) {
+	t.Helper()
+	for _, want := range []string{
+		"not in the merge request diff",
+		"A text position can only be placed on a line of a file in the diff",
+		"send position_type file with the path repository.tree lists at head_sha as both old_path and new_path",
+		"or omit the position parameter",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err.Error(), want)
+			}
+		})
+	}
+	if stale := "only be placed on changed files"; strings.Contains(err.Error(), stale) {
+		t.Errorf("error = %q, still says %q, while an image or file position may name a file outside the diff", err.Error(), stale)
 	}
 }
 
@@ -1104,8 +1196,9 @@ func newMRDiscussionsActionSpecs(t *testing.T) []toolutil.ActionSpec {
 	return ActionSpecs(client)
 }
 
-// TestValidatePosition_FileNotInDiff verifies that validatePosition returns
-// an error when the target file is not part of the MR diff.
+// TestValidatePosition_FileNotInDiff verifies that validatePosition refuses a
+// text position on a file that is not part of the MR diff, and offers a file
+// position on it or a general discussion instead.
 func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
@@ -1122,9 +1215,7 @@ func TestValidatePosition_FileNotInDiff(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for file not in diff")
 	}
-	if !strings.Contains(err.Error(), "not in the merge request diff") {
-		t.Errorf("unexpected error message: %v", err)
-	}
+	checkOutsideTheDiffRefusal(t, err)
 }
 
 // TestValidatePosition_ValidFile verifies that validatePosition succeeds
@@ -1170,22 +1261,98 @@ func TestValidatePosition_FileWithEmptyDiff_SkipsTheLineCheck(t *testing.T) {
 }
 
 // TestValidatePosition_OldPathFallback verifies that validatePosition
-// uses OldPath when NewPath is empty.
+// looks the file up by OldPath when NewPath is empty or only blanks, as
+// GitLab reads new_path.presence || old_path. Before the blank case was
+// handled, a new_path of " " passed the anchor check and was then looked up
+// as the path " ", which no diff holds, so a position GitLab would place on
+// old_path's file was refused as not in the diff. The out-of-range cases hold
+// the fallback to reading the old file's diff: a lookup skipped with a nil
+// return would pass the in-range cases and fail these. The file is one the
+// diff does not rename, the only kind one path finds at GitLab
+// (TestValidatePosition_RenamedFile_NeedsBothPaths).
 func TestValidatePosition_OldPathFallback(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
-			testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"renamed.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
-	}))
-	err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
-		BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
-		OldPath: "old.go",
-		OldLine: 1,
-	})
-	if err != nil {
-		t.Errorf("old_path fallback should match, got: %v", err)
+	tests := []struct {
+		name    string
+		newPath string
+		oldLine int
+		wantErr string
+	}{
+		{name: "new_path empty", newPath: "", oldLine: 1},
+		{name: "new_path of blanks", newPath: "  ", oldLine: 1},
+		{name: "new_path empty, old_line outside the diff", newPath: "", oldLine: 5, wantErr: "old_line 5"},
+		{name: "new_path of blanks, old_line outside the diff", newPath: "  ", oldLine: 5, wantErr: "old_line 5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"old.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
+			}))
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
+				OldPath: "old.go",
+				NewPath: tt.newPath,
+				OldLine: tt.oldLine,
+			})
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("old_path fallback should match, got: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("validatePosition() error = %v, want one naming %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidatePosition_RenamedFile_NeedsBothPaths verifies that a text
+// position on a file the merge request renames is refused before the write
+// unless it names both of the file's paths. GitLab looks the file's diff up
+// by the paths the position carries (Position#diff_options), and git pairs a
+// rename only when both paths are among them, so with one path GitLab reads
+// the file as deleted or as added and computes the line on that diff, not on
+// the rename the merge request shows. Before the check, the line was judged
+// against the rename and a position naming one path passed.
+func TestValidatePosition_RenamedFile_NeedsBothPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		oldPath, newPath string
+		wantErr          bool
+	}{
+		{name: "both paths", oldPath: "old.go", newPath: "renamed.go"},
+		{name: "the new path alone", newPath: "renamed.go", wantErr: true},
+		{name: "the old path alone", oldPath: "old.go", wantErr: true},
+		{name: "the old path and a blank new path", oldPath: "old.go", newPath: "  ", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+					testutil.RespondJSON(w, http.StatusOK, `{"diff_refs":{"base_sha":"base","start_sha":"start","head_sha":"head"}}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"old.go","new_path":"renamed.go","renamed_file":true,"diff":"@@ -1,2 +1,2 @@\n x\n-y\n+z\n"}]`)
+			}))
+			err := validatePosition(t.Context(), client, "42", 1, &DiffPosition{
+				BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
+				OldPath: tc.oldPath, NewPath: tc.newPath,
+				OldLine: 1, NewLine: 1,
+			})
+			if !tc.wantErr {
+				if err != nil {
+					t.Errorf("validatePosition() error = %v, want nil for both paths of the rename", err)
+				}
+				return
+			}
+			const want = `send old_path "old.go" and new_path "renamed.go"`
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("validatePosition() error = %v, want one saying %q", err, want)
+			}
+		})
 	}
 }
 
@@ -1238,8 +1405,8 @@ func TestCreate_FullImagePosition(t *testing.T) {
 			PositionType: "image",
 			Width:        new(int64(100)),
 			Height:       new(int64(200)),
-			X:            new(10.5),
-			Y:            new(20.5),
+			X:            new(int64(10)),
+			Y:            new(int64(20)),
 		},
 	})
 	if err != nil {
@@ -1479,6 +1646,125 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
+// mr_review.discussion_create sends a caller for the three SHAs of a position
+// to merge_request.get, whose output carries them as diff_refs, for the file
+// and the line to mr_review.changes_get, and for a file outside the diff,
+// which an image or file position may name, to repository.tree. The guidance
+// used to send a caller to mr_review.changes_get for the SHAs too, which
+// lists the diff's files and none of its SHAs. It gives a text position's
+// line by [lineRule], where it used to ask for new_line or old_line. And the
+// action's Usage names the three things a position anchors a comment to, a
+// line of the diff, a point of an image or a whole file, where it used to
+// offer only a file and a line.
+func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
+	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
+	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
+		t.Fatalf("merge_request.get's output has no diff_refs for the guidance to point at")
+	}
+	for _, spec := range newMRDiscussionsActionSpecs(t) {
+		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
+			continue
+		}
+		assertUsageNamesEveryPositionType(t, spec.Usage)
+		guidance := spec.ParameterGuidance["position"]
+		source := guidance.ValueSource
+		for _, want := range []string{
+			"base_sha, start_sha and head_sha are the diff_refs of merge_request.get,",
+			"the file's old_path and new_path and the line come from mr_review.changes_get.",
+			"whose path repository.tree lists at head_sha.",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(source, want) {
+					t.Errorf("position guidance = %q, want it to say %q", source, want)
+				}
+			})
+		}
+		assertBothPathsGuidance(t, guidance)
+		if confusions, want := strings.Join(guidance.CommonConfusions, " "), "text (the default) also needs a line of the MR diff ("+lineRule+")"; !strings.Contains(confusions, want) {
+			t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+		}
+		for name, otherPath := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+			t.Run(name, func(t *testing.T) {
+				field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+				description := field.Tag.Get("jsonschema")
+				for _, want := range []string{
+					otherPath,
+					"or from repository.tree for a file outside the diff.",
+					"Required for position_type=file and for a text position on a renamed file.",
+				} {
+					if !strings.Contains(description, want) {
+						t.Errorf("%s description = %q, want it to say %q", name, description, want)
+					}
+				}
+			})
+		}
+		return
+	}
+	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
+}
+
+// TestDiffPosition_ImageMeasures_AreDescribedInWholePixels verifies that every
+// field of a position that carries an image measure, and the position_type
+// that lists them, says the measures are whole pixels. The input takes
+// integers, as GitLab declares width, height, x and y
+// (lib/api/discussions.rb), and a fraction is refused when the arguments are
+// read, but a reference that prints a field's description and not its type
+// gave no hint of it for the width, the height or the position_type.
+func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
+	for _, name := range []string{"PositionType", "Width", "Height", "X", "Y"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, "whole pixels") {
+				t.Errorf("%s description = %q, want it to say the measures are whole pixels", name, description)
+			}
+		})
+	}
+}
+
+// assertBothPathsGuidance checks that the position guidance asks for both of
+// the file's paths, in its example as well, and says why one is not always
+// enough. GitLab documents both for a text position, takes one on a file the
+// diff does not rename, and finds a renamed file's lines only by both, where
+// the guidance used to offer either path as sufficient. Asking for both is a
+// recommendation, so it also names the positions the check before the write
+// refuses with one path, a file position and a text position on a file the
+// diff renames, and says a text or image position on any other file passes
+// with one. A file outside the diff has no entry in mr_review.changes_get,
+// so the guidance says it takes the path repository.tree lists as both,
+// where it used to send the caller to that entry for every file.
+func assertBothPathsGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
+	t.Helper()
+	confusions := strings.Join(guidance.CommonConfusions, " ")
+	for _, want := range []string{
+		"Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed.",
+		"A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both.",
+		"A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both.",
+		"A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position.",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(confusions, want) {
+				t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+			}
+		})
+	}
+	if !strings.Contains(guidance.ExampleBinding, `"old_path":"main.go","new_path":"main.go"`) {
+		t.Errorf("position example = %q, want it to send both paths", guidance.ExampleBinding)
+	}
+}
+
+// assertUsageNamesEveryPositionType checks that mr_review.discussion_create's
+// Usage names what each position_type anchors a comment to: a text position
+// a line of the diff, an image position a point of an image and a file
+// position a whole file. It is the first sentence a model reads of the
+// action, and it used to offer a position only for a file and a line.
+func assertUsageNamesEveryPositionType(t *testing.T, usage string) {
+	t.Helper()
+	if want := "Provide a position to attach an inline comment to a line of the diff, a point of an image or a whole file, or omit it for a general MR discussion."; !strings.Contains(usage, want) {
+		t.Errorf("Usage = %q, want it to say %q", usage, want)
+	}
+}
+
 // assertDiscoveryMetadata checks one MR discussion spec against the R-META
 // requirements: action-specific Usage, natural-language aliases, canonical
 // RelatedActions, parameter guidance, and a Returns:/See also: description.
@@ -1663,12 +1949,16 @@ func TestUpdateNote_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 // optional field of a diff position reaches GitLab exactly when it was given.
 // GitLab reads a position as a whole and refuses the ones it cannot resolve,
 // so a coordinate silently replaced by an unset one is the difference between
-// a comment landing where it was meant to and a 400 nobody can explain.
+// a comment landing where it was meant to and a 400 nobody can explain. The
+// fewest a position can carry is the line of a text position, since GitLab
+// completes none without one.
 func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 	base := DiffPosition{BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222", NewPath: "design.png"}
+	lineOnly := base
+	lineOnly.NewLine = 42
 	full := base
 	full.OldPath, full.OldLine, full.NewLine = "old.png", 7, 42
-	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", new(int64(100)), new(int64(200)), new(10.5), new(20.5)
+	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", new(int64(100)), new(int64(200)), new(int64(10)), new(int64(20))
 
 	for _, tc := range []struct {
 		name     string
@@ -1680,14 +1970,14 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 			position: full,
 			want: map[string]any{
 				"old_path": "old.png", "old_line": float64(7), "new_line": float64(42),
-				"width": float64(100), "height": float64(200), "x": 10.5, "y": 20.5,
+				"width": float64(100), "height": float64(200), "x": float64(10), "y": float64(20),
 			},
 		},
 		{
-			name:     "none set",
-			position: base,
+			name:     "only the line a text position needs",
+			position: lineOnly,
 			want: map[string]any{
-				"old_path": nil, "old_line": nil, "new_line": nil,
+				"old_path": nil, "old_line": nil, "new_line": float64(42),
 				"width": nil, "height": nil, "x": nil, "y": nil,
 			},
 		},
@@ -1711,6 +2001,68 @@ func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestCreate_PositionWithoutNewPath_SendsNone asserts that a position whose
+// new_path is left out or blank reaches GitLab without the key. GitLab
+// completes such a position with old_path (Position#file_path is
+// new_path.presence || old_path), but it looks the file's diff up by the
+// paths the position names, [old_path, new_path].compact.uniq, which keeps an
+// empty string, and Gitaly hands each to git diff as a pathspec, which git
+// refuses for an empty one ("empty string is not a valid pathspec"). On the
+// parent the request carried "new_path":"".
+func TestCreate_PositionWithoutNewPath_SendsNone(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		newPath string
+	}{
+		{name: "new_path left out", newPath: ""},
+		{name: "new_path of blanks", newPath: "  "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			createWithAssertions(t, CreateInput{
+				ProjectID: testProjectID,
+				MRIID:     1,
+				Body:      testRefactoringComment,
+				Position: &DiffPosition{
+					BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222",
+					OldPath: "main.go", NewPath: tc.newPath, OldLine: 7,
+				},
+			}, func(body map[string]any) {
+				pos, ok := body["position"].(map[string]any)
+				if !ok {
+					t.Errorf("position missing from the request body %v", body)
+					return
+				}
+				assertJSONField(t, pos, "new_path", nil)
+				assertJSONField(t, pos, "old_path", "main.go")
+			})
+		})
+	}
+}
+
+// TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires asserts that the
+// served schema of a position requires the three SHAs and no path. GitLab's
+// route requires base_sha, start_sha, head_sha and position_type and declares
+// new_path and old_path optional (lib/api/discussions.rb), and completes a
+// position with either path. position_type is optional here because the
+// handler sends text when it is left out. While new_path was required, a
+// client validating against the schema refused a position naming only
+// old_path, which the handler and GitLab both take.
+func TestActionSpecs_PositionSchema_RequiresWhatGitLabRequires(t *testing.T) {
+	for _, spec := range newMRDiscussionsActionSpecs(t) {
+		if spec.IndividualTool.Name != "gitlab_mr_discussion_create" {
+			continue
+		}
+		props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+		position, _ := props["position"].(map[string]any)
+		got := fmt.Sprint(position["required"])
+		if want := "[base_sha start_sha head_sha]"; got != want {
+			t.Errorf("position required = %s, want %s", got, want)
+		}
+		return
+	}
+	t.Fatal("no ActionSpec projects gitlab_mr_discussion_create")
 }
 
 // discussionCreateRoute returns the handler every surface reaches
@@ -1876,12 +2228,30 @@ func positionTypeCases() []positionTypeCase {
 			wantSent: map[string]any{"position_type": "text", "new_line": float64(40)}, wantRead: true,
 		},
 		{
+			name: "text naming no line", position: at(map[string]any{"position_type": "text"}),
+			wantErr: noLineRefusal,
+		},
+		{
+			name: "text by default naming no line", position: at(map[string]any{}),
+			wantErr: noLineRefusal,
+		},
+		{
+			name:     "text naming only a line range",
+			position: at(map[string]any{"line_range": map[string]any{"start": map[string]any{"new_line": 1}, "end": map[string]any{"new_line": 1}}}),
+			wantErr:  noLineRefusal,
+		},
+		{
 			name:     "image with width, height, x and y",
-			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}),
 			wantSent: map[string]any{
-				"position_type": "image", "width": float64(64), "height": float64(32), "x": 12.5, "y": float64(8),
+				"position_type": "image", "width": float64(64), "height": float64(32), "x": float64(12), "y": float64(8),
 				"new_line": nil, "old_line": nil,
 			},
+		},
+		{
+			name:     "image at a fraction of a pixel",
+			position: at(map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12.5, "y": 8}),
+			wantErr:  "position.x",
 		},
 		{
 			name:     "image at its top left corner",
@@ -1951,16 +2321,17 @@ func (c positionTypeCase) check(t *testing.T, g *positionTypeGitLab, err error) 
 
 // TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt holds
 // the position pre-check of mr_review.discussion_create to what GitLab reads
-// for each position_type. A text position, named or by default, is judged
-// against the lines of the merge request's diff. An image position is judged
-// by its width, height, x and y, and a file position by its old and new
-// paths, before any request and without reading the diff, since GitLab
-// places neither by a line. A position_type GitLab does not declare is left
-// to GitLab, which refuses it by name.
+// for each position_type. A text position, named or by default, needs a line
+// before anything is read, and is then judged against the lines of the merge
+// request's diff. An image position is judged by its width, height, x and y,
+// in whole pixels, and a file position by its old and new paths, before any
+// request and without reading the diff, since GitLab places neither by a
+// line. A position_type GitLab does not declare is left to GitLab, which
+// refuses it by name.
 //
-// On the parent every image and file case fails, and so does the undeclared
-// type: the pre-check read the diff for each and refused it as a text
-// position naming no line.
+// On the parent the three text positions naming no line are refused only
+// after the merge request and its diff are read, and the image at a fraction
+// of a pixel is sent as 12.5, which GitLab places at 12.
 func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testing.T) {
 	for _, tc := range positionTypeCases() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1971,6 +2342,90 @@ func TestCreate_EachPositionType_IsJudgedByTheFieldsGitLabRequiresForIt(t *testi
 				"project_id": testProjectID, "merge_request_iid": 1, "body": testRefactoringComment, "position": tc.position,
 			})
 			tc.check(t, gitlab, err)
+		})
+	}
+}
+
+// incompletePositionCase is a position, as a caller spells it, that GitLab
+// cannot complete, and the words its refusal names.
+type incompletePositionCase struct {
+	name     string
+	position map[string]any
+	wantErr  string
+}
+
+// incompletePositionCases lists, for each position_type GitLab declares and
+// for the text an unnamed type is sent as, a position complete in every
+// other part with one part of the anchor every type shares taken away: an
+// empty start_sha, a head_sha of blanks, or no path at all. It adds a text
+// position with its anchor and no line, the one part a text position needs
+// beyond it that is judged without the diff, and one on a negative line,
+// which no diff has.
+func incompletePositionCases() []incompletePositionCase {
+	types := []struct {
+		name   string
+		fields map[string]any
+	}{
+		{name: "text", fields: map[string]any{"position_type": "text", "new_line": 1}},
+		{name: "text by default", fields: map[string]any{"new_line": 1}},
+		{name: "image", fields: map[string]any{"position_type": "image", "width": 64, "height": 32, "x": 12, "y": 8}},
+		{name: "file", fields: map[string]any{"position_type": "file", "old_path": positionTypePath}},
+	}
+	breaks := []struct {
+		name    string
+		apply   func(position map[string]any)
+		wantErr string
+	}{
+		{name: "an empty start_sha", apply: func(p map[string]any) { p["start_sha"] = "" }, wantErr: "(missing: start_sha)"},
+		{name: "a head_sha of blanks", apply: func(p map[string]any) { p["head_sha"] = "  " }, wantErr: "(missing: head_sha)"},
+		{
+			name:    "no path",
+			apply:   func(p map[string]any) { delete(p, "new_path"); delete(p, "old_path") },
+			wantErr: "(missing: a path in new_path or old_path)",
+		},
+	}
+	var cases []incompletePositionCase
+	for _, typ := range types {
+		for _, br := range breaks {
+			position := map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath}
+			maps.Copy(position, typ.fields)
+			br.apply(position)
+			cases = append(cases, incompletePositionCase{name: typ.name + " with " + br.name, position: position, wantErr: br.wantErr})
+		}
+	}
+	return append(cases, incompletePositionCase{
+		name:     "text naming no line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath},
+		wantErr:  noLineRefusal,
+	}, incompletePositionCase{
+		name:     "text on a negative line",
+		position: map[string]any{"base_sha": "base", "start_sha": "start", "head_sha": "head", "new_path": positionTypePath, "old_line": -2},
+		wantErr:  "new_line and old_line are line numbers counted from 1 (got new_line 0, old_line -2)",
+	})
+}
+
+// TestCreate_IncompletePosition_IsRefusedBeforeAnyRequest holds
+// mr_review.discussion_create to the anchor GitLab completes every position
+// by (Position#complete?): the start and head commits of the diff and the
+// file's path, on every position type. A position missing one is refused in
+// words naming it, and nothing is sent, not even the read of the merge
+// request's diff, so the refusal holds where the diff cannot be read. GitLab
+// would answer the write with a 400 naming no field.
+//
+// On the parent every case sends a request: the image and file positions go
+// straight to the write, and a text position is judged only by the diff,
+// which a blank SHA skips and an unreadable merge request leaves to GitLab.
+func TestCreate_IncompletePosition_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, tc := range incompletePositionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err := discussionCreateRoute(t, client)(t.Context(), map[string]any{
+				"project_id": testProjectID, "merge_request_iid": 1, "body": testRefactoringComment, "position": tc.position,
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %v, want a refusal naming %q", err, tc.wantErr)
+			}
 		})
 	}
 }
@@ -2010,9 +2465,11 @@ func TestCreate_LineRange_SentWheneverEitherEndpointIsGiven(t *testing.T) {
 				ProjectID: testProjectID,
 				MRIID:     1,
 				Body:      testRefactoringComment,
+				// GitLab places a text position by its own line, the range's
+				// last, and a range does not stand in for it.
 				Position: &DiffPosition{
 					BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222",
-					NewPath: "main.go", LineRange: &tc.lineRange,
+					NewPath: "main.go", NewLine: 6, LineRange: &tc.lineRange,
 				},
 			}, func(body map[string]any) {
 				pos, ok := body["position"].(map[string]any)

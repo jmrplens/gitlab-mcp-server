@@ -10258,8 +10258,73 @@ func TestExecute_WithheldByScope_NamesEveryScopeTheCredentialLacks(t *testing.T)
 			if !strings.Contains(text, tc.want) || tc.absent != "" && strings.Contains(text, tc.absent) {
 				t.Errorf("Execute() error text = %q, want it to contain %q and not %q", text, tc.want, tc.absent)
 			}
-			if _, blank := registry.withheldByScope[""]; blank {
+			if registry.withheld.Holds("") {
 				t.Error("an entry with no key was recorded as withheld")
+			}
+		})
+	}
+}
+
+// TestExecute_TierPrunedParam_IsToldApartFromAnUnknownOne pins issue 1239 on
+// the dynamic surface: a param the action's tier left out of its schema is
+// answered with the tier it needs and the tier the session was built for,
+// rather than listed among "Unknown params" with near misses, which read as a
+// typo of a param this session can never send; a registry no tier was
+// recorded for answers without naming one, and a call sending a truly
+// unknown param still gets the unknown-param answer.
+func TestExecute_TierPrunedParam_IsToldApartFromAnUnknownOne(t *testing.T) {
+	routes := testRoutes(t)
+	route := routes["gitlab_project"]["hook_add"]
+	route.TierPruned = map[string]string{"weight": "premium"}
+	routes["gitlab_project"]["hook_add"] = route
+	catalog := actioncatalog.FromActionMaps(routes)
+	execute := func(t *testing.T, registry *Registry, params map[string]any) string {
+		t.Helper()
+		result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_add", Params: params})
+		if err != nil || result == nil || !result.IsError {
+			t.Fatalf("Execute() = %+v, %v; want a tool error", result, err)
+		}
+		return textContent(result)
+	}
+
+	detected := newCatalogRegistry(catalog, WithTierWithheld(nil, edition.Free, false))
+	const want = `gitlab_execute_action/project.hook_add: param "weight" needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free`
+	if text := execute(t, detected, map[string]any{"project_id": "1", "url": "https://example.com", "weight": 3}); !strings.HasPrefix(text, want) || strings.Contains(text, "Unknown params") {
+		t.Errorf("Execute() text = %q, want it to begin %q and list no unknown params", text, want)
+	}
+	untold := newCatalogRegistry(catalog)
+	if text := execute(t, untold, map[string]any{"project_id": "1", "url": "https://example.com", "weight": 3}); !strings.Contains(text, "this session's tier does not serve it") {
+		t.Errorf("Execute() text = %q, want the answer of a tier nothing recorded", text)
+	}
+	if text := execute(t, detected, map[string]any{"project_id": "1", "url": "https://example.com", "nonsense": 3}); !strings.Contains(text, "Unknown params: nonsense") {
+		t.Errorf("Execute() text = %q, want an unknown param still answered as unknown", text)
+	}
+}
+
+// TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken pins the
+// answer to a call for an action GitLab refuses to an OAuth access token on
+// every way (issue 1238): it exists, the credential in use is an OAuth token,
+// and the way out is a personal access token, which the caller can use, or
+// the operator on a deployment that refuses every personal access token; a
+// cross-link to it is published like any withheld action's.
+func TestExecute_WithheldByCredentialKind_NamesThePersonalAccessToken(t *testing.T) {
+	const want = `gitlab_execute_action: action "project.hook_add" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token`
+	for _, tc := range []struct {
+		name    string
+		refused bool
+		wayOut  string
+	}{
+		{name: "a deployment admitting personal access tokens", wayOut: "Authenticate with a personal access token"},
+		{name: "a deployment refusing them", refused: true, wayOut: "Ask the operator for a deployment that admits personal access tokens"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := newCatalogRegistry(narrowedCatalog(t), WithCredentialKindWithheld([]actioncatalog.ScopeWithheld{{ID: "project.hook_add"}}, tc.refused))
+			text := executeText(t, registry, "project.hook_add")
+			if !strings.HasPrefix(text, want) || !strings.Contains(text, tc.wayOut) || strings.Contains(text, "unknown action") {
+				t.Errorf("Execute() error text = %q, want it to begin %q and say %q", text, want, tc.wayOut)
+			}
+			if spelling, published := registry.publishableRelatedAction("project.hook_add"); !published || spelling != "project.hook_add" {
+				t.Errorf("publishableRelatedAction() = %q, %t, want the link kept", spelling, published)
 			}
 		})
 	}
@@ -10313,7 +10378,7 @@ func TestExecute_WithheldByTier_NamesTheTierAndAsksTheOperator(t *testing.T) {
 					t.Errorf("Execute() error text = %q, must not contain %q", text, unwanted)
 				}
 			}
-			if _, blank := registry.withheldByTier[""]; blank {
+			if registry.withheld.Holds("") {
 				t.Error("an entry with no key was recorded as withheld")
 			}
 		})
@@ -10608,28 +10673,6 @@ func TestSearch_RelatedActions_AreTheSameOnesDescribeWouldPublish(t *testing.T) 
 		return
 	}
 	t.Fatalf("Search() results = %+v, want widget.inspect among them", output.Results)
-}
-
-// TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes verifies how the withheld
-// list is indexed: each key is lowercased and trimmed, and a key that is blank
-// or only spaces is not indexed at all.
-//
-// The set is looked up with the lowercased action a caller asked for, so an
-// untrimmed key would never be found. A blank one is worse than useless: it
-// would answer a caller who sent an empty action with the withheld explanation
-// instead of the "action is required" refusal.
-func TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes(t *testing.T) {
-	set := withheldKeySet([]string{"  Project.Hook_Add ", "", "   "})
-
-	if _, ok := set["project.hook_add"]; !ok {
-		t.Errorf("withheldKeySet() = %v, want the normalized key indexed", set)
-	}
-	if len(set) != 1 {
-		t.Errorf("withheldKeySet() = %v, want the blank keys dropped", set)
-	}
-	if got := withheldKeySet(nil); got != nil {
-		t.Errorf("withheldKeySet(nil) = %v, want nil", got)
-	}
 }
 
 // TestRegistryShapeFor_SharedCatalogReusesOneShape verifies the split the

@@ -772,12 +772,12 @@ func TestSession_Actions_ListsWhatServesAnswersFor(t *testing.T) {
 // sends a call the session was configured not to serve, against the real
 // binary in read-only mode on all three surfaces.
 //
-// Each surface declines in its own shape, and each shape is what a client of
-// that surface would be told: the dynamic dispatcher names the action as
-// withheld and says by whom, the meta tool's schema no longer lists the
-// action among the ones its group has, and the individual surface never
-// registered the tool. The refusal never reaches GitLab, which is why the
-// stub behind this test can answer it.
+// Each shape is what a client of that surface would be told: the dynamic
+// dispatcher and the meta tool both name the action as withheld and say by
+// whom, the meta tool before its schema refuses an action its enum no longer
+// lists (issue 1282), and the individual surface never registered the tool.
+// The refusal never reaches GitLab, which is why the stub behind this test
+// can answer it.
 func TestWithheld_ReadOnlyMode_IsDeclinedOnEverySurface(t *testing.T) {
 	inst := stubInstance(t)
 
@@ -786,7 +786,7 @@ func TestWithheld_ReadOnlyMode_IsDeclinedOnEverySurface(t *testing.T) {
 		want    string
 	}{
 		{surface: SurfaceDynamic, want: "configured to withhold it"},
-		{surface: SurfaceMeta, want: "/properties/action"},
+		{surface: SurfaceMeta, want: "configured to withhold it"},
 		{surface: SurfaceIndividual, want: "unknown tool"},
 	}
 	for _, testCase := range cases {

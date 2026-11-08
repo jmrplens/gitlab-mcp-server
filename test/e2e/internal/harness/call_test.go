@@ -495,15 +495,20 @@ func TestIsTransportError_OnlyTheDroppedConnections(t *testing.T) {
 // Withheld accepts, which is one answer per surface and nothing else.
 //
 // The dispatchers refuse an action they have no route for as unknown, the
-// dynamic one with the withheld wording that classifies the same way, and the
-// individual surface answers a JSON-RPC error for a tool it never registered.
-// A GitLab 404 or a confirmation refusal is a different answer: the action
-// was served, so nothing was withheld.
+// dynamic one and a meta tool's group with the withheld wording that
+// classifies the same way, and the individual surface answers a JSON-RPC
+// error for a tool it never registered. The SDK's refusal of a meta call's
+// action as outside the tool's enum is accepted for an action the operator
+// excluded by name and for no other (issue 1282). A GitLab 404 or a
+// confirmation refusal is a different answer: the action was served, so
+// nothing was withheld.
 func TestWithheldAnswer_AcceptsTheThreeShapesASurfaceDeclinesIn(t *testing.T) {
+	enumRefusal := classify(errorResult(`validating "arguments": validating root: validating /properties/action: enum: create does not equal any of: [get list]`), nil)
 	cases := []struct {
-		name   string
-		answer callResult
-		want   bool
+		name     string
+		answer   callResult
+		excluded bool
+		want     bool
 	}{
 		{
 			name:   "unknown action from a dispatcher",
@@ -516,14 +521,31 @@ func TestWithheldAnswer_AcceptsTheThreeShapesASurfaceDeclinesIn(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "withheld with a reason from a meta tool's group",
+			answer: classify(errorResult(`gitlab_issue: action "create" exists but is not available: this deployment is configured to withhold it`), nil),
+			want:   true,
+		},
+		{
 			name:   "unregistered tool on the individual surface",
 			answer: classify(nil, errors.New(`unknown tool "gitlab_issue_create"`)),
 			want:   true,
 		},
 		{
-			name:   "action refused by the meta tool's schema",
-			answer: classify(errorResult(`validating "arguments": validating root: validating /properties/action: enum: create does not equal any of: [get list]`), nil),
-			want:   true,
+			name:     "an excluded action refused by the meta tool's schema",
+			answer:   enumRefusal,
+			excluded: true,
+			want:     true,
+		},
+		{
+			name:   "any other withheld action refused by the meta tool's schema",
+			answer: enumRefusal,
+			want:   false,
+		},
+		{
+			name:     "an excluded action's parameter refused by the schema",
+			answer:   classify(errorResult(`validating "arguments": validating root: validating /properties/params/properties/project_id: type mismatch`), nil),
+			excluded: true,
+			want:     false,
 		},
 		{
 			name:   "a parameter refused by the schema",
@@ -553,8 +575,8 @@ func TestWithheldAnswer_AcceptsTheThreeShapesASurfaceDeclinesIn(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := withheldAnswer(testCase.answer); got != testCase.want {
-				t.Errorf("withheldAnswer() = %t, want %t for %s", got, testCase.want, testCase.answer.describe())
+			if got := withheldAnswer(testCase.answer, testCase.excluded); got != testCase.want {
+				t.Errorf("withheldAnswer(excluded=%t) = %t, want %t for %s", testCase.excluded, got, testCase.want, testCase.answer.describe())
 			}
 		})
 	}
@@ -622,7 +644,7 @@ func TestClassify_FineGrainedRefusal_IsItsOwnClassOnBothPhases(t *testing.T) {
 			if answer.outcome != e2ecalls.RefusedOutcome(toolutil.RefusalFineGrained) {
 				t.Errorf("outcome = %q, want the server's own reason", answer.outcome)
 			}
-			if !withheldAnswer(answer) {
+			if !withheldAnswer(answer, false) {
 				t.Error("Withheld does not accept the refusal a fine-grained session is declined with")
 			}
 		})

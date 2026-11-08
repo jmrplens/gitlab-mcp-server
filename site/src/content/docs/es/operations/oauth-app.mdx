@@ -264,9 +264,29 @@ Así que **una aplicación prerregistrada con `api` o `read_api` es obligatoria*
 
 GitLab tampoco implementa los Client ID Metadata Documents (CIMD), el mecanismo que la especificación de autorización de MCP prefiere ahora al DCR, al que declara obsoleto. Está registrado aguas arriba en [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069).
 
-## Una acción que un token de acceso OAuth no puede ejecutar
+## Acciones que no se sirven a un token de acceso OAuth
 
-La ruta de GitLab para los ficheros de un paquete de modelo de ML autentica un token de acceso personal o un token de job de CI enviado como Bearer, y nada más. Un token de acceso OAuth no es ninguno de los dos, así que `model_registry.download` lo rechaza con `401` en todos los proyectos, públicos incluidos, y la respuesta del servidor a ese rechazo nombra este límite. Un token de acceso personal enviado como `Authorization: Bearer` sí funciona ahí, en el modo OAuth como en cualquier otro. Ninguna otra acción llega a una ruta que GitLab declare así.
+GitLab rechaza un token de acceso OAuth en unas pocas rutas, lleve los scopes que lleve, porque actúan sobre el propio token que llama o autentican solo un token de acceso personal. El servidor sabe que un token es de acceso OAuth por la descripción que el propio GitLab da de él (`/oauth/token/info`), y no sirve a esa sesión las acciones cuyas formas de ejecutarse envían todas una de esas rutas:
+
+| Acción                              | Qué responde GitLab a un token OAuth                                                                        |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `access.token_personal_revoke_self` | `400`: la ruta exige un token de acceso personal                                                            |
+| `access.token_personal_rotate_self` | `405`: solo un token de acceso personal puede rotarse a sí mismo                                            |
+| `access.token_group_rotate_self`    | `405`: solo un token de acceso de grupo, el token de acceso personal de un bot, puede rotarse a sí mismo    |
+| `access.token_project_rotate_self`  | `405`: solo un token de acceso de proyecto, el token de acceso personal de un bot, puede rotarse a sí mismo |
+| `model_registry.download`           | `401`: los ficheros de paquetes de modelos de ML autentican un token de acceso personal o un token de job   |
+
+No aparecen en el listado de ninguna superficie. Una llamada que nombra una se responde con la causa y no como desconocida en la superficie por defecto, a través de `gitlab_execute_action`, y en la superficie meta a través de `gitlab_access`, que conserva sus demás acciones:
+
+```text
+gitlab_execute_action: action "access.token_personal_rotate_self" exists but is not available to this session: GitLab answers what it sends only for a personal access token, and the credential in use is an OAuth access token, so a narrowed action surface was built for it. Authenticate with a personal access token, sent as the Bearer token, to use it; do not report the capability as missing.
+```
+
+La salida que indica depende de la credencial y del despliegue. A un token OAuth con `read_api` se le dice que el token de acceso personal debe llevar `api`, porque reautorizar el token OAuth con `api` daría otro token OAuth, que GitLab rechaza igual. Un despliegue que fija `--oauth-client-uid` rechaza en la puerta cualquier token de acceso personal, así que ninguna credencial que admite puede ejecutar estas acciones, y la respuesta pide en su lugar al operador un despliegue que admita tokens de acceso personal.
+
+En la superficie individual sus herramientas no se registran, y en la superficie meta tampoco `gitlab_model_registry`, cuya única acción es `model_registry.download`: una llamada que nombra una de esas herramientas se responde `unknown tool`, como la que nombra cualquier herramienta que el servidor no sirve.
+
+`access.token_personal_get` se sigue sirviendo: con `token_id` lee ese token, lo que GitLab sí sirve a un token OAuth, y sin él, que es como lee el token que llama, vuelve el `400` de GitLab con una pista para pasar el id. Un token de acceso personal enviado como `Authorization: Bearer` las recibe todas, en el modo OAuth como en cualquier otro, en un despliegue que lo admite, y un token cuyo tipo GitLab no describió de ninguna de las dos formas lo recibe todo.
 
 ## Duración de los tokens y caché de identidades
 

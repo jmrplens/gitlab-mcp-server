@@ -108,7 +108,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_mr_discussion_create":
-		options.Usage = "Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners."
+		options.Usage = "Open a new discussion thread on a merge request. Provide a position to attach an inline comment to a line of the diff, a point of an image or a whole file, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_mr_discussion_create", "create merge request discussion", "comment on merge request diff", "start MR review thread"}
 		options.RelatedActions = []string{actionDiscussionReply, actionDiscussionList, actionMRChangesGet, actionMRNoteCreate}
 		options.ParameterGuidance = mrScopeGuidance()
@@ -119,9 +119,9 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion.",
-			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
-			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line."},
+			ValueSource:      "Diff anchor. base_sha, start_sha and head_sha are the diff_refs of merge_request.get, and the file's old_path and new_path and the line come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha. Omit for a general discussion.",
+			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","old_path":"main.go","new_path":"main.go","new_line":12}`,
+			CommonConfusions: []string{"Every position needs start_sha and head_sha from the MR diff refs and the file's path. Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position. By position_type: text (the default) also needs a line of the MR diff (new_line for an added line, old_line for a removed one, both for an unchanged one), image needs width, height, x and y in whole pixels and no line, and file needs both old_path and new_path and no line. Omit position entirely for a thread that is not tied to the diff."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes_get."
 		// Position vocabularies from https://docs.gitlab.com/api/discussions/

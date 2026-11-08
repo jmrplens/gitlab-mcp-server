@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,439 |
-| Unit test functions                                   | 21,733 |
-| E2E test functions                                    |  1,706 |
-| cmd test functions                                    |  5,812 |
-| Test files (internal/)                                |    751 |
-| Test files (cmd/)                                     |    473 |
-| Test files (test/e2e/)                                |    438 |
+| Total test functions                                  | 23,605 |
+| Unit test functions                                   | 21,892 |
+| E2E test functions                                    |  1,713 |
+| cmd test functions                                    |  5,886 |
+| Test files (internal/)                                |    759 |
+| Test files (cmd/)                                     |    480 |
+| Test files (test/e2e/)                                |    442 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     35 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,714 | 58.5% |
+| `TestFunc_Scenario` (2-part)           | 13,738 | 58.2% |
 | `TestFunc` (no underscore)             |    901 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  8,824 | 37.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  8,966 | 38.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,230 |        259 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            439 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,252 |        476 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,706 |        438 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          5,812 |        473 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,439** |  **1,662** |                                                                                                 |
+| Core packages           |          4,247 |        262 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (181) |         11,306 |        480 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,713 |        442 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          5,886 |        480 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,605** |  **1,681** |                                                                                                 |
 
 ### Core Packages
 
@@ -63,21 +63,21 @@
 | clientcompat             |        25 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                                                                                             |
 | cmdutil                  |        11 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                                                                                           |
 | completions              |       129 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
-| config                   |       118 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
+| config                   |       119 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition                  |         9 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
 | elicitation              |       158 |   100.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
-| finegrained              |        63 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
+| finegrained              |        64 |   100.0% | Package finegrained holds what a fine-grained personal access token needs for each catalog action, and the decision this server takes on it.                                                                                                                                                                                        |
 | freshness                |         7 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
 | gatewaycompat            |        21 |   100.0% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.                                                                  |
 | gitlab                   |       257 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                                                                             |
 | graphqlschema            |        28 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                                                                                    |
 | i18n                     |        45 |   100.0% | Package i18n holds the texts this server shows a person directly, in every language it serves them in, and renders them in the language a request carries (issue 1547).                                                                                                                                                             |
 | mcpotel                  |       121 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                                                                                |
-| oauth                    |       113 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
+| oauth                    |       114 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                                                                             |
 | progress                 |        23 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                                                                                       |
-| prompts                  |       387 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
+| prompts                  |       388 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
 | resources                |       240 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
-| serverpool               |       193 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
+| serverpool               |       194 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
 | sourcewalk               |         9 |   100.0% | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
 | subscriptions            |       114 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry                |       152 |   100.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
@@ -92,16 +92,16 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,386 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,230** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,398 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,247** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   507 |   100.0% |    57 |
+| projects          |   518 |   100.0% |    57 |
 | mergerequests     |   349 |   100.0% |    30 |
-| dynamic           |   327 |   100.0% |     2 |
+| dynamic           |   328 |   100.0% |     2 |
 | groups            |   327 |   100.0% |    37 |
 | issues            |   298 |   100.0% |    21 |
 | users             |   275 |   100.0% |    38 |
@@ -135,7 +135,7 @@
 | accessrequests          |         66 |          4 |   100.0% |         8 |
 | accesstokens            |        110 |          2 |   100.0% |        18 |
 | achievements            |         67 |          3 |   100.0% |        12 |
-| actioncatalog           |         75 |          8 |   100.0% |         0 |
+| actioncatalog           |         82 |         10 |   100.0% |         0 |
 | actioncompat            |         61 |          3 |   100.0% |         1 |
 | actiongrants            |          6 |          1 |   100.0% |         0 |
 | adminspecs              |         18 |          1 |   100.0% |        92 |
@@ -158,7 +158,7 @@
 | civariables             |         53 |          2 |   100.0% |         5 |
 | ciyamltemplates         |         26 |          1 |   100.0% |         2 |
 | clusteragents           |         38 |          4 |   100.0% |         8 |
-| commitdiscussions       |         52 |          3 |   100.0% |         6 |
+| commitdiscussions       |         57 |          3 |   100.0% |         6 |
 | commits                 |        155 |          4 |   100.0% |        13 |
 | compliancepolicy        |         10 |          1 |   100.0% |         2 |
 | containerregistry       |        125 |          4 |   100.0% |        16 |
@@ -174,7 +174,7 @@
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
 | dorametrics             |         17 |          2 |   100.0% |         2 |
-| dynamic                 |        327 |          9 |   100.0% |         2 |
+| dynamic                 |        328 |          9 |   100.0% |         2 |
 | dynamiccatalog          |         14 |          1 |   100.0% |         0 |
 | elicitationtools        |         75 |          2 |   100.0% |         4 |
 | enterpriseusers         |         41 |          3 |   100.0% |         4 |
@@ -248,8 +248,8 @@
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
 | mrchanges               |         49 |          2 |   100.0% |         4 |
 | mrcontextcommits        |         40 |          3 |   100.0% |         3 |
-| mrdiscussions           |         70 |          1 |   100.0% |         7 |
-| mrdraftnotes            |         83 |          3 |   100.0% |         7 |
+| mrdiscussions           |         78 |          1 |   100.0% |         7 |
+| mrdraftnotes            |         98 |          3 |   100.0% |         7 |
 | mrnotes                 |         51 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         40 |          2 |   100.0% |         6 |
@@ -265,7 +265,7 @@
 | projectimportexport     |         55 |          2 |   100.0% |         5 |
 | projectiterations       |         24 |          3 |   100.0% |         1 |
 | projectmirrors          |         76 |          2 |   100.0% |         7 |
-| projects                |        507 |          9 |   100.0% |        57 |
+| projects                |        518 |          9 |   100.0% |        57 |
 | projectserviceaccounts  |         28 |          2 |   100.0% |         9 |
 | projectstatistics       |         12 |          2 |   100.0% |         1 |
 | projectstoragemoves     |         31 |          2 |   100.0% |         6 |
@@ -301,7 +301,7 @@
 | tags                    |         84 |          2 |   100.0% |         9 |
 | terraformstates         |         43 |          1 |   100.0% |         6 |
 | todos                   |         48 |          4 |   100.0% |         3 |
-| toolvisibility          |         24 |          2 |   100.0% |         0 |
+| toolvisibility          |         31 |          4 |   100.0% |         0 |
 | topics                  |         28 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
 | usagedata               |         37 |          1 |   100.0% |         6 |
@@ -313,7 +313,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        141 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,252** |    **476** |          | **1,195** |
+| **Total**               | **11,306** |    **480** |          | **1,195** |
 
 </details>
 
@@ -415,6 +415,7 @@
 | cmd/internal/sourcegate                   |   100.0% |
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
+| cmd/merge_coverage                        |      n/a |
 | cmd/release_checks                        |   100.0% |
 | cmd/release_packages                      |   100.0% |
 | cmd/reproduce_release                     |   100.0% |
@@ -712,7 +713,7 @@ All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
 - `test/e2e/scripts/docker-images.sh`: holds the GitLab and runner images to the images their tags name today, pulling only a newer one
-- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, and names the scenario its final pass runs last
+- `test/e2e/scripts/skip-gate.sh`: hands a complete run's `go test -json` streams to the skip gate, settles what a complete run is started with or refused for, names the scenario its final pass runs last, and stamps the sources each pass of a complete run measures, keeping the stamp only once the run ended complete
 - `test/e2e/scripts/gitlab-exceptions.sh`: copies GitLab's exceptions log into the reports before the teardown deletes it
 
 ```bash

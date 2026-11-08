@@ -95,6 +95,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update)
   - [Eight update option structs cannot send the null or the empty list that clears a field](#eight-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field)
   - [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer)
+  - [PositionOptions types the image coordinates as floats, and NotePosition carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
   - [A nil SearchOptions panics in every search method but one](#a-nil-searchoptions-panics-in-every-search-method-but-one)
   - [The Link header parser reads rel only from the first parameter](#the-link-header-parser-reads-rel-only-from-the-first-parameter)
@@ -181,6 +182,7 @@ for the fork, branch, fix, test and MR workflow.
   - [A project update that sends only `mirror_branch_regex` is refused as sending nothing](#a-project-update-that-sends-only-mirror_branch_regex-is-refused-as-sending-nothing)
   - [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends)
   - [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept)
+  - [A draft note update needs its body, and before 19.5 clears a position it is not sent](#a-draft-note-update-needs-its-body-and-before-195-clears-a-position-it-is-not-sent)
 - [GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)](#gitlab-orbit-gitlab-orgorbitknowledge-graph)
   - [The DSL schema says a path query may omit `rel_types`](#the-dsl-schema-says-a-path-query-may-omit-rel_types)
   - [The DSL schema says the default neighbors direction is `both`](#the-dsl-schema-says-the-default-neighbors-direction-is-both)
@@ -357,7 +359,7 @@ readable without opening the tracker:
 | 87 | gitlab-org/gitlab | [GraphQL types and mutations this server reaches declare no fine-grained permission](#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission) | GitLab tracks them on its own pending list, and plans part of them in [gitlab-org/gitlab#631631](https://gitlab.com/gitlab-org/gitlab/-/issues/631631), moved to milestone 19.7 on 2026-10-27; nothing raised by us | Partly. Ours: [gitlab-org/gitlab!266025](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266025) for `QuickActionsStatus`, merged, and [gitlab-org/gitlab!266080](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266080) for `UserAchievement`, open; for types below the table's lines, [gitlab-org/gitlab!266046](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266046), [gitlab-org/gitlab!266059](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266059) and [gitlab-org/gitlab!266028](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266028), merged. Theirs: another contributor's for `CustomEmoji`, [gitlab-org/gitlab!260586](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260586), merged; GitLab's own for `Namespace` and `WorkItemSavedViewType`, [gitlab-org/gitlab!261599](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261599), merged, and for `WorkItemType`, [gitlab-org/gitlab!251840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251840), merged | **Partly**: in **19.5.0**, the `CustomEmoji` entry, by another contributor, one of five on the table's second line, which this server's table adopted when the live record was taken from 19.5.0-ee; unreleased, `Namespace` (merged on 2026-10-29) and ours for `QuickActionsStatus` (merged on 2026-10-30), both in milestone 19.6 and deployed to GitLab.com | Yes, for a fine-grained token: 36 of the 55 actions of 1103 withheld at 19.5.0 (phase A), 8 served with parts empty | Withheld with the reason, and a note on the parts; [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054) |
 | 88 | gitlab-org/gitlab | [A declared mutation whose payload type declares nothing commits the write and answers null](#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null) | No; a merge request proposing a visible error is written and goes out after a second review of its text | Yes, partly. Ours for `Achievement` and `UserAchievement`, [gitlab-org/gitlab!266080](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/266080), open; GitLab's for `WorkItemType`, [gitlab-org/gitlab!251840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/251840), and for `WorkItemSavedViewType`, [gitlab-org/gitlab!261599](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/261599), both merged | **Partly, unreleased**: `WorkItemType` and `WorkItemSavedViewType`, merged on 2026-10-26 and 2026-10-29 in milestone 19.6 and deployed to GitLab.com; the 19.5.0 table still withholds their six writes | Yes, for a fine-grained token, on 19 writes | Withheld with the reason; the handlers answer such a write as probably committed for a table that stops withholding one, and eight served writes whose object a grant can leave out answer so today |
 | 89 | gitlab-org/gitlab | [WorkItem declares the project boundary only, so a group's work item is null to a fine-grained token](#workitem-declares-the-project-boundary-only-so-a-groups-work-item-is-null-to-a-fine-grained-token) | Yes, by another user, [gitlab-org/gitlab#630483](https://gitlab.com/gitlab-org/gitlab/-/issues/630483) | Yes, [gitlab-org/gitlab!259765](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259765), merged; the issue it closes was closed as completed on 2026-10-12 | **Yes, 19.5.0**: merged on 2026-10-11 before the 19.5 cut, although its milestone says 19.6 | No longer: the permission table is taken from 19.5.0-ee, and the epic actions are withheld by `Namespace` (row 87) and `WorkItemType` (row 88) instead, both declared on `master` for 19.6 | Retired |
-| 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself |
+| 90 | gitlab-org/gitlab | [The pending-permission check exempts every type named `*Edge` or `*Payload`](#the-pending-permission-check-exempts-every-type-named-edge-or-payload) | Yes, by the merge request | Yes, [gitlab-org/gitlab!260959](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/260959), merged | **Yes, unreleased**: merged on 2026-10-15 in milestone 19.6 and deployed to GitLab.com at 13:47 UTC that day | No | Not needed; the live record computes the undeclared set itself, with the image's own rule, so a record taken from 19.6 tells the generated types apart by class as GitLab's list does |
 | 91 | gitlab-org/gitlab | [`available_for_permission` ignores `available_for`](#available_for_permission-ignores-available_for) | No | No | No | No | Not needed; the live record names the first permission a token can be granted |
 | 92 | gitlab-org/gitlab | [The REST API page does not say a non-GET request to a moved project's old path is answered 405](#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405) | Yes, by the merge request | Yes, [gitlab-org/gitlab!259297](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/259297), merged | **Yes, 19.5.0** | No | Yes, since [issue 1133](https://github.com/jmrplens/gitlab-mcp-server/issues/1133): the refusal is described and names the retry with the ID |
 | 93 | client-go | [`OrbitGraphStatusProjects` does not model the projects the indexer gave up on](#orbitgraphstatusprojects-does-not-model-the-projects-the-indexer-gave-up-on) | No | No | No | No | Was yes; the handler reads GraphQL since GitLab.com removed the route (row 148) |
@@ -426,6 +428,8 @@ readable without opening the tracker:
 | 156 | gitlab-org/gitlab | [A service account update with an empty email keeps the address, as GitLab intends](#a-service-account-update-with-an-empty-email-keeps-the-address-as-gitlab-intends) | Not needed: GitLab drops a blank value on purpose since [gitlab-org/gitlab!215942](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215942), merged on 2025-12-15; unsetting the address is another user's open feature request, [gitlab-org/gitlab#631255](https://gitlab.com/gitlab-org/gitlab/-/issues/631255) | No, and none is coming from here | No, works as intended upstream | No | None needed: the three service account updates send `email` only when it is set |
 | 157 | gitlab-org/gitlab | [The job token allowlist writes refuse a project path their page says they accept](#the-job-token-allowlist-writes-refuse-a-project-path-their-page-says-they-accept) | No; a fix is to be prepared, and its merge request is linked here when opened | No | No | No | Yes, the four allowlist writes take `project_id` as the numeric ID alone |
 | 158 | client-go | [Eighteen methods take an int64 where GitLab takes a name or a path](#eighteen-methods-take-an-int64-where-gitlab-takes-a-name-or-a-path) | No | No | No | No | Yes, `admin.custom_attr_*` and the six `storage_move.*` actions that name a project or a group read a name into its ID with one more request first |
+| 159 | client-go | [`PositionOptions` types the image coordinates as floats, and `NotePosition` carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields) | No | No | No | No | Yes, the three merge request position writes take `x` and `y` as integers and convert them, and the commit discussion create refuses an image position before the request |
+| 160 | gitlab-org/gitlab | [A draft note update needs its body, and before 19.5 clears a position it is not sent](#a-draft-note-update-needs-its-body-and-before-195-clears-a-position-it-is-not-sent) | The position half yes, by another user, [gitlab-org/gitlab#631434](https://gitlab.com/gitlab-org/gitlab/-/work_items/631434), closed; the body half no | The position half yes, theirs, [gitlab-org/gitlab!258695](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258695), merged; the body half no | The position half **yes, 19.5.0**; the body half no | No | Yes, `mr_review.draft_note_update` reads the draft first and sends back its body when only a position is given, and its position when only a body is given to an instance not known to run 19.5 or later |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -8000,6 +8004,54 @@ request option of their own.
 
 **Effort**: small: the type of three fields, the same change client-go made
 on the list options.
+
+### PositionOptions types the image coordinates as floats, and NotePosition carries no image fields
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no. v3.43.0, and `main` as of 2026-11-04, carry the same
+  types.
+- **Blocking**: no.
+- **Workaround**: yes. `mr_review.discussion_create`,
+  `mr_review.draft_note_create` and `mr_review.draft_note_update` take `x`
+  and `y` as integers, publish them as `integer` and convert each with
+  `toolutil.ImageCoordinate`, so a fraction is refused when the params are
+  read. `repository.commit_discussion_create` refuses an image position
+  before the request. The first retires when the two fields take an
+  `*int64`, the second when the commit discussion's position models the
+  four image fields.
+
+**Where**: `discussions.go`, `PositionOptions.X` and `PositionOptions.Y`,
+each `*float64` beside the `*int64` `Width` and `Height`, sent as
+`position[x]` and `position[y]` by `CreateMergeRequestDiscussionOptions`
+to `POST /projects/:id/merge_requests/:merge_request_iid/discussions`, and
+by `CreateDraftNoteOptions` and `UpdateDraftNoteOptions` (`draft_notes.go`)
+to `POST /projects/:id/merge_requests/:merge_request_iid/draft_notes` and
+`PUT /projects/:id/merge_requests/:merge_request_iid/draft_notes/:draft_note_id`.
+And `CreateCommitDiscussionOptions.Position`, a `*NotePosition`
+(`notes.go`), which has no `Width`, `Height`, `X` or `Y`, sent to
+`POST /projects/:id/repository/commits/:commit_id/discussions`.
+
+**What**: GitLab declares `x` and `y` as `Integer` in the position params of
+`lib/api/discussions.rb`, for merge request and commit discussions alike,
+and of `lib/api/draft_notes.rb`, beside `width` and `height`. Grape coerces
+a JSON 12.5 to 12 with no error, so a caller of client-go that passes a
+fraction has its comment placed at the whole pixel below, and nothing in the
+option's type says that only whole pixels exist. The commit discussion
+route declares the same four image params, and GitLab completes an image
+position only with all four (`Gitlab::Diff::Formatters::ImageFormatter#complete?`),
+so no image position on a commit can be completed through client-go: GitLab
+answers the write with a 400 saying the position is incomplete.
+
+**How we found it**: issue 1692, which held the inline position tools to
+`Gitlab::Diff::Position`, its formatters and the Grape declarations after
+issue 1531.
+
+**Effort**: small. The type of two fields, a breaking change for callers that
+build the options, so it waits for a major version or a parallel field; and
+the four image fields on the commit discussion's position, either on
+`NotePosition`, which also decodes responses, or by having the commit
+discussion options take a `PositionOptions` instead.
 
 ### Three option structs carry a timestamp parameter as a date
 
@@ -15978,7 +16030,15 @@ resolves no boundary, which the merge request leaves as a separate question.
 - **Workaround**: not needed. `cmd/gen_api_live` records which types GitLab
   enforces and which declare a fine-grained permission, and the derivation
   reads that rather than GitLab's list, so these three would be judged like
-  any other undeclared type.
+  any other undeclared type. The undeclared set the record holds beside the
+  list is computed with the image's own `graphql_object_type?`, which
+  `cmd/gen_api_live/introspect.rb` loads from the image and calls rather than
+  copies, keeping the rule by name only when the image ships no such method
+  or one that does not take a name and a type
+  ([issue 1492](https://github.com/jmrplens/gitlab-mcp-server/issues/1492)):
+  the record taken from 19.5.0 leaves the three out as that release's list
+  does, and one taken from 19.6 or later computes them, as the list GitLab
+  ships from then on names them, with no change to the script at the re-pin.
 
 **Where**: `graphql_object_type?` in
 `lib/tasks/gitlab/permissions/graphql/schema_directives.rb` at `v19.4.1-ee`,
@@ -17386,6 +17446,78 @@ does, and a call that followed them was refused by GitLab after it was sent.
 **How we found it**: the cases MT-066 and MS-005 of the model evaluation, whose
 `fake:perfect` replay failed its recipe check on 2026-11-01 because the
 removal had been refused.
+
+### A draft note update needs its body, and before 19.5 clears a position it is not sent
+
+- **Reported**: the position half yes, by another user,
+  [gitlab-org/gitlab#631434](https://gitlab.com/gitlab-org/gitlab/-/work_items/631434)
+  ("Draft notes API: updating a draft note without position wipes its diff
+  position"), opened on 2026-09-30 and closed on 2026-10-07 by the merge
+  below. The body half no: searched on 2026-11-06, no issue or merge request
+  upstream is about the route refusing an update without the body it
+  declares optional.
+- **In review**: the position half yes, theirs,
+  [gitlab-org/gitlab!258695](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258695)
+  ("Keep the draft note position when updating only its text"), with a
+  request spec for each case and the page's `position` row saying an omitted
+  position is kept. The body half no.
+- **Merged**: the position half **yes, 19.5.0**: merged on 2026-10-06 in
+  milestone 19.5 and carried by every tag from `v19.5.0-ee` on, read on
+  2026-11-06, with no backport to `19-4-stable-ee`. The body half no: GitLab
+  master `48872033a236` (2026-11-06) still refuses an update without a body.
+- **Blocking**: no.
+- **Workaround**: yes, in `mr_review.draft_note_update`
+  (`internal/tools/mrdraftnotes/mr_draft_notes.go`, `Update` and
+  `currentDraft`). A position sent alone goes with the body the draft has,
+  read from the draft first, on every release. A body sent alone to an
+  instance not known to run 19.5 or later (`Client.AtLeast`) goes with the
+  position the draft has, read the same way and decoded from the captured
+  response, since client-go's `NotePosition` carries no image fields (row
+  159); a position with no start or head commit or no file, which GitLab
+  publishes as a general comment whatever it carries, is not sent back. A
+  call naming neither is refused before any request, and the action's
+  catalog entry states the alternative as `SchemaAnyOfRequired`. The
+  position half retires when 19.5 is the oldest release this server serves,
+  and the body half when the route keeps a body it is not sent.
+
+**Where**: `PUT /projects/:id/merge_requests/:merge_request_iid/draft_notes/:draft_note_id`
+(`lib/api/draft_notes.rb`) declares `optional :note` (line 214 at
+`v19.4.0-ee`, 215 at `v19.5.0-ee`) and its first statement is
+`bad_request!('Missing params to modify') unless params[:note].present?`
+(line 219, and 220). Up to 19.4 it then called the draft's `update!` with
+`note: params[:note], position: params[:position]` (line 226 at
+`v19.4.0-ee`), and an absent `position` is nil there;
+`DiffPositionableNote#position=` stores nil for anything that is not a hash
+or a position (`app/models/concerns/diff_positionable_note.rb`). From 19.5 the
+route sets the position only when one is sent
+(`draft_note.position = params[:position] if params[:position].present?`,
+line 229 at `v19.5.0-ee`). `doc/api/draft_notes.md` lists `note` as not
+required on the route, at master as at both tags.
+
+**What**: an update that sends only `note` to 19.4 or earlier answers `200`
+with the draft's position emptied. `DraftNote#on_diff?` is
+`position&.complete?`, which is then false, so the draft is published as a
+general comment, off the line it was written for. The issue above reproduced
+it on gitlab.com on 2026-09-30, before the merge, with a single-line draft
+and a `line_range` one, and found four drafts of a review on
+gitlab-org/editor-extensions/gitlab-lsp that had lost their positions that
+way. An update that sends only `position` is refused on every release with
+`400 {"message":"400 Bad request - Missing params to modify"}`. Neither was
+measured against an instance here; both are read from the source at the tags
+named above.
+
+**What it costs this server**: before the workaround, a body edit of an
+inline draft on 19.4 or earlier lost the draft's line without a word, and a
+move of a draft that named no body was judged by the position check, which
+reads the merge request and its diff, and then refused by GitLab. With it, a
+body sent alone to an instance whose release is not known, or is before 19.5,
+and every position sent alone, costs one more read of the draft.
+
+**How we found it**: reviewing the position checks of
+[pull request 1760](https://github.com/jmrplens/gitlab-mcp-server/pull/1760)
+against GitLab's source on 2026-11-06, where `mr_review.draft_note_update`
+said it edited "the body or inline position" and sent whichever the caller
+gave alone; the upstream issue and its merge request were found the same day.
 
 ## GitLab Orbit (`gitlab-org/orbit/knowledge-graph`)
 

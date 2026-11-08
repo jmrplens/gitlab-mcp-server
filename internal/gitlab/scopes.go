@@ -43,6 +43,13 @@ type TokenFacts struct {
 	// served as a classic one is served every action, the ones no grant reaches
 	// among them.
 	KindUnknown bool
+	// OAuth is set for an OAuth access token, which only the OAuth verifier
+	// can say: it is the one that asks /oauth/token/info, which describes
+	// such a token and nothing else, while the self endpoint answers only for
+	// a personal access token. The entry is then not served the actions
+	// GitLab refuses to an OAuth token on every way ([config.ServerConfig]
+	// OAuthCredential, issue 1238).
+	OAuth bool
 }
 
 // DetectToken asks the GitLab personal access token self endpoint what the

@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -44,6 +45,22 @@ const (
 type ToolActions struct {
 	single map[string]string
 	groups map[string]toolGroup
+	// withheldKeys and withheld are what [ToolActions.Withhold] attached on a
+	// meta surface: every action argument a meta tool's actions answer to,
+	// mapped to its canonical ID, and the record of what the session's
+	// configuration withheld. Both are nil until then, and on every other
+	// surface.
+	withheldKeys map[string]map[string]string
+	withheld     *actioncatalog.Withheld
+	// singleRoutes are the routes of the individual surface's tools, by tool
+	// name, which a call's params are held to the served schema of before the
+	// SDK validates them (issue 1239); tier and tierPinned are the tier the
+	// server was built for and whether an operator pinned it, which
+	// [ToolActions.ServedAt] records, tierKnown false until it does.
+	singleRoutes map[string]toolutil.ActionRoute
+	tier         edition.Tier
+	tierPinned   bool
+	tierKnown    bool
 }
 
 // toolGroup is one meta tool: the routes its action argument names, and the
@@ -64,7 +81,7 @@ type toolGroup struct {
 // nothing is mapped, since a call names its action through gitlab_execute_action,
 // which decides in its own handler.
 func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions {
-	actions := &ToolActions{single: map[string]string{}, groups: map[string]toolGroup{}}
+	actions := &ToolActions{single: map[string]string{}, groups: map[string]toolGroup{}, singleRoutes: map[string]toolutil.ActionRoute{}}
 	switch surface {
 	case config.ToolSurfaceIndividual:
 		identifier := gitlabtools.NewServedCallIdentifier(catalog, surface)
@@ -74,6 +91,9 @@ func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions
 			name := strings.TrimSpace(action.IndividualTool.Name)
 			if identity, known := identifier.Identify(name, nil); known {
 				actions.single[name] = identity.ActionID
+				if identity.ActionID == string(action.ID) {
+					actions.singleRoutes[name] = action.Route
+				}
 			}
 		}
 	case config.ToolSurfaceMeta:
@@ -90,6 +110,40 @@ func NewToolActions(surface string, catalog *actioncatalog.Catalog) *ToolActions
 	}
 	maps.Copy(actions.single, gitlabtools.StandaloneActionIDs())
 	return actions
+}
+
+// KeepRegistered narrows the index to the tools the server holds, registered,
+// as the server lists them once [Apply] has removed what it removes, and
+// returns it. A nil index is returned as it came.
+//
+// The index is built from the catalog the server registered from, and on the
+// individual surface that catalog still carries every write when the
+// deployment is read-only, which [Apply] withholds by removing the registered
+// tools afterwards. An index left with them answered calls for tools the
+// server did not serve: a call sending a param the tier pruned was refused
+// with the tier it needs and told to send the call without it, which the SDK
+// then answered as an unknown tool (issue 1239), and a fine-grained session's
+// call was answered with GitLab's permission rather than as unknown. The
+// standalone utilities are mapped by name whether or not they were
+// registered, and are narrowed the same way.
+func (t *ToolActions) KeepRegistered(registered []*mcp.Tool) *ToolActions {
+	if t == nil {
+		return nil
+	}
+	names := make(map[string]struct{}, len(registered))
+	for _, tool := range registered {
+		if tool != nil {
+			names[tool.Name] = struct{}{}
+		}
+	}
+	unregistered := func(name string) bool {
+		_, kept := names[name]
+		return !kept
+	}
+	maps.DeleteFunc(t.single, func(name, _ string) bool { return unregistered(name) })
+	maps.DeleteFunc(t.singleRoutes, func(name string, _ toolutil.ActionRoute) bool { return unregistered(name) })
+	maps.DeleteFunc(t.groups, func(name string, _ toolGroup) bool { return unregistered(name) })
+	return t
 }
 
 // ActionIDs returns, for each tool that runs catalog actions, their canonical

@@ -732,31 +732,31 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 
 ## `mr_review`
 
-| Action                             | Needs                                                                                  | Served empty |
-| ---------------------------------- | -------------------------------------------------------------------------------------- | ------------ |
-| `mr_review.changes_get`            | Merge Request: Read at project                                                         |              |
-| `mr_review.diff_version_get`       | Merge Request: Read at project                                                         |              |
-| `mr_review.diff_versions_list`     | Merge Request: Read at project                                                         |              |
-| `mr_review.discussion_create`      | Merge Request: Create at project. Some calls also need: Merge Request: Read at project |              |
-| `mr_review.discussion_get`         | Merge Request: Read at project                                                         |              |
-| `mr_review.discussion_list`        | Merge Request: Read at project                                                         |              |
-| `mr_review.discussion_note_delete` | Merge Request: Delete at project                                                       |              |
-| `mr_review.discussion_note_update` | Merge Request: Update at project                                                       |              |
-| `mr_review.discussion_reply`       | Merge Request: Create at project                                                       |              |
-| `mr_review.discussion_resolve`     | Merge Request: Update at project                                                       |              |
-| `mr_review.draft_note_create`      | Merge Request: Update at project. Some calls also need: Merge Request: Read at project |              |
-| `mr_review.draft_note_delete`      | Merge Request: Update at project                                                       |              |
-| `mr_review.draft_note_get`         | Merge Request: Read at project                                                         |              |
-| `mr_review.draft_note_list`        | Merge Request: Read at project                                                         |              |
-| `mr_review.draft_note_publish`     | Merge Request: Update at project                                                       |              |
-| `mr_review.draft_note_publish_all` | Merge Request: Update at project                                                       |              |
-| `mr_review.draft_note_update`      | Merge Request: Update at project. Some calls also need: Merge Request: Read at project |              |
-| `mr_review.note_create`            | Work Item: Create at project                                                           |              |
-| `mr_review.note_delete`            | Work Item: Delete at project                                                           |              |
-| `mr_review.note_get`               | Work Item: Read at project                                                             |              |
-| `mr_review.note_list`              | Work Item: Read at project                                                             |              |
-| `mr_review.note_update`            | Work Item: Update at project                                                           |              |
-| `mr_review.raw_diffs`              | Merge Request: Read at project                                                         |              |
+| Action                             | Needs                                                                                                              | Served empty |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `mr_review.changes_get`            | Merge Request: Read at project                                                                                     |              |
+| `mr_review.diff_version_get`       | Merge Request: Read at project                                                                                     |              |
+| `mr_review.diff_versions_list`     | Merge Request: Read at project                                                                                     |              |
+| `mr_review.discussion_create`      | Merge Request: Create at project. Some calls also need: Merge Request: Read at project                             |              |
+| `mr_review.discussion_get`         | Merge Request: Read at project                                                                                     |              |
+| `mr_review.discussion_list`        | Merge Request: Read at project                                                                                     |              |
+| `mr_review.discussion_note_delete` | Merge Request: Delete at project                                                                                   |              |
+| `mr_review.discussion_note_update` | Merge Request: Update at project                                                                                   |              |
+| `mr_review.discussion_reply`       | Merge Request: Create at project                                                                                   |              |
+| `mr_review.discussion_resolve`     | Merge Request: Update at project                                                                                   |              |
+| `mr_review.draft_note_create`      | Merge Request: Update at project. Some calls also need: Merge Request: Read at project                             |              |
+| `mr_review.draft_note_delete`      | Merge Request: Update at project                                                                                   |              |
+| `mr_review.draft_note_get`         | Merge Request: Read at project                                                                                     |              |
+| `mr_review.draft_note_list`        | Merge Request: Read at project                                                                                     |              |
+| `mr_review.draft_note_publish`     | Merge Request: Update at project                                                                                   |              |
+| `mr_review.draft_note_publish_all` | Merge Request: Update at project                                                                                   |              |
+| `mr_review.draft_note_update`      | Merge Request: Update at project. Some calls also need: Metadata: Read at instance; Merge Request: Read at project |              |
+| `mr_review.note_create`            | Work Item: Create at project                                                                                       |              |
+| `mr_review.note_delete`            | Work Item: Delete at project                                                                                       |              |
+| `mr_review.note_get`               | Work Item: Read at project                                                                                         |              |
+| `mr_review.note_list`              | Work Item: Read at project                                                                                         |              |
+| `mr_review.note_update`            | Work Item: Update at project                                                                                       |              |
+| `mr_review.raw_diffs`              | Merge Request: Read at project                                                                                     |              |
 
 ## `orbit`
 
@@ -987,7 +987,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `project.transfer`                         | Project: Transfer at project. Some calls also need: Project: Read at project; Todo: Read at user; Metadata: Read at instance                                       |              |
 | `project.unarchive`                        | Project: Archive at project                                                                                                                                        |              |
 | `project.unstar`                           | Project: Update at project                                                                                                                                         |              |
-| `project.update`                           | Project: Update at project                                                                                                                                         |              |
+| `project.update`                           | Project: Update at project. Some calls also need: Pull Mirror: Read at project                                                                                     |              |
 | `project.upload`                           | Markdown Upload: Create at project                                                                                                                                 |              |
 | `project.upload_avatar`                    | Project: Update at project                                                                                                                                         |              |
 | `project.upload_delete`                    | Markdown Upload: Delete at project                                                                                                                                 |              |

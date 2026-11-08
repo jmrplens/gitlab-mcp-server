@@ -188,6 +188,50 @@ func TestToolActions_Filter_KeepsOrderAndTheSDKsOwnTools(t *testing.T) {
 	}
 }
 
+// TestToolActions_KeepRegistered_AnswersOnlyForTheToolsTheServerHolds
+// verifies the index narrowed to what a server lists after [Apply]: a tool
+// left out, an individual write a read-only deployment removed or a meta
+// group, runs no action for the call checks and its tier-pruned params are no
+// longer refused with the tier, which told the caller to resend a call the
+// SDK then answered as an unknown tool (issue 1239); a tool left in keeps
+// both; a standalone utility the server did not register leaves the index;
+// and a nil index stays nil.
+func TestToolActions_KeepRegistered_AnswersOnlyForTheToolsTheServerHolds(t *testing.T) {
+	board := boardUpdateTool(t)
+	pruned := json.RawMessage(`{"project_id":"42","board_id":7,"assignee_id":5}`)
+	t.Run("individual", func(t *testing.T) {
+		kept := freeIndex(t, config.ToolSurfaceIndividual)
+		if refusal, _ := kept.KeepRegistered([]*mcp.Tool{{Name: board}, nil}).TierPrunedRefusal(board, pruned); refusal == nil {
+			t.Errorf("a registered %s lost its tier refusal", board)
+		}
+		removed := freeIndex(t, config.ToolSurfaceIndividual).KeepRegistered([]*mcp.Tool{{Name: "gitlab_find_action"}})
+		if refusal, callName := removed.TierPrunedRefusal(board, pruned); refusal != nil || callName != "" {
+			t.Errorf("TierPrunedRefusal(%s) = %+v, %q for a tool the server does not hold, want nil", board, refusal, callName)
+		}
+		if id, named := removed.CallAction(board, pruned); named {
+			t.Errorf("CallAction(%s) = %q for a tool the server does not hold, want none", board, id)
+		}
+		if ids := removed.ActionIDs(); len(ids) != 0 {
+			t.Errorf("ActionIDs() = %v, want no tool, the standalone utilities included, when none is registered", ids)
+		}
+	})
+	t.Run("meta", func(t *testing.T) {
+		actions := NewToolActions(config.ToolSurfaceMeta, demoCatalog(t)).KeepRegistered([]*mcp.Tool{{Name: "gitlab_demo"}})
+		if _, named := actions.CallAction("gitlab_blocked", json.RawMessage(`{"action":"only"}`)); named {
+			t.Error("a meta group the server does not hold still names an action")
+		}
+		if id, named := actions.CallAction("gitlab_demo", json.RawMessage(`{"action":"allowed"}`)); !named || id != "demo.allowed" {
+			t.Errorf("CallAction(gitlab_demo) = %q, %t, want demo.allowed", id, named)
+		}
+	})
+	t.Run("a nil index", func(t *testing.T) {
+		var none *ToolActions
+		if none.KeepRegistered(nil) != nil {
+			t.Error("KeepRegistered() on a nil index returned one")
+		}
+	})
+}
+
 // TestToolActions_CallAction_NamesTheActionACallRuns verifies which action a
 // call is checked against: an individual or standalone tool's own; a meta
 // tool's action argument resolved through its group's routes, a historical

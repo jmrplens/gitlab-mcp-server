@@ -125,6 +125,14 @@ type ActionRoute struct {
 	// [FineGrainedNotes]). Empty on a route no catalog projected, which
 	// nothing decides.
 	ActionID string
+	// TierPruned are the input fields, by JSON name, the catalog pruned from
+	// InputSchema because their `tier:` tag asks for a tier above the one the
+	// catalog was built at, each with that tier ([TierPrunedFields]). The
+	// catalog sets it once, when it prunes, so a dispatcher refuses a call
+	// sending one with the tier it needs before anything is sent, rather than
+	// decode it into InputType, where the field still exists, and send it
+	// (issue 1239). It is frozen and shared like the schemas.
+	TierPruned map[string]string
 }
 
 // ParameterGuidance carries compact model-facing hints for parameters that are
@@ -2499,6 +2507,15 @@ func addMetaTool(server *mcp.Server, name, description string, annotations *mcp.
 	if guard := metaParamsGuard(name, envelope, mode); guard != nil {
 		dispatch := handler
 		handler = func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
+			// A param the action's tier left out is not in the definition
+			// either, so it is answered with its tier before the definition
+			// refuses it as unknown (issue 1239).
+			if route, routed := routes[input.Action]; routed {
+				if refusal := metaTierRefusal(ctx, name, route, &input); refusal != nil {
+					LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
+					return refusal, nil, nil
+				}
+			}
 			if refusal := guard(input); refusal != nil {
 				LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
 				return refusal, nil, nil
@@ -2531,7 +2548,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		formatResult = defaultFormatResult
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-		route, refusal, validationResult := validateMetaToolInput(toolName, routes, &input)
+		route, refusal, validationResult := validateMetaToolInput(ctx, toolName, routes, &input)
 		if validationResult != nil {
 			LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), refusal)
 			return validationResult, nil, nil
@@ -2594,7 +2611,12 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 // naming actions that do not exist has a different problem from one whose
 // clients keep omitting a required parameter, and neither used to appear in the
 // log at all.
-func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, string, *mcp.CallToolResult) {
+//
+// An action the routes do not carry is answered with its cause when ctx
+// carries one for it ([WithWithheldAnswer]): an action the session's
+// configuration withheld from the group is not a typo, and listing the
+// valid actions after it reads as if it were (issue 1282).
+func validateMetaToolInput(ctx context.Context, toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, string, *mcp.CallToolResult) {
 	if input.Action == "" {
 		return ActionRoute{}, RefusalInvalidParams, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
 	}
@@ -2602,12 +2624,33 @@ func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInp
 	input.Action = normalizeActionAliasForParams(toolName, input.Action, input.Params, routes)
 	route, ok := routes[input.Action]
 	if !ok {
+		if answer, withheld := withheldAnswerFor(ctx, toolName, input.Action); withheld {
+			return ActionRoute{}, RefusalUnknownAction, ErrorResult(answer)
+		}
 		return ActionRoute{}, RefusalUnknownAction, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))
+	}
+	if result := metaTierRefusal(ctx, toolName, route, input); result != nil {
+		return ActionRoute{}, RefusalInvalidParams, result
 	}
 	if result := validateMetaToolParams(toolName, route, input); result != nil {
 		return ActionRoute{}, RefusalInvalidParams, result
 	}
 	return route, "", nil
+}
+
+// metaTierRefusal refuses a meta call sending params its action's tier left
+// out of the served schema ([TierPrunedParams]), with the tier each needs,
+// before the params are decoded into the route's input type, where the field
+// still exists and would be sent (issue 1239). The session's tier is the one
+// the call middleware handed over ([WithSessionTier]). It is nil for every
+// other call.
+func metaTierRefusal(ctx context.Context, toolName string, route ActionRoute, input *MetaToolInput) *mcp.CallToolResult {
+	pruned := TierPrunedParams(route, input.Params)
+	if len(pruned) == 0 {
+		return nil
+	}
+	tier, pinned, known := sessionTierFrom(ctx)
+	return TierPrunedParamsRefusal(metaCallName(toolName, input.Action), route, pruned, tier, pinned, known)
 }
 
 // metaCallName is how a meta-tool action is named in a log record.

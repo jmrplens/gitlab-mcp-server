@@ -138,6 +138,13 @@ jobs:
           # merge step passes the parent as E2E_COVER_ROOT, so the two never
           # have to mean the same directory.
           E2E_COVER_DIR: ${{ github.workspace }}/test-results/e2e-cover/ce
+          # The suite's own support packages, measured where their code runs
+          # (issue 1461): every test binary of the run is built with
+          # -coverpkg naming them, and the statements they reached go to
+          # test-results/e2e-gitlab-coverprofile.out for the report step
+          # below. The list is the Makefile's E2E_SUPPORT_COVERPKG, which
+          # cmd/merge_coverage's tests hold this one to.
+          E2E_COVERPKG: ./test/e2e/internal/fixture,./test/e2e/modeleval
 
       # What the run covered, from the calls it recorded and the verdicts
       # gotestsum wrote: the JSON report is uploaded with the results and the
@@ -187,6 +194,31 @@ jobs:
             tail -n 1 test-results/e2e-go-coverage.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The third question: how much of the suite's own support packages,
+      # test/e2e/internal/fixture and test/e2e/modeleval, the run and their
+      # offline tests reach together. The target runs the offline half on
+      # this tree and merges it with the run's profile (cmd/merge_coverage),
+      # the per-package table lands on the run, and the profiles go up in an
+      # artifact of their own below. It runs only when the suite passed, for
+      # the reason the step above does, and no figure gates on it here: it
+      # fails only when it cannot measure, because no run profile was
+      # written, an offline test failed or the profiles disagree.
+      - name: Go statement coverage of the e2e support packages
+        run: make -s e2e-support-coverage E2E_REPORT_DIR=test-results E2E_SUPPORT_SUMMARY="$GITHUB_STEP_SUMMARY"
+
+      # The run's profile, the offline one and the merge, under a name of
+      # their own, so the figure of a run can be fetched without the rest of
+      # its results; they are in the results artifact below as well.
+      - name: Upload the e2e support packages' coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-support-coverage
+          path: |
+            test-results/*-coverprofile.out
+            test-results/e2e-support-offline.out
+            test-results/e2e-support-coverage.out
+          retention-days: 14
 
       # The children's stderr goes with the results: when a test failed
       # because the server refused something, the reason is in the server's

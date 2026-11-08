@@ -261,15 +261,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Merge Request: Update at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, not idempotent
 
-| Parameter                   | Type             | Mandatory | Description                                                                        |
-| --------------------------- | ---------------- | --------- | ---------------------------------------------------------------------------------- |
-| `merge_request_iid`         | `integer`        | yes       | Merge request internal ID                                                          |
-| `note`                      | `string`         | yes       | Note body text (Markdown)                                                          |
-| `project_id`                | `string/integer` | yes       | Project ID or URL-encoded path                                                     |
-| `commit_id`                 | `string`         | no        | SHA of the commit to comment on                                                    |
-| `in_reply_to_discussion_id` | `string`         | no        | Discussion ID to reply to                                                          |
-| `position`                  | `object`         | no        | Diff position for inline comments on specific lines. Omit for general MR comments. |
-| `resolve_discussion`        | `boolean`        | no        | Resolve the discussion when published                                              |
+| Parameter                   | Type             | Mandatory | Description                                                                                                                   |
+| --------------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid`         | `integer`        | yes       | Merge request internal ID                                                                                                     |
+| `note`                      | `string`         | yes       | Note body text (Markdown)                                                                                                     |
+| `project_id`                | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                |
+| `commit_id`                 | `string`         | no        | SHA of the commit to comment on                                                                                               |
+| `in_reply_to_discussion_id` | `string`         | no        | Discussion ID to reply to                                                                                                     |
+| `position`                  | `object`         | no        | Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments. |
+| `resolve_discussion`        | `boolean`        | no        | Resolve the discussion when published                                                                                         |
 
 ### `mr_review.draft_note_delete`
 
@@ -363,22 +363,24 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `mr_review.draft_note_update`
 
-> Update a pending draft note's body or position. Returns: the updated draft note. See also: [`mr_review.draft_note_get`](#mr_reviewdraft_note_get), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish).
+> Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: [`mr_review.draft_note_get`](#mr_reviewdraft_note_get), [`mr_review.draft_note_publish`](#mr_reviewdraft_note_publish).
 
 - **Meta-tool**: `gitlab_mr_review`, action `draft_note_update`
 - **Individual tool**: `gitlab_mr_draft_note_update`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Merge Request: Update at project. Some calls also need: Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
+- **Fine-grained token**: Merge Request: Update at project. Some calls also need: Metadata: Read at instance; Merge Request: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#mr_review))
 - **Behavior**: writes, idempotent
 
-| Parameter           | Type             | Mandatory | Description                               |
-| ------------------- | ---------------- | --------- | ----------------------------------------- |
-| `merge_request_iid` | `integer`        | yes       | Merge request internal ID                 |
-| `note_id`           | `integer`        | yes       | Draft note ID                             |
-| `project_id`        | `string/integer` | yes       | Project ID or URL-encoded path            |
-| `note`              | `string`         | no        | Updated note body text (Markdown)         |
-| `position`          | `object`         | no        | Updated diff position for inline comments |
+| Parameter           | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `merge_request_iid` | `integer`        | yes       | Merge request internal ID                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `note_id`           | `integer`        | yes       | Draft note ID                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `project_id`        | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `note`              | `string`         | no        | Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `position`          | `object`         | no        | Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both |
+
+Also needs at least one of: `note`; `position`.
 
 ### `mr_review.note_create`
 

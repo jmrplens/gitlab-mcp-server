@@ -428,7 +428,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	b.WriteString("\n## How to Submit Review Comments\n")
 	b.WriteString("Use the batch review workflow to avoid sending one notification per comment:\n")
 	b.WriteString("1. For each finding, call `" + actionDraftNoteCreate + "` and include the `position` object for inline comments on specific diff lines.\n")
-	b.WriteString("   Position fields: base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line (not both).\n")
+	b.WriteString("   Position fields: base_sha, start_sha, head_sha, old_path and new_path, and the line by its kind:\n")
 	b.WriteString("   - Modified/added line -> set `new_line` only (line number in the new file).\n")
 	b.WriteString("   - Removed line -> set `old_line` only (line number in the old file).\n")
 	b.WriteString("   - Unchanged context line -> set both `old_line` and `new_line`.\n")

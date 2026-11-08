@@ -15,8 +15,10 @@
 // A Free action is here too where the scenario that drives it needs a
 // license: the license endpoints, a merge request's approval reset, a
 // deployment's approval and the group Datadog integration are Free in the
-// catalog and answer only on a licensed instance, and an access request
-// approval grants Minimal access only under a license.
+// catalog and answer only on a licensed instance, an access request
+// approval grants Minimal access only under a license, and a project
+// update reaches the pull mirror's settings only where pull mirroring is
+// licensed.
 
 package ee
 
@@ -373,6 +375,10 @@ const (
 	actionProjectSecuritySettingsGet    harness.ActionID = "project.security_settings_get"
 	actionProjectSecuritySettingsUpdate harness.ActionID = "project.security_settings_update"
 )
+
+// actionProjectUpdate is Free, and is named here for the pull mirror settings
+// it reaches, which only a licensed instance serves.
+const actionProjectUpdate harness.ActionID = "project.update"
 
 // The licensed actions of the merge request tool, and the three Free ones
 // its approval scenarios stand on.

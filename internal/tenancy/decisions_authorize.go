@@ -18,7 +18,12 @@ package tenancy
 //
 //nolint:maintidx // one table of data, cyclomatic complexity 1: its length is the number of decisions it declares.
 func authorizeDecisions() []Decision {
-	withheld := refuse(pkgDynamic, "Registry.withheldActionMessage")
+	// One sentence for every surface that answers a withheld call: the
+	// dynamic registry in execute, and the meta surface before the SDK
+	// validates the action argument (issue 1282), which the call middleware
+	// enforces.
+	withheld := refuse(pkgActionCatalog, "Withheld.Message")
+	metaWithheld := enforce(pkgVisibility, "NarrowedCallMiddleware")
 	filter := refuse(pkgTools, "FilterActionCatalog")
 	narrowed := func(answer Answer) []Refusal {
 		return []Refusal{
@@ -59,6 +64,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgTools, "FilterActionCatalog"),
 				enforce(pkgActionCatalog, "Catalog.FilterReachableWith"),
 				enforce(pkgVisibility, "Apply"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -74,6 +80,7 @@ func authorizeDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgGitLab, "CatalogScopes"),
 				enforce(pkgTools, "FilterScopeFilteredCatalog"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -124,12 +131,23 @@ func authorizeDecisions() []Decision {
 			// the answer says where the tier was detected rather than pinned.
 			// An action the operator excluded by name is never recorded, so
 			// no answer names one (AUT-004).
-			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956"},
+			// Issue 1239: a param of a served action that the tier pruned
+			// from its schema is refused with the tier it needs before
+			// anything is sent, by every dispatcher and, ahead of the SDK's
+			// validation, by the call middleware, rather than sent through
+			// the meta surface or refused as unknown. The answer is the
+			// tier's, Ask the operator, and allows a detected tier may be
+			// wrong.
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
 					Methods: []string{"tools/list"}, Channel: Absent, Answer: AskOperator,
 					At: refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				},
+				{
+					Methods: []string{"tools/call"}, Channel: ToolError, Answer: AskOperator,
+					At: refuse(pkgToolutil, "TierPrunedParamsRefusal"),
 				},
 			},
 			Sites: []Site{
@@ -140,6 +158,12 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
+				enforce(pkgTools, "pruneSpecFieldsByTier"),
+				enforce(pkgToolutil, "TierPrunedFields"),
+				enforce(pkgToolutil, "TierPrunedParams"),
+				enforce(pkgVisibility, "ToolActions.TierPrunedRefusal"),
+				refuse(pkgToolutil, "TierPrunedParamsRefusal"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -154,6 +178,7 @@ func authorizeDecisions() []Decision {
 			Sites: []Site{
 				enforce(pkgTools, "FilterActionCatalog"),
 				enforce(pkgVisibility, "Apply"),
+				metaWithheld,
 				withheld,
 			},
 		},
@@ -325,6 +350,49 @@ func authorizeDecisions() []Decision {
 				enforce(pkgVisibility, "ListingMiddleware"),
 				refuse(pkgFinegrained, "Authority.notGrantedText"),
 				refuse(pkgVisibility, "ToolActions.Filter"),
+			},
+		},
+		{
+			// Issue 1238: GitLab refuses an OAuth access token, whatever
+			// scopes it carries, on the routes that act on the calling token
+			// itself and on the model registry's package files, which the
+			// generated table marks from the generator's declarations. A
+			// session the OAuth verifier knows to be authenticated by one is
+			// not served an action every way of which sends such a route,
+			// and a call for one is answered with the credential's kind and
+			// the way out, a personal access token, which is the caller's to
+			// use. The kind is one bit of the entry's configuration and so of
+			// the shape and catalog keys, as AUT-001's read_api narrowing is:
+			// at most two catalogs per narrowing, and only in OAuth mode. A
+			// kind nothing described is served everything (INV-008), and the
+			// personal token read keeps its no-id way and GitLab's 400 with
+			// it. stdio sends PRIVATE-TOKEN, which GitLab reads as a personal
+			// access token only, so the decision does not exist there.
+			//
+			// The kind is the cause whatever scope the credential lacks
+			// besides, filed before the read_api narrowing and from the
+			// admin_mode one, since reauthorizing an OAuth token yields
+			// another, and the answer names those scopes as what the
+			// personal access token must carry. Where ADM-004's pin is set
+			// the door refuses every personal access token, so no credential
+			// the deployment admits runs the action and the answer is Ask
+			// the operator; the pin is the deployment's, one bit of the shape
+			// key that splits no deployment.
+			ID: "AUT-009", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
+			Resource: "the actions GitLab refuses to an OAuth access token on every way: the calling token's own revocation and rotations, and the model registry's package file download",
+			Key:      KeyEntry, StdioKey: KeyNone,
+			Decided:  []string{"issue 1238"},
+			Refusals: append(narrowed(Reauthorize), Refusal{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld}),
+			Sites: []Site{
+				enforce(pkgOAuth, "admitToken"),
+				enforce(pkgServer, "verifiedFacts"),
+				enforce(pkgConfig, "Config.ServerConfig"),
+				enforce(pkgPool, "ServerPool.entryConfig"),
+				enforce(pkgTools, "narrowForCredentialKind"),
+				enforce(pkgActionCatalog, "Action.OAuthRefused"),
+				enforce(pkgFinegrained, "Table.OAuthRefusal"),
+				metaWithheld,
+				withheld,
 			},
 		},
 		{

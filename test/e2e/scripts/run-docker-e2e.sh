@@ -67,6 +67,24 @@
 # run leaves no stream, which the skip gate then reports. It records no calls:
 # the coverage record is the main pass's, joined with the main pass's stream.
 #
+# With E2E_COVERPKG naming packages, the main pass and a final pass build
+# their test binaries with -coverpkg naming them and write the statements of
+# those packages the tests reached to a profile beside their other reports,
+# <stem>-coverprofile.out and, on ce, <stem>-final-coverprofile.out. What is
+# measured this way is the suite's own code, the support packages its tests
+# import (issue 1461), and not the server, whose statements E2E_COVER_DIR
+# collects from the children. Both profiles are removed before anything
+# starts, and make e2e-support-coverage merges every one the report directory
+# holds with the profile the packages' offline tests write. A complete run
+# also stamps the sources of those packages before each pass builds, the
+# SHA-256 of every source file of them, and keeps the stamp beside the pass's
+# profile, as <stem>-coverprofile.complete and <stem>-final-coverprofile.complete,
+# only once the run ended with status 0: make e2e-support-coverage-record
+# takes no run profile without a stamp that is the tree's, so a record is
+# only ever of complete runs of the packages' sources the tree it is written
+# on holds. The scenarios, the harness and the server that drive them are not
+# stamped.
+#
 # Before the teardown takes the volumes with it, GitLab's exceptions log is
 # copied into the reports, so a 500 a scenario met can be traced to the
 # exception behind it after the stack is gone.
@@ -91,6 +109,11 @@
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
 #   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
 #                                  absolute, and only useful when the binary was built with -cover
+#   E2E_COVERPKG                   packages, comma-separated as go test's -coverpkg takes them, whose
+#                                  statements the run's test binaries measure; the main pass writes
+#                                  them to <stem>-coverprofile.out and a final pass to
+#                                  <stem>-final-coverprofile.out, both removed first whether set or not;
+#                                  a complete run stamps each beside it as <...>.complete
 #   GITLAB_IMAGE                   the image for the runtime; the defaults above. A tag
 #                                  pins a release and is held to the registry the
 #                                  same way; a digest pins an image and is never asked
@@ -203,6 +226,21 @@ case "${E2E_REPORT_DIR}" in
     *) E2E_REPORT_DIR="${REPO_ROOT}/${E2E_REPORT_DIR}" ;;
 esac
 FINAL_REPORT_NAME="${E2E_REPORT_NAME}-final"
+
+# The statement profiles the two passes write when E2E_COVERPKG names
+# packages, removed before anything starts whether or not this run writes
+# them: make e2e-support-coverage merges every one the report directory holds,
+# so a profile an earlier run left under this run's names would be folded in
+# as this run's, and a run that stopped before its tests would leave the
+# earlier run's standing for it.
+rm -f "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"
+# Their stamps go with them, and so do the pending ones a run cut short left:
+# a stamp an earlier run left would vouch for this run's profile.
+rm -f "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.complete" \
+    "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.complete.pending" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.complete" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.complete.pending"
 
 # What the compose file publishes follows the address the fixture is reached
 # from, so the web_url fields GitLab answers with are the ones the tests reach.
@@ -385,6 +423,13 @@ if [ -n "${E2E_COVER_DIR:-}" ]; then
     mkdir -p "${E2E_COVER_DIR}"
 fi
 
+# A complete run stamps the sources the main pass measures right before the
+# pass builds them, and keeps the stamp only when the run ends complete,
+# after the gate below.
+if [ "${E2E_GATE_SKIPS:-false}" = "true" ] && [ -n "${E2E_COVERPKG:-}" ]; then
+    stamp_complete_run "${REPO_ROOT}" "${E2E_COVERPKG}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.complete"
+fi
+
 set +e
 (
     echo "GitLab under test: ${TESTED_VERSION}, from ${GITLAB_IMAGE}"
@@ -397,7 +442,7 @@ set +e
         --format testdox \
         --junitfile "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-junit.xml" \
         --jsonfile "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-log.json" \
-        -- -tags e2e -p 1 -count=1 "$@"
+        -- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.out"} "$@"
 ) 2>&1 | tee "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-output.txt"
 RUN_STATUS="${PIPESTATUS[0]}"
 set -e
@@ -417,11 +462,16 @@ set -e
 # recorded would be credited to a test that stream says skipped, and its
 # filtered run line would read as a partial run. The coverage directory is
 # kept, since a child's statement counters are the same measurement whichever
-# pass started it.
+# pass started it, and so is E2E_COVERPKG for the same reason: the statements
+# of the support packages this pass reaches are reached, and its profile goes
+# under its own report name.
 FINAL_STATUS=0
 if [ -n "${FINAL_TEST}" ]; then
     echo "=== Final pass: ${FINAL_TEST} alone, after every other test, on the same stack (${RUNTIME}) ==="
     if "${SCRIPT_DIR}/wait-for-gitlab.sh" "${E2E_DOCKER_GITLAB_URL}" 120; then
+        if [ -n "${E2E_COVERPKG:-}" ]; then
+            stamp_complete_run "${REPO_ROOT}" "${E2E_COVERPKG}" "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.complete"
+        fi
         set +e
         (
             echo "GitLab under test: ${TESTED_VERSION}, from ${GITLAB_IMAGE}"
@@ -436,7 +486,7 @@ if [ -n "${FINAL_TEST}" ]; then
                 --format testdox \
                 --junitfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-junit.xml" \
                 --jsonfile "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json" \
-                -- -tags e2e -p 1 -count=1 -timeout 1800s -run "^${FINAL_TEST}\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"
+                -- -tags e2e -p 1 -count=1 ${E2E_COVERPKG:+"-coverpkg=${E2E_COVERPKG}" "-coverprofile=${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.out"} -timeout 1800s -run "^${FINAL_TEST}\$" "./test/e2e/gitlab/${FINAL_PACKAGE}/"
         ) 2>&1 | tee "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-output.txt"
         FINAL_STATUS="${PIPESTATUS[0]}"
         set -e
@@ -463,3 +513,12 @@ if [ "${E2E_GATE_SKIPS:-false}" = "true" ]; then
         ${FINAL_TEST:+"${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-log.json"} || GATE_STATUS=$?
     RUN_STATUS="$(run_status_after_gate "${RUN_STATUS}" "${GATE_STATUS}")"
 fi
+
+# The stamps of a complete run's profiles take their own names only now, when
+# the run's status says it was complete: the main pass passed, and the final
+# pass on a runtime that makes one, and the gate held every skip to a
+# declaration. A run that ended otherwise keeps its profiles,
+# which make e2e-support-coverage still reports, and no stamp, so
+# make e2e-support-coverage-record refuses them.
+keep_complete_run_stamps "${RUN_STATUS}" "${E2E_REPORT_DIR}/${E2E_REPORT_NAME}-coverprofile.complete" \
+    "${E2E_REPORT_DIR}/${FINAL_REPORT_NAME}-coverprofile.complete"

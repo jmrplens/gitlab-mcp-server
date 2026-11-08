@@ -2893,6 +2893,61 @@ func TestAdmitToken_AssumedScopes_SaySoInTheAdmission(t *testing.T) {
 	}
 }
 
+// TestIntrospectToken_CredentialKind_TravelsInTheAdmission verifies the
+// credential kind the pool withholds by (issue 1238, register row AUT-009):
+// a token the self endpoint refuses to describe and /oauth/token/info
+// describes is an OAuth access token, and its admission carries
+// IssuedByOAuthKey; a personal access token the self endpoint describes carries
+// none, and nor does a token nothing described, whose kind is unknown and is
+// served everything.
+func TestIntrospectToken_CredentialKind_TravelsInTheAdmission(t *testing.T) {
+	t.Parallel()
+	user := gitlabUserResponse{ID: 1, Username: "u"}
+	describing := func(self bool) *httptest.Server {
+		instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.URL.Path == "/api/v4/personal_access_tokens/self" && self:
+				_, _ = w.Write([]byte(`{"id":7,"scopes":["api"],"active":true}`))
+			case r.URL.Path == "/api/v4/personal_access_tokens/self":
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"This endpoint requires token type to be a personal access token"}`))
+			case r.URL.Path == "/oauth/token/info":
+				_, _ = w.Write([]byte(`{"scope":["api"],"expires_in":7200,"application":{"uid":"app"}}`))
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		t.Cleanup(instance.Close)
+		return instance
+	}
+	cases := []struct {
+		name     string
+		instance *httptest.Server
+		want     bool
+	}{
+		{name: "an OAuth access token", instance: describing(false), want: true},
+		{name: "a personal access token", instance: describing(true), want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := introspectToken(t.Context(), tc.instance.Client(), tc.instance.URL, "token")
+			info := admitToken(nil, tc.instance.URL, "token", time.Minute, user, result)
+			if got, _ := info.Extra[IssuedByOAuthKey].(bool); got != tc.want || result.oauth != tc.want {
+				t.Errorf("admitted Extra[%s] = %v (introspection %t), want %t", IssuedByOAuthKey, info.Extra[IssuedByOAuthKey], result.oauth, tc.want)
+			}
+		})
+	}
+	t.Run("a token nothing described", func(t *testing.T) {
+		t.Parallel()
+		url := netfixture.DeadEndpoint(t)
+		info := admitToken(nil, url, "token", time.Minute, user, introspectToken(t.Context(), http.DefaultClient, url, "token"))
+		if _, carried := info.Extra[IssuedByOAuthKey]; carried {
+			t.Errorf("an admission whose kind nothing said carries Extra[%s] = %v", IssuedByOAuthKey, info.Extra[IssuedByOAuthKey])
+		}
+	})
+}
+
 // TestTokenIDFrom_ReadsOnlyAnExactPositiveWholeNumber verifies the id is read
 // from the decoded number only when it is a positive whole number a float64
 // carries exactly, and is 0 for anything else, a string included.

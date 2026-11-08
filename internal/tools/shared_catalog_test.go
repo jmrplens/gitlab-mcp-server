@@ -204,7 +204,8 @@ func TestUnboundClient_AnswersTheInstanceClassAndRefusesRequests(t *testing.T) {
 // builders: the base key carries tier, instance class and the maintenance
 // group; the filter key carries the exclusions, the scopes that can change the
 // catalog (sorted and deduplicated), whether the scopes were detected at all,
-// and the three mode switches.
+// the three mode switches, and whether the credential is an OAuth access
+// token (issue 1238).
 func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 	t.Parallel()
 
@@ -218,28 +219,29 @@ func TestCatalogKeys_NameEverythingThatShapesTheCatalog(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: "exclude=|scopes=|scopesKnown=false|readonly=false|readAPIOnly=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=false|readonly=false|readAPIOnly=false|oauth=false|safe=false",
 		},
 		{
 			name: "detected empty scopes are told apart from unknown",
 			cfg:  config.ServerConfig{TokenScopes: []string{}},
-			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|oauth=false|safe=false",
 		},
 		{
 			name: "scopes the filter cannot act on leave no trace",
 			cfg:  config.ServerConfig{TokenScopes: []string{"read_api", "api", "k8s_proxy", "ai_features"}},
-			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|safe=false",
+			want: "exclude=|scopes=|scopesKnown=true|readonly=false|readAPIOnly=false|oauth=false|safe=false",
 		},
 		{
 			name: "the scopes that shape the catalog are kept, sorted and deduplicated, and the switches named",
 			cfg: config.ServerConfig{
-				ExcludeTools: []string{"gitlab_admin", "issue.delete"},
-				TokenScopes:  []string{"sudo", "api", "admin_mode", "read_api", "admin_mode"},
-				ReadOnly:     true,
-				ReadAPIOnly:  true,
-				SafeMode:     true,
+				ExcludeTools:    []string{"gitlab_admin", "issue.delete"},
+				TokenScopes:     []string{"sudo", "api", "admin_mode", "read_api", "admin_mode"},
+				ReadOnly:        true,
+				ReadAPIOnly:     true,
+				OAuthCredential: true,
+				SafeMode:        true,
 			},
-			want: "exclude=gitlab_admin,issue.delete|scopes=admin_mode|scopesKnown=true|readonly=true|readAPIOnly=true|safe=true",
+			want: "exclude=gitlab_admin,issue.delete|scopes=admin_mode|scopesKnown=true|readonly=true|readAPIOnly=true|oauth=true|safe=true",
 		},
 	}
 	for _, tc := range cases {
@@ -316,6 +318,37 @@ func TestCatalogFilterKey_FineGrainedTokenIsKeyedAsUnknownScopes(t *testing.T) {
 	}
 	if got, other := CatalogFilterKey(&fineGrained), CatalogFilterKey(&empty); got == other {
 		t.Errorf("CatalogFilterKey(fine-grained) = %q, the key of a token with no scope", got)
+	}
+}
+
+// TestCatalogFilterKey_OAuthCredentialIsOneComponent verifies the credential's
+// kind splits the shared catalogs by one component and no more (issue 1238):
+// an OAuth session and a personal access token session of one narrowing are
+// keyed apart, differing only in that component, on the meta and dynamic
+// key and on the individual surface's own, and each gets the catalog its
+// kind is served.
+func TestCatalogFilterKey_OAuthCredentialIsOneComponent(t *testing.T) {
+	t.Parallel()
+	classic := config.ServerConfig{Tier: edition.Free}
+	oauth := config.ServerConfig{Tier: edition.Free, OAuthCredential: true}
+	got, other := CatalogFilterKey(&oauth), CatalogFilterKey(&classic)
+	if got == other || strings.Replace(got, "|oauth=true|", "|oauth=false|", 1) != other {
+		t.Errorf("CatalogFilterKey(oauth) = %q and (classic) = %q, want them to differ in the oauth component alone", got, other)
+	}
+	client := UnboundClient(false)
+	individual, _, err := SharedIndividualCatalog(client, &oauth)
+	if err != nil {
+		t.Fatalf("SharedIndividualCatalog(oauth) error = %v", err)
+	}
+	if _, served := individual.Action("access.token_personal_rotate_self"); served {
+		t.Error("the individual catalog of an OAuth session serves access.token_personal_rotate_self")
+	}
+	whole, _, err := SharedIndividualCatalog(client, &classic)
+	if err != nil {
+		t.Fatalf("SharedIndividualCatalog(classic) error = %v", err)
+	}
+	if _, served := whole.Action("access.token_personal_rotate_self"); !served || whole.SharedOrigin() == individual.SharedOrigin() {
+		t.Errorf("the classic individual catalog serves the self rotation %t and shares the OAuth one's cache entry %t", served, whole.SharedOrigin() == individual.SharedOrigin())
 	}
 }
 
@@ -734,6 +767,21 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 			arrange: failFilter,
 			run:     func() error { _, _, err := SharedMetaCatalog(client, fresh("meta-filter")); return err },
 			want:    "filter meta action catalog",
+		},
+		{
+			// What the tier removed is recorded in the same build (issue
+			// 1282), so a failure to read it fails the catalog rather than
+			// leave a meta surface answering a tier-withheld call without its
+			// cause.
+			name: "meta tier",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				original := sharedTierRemoved
+				t.Cleanup(func() { sharedTierRemoved = original })
+				sharedTierRemoved = func(bool, edition.Tier) (*actioncatalog.Catalog, error) { return nil, forced }
+			},
+			run:  func() error { _, _, err := SharedMetaCatalog(client, fresh("meta-tier")); return err },
+			want: "record what the tier withheld from the meta catalog",
 		},
 		{
 			name:    "individual base",

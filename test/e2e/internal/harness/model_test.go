@@ -196,15 +196,13 @@ func TestCallAsModel_DiscoveryCall_ReturnsAToolOnlyDispatch(t *testing.T) {
 // requested action here would let a model be scored as having reached a step
 // that never ran.
 //
-// The two surfaces refuse in two different ways, and the difference is not
-// cosmetic. On dynamic the execute dispatcher refuses the action itself and
-// answers with the withheld message, so the span carries the server's own
-// reason. On meta the action is gone from the tool's own action enum, so the
-// SDK's schema validation refuses the call before any handler of ours runs:
-// the span carries the tool and the domain and no reason at all, and the only
-// evidence of what happened is the message naming /properties/action. A scorer
-// that recognized unknown_action alone would read every correctly declined
-// meta step as a model failure.
+// Both surfaces answer with the withheld message, so the span carries the
+// server's own reason on each. On dynamic the execute dispatcher refuses the
+// action itself. On meta the action is gone from the tool's own action enum,
+// and the server answers the call before the SDK's schema validation would
+// refuse it by that enum (issue 1282): the refusal naming /properties/action,
+// which carries no reason at all, is left to an action the operator excluded
+// by name, and a meta step declined with it here would be the defect back.
 func TestCallAsModel_WithheldAction_CarriesTheServersRefusal(t *testing.T) {
 	inst := stubInstance(t)
 
@@ -238,10 +236,10 @@ func TestCallAsModel_WithheldAction_CarriesTheServersRefusal(t *testing.T) {
 				"action": "create",
 				"params": map[string]any{"name": "withheld"},
 			},
-			wantFailure: FailureInvalidParams,
-			// Nothing of ours ran, so there is no reason of ours to record.
-			wantReason:    "",
-			wantTextNames: "/properties/action",
+			wantFailure: FailureUnknownAction,
+			// The narrowed-call check refused it before the SDK's schema did.
+			wantReason:    "unknown_action",
+			wantTextNames: "withhold",
 		},
 	}
 	for _, testCase := range cases {

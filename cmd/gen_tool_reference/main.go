@@ -80,27 +80,26 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 // GitLab refuses to an OAuth token, and the hand-written data file. A test
 // hands run a small one.
 type source struct {
-	root         func() (string, error)
-	builds       func() ([]build, error)
-	surfaces     func() surfaceNames
-	scopes       map[string][]string
-	grants       *finegrained.Table
-	oauthRefused []oauthRefusedRoute
-	domains      []byte
+	root     func() (string, error)
+	builds   func() ([]build, error)
+	surfaces func() surfaceNames
+	scopes   map[string][]string
+	grants   *finegrained.Table
+	domains  []byte
 }
 
 // defaultSource is the source the command reads: the repository it runs in,
 // the catalogs this binary builds, the action grants table compiled into it,
-// the OAuth refusals declared here, and the embedded data file.
+// which marks the routes GitLab refuses to an OAuth token, and the embedded
+// data file.
 func defaultSource() source {
 	return source{
-		root:         mcpsurface.ProjectRoot,
-		builds:       defaultBuilds,
-		surfaces:     defaultSurfaces,
-		scopes:       tools.MetaToolScopes,
-		grants:       actiongrants.Table(),
-		oauthRefused: oauthRefusedRoutes,
-		domains:      domainsJSON,
+		root:     mcpsurface.ProjectRoot,
+		builds:   defaultBuilds,
+		surfaces: defaultSurfaces,
+		scopes:   tools.MetaToolScopes,
+		grants:   actiongrants.Table(),
+		domains:  domainsJSON,
 	}
 }
 
@@ -120,7 +119,7 @@ func run(src source, check bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	ref, err := assemble(builds, src.surfaces(), src.scopes, src.grants, src.oauthRefused)
+	ref, err := assemble(builds, src.surfaces(), src.scopes, src.grants)
 	if err != nil {
 		return err
 	}

@@ -111,6 +111,7 @@ func renderTable(table *finegrained.Table) []byte {
 		writeFlag(&b, "Skip", op.Skip)
 		writeIndices(&b, "Spine", op.Spine)
 		writeIndices(&b, "OffSpine", op.OffSpine)
+		writeFlag(&b, "OAuthRefused", op.OAuthRefused)
 		b.WriteString("},\n")
 	}
 	b.WriteString("},\n")
