@@ -392,21 +392,27 @@ func formatCredits(credits *float64) string {
 // the causes GitLab's description of the field gives for null), or an index a
 // trial serves, which ends. It is empty for any other index, and for a
 // subgroup or a project, which carry no access.
+//
+// It is a chain of early returns rather than a tagless switch because a case
+// expression carries no statement counter, so gremlins reads its mutants as
+// unreached and never runs them, whatever the tests do.
 func graphStatusAccessNote(out GraphStatusOutput) string {
 	access := out.Access
-	switch {
-	case access == nil:
+	if access == nil {
 		return ""
-	case out.HasIndex():
+	}
+	if out.HasIndex() {
 		if access.State == AccessTrialActive {
 			return "Orbit is served on a trial, which ends on its last day or when its credits run out."
 		}
 		return ""
-	case !access.Serves():
+	}
+	if !access.Serves() {
 		return "Orbit access is " + toolutil.EscapeMdTableCell(access.State) +
 			": GitLab.com serves a group's Orbit index and queries under LICENSED or TRIAL_ACTIVE access, " +
 			"so the index is missing here because of the access, not because the graph is empty."
-	case out.Enabled != nil && !*out.Enabled:
+	}
+	if out.Enabled != nil && !*out.Enabled {
 		return "The group has Orbit access and Orbit is off for it, which is why GitLab answered no index."
 	}
 	return "The group has Orbit access and GitLab answered no index, which GitLab answers when Orbit is off for the top-level group, " +

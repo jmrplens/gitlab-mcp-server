@@ -18,7 +18,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 gitlab-mcp-server/
 ├── cmd/                    # server + 44 dev utility binaries; see docs/development/cmd-utilities.md for the full reference
 │   ├── server/             # MCP server entry point (+ --shutdown, --probe flags)
-│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk|paths|grants|required|params|routes; -validate-docs); grants is R-GRANT, the fine-grained table held to the live GitLab record; params is R-PARAM and routes R-ROUTE, every param a reached route declares and every route the record mounts held to what sends it or a declaration
+│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|enums|sdk|paths|grants|required|params|routes; -validate-docs); grants is R-GRANT, the fine-grained table held to the live GitLab record; params is R-PARAM and routes R-ROUTE, every param a reached route declares and every route the record mounts held to what sends it or a declaration
 │   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
 │   ├── audit_doc_tool_names/ # Every `gitlab_*` name the docs mention exists on the surface it claims (make check-doc-tool-names)
@@ -55,6 +55,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── measure_conditions/ # Plan, measuring loop and job summary of the on-demand condition and branch coverage workflow (conditions.yml, dispatched by hand), and the whole-tree figures (make coverage-conditions-tree)
 │   ├── fuzz_targets/       # The fuzz targets the weekly fuzzing workflow (fuzz.yml) runs with go test -fuzz
+│   ├── merge_coverage/     # The e2e support packages' offline profile merged with the complete runs', their committed record and gate (make e2e-support-coverage, check-e2e-support-coverage)
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
 │   ├── gen_brand/          # Every vector brand asset from one parametric geometry
 │   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go

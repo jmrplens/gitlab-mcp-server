@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -223,7 +224,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			status:    http.StatusForbidden,
 			hint:      "adding to inbound allowlist requires Maintainer role on source project; verify target_project_id exists and is accessible",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
-				_, err := AddProjectAllowlist(ctx, c, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+				_, err := AddProjectAllowlist(ctx, c, AddProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99})
 				return err
 			},
 		},
@@ -233,7 +234,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			status:    http.StatusNotFound,
 			hint:      "verify target_project_id is on the allowlist with job.token_scope_list_inbound; requires Maintainer role",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
-				return RemoveProjectAllowlist(ctx, c, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+				return RemoveProjectAllowlist(ctx, c, RemoveProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99})
 			},
 		},
 		{
@@ -252,7 +253,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			status:    http.StatusForbidden,
 			hint:      "adding to group allowlist requires Maintainer role on project; verify target_group_id exists; requires GitLab 17.0+",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
-				_, err := AddGroupAllowlist(ctx, c, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+				_, err := AddGroupAllowlist(ctx, c, AddGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5})
 				return err
 			},
 		},
@@ -262,7 +263,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			status:    http.StatusNotFound,
 			hint:      "verify target_group_id is on the allowlist with job.token_scope_list_groups; requires Maintainer role",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
-				return RemoveGroupAllowlist(ctx, c, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+				return RemoveGroupAllowlist(ctx, c, RemoveGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5})
 			},
 		},
 	}
@@ -413,7 +414,7 @@ func TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *tes
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
 		`{"source_project_id": 42, "target_project_id": 99}`, &got))
 
-	out, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+	out, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -435,7 +436,7 @@ func TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *tes
 func TestRemoveProjectAllowlist_Success(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusNoContent, "", &got))
-	if err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99}); err != nil {
+	if err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	assertAddressed(t, got, http.MethodDelete, "/api/v4/projects/42/job_token_scope/allowlist/99")
@@ -478,7 +479,7 @@ func TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testi
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
 		`{"source_project_id": 42, "target_group_id": 5}`, &got))
 
-	out, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+	out, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -498,7 +499,7 @@ func TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testi
 func TestRemoveGroupAllowlist_Success(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusNoContent, "", &got))
-	if err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5}); err != nil {
+	if err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	assertAddressed(t, got, http.MethodDelete, "/api/v4/projects/42/job_token_scope/groups_allowlist/5")
@@ -530,7 +531,7 @@ func assertRequiredInt64(t *testing.T, err error, operation, field string) {
 // operation and parameter of the project-add half.
 func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
+	_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: 42, TargetProjectID: 0})
 	assertRequiredInt64(t, err, "add_project_job_token_allowlist", "target_project_id")
 }
 
@@ -538,7 +539,7 @@ func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 // the operation and parameter of the project-remove half.
 func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
+	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: 42, TargetProjectID: 0})
 	assertRequiredInt64(t, err, "remove_project_job_token_allowlist", "target_project_id")
 }
 
@@ -546,7 +547,7 @@ func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 // operation and parameter of the group-add half.
 func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	_, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
+	_, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: 42, TargetGroupID: 0})
 	assertRequiredInt64(t, err, "add_group_job_token_allowlist", "target_group_id")
 }
 
@@ -554,8 +555,72 @@ func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 // operation and parameter of the group-remove half.
 func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
+	err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: 42, TargetGroupID: 0})
 	assertRequiredInt64(t, err, "remove_group_job_token_allowlist", "target_group_id")
+}
+
+// TestAllowlistWrites_ProjectID_IsTheNumericIDTheRouteTakes holds the four
+// allowlist writes to the type their routes declare for :id. GitLab 19.5
+// declares it Integer on POST and DELETE of both allowlists
+// (lib/api/project_job_token_scope.rb) and refuses a URL-encoded path with
+// 400 {"error":"id is invalid"}, although its page says a path is accepted;
+// the inputs promised a path until 2026-11-01, and a model handed one was
+// refused by GitLab after the call.
+func TestAllowlistWrites_ProjectID_IsTheNumericIDTheRouteTakes(t *testing.T) {
+	schemas := map[string]func() (*jsonschema.Schema, error){
+		"add_project":    func() (*jsonschema.Schema, error) { return jsonschema.For[AddProjectAllowlistInput](nil) },
+		"remove_project": func() (*jsonschema.Schema, error) { return jsonschema.For[RemoveProjectAllowlistInput](nil) },
+		"add_group":      func() (*jsonschema.Schema, error) { return jsonschema.For[AddGroupAllowlistInput](nil) },
+		"remove_group":   func() (*jsonschema.Schema, error) { return jsonschema.For[RemoveGroupAllowlistInput](nil) },
+	}
+	for name, build := range schemas {
+		t.Run(name, func(t *testing.T) {
+			schema, err := build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			projectID := schema.Properties["project_id"]
+			if projectID == nil || projectID.Type != "integer" || !strings.Contains(projectID.Description, "Numeric ID") {
+				t.Errorf("project_id = %+v, want an integer described as the numeric ID", projectID)
+			}
+		})
+	}
+}
+
+// TestAllowlistWrites_NoProjectID_IsRefusedBeforeAnyRequest holds the four
+// writes to refusing a missing or non-positive project ID by name, before
+// anything is sent.
+func TestAllowlistWrites_NoProjectID_IsRefusedBeforeAnyRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	cases := []struct {
+		name      string
+		operation string
+		call      func() error
+	}{
+		{name: "add project", operation: "add_project_job_token_allowlist", call: func() error {
+			_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{TargetProjectID: 99})
+			return err
+		}},
+		{name: "add project with a negative ID", operation: "add_project_job_token_allowlist", call: func() error {
+			_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: -1, TargetProjectID: 99})
+			return err
+		}},
+		{name: "remove project", operation: "remove_project_job_token_allowlist", call: func() error {
+			return RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{TargetProjectID: 99})
+		}},
+		{name: "add group", operation: "add_group_job_token_allowlist", call: func() error {
+			_, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{TargetGroupID: 5})
+			return err
+		}},
+		{name: "remove group", operation: "remove_group_job_token_allowlist", call: func() error {
+			return RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{TargetGroupID: 5})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRequiredInt64(t, tc.call(), tc.operation, "project_id")
+		})
+	}
 }
 
 // markdownText reads the one text block a formatter's result carries.
@@ -738,7 +803,7 @@ func TestListInboundAllowlist_Empty(t *testing.T) {
 func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
-	_, err := AddProjectAllowlist(ctx, client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+	_, err := AddProjectAllowlist(ctx, client, AddProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
 	}
@@ -752,7 +817,7 @@ func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
 func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
-	err := RemoveProjectAllowlist(ctx, client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+	err := RemoveProjectAllowlist(ctx, client, RemoveProjectAllowlistInput{ProjectID: 42, TargetProjectID: 99})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
 	}
@@ -848,7 +913,7 @@ func TestListGroupAllowlist_Empty(t *testing.T) {
 func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
-	_, err := AddGroupAllowlist(ctx, client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+	_, err := AddGroupAllowlist(ctx, client, AddGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
 	}
@@ -862,7 +927,7 @@ func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
-	err := RemoveGroupAllowlist(ctx, client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+	err := RemoveGroupAllowlist(ctx, client, RemoveGroupAllowlistInput{ProjectID: 42, TargetGroupID: 5})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
 	}

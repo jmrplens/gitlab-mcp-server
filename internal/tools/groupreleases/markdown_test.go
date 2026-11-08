@@ -180,7 +180,7 @@ func TestFormatListMarkdown_HostileTagAndEditURLFallback(t *testing.T) {
 
 	want := "## Group Releases (3)\n\n" +
 		listHeader +
-		"| v1&#124;beta](http://attacker.invalid/) | Rel&#124;ease |  |  |\n" +
+		"| v1&#124;beta](http\\://attacker.invalid/) | Rel&#124;ease |  |  |\n" +
 		"| [v5.0.0](https://git.example.com/g/p/-/releases/v5.0.0) | EditFallback |  |  |\n" +
 		"| v3.9.0 | NoURL |  |  |\n" +
 		"\n3 items total\n" +

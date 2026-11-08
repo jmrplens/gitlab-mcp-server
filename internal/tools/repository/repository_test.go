@@ -1442,8 +1442,8 @@ func TestFormatContributorsMarkdown(t *testing.T) {
 		"Showing 2 of 45 results (page 1 of 3)\n\n" +
 		"| Name | Email | Commits | Additions | Deletions |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| Alice | alice@test.com | 10 | 500 | 100 |\n" +
-		"| Bob | bob@test.com | 5 | 200 | 50 |\n" +
+		"| Alice | alice\\@test.com | 10 | 500 | 100 |\n" +
+		"| Bob | bob\\@test.com | 5 | 200 | 50 |\n" +
 		"\nPage 1 of 3 | 45 items total | 20 per page\n" +
 		contributorsHints
 

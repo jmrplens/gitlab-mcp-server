@@ -44,7 +44,12 @@ import (
 // that a reason to move one is a reason to move both. The reason applies here
 // with rather more force than it does to a GitLab record: a provider changes a
 // price by publishing a new page, with no release to notice.
-const maxPriceAge = 180 * 24 * time.Hour
+//
+// It is 180 days, 15552000 seconds, written as nanoseconds rather than as the
+// product of days, hours and time.Hour: a product at package level is two
+// arithmetic mutants no coverage profile reaches, so gremlins reports them as
+// never covered although a test holds the value to 180 days.
+const maxPriceAge time.Duration = 15552000e9
 
 // priceEntry is one model's prices and where they were read.
 type priceEntry struct {

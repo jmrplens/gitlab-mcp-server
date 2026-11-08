@@ -11,16 +11,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 )
 
-// workhorseFile is the type the record gives a param Workhorse uploads: the
-// file itself, whose attributes (`file.etag`, `file.sha256` and the rest)
-// Workhorse fills in and no caller sends.
-const workhorseFile = "API::Validations::Types::WorkhorseFile"
-
 // routeVerdict is what judging one route found.
 type routeVerdict struct {
 	judged   int
 	covered  int
 	findings []Finding
+	// bodies are the params covered as the body Workhorse rewrote into a
+	// file.
+	bodies []string
 }
 
 // paramJudge judges the params of one route.
@@ -106,12 +104,18 @@ func (j *paramJudge) node(name string) ([]Finding, bool) {
 
 // leaf is the verdict on one param taken alone: no class when a recorded
 // request carries it, carries the top-level key it sits under and an option
-// struct of the route models it, or a request carries it on every call, its
-// finding otherwise.
+// struct of the route models it, a request carries it on every call, or it
+// is the body Workhorse rewrote into a file, which no option struct models
+// (client-go's group import writes its own multipart form under the name its
+// options carry), its finding otherwise.
 func (j *paramJudge) leaf(name string) Finding {
 	canonical := sdkoptions.Canonical(name)
 	top, _, _ := strings.Cut(canonical, "[")
 	if j.recorded[canonical] || (j.recorded[top] && j.use.sends[canonical]) || j.use.always[canonical] {
+		return Finding{}
+	}
+	if j.use.bodies[name] && !j.use.sends[canonical] {
+		j.verdict.bodies = append(j.verdict.bodies, name)
 		return Finding{}
 	}
 	param := j.use.route.Params[name]
@@ -162,7 +166,7 @@ func pathParams(path string) map[string]bool {
 // for an uploaded file: a dotted name under a param the record types as one.
 func workhorseAttribute(params map[string]apilive.Param, name string) bool {
 	file, _, dotted := strings.Cut(name, ".")
-	return dotted && params[file].Type == workhorseFile
+	return dotted && params[file].Type == apilive.WorkhorseFile
 }
 
 // declaredParent names the nearest param the route declares that name sits

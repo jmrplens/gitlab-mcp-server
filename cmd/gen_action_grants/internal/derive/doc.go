@@ -39,9 +39,15 @@
 //     check after a request does not make the request optional.
 //   - A function literal runs where it is written.
 //   - A client-go method that can send several routes sends one of them per
-//     call (the label methods pick by name or by ID), and one that posts
-//     several GraphQL documents posts all of them (a work item delete reads
-//     the item's ID, then deletes it).
+//     call, and one that posts several GraphQL documents posts all of them (a
+//     work item delete reads the item's ID, then deletes it). A route behind
+//     a nil check of a parameter is left out where the call's argument cannot
+//     pass the check: the label update and delete send one route when lid is
+//     nil and another when it is not, and a handler that hands lid a string
+//     only ever sends the second. An argument that can hold nil, a pointer
+//     field among them, is read as either, and so are a parameter its helper
+//     assigns, ranges into or takes the address of, a value of a type parameter
+//     no call handed, and a method named without being called.
 //
 // Where the syntax is wrong, the author says so beside the request, and the
 // directive applies to every action that reaches the statement it is written
@@ -60,4 +66,15 @@
 // request is, where it came from and which directive shaped it is kept, for
 // the committed record of what this server sends and for the gates that hold
 // the derivation to an author's intent.
+//
+// # From a call to the fields it fills
+//
+// Beside what a request is, each one records which field of the action's
+// input fills each segment of its path (placeholders.go), read from the call
+// that sends it: cmd/internal/sdkroutes says where each argument of a client-go
+// method lands, and the argument, or the identifier a raw path carries, is read
+// back through locals, parameters and calls to the field it is built out of.
+// R-REQUIRED places a path parameter through the answer, since GitLab's name
+// for a parameter and the input's often differ. A segment every call does not
+// fill from one field is left out.
 package derive

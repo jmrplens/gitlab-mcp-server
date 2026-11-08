@@ -216,7 +216,7 @@ func TestFormatProjectCheckMarkdown_HostileBranchName(t *testing.T) {
 		"### Protected Branches\n\n" +
 		"| ID | Name | Code Owner Approval |\n" +
 		"| --- | --- | --- |\n" +
-		"| 5 | a&#124;b&lt;c>&#91;d](http://attacker.invalid) | ❌ |\n" +
+		"| 5 | a&#124;b&lt;c>&#91;d](http\\://attacker.invalid) | ❌ |\n" +
 		projectCheckHints
 
 	if got != want {

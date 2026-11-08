@@ -1466,6 +1466,20 @@
     {
       "package": "internal/tools",
       "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/boards/:board_id",
+      "body": [
+        "assignee_id",
+        "name"
+      ],
+      "identifiers": {
+        ":board_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/external_status_checks",
       "identifiers": {
@@ -4869,9 +4883,30 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id",
+      "query": [
+        "with_projects"
+      ],
+      "identifiers": {
+        ":group_id": 4
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/:group_id/custom_attributes",
       "identifiers": {
-        ":group_id": 2
+        ":group_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/custom_attributes/dept",
+      "identifiers": {
+        ":group_id": 1
       }
     },
     {
@@ -4879,6 +4914,19 @@
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/custom_attributes/dept",
+      "identifiers": {
+        ":group_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/custom_attributes/dept",
+      "body": [
+        "key",
+        "value"
+      ],
       "identifiers": {
         ":group_id": 1
       }
@@ -4918,9 +4966,36 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/custom_attributes",
       "identifiers": {
-        ":project_id": 2
+        ":project_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/custom_attributes/dept",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/custom_attributes/dept",
+      "identifiers": {
+        ":project_id": 1
       }
     },
     {
@@ -4933,7 +5008,7 @@
         "value"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -4984,9 +5059,18 @@
       "package": "internal/tools/customattributes",
       "kind": "rest",
       "method": "GET",
+      "path": "/users",
+      "query": [
+        "username"
+      ]
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "GET",
       "path": "/users/:user_id/custom_attributes",
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -4995,7 +5079,7 @@
       "method": "DELETE",
       "path": "/users/:user_id/custom_attributes/dept",
       "identifiers": {
-        ":user_id": 1
+        ":user_id": 2
       }
     },
     {
@@ -5003,6 +5087,19 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/custom_attributes/dept",
+      "identifiers": {
+        ":user_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/users/:user_id/custom_attributes/dept",
+      "body": [
+        "key",
+        "value"
+      ],
       "identifiers": {
         ":user_id": 1
       }
@@ -9841,6 +9938,18 @@
       "package": "internal/tools/groupstoragemoves",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id",
+      "query": [
+        "with_projects"
+      ],
+      "identifiers": {
+        ":group_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/groupstoragemoves",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/:group_id/repository_storage_moves",
       "query": [
         "order_by",
@@ -14049,9 +14158,9 @@
       "method": "GET",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/draft_notes/:draft_note_id",
       "identifiers": {
-        ":draft_note_id": 2,
+        ":draft_note_id": 3,
         ":merge_request_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -14094,6 +14203,12 @@
         ":merge_request_id": 1,
         ":project_id": 1
       }
+    },
+    {
+      "package": "internal/tools/mrdraftnotes",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/version"
     },
     {
       "package": "internal/tools/mrnotes",
@@ -15738,15 +15853,21 @@
         "container_expiration_policy_attributes",
         "description",
         "external_authorization_classification_label",
+        "import_url",
         "issue_branch_template",
         "max_artifacts_size",
         "merge_commit_template",
         "merge_request_title_regex",
         "merge_request_title_regex_description",
         "merge_train_enforcement",
+        "mirror",
+        "mirror_branch_regex",
+        "mirror_overwrites_diverged_branches",
+        "mirror_trigger_builds",
         "mirror_user_id",
         "mr_default_title_template",
         "name",
+        "only_mirror_protected_branches",
         "reviewer_assignment_strategy",
         "squash_commit_template",
         "suggestion_commit_message",
@@ -16709,6 +16830,15 @@
       "path": "/project_repository_storage_moves/:project_repository_storage_move_id",
       "identifiers": {
         ":project_repository_storage_move_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/projectstoragemoves",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id",
+      "identifiers": {
+        ":project_id": 3
       }
     },
     {

@@ -239,6 +239,8 @@ Después comprueba `params` contra el schema de la acción. Un parámetro descon
 gitlab_execute_action/<action>: invalid params. Unknown params: ... Did you mean ...? Missing required params: ... Missing one of ... Valid params: ...
 ```
 
+Un parámetro que el tier de la instancia deja fuera del schema de la acción no aparece entre los desconocidos. Se rechaza antes que ellos, con el tier que necesita y sin enviar nada, como `assignee_id` en `project.board_update` con el tier Free ([Errores de argumentos](/gitlab-mcp-server/es/operations/error-handling/#errores-de-argumentos)).
+
 Una llamada que supera esta comprobación y aun así lleva un valor que la acción no admite recibe la respuesta del handler base, con el mismo error de validación que devuelve en la superficie meta.
 
 ### Cuando una acción está retenida para la sesión
@@ -257,6 +259,7 @@ Una acción que el catálogo contiene pero que esta sesión no puede ejecutar nu
   gitlab_execute_action: action "issue.create" exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.
   ```
 
+- **El tipo de credencial.** En el modo OAuth, a una sesión que el servidor sabe autenticada por un token de acceso OAuth no se le sirven las cinco acciones que GitLab le rechaza lleve los scopes que lleve: la revocación y las tres rotaciones del propio token que llama, y la descarga de ficheros de paquetes del registro de modelos. Una llamada que nombra una se responde diciendo que la credencial en uso es un token de acceso OAuth y que un token de acceso personal enviado como token Bearer la ejecuta ([Acciones que no se sirven a un token de acceso OAuth](/gitlab-mcp-server/es/operations/oauth-app/#acciones-que-no-se-sirven-a-un-token-de-acceso-oauth)).
 - **Un token de grano fino.** Execute responde justo después de resolver la acción, antes de comprobar los parámetros o pedir confirmación, con el permiso que declara GitLab o el motivo por el que ningún token de grano fino alcanza la acción. [Leer una respuesta retenida](/gitlab-mcp-server/es/operations/fine-grained-tokens/#leer-una-respuesta-retenida) cita ambos textos.
 - **El tier de la instancia.** Una acción por encima del tier con el que se sirve la instancia no está en el catálogo, y se responde con el tier que necesita y el tier para el que se construyó la sesión. Solo el operador puede cambiar el tier, así que la respuesta remite al operador; cuando el tier se detectó en lugar de fijarse con `GITLAB_MCP_TIER` (`--tier`), admite que la detección pudo equivocarse, ya que un tier por el que nada respondió es Free:
 
@@ -399,7 +402,7 @@ Para despliegues más seguros:
 
 - Establece `GITLAB_MCP_READ_ONLY=true` para eliminar del catálogo las acciones mutantes.
 - Establece `GITLAB_MCP_SAFE_MODE=true` para devolver previsualizaciones de las acciones mutantes en lugar de ejecutarlas.
-- Mantén `GITLAB_MCP_YOLO_MODE=false` y `AUTOPILOT=false` salvo que el despliegue sea de plena confianza. Con `GITLAB_MCP_YOLO_MODE` verdadera, o sin definir y `AUTOPILOT` verdadera, toda acción clasificada como destructiva se ejecuta sin `confirm: true`, y también las dos llamadas cuyos argumentos deciden: un `issue.work_item_update` que vacía los asignados o los contactos CRM de un work item, y un `project.pull_mirror_configure` que haría que un pull mirror sobrescribiera las ramas divergentes. Si no, una acción destructiva se rechaza hasta que la llamada lleve `confirm: true`, y esas dos preguntan mediante elicitación o, cuando no se puede preguntar al cliente, rechazan la llamada hasta que se reenvíe con `confirm: true`.
+- Mantén `GITLAB_MCP_YOLO_MODE=false` y `AUTOPILOT=false` salvo que el despliegue sea de plena confianza. Con `GITLAB_MCP_YOLO_MODE` verdadera, o sin definir y `AUTOPILOT` verdadera, toda acción clasificada como destructiva se ejecuta sin `confirm: true`, y también las llamadas cuyos argumentos deciden: un `issue.work_item_update` que vacía los asignados o los contactos CRM de un work item, y un `project.pull_mirror_configure` o un `project.update` que haría que un pull mirror sobrescribiera las ramas divergentes. Si no, una acción destructiva se rechaza hasta que la llamada lleve `confirm: true`, y esas llamadas preguntan mediante elicitación o, cuando no se puede preguntar al cliente, rechazan la llamada hasta que se reenvíe con `confirm: true`. La protección no puede preguntar por la llamada que vuelve a activar el mirror, sin enviar el indicador, mientras el mirror guarda un indicador de sobrescritura de cuando estaba desactivado, porque GitLab lo oculta ([Cuando deciden los argumentos](/gitlab-mcp-server/es/operations/security/#cuando-deciden-los-argumentos)).
 
 ## Dinámico vs meta-herramientas
 

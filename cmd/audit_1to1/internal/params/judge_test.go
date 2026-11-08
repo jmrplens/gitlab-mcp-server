@@ -31,7 +31,7 @@ func TestPathParams_EveryPlaceholderAndSplat_IsAPathParam(t *testing.T) {
 // webhook payload's.
 func TestWorkhorseAttribute_OnlyAnAttributeOfAnUploadedFile_IsLeftOut(t *testing.T) {
 	params := map[string]apilive.Param{
-		"file": {Type: workhorseFile}, "file.sha256": {}, "pull_request": {Type: "Hash"}, "pull_request.number": {},
+		"file": {Type: apilive.WorkhorseFile}, "file.sha256": {}, "pull_request": {Type: "Hash"}, "pull_request.number": {},
 	}
 	cases := map[string]bool{"file.sha256": true, "file": false, "pull_request.number": false, "absent.key": false}
 	for name, want := range cases {

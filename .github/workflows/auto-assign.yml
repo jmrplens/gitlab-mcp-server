@@ -1,9 +1,14 @@
 name: Auto-assign
 
+# pull_request_target so that pull requests from forks are assigned too: the
+# default GITHUB_TOKEN is read-only for fork pull requests under `pull_request`,
+# and the assignment answered 403 on every outside contribution. The job reads
+# only the event payload and calls the API; nothing of the pull request is
+# checked out or run, so the elevated token is not exposed to it.
 on:
   issues:
     types: [opened]
-  pull_request:
+  pull_request_target:
     types: [opened]
 
 # The default is nothing; the job asks for what an assignment needs.
@@ -19,7 +24,7 @@ jobs:
       pull-requests: write # assign a pull request
     if: >-
       (github.event_name == 'issues' && github.event.issue.user.login != 'jmrplens' && github.event.issue.user.login != 'dependabot[bot]') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.user.login != 'jmrplens' && github.event.pull_request.user.login != 'dependabot[bot]')
+      (github.event_name == 'pull_request_target' && github.event.pull_request.user.login != 'jmrplens' && github.event.pull_request.user.login != 'dependabot[bot]')
     steps:
       - name: Assign to jmrplens
         env:

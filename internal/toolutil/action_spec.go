@@ -505,6 +505,37 @@ func FillScopeParameterGuidanceSingle(spec ActionSpec) ActionSpec {
 	return spec
 }
 
+// integerProperty reports whether props declares name with the schema type
+// integer, alone or beside null, which is what an int64 input field projects
+// to. A list that also names string, as [StringOrInt] declares, is an input
+// that takes a path too, and is not one.
+func integerProperty(props map[string]any, name string) bool {
+	prop, _ := props[name].(map[string]any)
+	var kinds []string
+	switch kind := prop["type"].(type) {
+	case string:
+		kinds = []string{kind}
+	case []string:
+		kinds = kind
+	case []any:
+		for _, each := range kind {
+			text, _ := each.(string)
+			kinds = append(kinds, text)
+		}
+	}
+	integer := false
+	for _, kind := range kinds {
+		switch kind {
+		case "integer":
+			integer = true
+		case "null":
+		default:
+			return false
+		}
+	}
+	return integer
+}
+
 // isScopeSuggestiveParameterName mirrors the audit heuristic for parameter
 // names that commonly confuse models because the same parameter type means
 // different scopes across GitLab APIs.
@@ -523,16 +554,32 @@ func isScopeSuggestiveParameterName(name string) bool {
 
 // defaultScopeParameterGuidance returns the guidance a scope-suggestive
 // parameter gets when its action declares none, props being the action's
-// input properties, and the zero value for any other name.
+// input properties, and the zero value for any other name. A project_id or
+// group_id the schema declares as an integer is an input that cannot decode a
+// path, so its guidance asks for the numeric ID rather than offering one.
 func defaultScopeParameterGuidance(name string, props map[string]any) ParameterGuidance {
 	switch name {
 	case "project_id":
+		if integerProperty(props, name) {
+			return ParameterGuidance{
+				SemanticRole:   "scope_project",
+				ValueSource:    "Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.",
+				ExampleBinding: `params.project_id:42`,
+			}
+		}
 		return ParameterGuidance{
 			SemanticRole:   "scope_project",
 			ValueSource:    "Project ID or URL-encoded path (e.g. \"group/project\").",
 			ExampleBinding: `params.project_id:"group/project"`,
 		}
 	case "group_id":
+		if integerProperty(props, name) {
+			return ParameterGuidance{
+				SemanticRole:   "scope_group",
+				ValueSource:    "Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.",
+				ExampleBinding: `params.group_id:42`,
+			}
+		}
 		return ParameterGuidance{
 			SemanticRole:   "scope_group",
 			ValueSource:    "Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").",

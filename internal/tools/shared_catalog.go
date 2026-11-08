@@ -147,14 +147,21 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // would want here would only make two configurations that differ collide less
 // legibly.
 //
+// The credential's kind is one bit, as the read_api narrowing is: an OAuth
+// access token is served a catalog without what GitLab refuses to it on every
+// way (issue 1238), so a deployment serving OAuth tokens and personal access
+// tokens alike holds at most two catalogs per narrowing, and only in OAuth
+// mode, the one place the kind is learned.
+//
 //gitlab:allow-raw cfg.ReadOnly: a cache key component, compared and never read
 //gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
+//gitlab:allow-raw cfg.OAuthCredential: a cache key component, compared and never read
 //gitlab:allow-raw cfg.SafeMode: a cache key component, compared and never read
 func CatalogFilterKey(cfg *config.ServerConfig) string {
-	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readAPIOnly=%t|safe=%t",
+	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readAPIOnly=%t|oauth=%t|safe=%t",
 		strings.Join(cfg.ExcludeTools, ","),
 		scopeCatalogKey(cfg.TokenScopes),
-		cfg.ReadOnly, cfg.ReadAPIOnly, cfg.SafeMode)
+		cfg.ReadOnly, cfg.ReadAPIOnly, cfg.OAuthCredential, cfg.SafeMode)
 }
 
 // scopeCatalogKey names the part of a token's scopes that changes a catalog:
@@ -200,6 +207,13 @@ func SharedBaseCatalog(dotcom bool, opts ActionCatalogOptions) (*actioncatalog.C
 // narrowed by [FilterActionCatalog] and bound to client, together with what
 // the narrowing withheld. One filtered catalog is built per distinct
 // narrowing and shared by every server that needs it.
+//
+// What the licensing tier removed is recorded beside it, as the dynamic
+// catalog records it (issue 956), so a meta call naming one is answered with
+// the tier it needs rather than as a value outside its tool's action enum
+// (issue 1282). It depends on nothing the key does not already name: the
+// tier and instance class, the exclusions, read-only mode and the scopes
+// [TierWithheld] reads.
 func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, WithheldActions, error) {
 	dotcom := client.IsGitLabDotCom()
 	key := "meta|" + BaseCatalogKey(cfg.Tier, dotcom, true) + "|" + CatalogFilterKey(cfg)
@@ -212,6 +226,11 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 		if filterErr != nil {
 			return nil, WithheldActions{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 		}
+		byTier, tierErr := TierWithheld(dotcom, cfg)
+		if tierErr != nil {
+			return nil, WithheldActions{}, fmt.Errorf("record what the tier withheld from the meta catalog: %w", tierErr)
+		}
+		filteredWithheld.ByTier = byTier
 		return filtered, filteredWithheld, nil
 	})
 	if err != nil {
@@ -249,12 +268,17 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 // action needs no such treatment, since the credential that cannot call it
 // cannot read it either, and the two filtered surfaces make the same split.
 //
+// What GitLab refuses to an OAuth access token on every way is left out for a
+// credential known to be one, beside the scopes, as the other two surfaces
+// leave it out (issue 1238): a tool it could never run is not listed.
+//
 //gitlab:allow-raw cfg.ReadAPIOnly: a cache key component, compared and never read
+//gitlab:allow-raw cfg.OAuthCredential: a cache key component, compared and never read
 func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
 	dotcom := client.IsGitLabDotCom()
 	key := "individual|" + BaseCatalogKey(cfg.Tier, dotcom, true) +
 		"|exclude=" + strings.Join(cfg.ExcludeTools, ",") + "|" + scopeCatalogKey(cfg.TokenScopes) +
-		"|readAPIOnly=" + strconv.FormatBool(cfg.ReadAPIOnly)
+		"|readAPIOnly=" + strconv.FormatBool(cfg.ReadAPIOnly) + "|oauth=" + strconv.FormatBool(cfg.OAuthCredential)
 	catalog, withheld, err := ShareCatalog(key, func() (*actioncatalog.Catalog, WithheldActions, error) {
 		base, baseErr := sharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 		if baseErr != nil {
@@ -273,6 +297,9 @@ func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConf
 		if cfg.ReadAPIOnly {
 			scoped = scoped.FilterReachableWith(finegrained.ClassicReadAPI)
 		}
+		// What either narrowing removed is not recorded, so their order
+		// decides nothing here.
+		scoped, _ = narrowForCredentialKind(scoped, cfg, WithheldActions{})
 		return scoped, WithheldActions{ExcludedByName: excluded}, nil
 	})
 	if err != nil {

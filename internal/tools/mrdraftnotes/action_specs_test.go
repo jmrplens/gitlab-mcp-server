@@ -221,9 +221,15 @@ func TestCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestUpdate_Forbidden verifies Update returns guidance for author-only draft notes.
+// TestUpdate_Forbidden verifies Update returns guidance for author-only draft
+// notes. The draft is answered, since a body sent alone to an instance whose
+// version is not known reads it first, and the update is refused.
 func TestUpdate_Forbidden(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/draft_notes/") {
+			testutil.RespondJSON(w, http.StatusOK, draftNoteActionJSON)
+			return
+		}
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
 	}))
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "updated"})
@@ -321,25 +327,37 @@ func mrDraftNoteSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	return byTool
 }
 
-// TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues verifies
-// that the bulk publish action publishes reviewer_state as the two values
-// GitLab's route declares, and that no other draft note action carries a
-// schema override, since none of them takes the parameter.
-func TestActionSpecs_PublishAll_ReviewerStateIsAnEnumOfGitLabsTwoValues(t *testing.T) {
+// TestActionSpecs_InputSchemaOverrides_AreTheEnumsGitLabDeclares verifies
+// that each draft note action publishes as an enum exactly the values
+// GitLab's route declares for it: the bulk publish its two reviewer_state
+// values, and the create and the update the three position_type values of
+// the positional params they share, as mr_review.discussion_create does.
+// The update carries one more, the root requirement of a body or a position,
+// since it keeps whichever of the two it is not given (Update) and has
+// nothing to change without either. No other draft note action carries a
+// schema override, since none of them takes either parameter.
+//
+// On the parent the create and the update publish position_type as a free
+// string, so a model could not see the three values without a refusal.
+func TestActionSpecs_InputSchemaOverrides_AreTheEnumsGitLabDeclares(t *testing.T) {
 	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
-	want := []toolutil.InputSchemaOverride{
-		{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
+	positionType := toolutil.InputSchemaOverride{
+		PropertyPath: "position.position_type", Values: map[string]any{"enum": []any{"text", "image", "file"}},
+	}
+	want := map[string][]toolutil.InputSchemaOverride{
+		"gitlab_mr_draft_note_publish_all": {
+			{PropertyPath: "reviewer_state", Values: map[string]any{"enum": []any{"requested_changes", "reviewed"}}},
+		},
+		"gitlab_mr_draft_note_create": {positionType},
+		"gitlab_mr_draft_note_update": {positionType, {Values: map[string]any{"anyOf": []any{
+			map[string]any{"required": []string{"note"}},
+			map[string]any{"required": []string{"position"}},
+		}}}},
 	}
 	for tool, spec := range byTool {
 		t.Run(tool, func(t *testing.T) {
-			if tool == "gitlab_mr_draft_note_publish_all" {
-				if !reflect.DeepEqual(spec.InputSchemaOverrides, want) {
-					t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, want)
-				}
-				return
-			}
-			if len(spec.InputSchemaOverrides) != 0 {
-				t.Errorf("input schema overrides = %#v, want none on an action that takes no reviewer_state", spec.InputSchemaOverrides)
+			if !reflect.DeepEqual(spec.InputSchemaOverrides, want[tool]) {
+				t.Errorf("input schema overrides =\n got %#v\nwant %#v", spec.InputSchemaOverrides, want[tool])
 			}
 		})
 	}
@@ -381,6 +399,174 @@ func TestActionSpecs_PublishAll_RouteSendsTheReviewOptions(t *testing.T) {
 	want := map[string]any{"note": "Summary", "internal": true, "reviewer_state": "requested_changes"}
 	if !reflect.DeepEqual(sent, want) {
 		t.Errorf("bulk_publish body = %#v, want %#v", sent, want)
+	}
+}
+
+// TestDiffPosition_ImageMeasures_AreDescribedInWholePixels verifies that every
+// field of a position that carries an image measure, and the position_type
+// that lists them, says the measures are whole pixels. The inputs take
+// integers, as GitLab declares width, height, x and y (lib/api/draft_notes.rb),
+// and a fraction is refused when the arguments are read, but a reference that
+// prints a field's description and not its type, as the tool reference does
+// for the update's position, gave no hint of it.
+func TestDiffPosition_ImageMeasures_AreDescribedInWholePixels(t *testing.T) {
+	for _, name := range []string{"PositionType", "Width", "Height", "X", "Y"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			if description := field.Tag.Get("jsonschema"); !strings.Contains(description, "whole pixels") {
+				t.Errorf("%s description = %q, want it to say the measures are whole pixels", name, description)
+			}
+		})
+	}
+}
+
+// bothPathsConfusion is the sentence the position guidance of both writes
+// asks for both of the file's paths with.
+const bothPathsConfusion = "Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed."
+
+// outsideTheDiffConfusion is the sentence the position guidance of both
+// writes says where a file outside the diff takes its paths in. Such a file,
+// which an image or file position may name, has no entry in
+// mr_review.changes_get, and the guidance used to send the caller there for
+// both paths whatever the file.
+const outsideTheDiffConfusion = "A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both."
+
+// onePathConfusion is the sentence the position guidance of both writes says
+// which positions are refused with one path in: a file position
+// (toolutil.ValidateFilePosition) and a text position on a file the diff
+// renames (toolutil.ValidateRenamedFilePosition), and no other.
+const onePathConfusion = "A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position."
+
+// lineRule is the rule the position guidance, the update's position
+// parameter and the 400 hint give a text position's line by. GitLab finds the
+// line only where both of its numbers match the diff line
+// (Gitlab::Diff::File#line_for_position), so an unchanged line needs both,
+// and the check before the write refuses it with one when it can read the
+// diff (toolutil.ValidateDiffPosition).
+const lineRule = "new_line for an added line, old_line for a removed one, both for an unchanged one"
+
+// noLineRefusal opens the refusal of a text position that names no line
+// (toolutil.ValidateTextPosition), which gives the line by [lineRule]. It
+// used to ask for new_line or old_line.
+const noLineRefusal = "a text position needs its line (" + lineRule + ")"
+
+// assertBothPathsAsked checks that the old_path and new_path descriptions
+// each ask for the other path beside it and name the positions that need
+// both, and that the create's Usage asks for both paths from
+// mr_review.changes_get.
+func assertBothPathsAsked(t *testing.T, createUsage string) {
+	t.Helper()
+	for name, otherPath := range map[string]string{"OldPath": "Send it with new_path", "NewPath": "Send it with old_path"} {
+		t.Run(name, func(t *testing.T) {
+			field, _ := reflect.TypeFor[DiffPosition]().FieldByName(name)
+			description := field.Tag.Get("jsonschema")
+			for _, want := range []string{
+				otherPath,
+				"or from repository.tree for a file outside the diff.",
+				"Required for position_type 'file' and for a text position on a renamed file.",
+			} {
+				if !strings.Contains(description, want) {
+					t.Errorf("%s description = %q, want it to say %q", name, description, want)
+				}
+			}
+		})
+	}
+	if want := "the file's old_path and new_path from mr_review.changes_get, or both from repository.tree for a file outside the diff."; !strings.Contains(createUsage, want) {
+		t.Errorf("create usage = %q, want it to say %q", createUsage, want)
+	}
+}
+
+// assertWriteGuidance checks the position guidance of one of the two writes:
+// where it sends a caller for each part of a position, and the sentences
+// that ask for both of the file's paths, say where a file outside the diff
+// takes them, and name the positions refused with one.
+func assertWriteGuidance(t *testing.T, guidance toolutil.ParameterGuidance) {
+	t.Helper()
+	for _, want := range []string{
+		"base_sha, start_sha and head_sha are the diff_refs of merge_request.get.",
+		"The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get.",
+		"whose path repository.tree lists at head_sha.",
+	} {
+		if !strings.Contains(guidance.ValueSource, want) {
+			t.Errorf("position guidance = %q, want it to say %q", guidance.ValueSource, want)
+		}
+	}
+	confusions := strings.Join(guidance.CommonConfusions, " ")
+	for _, want := range []string{bothPathsConfusion, outsideTheDiffConfusion, onePathConfusion} {
+		if !strings.Contains(confusions, want) {
+			t.Errorf("position guidance confusions = %q, want them to say %q", confusions, want)
+		}
+	}
+}
+
+// TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom verifies that
+// the create and the update send a caller for the three SHAs of a position to
+// merge_request.get, whose output carries them as diff_refs, and for the
+// file and the line to mr_review.changes_get, and that a file outside the
+// diff, which an image or file position may name, is looked up in
+// repository.tree. The guidance used to send a caller to
+// mr_review.changes_get for the SHAs too, which lists the diff's files and
+// none of its SHAs. The update replaces the position whole, so its guidance
+// and the description of the parameter itself also say what each
+// position_type needs. The update had no position guidance at all.
+//
+// Both writes, the create's Usage and the two path fields ask for both of
+// the file's paths, as GitLab documents for a text position, and say that
+// one is enough only on a file that was not renamed. They used to offer
+// either path as sufficient. Asking for both is a recommendation, not a rule
+// for every position: the check before the write refuses one path only for
+// a file position and for a text position on a file the diff renames, so the
+// guidance, the path fields and the update's parameter say which positions
+// those are. The update's parameter and guidance used to say every position
+// needs both.
+//
+// They also give a text position's line by [lineRule], the create's Usage
+// included: an unchanged line needs both of its numbers, where they used to
+// ask for new_line or old_line. And they say that a file outside the diff,
+// which has no entry in mr_review.changes_get, takes the path
+// repository.tree lists as both, the create's Usage and the two path fields
+// included, where they used to send the caller to that entry for every file.
+func TestActionSpecs_PositionGuidance_NamesWhereEachPartComesFrom(t *testing.T) {
+	diffRefs, ok := reflect.TypeFor[toolutil.MergeRequestOutput]().FieldByName("DiffRefs")
+	if !ok || !strings.HasPrefix(diffRefs.Tag.Get("json"), "diff_refs") {
+		t.Fatalf("merge_request.get's output has no diff_refs for the guidance to point at")
+	}
+	byTool := mrDraftNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, tool := range []string{"gitlab_mr_draft_note_create", "gitlab_mr_draft_note_update"} {
+		t.Run(tool, func(t *testing.T) {
+			guidance, found := byTool[tool].ParameterGuidance["position"]
+			if !found {
+				t.Fatalf("%s carries no guidance for position", tool)
+			}
+			assertWriteGuidance(t, guidance)
+		})
+	}
+	assertBothPathsAsked(t, byTool["gitlab_mr_draft_note_create"].Usage)
+	if usage, want := byTool["gitlab_mr_draft_note_create"].Usage, "A text position (the default) also needs a line of the diff: "+lineRule+"."; !strings.Contains(usage, want) {
+		t.Errorf("create usage = %q, want it to say %q", usage, want)
+	}
+	update := strings.Join(byTool["gitlab_mr_draft_note_update"].ParameterGuidance["position"].CommonConfusions, " ")
+	field, _ := reflect.TypeFor[UpdateInput]().FieldByName("Position")
+	description := field.Tag.Get("jsonschema")
+	const onePathDescription = "Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one."
+	if !strings.Contains(description, onePathDescription) {
+		t.Errorf("update position description = %q, want it to say %q", description, onePathDescription)
+	}
+	for _, want := range []string{
+		"base_sha, start_sha and head_sha",
+		"the file's path, and by position_type",
+		"a line of the diff (text, the default: " + lineRule + ")",
+		"width, height, x and y in whole pixels (image)",
+		"both old_path and new_path (file)",
+	} {
+		t.Run("the update names "+want, func(t *testing.T) {
+			if !strings.Contains(update, want) {
+				t.Errorf("update position guidance = %q, want it to say %q", update, want)
+			}
+			if !strings.Contains(description, want) {
+				t.Errorf("update position description = %q, want it to say %q", description, want)
+			}
+		})
 	}
 }
 

@@ -41,8 +41,8 @@ func TestFormatSettingsMarkdown(t *testing.T) {
 				"- **Active**: ✅\n"+
 				"- **Integrated**: ❌\n"+
 				"- **Project Name**: test\n"+
-				"- **Sentry URL**: https://sentry.io\n"+
-				"- **API URL**: https://sentry.io/api\n"+
+				"- **Sentry URL**: https\\://sentry.io\n"+
+				"- **API URL**: https\\://sentry.io/api\n"+
 				hints)
 	})
 	t.Run("no Sentry integration", func(t *testing.T) {

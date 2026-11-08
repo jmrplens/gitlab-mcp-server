@@ -518,7 +518,7 @@ func TestFormatOutputMarkdown_NameHoldingAPipe(t *testing.T) {
 func TestFormatOutputMarkdown_NameHoldingATag(t *testing.T) {
 	md := FormatOutputMarkdown(Output{ID: 7, ProjectID: 42, Name: `<a href="http://attacker.invalid">x</a>`})
 
-	want := "## Project Alias: &lt;a href=\"http://attacker.invalid\">x&lt;/a>\n\n" +
+	want := "## Project Alias: &lt;a href=\"http\\://attacker.invalid\">x&lt;/a>\n\n" +
 		"- **ID**: 7\n" +
 		"- **Name**: `<a href=\"http://attacker.invalid\">x</a>`\n" +
 		"- **Project ID**: 42\n\n" +

@@ -381,9 +381,13 @@ func mutationFieldProblems(authz *apilive.GraphQLAuthz) []string {
 //
 // GitLab keeps the list exact both ways in its own CI, so at a released
 // revision the two are equal, and a difference means the walk here did not
-// see the schema GitLab's task sees. The types the rule calls undeclared and
-// the check never runs on are not a difference: they are counted apart, in
-// [apilive.AuthorizationCounts.GraphQLUncheckedUndeclaredTypes].
+// see the schema GitLab's task sees, or did not apply its rule. introspect.rb
+// asks the image for the rule, and falls back to the one by name only when
+// the image does not answer; on 19.6, whose rule tells the types GraphQL Ruby
+// generates apart by class, that fallback passes over the hand-written types
+// the list names, such as DependencyPathEdge. The types the rule calls
+// undeclared and the check never runs on are not a difference: they are
+// counted apart, in [apilive.AuthorizationCounts.GraphQLUncheckedUndeclaredTypes].
 func todoProblems(doc apilive.Document) []string {
 	if doc.GraphQLAuthz == nil || doc.GraphQLAuthz.Todo == nil {
 		return nil
@@ -404,7 +408,7 @@ func todoProblems(doc apilive.Document) []string {
 		}
 		problems = append(problems, fmt.Sprintf(
 			"the undeclared GraphQL %s computed with GitLab's todo rule differ from its authorization_todo.txt "+
-				"(%s; %s): the walk did not see the schema GitLab's task sees",
+				"(%s; %s): the walk did not see the schema, or apply the rule, that GitLab's task does",
 			kind.what, onlyOneSide(onlyRule, "computed"), onlyOneSide(onlyTodo, "listed"),
 		))
 	}

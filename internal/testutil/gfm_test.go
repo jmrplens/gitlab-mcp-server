@@ -279,7 +279,10 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 		// A backslash before ASCII punctuation makes it literal: an escaped
 		// backtick opens no span, an escaped "<" opens no autolink and an
 		// escaped bracket opens no label; inside a span it is a backslash.
-		{name: "an escaped angle bracket opens no autolink", md: "\\<https://h/a`b> `[x](http://attacker.invalid/y)`\n", want: "http://attacker.invalid/y"},
+		// The address after the escaped "<" has a scheme GFM does not link as
+		// text, since an https address there would be a literal autolink,
+		// which holds the backtick as the autolink would have.
+		{name: "an escaped angle bracket opens no autolink", md: "\\<ab:h/a`b> `[x](http://attacker.invalid/y)`\n", want: "http://attacker.invalid/y"},
 		{name: "an escaped backtick opens no span", md: "\\`[x](http://attacker.invalid/y)`\n", want: "http://attacker.invalid/y"},
 		{name: "a run after an escaped backtick opens one", md: "\\``[x](http://attacker.invalid/y)`\n"},
 		{name: "a backslash inside a span does not keep it from closing", md: "`a\\`[x](http://attacker.invalid/y)\n", want: "http://attacker.invalid/y"},
@@ -659,7 +662,7 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		{name: "an escaped backtick opens no span", md: "\\`a`\n", want: "\\`a`"},
 		{name: "a run after an escaped backtick opens one", md: "\\``a`\n", want: "\\`" + gfmCodeSpanPlaceholder},
 		{name: "a backslash inside a span is a backslash", md: "`a\\`b`\n", want: gfmCodeSpanPlaceholder + "b`"},
-		{name: "an escaped angle bracket opens no autolink", md: "\\<https://h/a`b> `c`\n", want: "\\<https://h/a" + gfmCodeSpanPlaceholder + "c`"},
+		{name: "an escaped angle bracket opens no autolink", md: "\\<ab:h/a`b> `c`\n", want: "\\<ab:h/a" + gfmCodeSpanPlaceholder + "c`"},
 		{name: "a backtick in a destination opens no span", md: "[a](h`b) `c`\n", want: "[a](h`b) " + gfmCodeSpanPlaceholder},
 		{name: "a destination ending in a backtick", md: "[a](h`) `c\n", want: "[a](h`) `c"},
 		{name: "an escaped bracket leaves the destination text", md: "\\[a](h`b) `c`\n", want: "\\[a](h" + gfmCodeSpanPlaceholder + "c`"},
@@ -918,6 +921,144 @@ func TestScanGFM_ThreeSpacesOfIndentation_StillOpensTheBlock(t *testing.T) {
 		}
 		if got := strings.Join(doc.Content, "|"); strings.Contains(got, "quoted") {
 			t.Errorf("content = %q, want the quote line left out of it", got)
+		}
+	})
+}
+
+// TestScanGFM_LiteralLinks_ReadsWhatMicromarkLinks checks the literal
+// autolinks the walk reads: an email address, a www. address and an http or
+// https address written as text, each recorded as the destination a client
+// opens, with the extent micromark-extension-gfm-autolink-literal gives it.
+//
+// Every line was rendered by micromark 4.0.3 with micromark-extension-gfm
+// 3.0.0, patched where micromark departs from CommonMark as the walk's other
+// differential is, and micromark reads exactly these destinations, the
+// CommonMark links on the line included, which Links holds and this test
+// leaves out. The cases are the boundaries of each rule: the character an
+// address may follow, the domain's underscores and its end, the path's
+// parentheses, its trailing punctuation and the character references and
+// brackets after it, the whitespace JavaScript and Go do not agree on, and
+// U+0000, which micromark reads as U+FFFD.
+func TestScanGFM_LiteralLinks_ReadsWhatMicromarkLinks(t *testing.T) {
+	cases := []struct {
+		name, md, want string
+	}{
+		{name: "an email address", md: "mail b@c.de now", want: "mailto:b@c.de"},
+		{name: "an email address read from its first character", md: "mail xb@c.de", want: "mailto:xb@c.de"},
+		{name: "an email address after a slash", md: "path x/b@c.de"},
+		{name: "an email address opening with a plus", md: "mail +b@c.de", want: "mailto:+b@c.de"},
+		{name: "an email domain without a dot", md: "mail a@bc"},
+		{name: "an email domain ending in a digit", md: "mail a@b.c1"},
+		{name: "two dots in an email domain", md: "mail a@b..c"},
+		{name: "an email domain opening with a dot", md: "mail a@.b", want: "mailto:a@.b"},
+		{name: "a dot after an email address", md: "mail a@b.co.", want: "mailto:a@b.co"},
+		{name: "a dot before the at sign", md: "mail a.@bc"},
+		{name: "a mailto prefix", md: "mail mailto:a@b.co", want: "mailto:a@b.co"},
+		{name: "an escaped at sign", md: `mail a\@b.co`},
+		{name: "a dash and an underscore in an email domain", md: "mail a@b-c.d_e", want: "mailto:a@b-c.d_e"},
+		{name: "a www address opening the line", md: "www.example.com", want: "http://www.example.com"},
+		{name: "a www address in parentheses", md: "see (www.example.com)", want: "http://www.example.com"},
+		{name: "a www address between asterisks", md: "see *www.example.com*", want: "http://www.example.com"},
+		{name: "a www address between underscores", md: "see _www.example.com_", want: "http://www.example.com"},
+		{name: "a www address between tildes", md: "see ~www.example.com~", want: "http://www.example.com"},
+		{name: "a www address after a bracket", md: "see ]www.example.com", want: "http://www.example.com"},
+		{name: "a www address after a tab", md: "see x\twww.example.com", want: "http://www.example.com"},
+		{name: "a www address after a letter", md: "see awww.example.com"},
+		{name: "a www address after a digit", md: "see 1www.example.com"},
+		{name: "a www address in mixed case", md: "see WwW.example.com", want: "http://WwW.example.com"},
+		{name: "www without its dot", md: "see www"},
+		{name: "www with nothing after its dot", md: "see www."},
+		{name: "www with a dot as its trail", md: "see www..", want: "http://www"},
+		{name: "an underscore in the last but one segment", md: "see www.x_y.com"},
+		{name: "an underscore in the last segment", md: "see www.a.b_c"},
+		{name: "an underscore two segments from the end", md: "see www.a_b.c"},
+		{name: "an underscore three segments from the end", md: "see www.a_b.c.d", want: "http://www.a_b.c.d"},
+		{name: "punctuation ending the domain", md: "see www.a_b/.c.d"},
+		{name: "a dash inside the domain", md: "see www.a_b-.c.d", want: "http://www.a_b-.c.d"},
+		{name: "U+0000 ending the domain", md: "see www.a_b\x00.c.d"},
+		{name: "a space after the domain", md: "see www.a.com b", want: "http://www.a.com"},
+		{name: "a no-break space after the domain", md: "see www.a.com\U000000A0b", want: "http://www.a.com"},
+		{name: "a next-line character inside the domain", md: "see www.a\U00000085b c", want: "http://www.a\U00000085b"},
+		{name: "a byte order mark after the domain", md: "see www.a\U0000FEFFb c", want: "http://www.a"},
+		{name: "a dot after a www address", md: "see www.example.com.", want: "http://www.example.com"},
+		{name: "an http address", md: "see http://a.b/c now", want: "http://a.b/c"},
+		{name: "an https address in upper case", md: "see HTTPS://a.b now", want: "HTTPS://a.b"},
+		{name: "an http address after a letter", md: "see xhttp://a.b"},
+		{name: "an http address after a digit", md: "see 1http://a.b", want: "http://a.b"},
+		{name: "a scheme longer than https", md: "see httpx://a.b"},
+		{name: "an ftp address", md: "see ftp://a.b"},
+		{name: "one slash after the scheme", md: "see http:/a.b"},
+		{name: "punctuation after the slashes", md: "see http://.a"},
+		{name: "a space after the slashes", md: "see http:// a"},
+		{name: "U+0000 after the slashes", md: "see http://\x00a.b"},
+		{name: "an underscore in each of the last two segments", md: "see http://a_b.c_d"},
+		{name: "an escaped colon", md: `see http\://a.b`},
+		{name: "a parenthesis the path opens and closes", md: "see http://a.b/(c) now", want: "http://a.b/(c)"},
+		{name: "a closing parenthesis at the end", md: "see http://a.b/c) now", want: "http://a.b/c"},
+		{name: "a closing parenthesis too many", md: "see http://a.b/(c)) now", want: "http://a.b/(c)"},
+		{name: "a closing parenthesis inside, counted", md: "see http://a.b/c)d(e) now", want: "http://a.b/c)d(e"},
+		{name: "a dot inside the path", md: "see http://a.b/c.d(e) now", want: "http://a.b/c.d(e)"},
+		{name: "a comma inside the path", md: "see http://a.b/c,d now", want: "http://a.b/c,d"},
+		{name: "a comma after the path", md: "see http://a.b/c, now", want: "http://a.b/c"},
+		{name: "an angle bracket ending the path", md: "see http://a.b/c<d", want: "http://a.b/c"},
+		{name: "a character reference after the path", md: "see http://a.b/c&amp;", want: "http://a.b/c"},
+		{name: "a character reference inside the path", md: "see http://a.b/c&amp;d", want: "http://a.b/c&amp;d"},
+		{name: "a reference that names no character", md: "see http://a.b/c&1;", want: "http://a.b/c&1"},
+		{name: "a bracket and a parenthesis after the path", md: "see http://a.b/c](x", want: "http://a.b/c"},
+		{name: "a bracket inside the path", md: "see http://a.b/c]x", want: "http://a.b/c]x"},
+		{name: "a bracket and a dot after the path", md: "see http://a.b/c].", want: "http://a.b/c"},
+		{name: "two brackets after the path", md: "see http://a.b/c][x", want: "http://a.b/c"},
+		{name: "U+0000 inside the path", md: "see http://a.b/c\x00d e", want: "http://a.b/c\x00d"},
+		{name: "an unclosed bracket before it", md: "[a www.example.com"},
+		{name: "a closed bracket before it", md: "[a] www.example.com", want: "http://www.example.com"},
+		{name: "an outer bracket still open around a link", md: "[a [b](c) www.example.com"},
+		{name: "an outer bracket closed after a link", md: "[a [b](c)] www.example.com", want: "http://www.example.com"},
+		{name: "an image still open", md: "![a www.example.com"},
+		{name: "an address in a link's label", md: "[www.example.com](https://gitlab.example/T/7)"},
+		{name: "an address after a link", md: "[a](b) www.example.com", want: "http://www.example.com"},
+		{name: "an address in a code span", md: "`www.example.com` and <https://a.b>"},
+		{name: "an address in a raw tag", md: `<a href="http://a.b">x</a>`},
+		{name: "an address in an escaped tag", md: `&lt;a href="http://a.b">x&lt;/a>`, want: `http://a.b">x&lt;/a>`},
+		{name: "an address after the closing half of a link", md: "x](http://attacker.invalid/y)Title7", want: "http://attacker.invalid/y)Title7"},
+		{name: "one of each on a line", md: "a@b.co and www.c.de and http://e.fg", want: "mailto:a@b.co|http://www.c.de|http://e.fg"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(ScanGFM(tc.md+"\n").LiteralLinks, "|"); got != tc.want {
+				t.Errorf("literal links of %q = %q, want %q", tc.md, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScanGFM_LiteralLinks_AreReadWhereStructureIs checks where a literal
+// autolink is recorded: in a table row cell by cell, since GFM splits a row
+// before it reads an address, on a line outside quotes and fences, and with
+// the address written to the bare text as it stands, so a backtick inside
+// one opens no code span.
+func TestScanGFM_LiteralLinks_AreReadWhereStructureIs(t *testing.T) {
+	cases := []struct {
+		name, md, want string
+	}{
+		{name: "a table row", md: "| A | B | C |\n| --- | --- | --- |\n| http://a.b/c|d | www.e.fg |\n", want: "http://a.b/c|http://www.e.fg"},
+		{name: "a quote", md: "> www.example.com\n"},
+		{name: "a fence", md: "```\nwww.example.com\n```\n"},
+		{name: "a list item", md: "- **Web**: www.example.com\n", want: "http://www.example.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(ScanGFM(tc.md).LiteralLinks, "|"); got != tc.want {
+				t.Errorf("literal links = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("a backtick inside an address", func(t *testing.T) {
+		const line = "see http://a.b/`c` d"
+		doc := ScanGFM(line + "\n")
+
+		if got := doc.Bare[0].Bare; got != line {
+			t.Errorf("bare = %q, want the line as written: the address holds both backticks", got)
 		}
 	})
 }

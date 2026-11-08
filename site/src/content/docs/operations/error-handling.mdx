@@ -243,6 +243,14 @@ Arguments are checked before anything is sent to GitLab, in up to three places, 
 2. **The surface's own check.** On the dynamic surface: `gitlab_execute_action/<action>: invalid params.`, followed by `Unknown params: ...`, a `Did you mean ...?` suggestion, `Missing required params: ...`, `Missing one of ...` for an action whose call needs one of several groups, and the `Valid params: ...` (see [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/)). On the meta surface: `gitlab_issue/get: missing required params: issue_iid. Put action-specific fields under params.`, `'params' is required for this action. Required params: ...`, or, for an action the tool does not have, `gitlab_issue: unknown action "x". Valid actions: ...`.
 3. **The action's own decoding.** Every key must be a parameter of the action, and any other is refused rather than dropped: `invalid params for this action: json: unknown field "foo"`, which the meta surface opens with the tool and action (`gitlab_issue/get: ...`). The reserved `confirm` key is taken out first. Where the schema is open, a few documented aliases are translated to their canonical names before this check (`mr_iid` to `merge_request_iid`, `commit_id` to `commit_sha`), and a number sent as a string is converted; a closed schema refuses an alias in the first step.
 
+A parameter the instance's tier does not serve is refused on every surface before anything is sent, with the tier it needs, rather than as a parameter the action does not know. The schemas of a lower tier leave out the parameters a higher one adds, such as the assignee, milestone, labels and weight a Premium board is scoped by, and a call sending one is answered, here on the meta surface of a Free instance:
+
+```text
+gitlab_project/board_update: param "assignee_id" needs GitLab Premium or Ultimate, and this instance's tier was detected as GitLab Free, so the action's schema at this tier leaves it out and nothing was sent. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier. Send the call without it to run the action at this tier.
+```
+
+The dynamic surface opens the same answer with `gitlab_execute_action/project.board_update`, and the individual surface with the tool's name. Where the tier was set with `GITLAB_MCP_TIER` (`--tier`) the answer says `this deployment is configured for GitLab Free` and asks the operator to configure the tier the instance has. A documented alias of a parameter the tier serves is not refused.
+
 A required value that arrives empty or zero is refused with a message naming the exact parameter, aimed at the names models confuse (`milestone_id` for `milestone_iid`, `branch` for `branch_name`, `iid` for `merge_request_iid`):
 
 ```text

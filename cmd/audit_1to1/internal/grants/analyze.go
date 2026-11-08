@@ -28,7 +28,8 @@ type Report struct {
 	GitLabVersion string  `json:"gitlab_version"`
 	Summary       Summary `json:"summary"`
 	// Inconsistencies are what the gate fails on: a committed artifact that
-	// disagrees with the live record or with the other artifact.
+	// disagrees with the live record or with the other artifact, and a slash
+	// declaration that answers nothing.
 	Inconsistencies []string `json:"inconsistencies"`
 	// Actions are every action's requirement in GitLab's words. Context, and
 	// left out with -gaps-only.
@@ -106,8 +107,9 @@ type Summary struct {
 }
 
 // clean reports whether the gate passes: the committed artifacts agree with
-// the live record and with each other. Nothing else here gates, for the
-// reasons each part records.
+// the live record and with each other, and every declaration read here still
+// answers something. Nothing else here gates, for the reasons each part
+// records.
 func (s Summary) clean() bool { return s.Inconsistencies == 0 }
 
 // Options is what a run of this scope needs beyond the tree.
@@ -116,7 +118,8 @@ type Options struct {
 	// requirements, the served-empty positions and the public operations.
 	GapsOnly bool
 	// E2ECallsDir is the shard directory an end-to-end run recorded its calls
-	// into. Empty leaves the action-grain cross-check out.
+	// into. Empty leaves the action-grain cross-check out, and one that cannot
+	// be read fails the run.
 	E2ECallsDir string
 }
 
@@ -124,13 +127,14 @@ type Options struct {
 // and for the JSON encoder that never fails on a report of strings and ints.
 // Each is a variable a test restores.
 var (
-	marshalIndent = json.MarshalIndent
-	readRecord    = actionrequests.ReadRecord
-	readInventory = requestinventory.Read
-	catalog       = actionrequests.Catalog
-	grantTable    = actiongrants.Table
-	readE2ECalls  = e2ecalls.ReadForCalls
-	readLive      = func(root string) (apilive.Document, error) {
+	marshalIndent     = json.MarshalIndent
+	readRecord        = actionrequests.ReadRecord
+	readInventory     = requestinventory.Read
+	catalog           = actionrequests.Catalog
+	grantTable        = actiongrants.Table
+	readE2ECalls      = e2ecalls.ReadForCalls
+	slashPlaceholders = apilive.SlashPlaceholders
+	readLive          = func(root string) (apilive.Document, error) {
 		return apilive.Read(filepath.Join(root, apilive.DefaultDir))
 	}
 )
@@ -176,8 +180,12 @@ func buildReport(root string, opts Options) (Report, error) {
 	view := viewActions(table, record, owners)
 	elements := worklist(table, record, &live, owners)
 	crossCheck := inventoryCheck(inventory.Requests, record, &live, owners)
-	e2e := e2eCheck(opts.E2ECallsDir, record)
+	e2e, err := e2eCheck(opts.E2ECallsDir, record)
+	if err != nil {
+		return Report{}, err
+	}
 	found := inconsistencies(table, record, &live, actions)
+	found = append(found, staleSlashes(inventory.Requests, apilive.NewRouteIndex(live.Routes))...)
 	classic := classicView(table, actions)
 
 	report := Report{

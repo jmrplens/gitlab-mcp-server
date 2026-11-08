@@ -132,6 +132,11 @@ type Operation struct {
 	// OffSpine are the declared positions whose denial stays off the spine,
 	// judged per grant for the degraded note and never for the listing.
 	OffSpine []uint32
+	// OAuthRefused is set for a REST route GitLab answers only for a personal
+	// access token (or a job token), refusing an OAuth access token whatever
+	// scopes it carries, as the generator's declarations cite from GitLab's
+	// source ([Table.OAuthRefusal]).
+	OAuthRefused bool
 }
 
 // Element is one GraphQL object position a document selects. At an abstract

@@ -103,6 +103,49 @@ func TestSDKSource_Requests_AnswersByWhatTheMethodSends(t *testing.T) {
 	}
 }
 
+// TestSDKSource_Placements_KeysEachRouteTheWayADerivedRequestIs verifies the
+// reading of where a client-go method's arguments land: each by its position
+// among the parameters, on the route spelled as [derive.Request.Key] spells a
+// REST request, in the segment it fills, and nothing for a method client-go
+// does not declare.
+func TestSDKSource_Placements_KeysEachRouteTheWayADerivedRequestIs(t *testing.T) {
+	source := &sdkSource{sdk: sdkroutes.Read(sdkFixtureDir(t))}
+	route := derive.Request{Kind: derive.KindREST, Method: "GET", Path: "/projects/:/issues/:"}.Key()
+	want := []derive.Placement{{Index: 0, Route: route, Segment: 1}, {Index: 1, Route: route, Segment: 3}}
+	if got := source.Placements("Issues.GetIssue"); !reflect.DeepEqual(got, want) {
+		t.Errorf("Placements(Issues.GetIssue) = %+v, want %+v", got, want)
+	}
+	if got := source.Placements("Absent.Method"); got != nil {
+		t.Errorf("Placements(Absent.Method) = %+v, want none", got)
+	}
+}
+
+// TestSDKSource_NilChecks_KeysEachRouteTheWayADerivedRequestIs verifies the
+// checks each route of a method sits behind are read under the key a derived
+// request has, every check of a route kept, and that a method with no check and
+// one client-go does not declare answer none.
+func TestSDKSource_NilChecks_KeysEachRouteTheWayADerivedRequestIs(t *testing.T) {
+	source := &sdkSource{sdk: sdkroutes.Read(sdkFixtureDir(t))}
+	item := derive.Request{Kind: derive.KindREST, Method: "GET", Path: "/guarded/:/items/:"}.Key()
+	items := derive.Request{Kind: derive.KindREST, Method: "GET", Path: "/guarded/:/items"}.Key()
+	cases := []struct {
+		method string
+		want   map[string][]derive.NilCheck
+	}{
+		{method: "Guards.GuardedAppend", want: map[string][]derive.NilCheck{item: {{Index: 1}}, items: {{Index: 1, Nil: true}}}},
+		{method: "Guards.GuardedNested", want: map[string][]derive.NilCheck{item: {{Index: 0}, {Index: 1}}}},
+		{method: "Issues.GetIssue", want: map[string][]derive.NilCheck{}},
+		{method: "Absent.Method", want: map[string][]derive.NilCheck{}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.method, func(t *testing.T) {
+			if got := source.NilChecks(testCase.method); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("NilChecks(%s) = %+v, want %+v", testCase.method, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestClientGoDir_IsTheModuleTheProgramImports verifies client-go is read
 // from the directory of the package the loaded program imports, and from
 // nowhere when no package imports it or the import carries no files.

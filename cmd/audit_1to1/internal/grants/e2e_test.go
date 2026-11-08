@@ -33,19 +33,26 @@ func useE2ECalls(t *testing.T, records []e2ecalls.Record, err error) {
 // TestE2ECheck_NoDirectory_RunsNothing verifies a run that named no shard
 // directory reports the check as not run rather than as nothing compared.
 func TestE2ECheck_NoDirectory_RunsNothing(t *testing.T) {
-	if got := e2eCheck("", fixtureRecord()); !reflect.DeepEqual(got, E2ECheck{}) {
-		t.Errorf("e2eCheck(\"\") = %+v, want nothing", got)
+	got, err := e2eCheck("", fixtureRecord())
+	if err != nil || !reflect.DeepEqual(got, E2ECheck{}) {
+		t.Errorf("e2eCheck(\"\") = %+v, %v; want nothing", got, err)
 	}
 }
 
-// TestE2ECheck_AnUnreadableRecord_IsANoteNotAFailure verifies a directory that
-// cannot be read is reported with why, and nothing is compared.
-func TestE2ECheck_AnUnreadableRecord_IsANoteNotAFailure(t *testing.T) {
-	useE2ECalls(t, nil, errors.New("no such directory"))
-	got := e2eCheck("shards", fixtureRecord())
-	want := E2ECheck{Ran: true, Directory: "shards", Grain: e2eGrain, Error: "read the end-to-end call record: no such directory"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("e2eCheck = %+v, want %+v", got, want)
+// TestE2ECheck_AnUnreadableRecord_FailsTheRun verifies a directory named and
+// not readable is an error wrapping why rather than a report that reads like a
+// run with nothing to say, while a record that holds nothing is one that ran.
+func TestE2ECheck_AnUnreadableRecord_FailsTheRun(t *testing.T) {
+	boom := errors.New("no such directory")
+	useE2ECalls(t, nil, boom)
+	if got, err := e2eCheck("shards", fixtureRecord()); !errors.Is(err, boom) || !reflect.DeepEqual(got, E2ECheck{}) {
+		t.Errorf("e2eCheck = %+v, %v; want nothing and an error wrapping %v", got, err, boom)
+	}
+	useE2ECalls(t, nil, nil)
+	got, err := e2eCheck("shards", fixtureRecord())
+	want := E2ECheck{Ran: true, Directory: "shards", Grain: e2eGrain}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("e2eCheck of an empty record = %+v, %v; want %+v", got, err, want)
 	}
 }
 
@@ -104,7 +111,10 @@ func TestE2ECheck_EachActionsBusiestTrace_IsHeldToItsShortestPath(t *testing.T) 
 		actionrequests.RecordAction{ID: "either.way", Requests: alternatives, Paths: [][]int{{0, 1}, {2}}},
 		actionrequests.RecordAction{ID: "either.ok", Requests: alternatives, Paths: [][]int{{0, 1}, {2}}},
 	)
-	got := e2eCheck("shards", record)
+	got, err := e2eCheck("shards", record)
+	if err != nil {
+		t.Fatalf("e2eCheck: %v", err)
+	}
 	want := E2ECheck{
 		Ran: true, Directory: "shards", Grain: e2eGrain,
 		Compared: 9, Consistent: 5,
@@ -148,7 +158,10 @@ func TestE2ECheck_Routes_EachIsAccountedForOrALead(t *testing.T) {
 	head.Derived = "HEAD /projects/:/repository/files/:/raw"
 	record.Actions = append(record.Actions, actionrequests.RecordAction{ID: "file.raw", Requests: []actionrequests.RecordRequest{head}, Paths: [][]int{{0}}})
 
-	got := e2eCheck("shards", record)
+	got, err := e2eCheck("shards", record)
+	if err != nil {
+		t.Fatalf("e2eCheck: %v", err)
+	}
 	want := E2ECheck{
 		Ran: true, Directory: "shards", Grain: e2eGrain,
 		Compared: 8, Consistent: 5, RoutesCompared: 7,

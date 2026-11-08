@@ -358,6 +358,66 @@ func TestPaginationCheck_AListOnAKeysetRouteWithoutPageToken_IsAFinding(t *testi
 	}
 }
 
+// TestPaginationCheck_AListThatReadsAKeysetRouteOnSomeCalls_IsNotAsked verifies
+// what a list's read of one object by name comes to: no way of running the action
+// needs that route, so it is not the list the action publishes, and page_token
+// would have nothing to page. The same route is asked of a list that needs it,
+// whether on every call or as one of its alternatives, and an action offering
+// page_token is still held to a route it sends on some calls only. A route the
+// action sends at two sites, one it needs and one it does not, is asked
+// whichever of the two the record lists first.
+func TestPaginationCheck_AListThatReadsAKeysetRouteOnSomeCalls_IsNotAsked(t *testing.T) {
+	withPaginationDeclarations(t, nil)
+	classed := func(id, handler string, classes ...string) actionrequests.RecordAction {
+		routes := []string{"GET /projects/:id"}
+		for range classes {
+			routes = append(routes, "GET /projects/:id/cursors")
+		}
+		action := sending(id, handler, routes...)
+		for i, class := range classes {
+			action.Requests[i+1].Class = class
+		}
+		return action
+	}
+	half := keysetFixture{
+		operations: map[string]response{
+			"GET /projects/:id":         {Params: []string{"id"}},
+			"GET /projects/:id/cursors": cursorRoute,
+		},
+		requests: []actionrequests.RecordAction{
+			classed("thing.lookup", "things.Lookup", actionrequests.ClassOptional),
+			classed("thing.needs", "things.Needs", actionrequests.ClassMandatory),
+			classed("thing.either", "things.Either", actionrequests.ClassAlternative),
+			classed("thing.offers", "things.Offers", actionrequests.ClassOptional),
+			classed("thing.needed_first", "things.NeededFirst", actionrequests.ClassMandatory, actionrequests.ClassOptional),
+			classed("thing.needed_last", "things.NeededLast", actionrequests.ClassOptional, actionrequests.ClassMandatory),
+		},
+		actions: []requestinventory.Action{
+			listAction("thing.lookup", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+			listAction("thing.needs", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+			listAction("thing.either", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+			listAction("thing.offers", "things", reflect.TypeFor[fixturePaginatedListOutput](), withPageToken),
+			listAction("thing.needed_first", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+			listAction("thing.needed_last", "things", reflect.TypeFor[fixturePaginatedListOutput](), withoutPageToken),
+		},
+	}.run(t)
+
+	got := map[string]string{}
+	for _, finding := range half.Findings {
+		got[finding.Action] = finding.Problem
+	}
+	want := map[string]string{
+		"thing.either":       "keyset-route-without-page-token",
+		"thing.needs":        "keyset-route-without-page-token",
+		"thing.offers":       "keyset-route-never-followed",
+		"thing.needed_first": "keyset-route-without-page-token",
+		"thing.needed_last":  "keyset-route-without-page-token",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findings = %v, want %v", got, want)
+	}
+}
+
 // TestPaginationCheck_ARouteMountedTwice_IsAskedByTheCursorsOfBoth verifies a
 // route the record mounts twice is one route to the request record, which
 // spells it once, and its next page is asked by what either mount names: the
@@ -527,7 +587,7 @@ func TestRun_AnUndeclaredKeysetFinding_FailsTheGate(t *testing.T) {
 				listAction("thing.list", "things", reflect.TypeFor[fixturePaginatedListOutput](), testCase.input),
 			}, graphqldocs.Result{})
 
-			content, clean, err := Run(t.Context(), root, Options{})
+			content, clean, err := Run(root, Options{})
 			if err != nil {
 				t.Fatalf("Run() error = %v", err)
 			}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"reflect"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/go/types/typeutil"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
@@ -1012,6 +1014,12 @@ func (r *diffRun) isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
 //     a param modeled on a nested object/slice element, a deprecated param the
 //     current endpoint replaced, or an SDK options field the endpoint doesn't accept).
 //
+// MCPType may also name a struct of ours an input's values go through on the
+// way to a helper that builds the options, the struct the helper takes
+// (projects.userProjectFilter, notifications.eventFields): the key answers
+// that struct's own pair and every pair found through a caller that went
+// through it, in whichever package the input is declared.
+//
 // This makes the auditor's missing-input total fully explained: every accepted
 // miss is here with a reason, so any NEW genuine gap still surfaces.
 var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", entries: map[string]string{
@@ -1313,9 +1321,20 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 // adjudicated legitimate omission, checking the whole-type key first then
 // per-field, with the same consequence for a shadowed per-field key that
 // isAcceptedExtraOutput describes.
-func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string) bool {
-	return r.answer(acceptedMissingInputs, pkg+"."+mcpType) ||
-		r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag)
+//
+// The input's own keys come first, and then those of each struct of ours the
+// pair went through, through naming them as [structPair.through] does. A
+// declaration written on such a struct is about every input handed through
+// it: every project list goes through projects.userProjectFilter, and what
+// the struct offers is what each list offers, so the reason one key gives
+// for the struct is the reason for all of them.
+func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string, through []string) bool {
+	if r.answer(acceptedMissingInputs, pkg+"."+mcpType) || r.answer(acceptedMissingInputs, pkg+"."+mcpType+"."+tag) {
+		return true
+	}
+	return slices.ContainsFunc(through, func(typeKey string) bool {
+		return r.answer(acceptedMissingInputs, typeKey) || r.answer(acceptedMissingInputs, typeKey+"."+tag)
+	})
 }
 
 // keysetListFields are the two parameters of gl.ListOptions that ask GitLab
@@ -1460,12 +1479,14 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 	run := newDiffRun()
+	analyzed := make([]packageReport, 0, len(pkgs))
 	reports := make([]packageReport, 0, len(pkgs))
 	for _, pkg := range withSharedShapes(pkgs) {
 		pr, ok := run.analyzePackage(pkg)
 		if !ok {
 			continue
 		}
+		analyzed = append(analyzed, pr)
 		if gapsOnly && !pr.hasFindings() {
 			continue
 		}
@@ -1474,9 +1495,12 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	slices.SortFunc(reports, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) })
 	// Judged after the loop and over every package, including the clean ones
 	// -gaps-only is about to drop from the report: a declaration that answers a
-	// candidate in a package with no finding left is doing its job.
+	// candidate in a package with no finding left is doing its job. The
+	// summary counts them too, so the flag shortens the list and changes no
+	// count: a package with no missing or extra field still has its pairs and
+	// its type mismatches.
 	stale := run.staleDeclarations(declarationTables)
-	summary := summarize(reports)
+	summary := summarize(analyzed)
 	summary.StaleDeclarations = len(stale)
 	return report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -1590,6 +1614,7 @@ func CollectPairs(pkg *packages.Package) []Pair {
 func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string]structPair) {
 	inputPairs = map[[2]string]structPair{}
 	outputPairs = map[[2]string]structPair{}
+	decls := funcDecls(pkg)
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
@@ -1597,7 +1622,7 @@ func discoverPairs(pkg *packages.Package) (inputPairs, outputPairs map[[2]string
 				continue
 			}
 			collectConverter(pkg, fn, outputPairs)
-			collectHandlerInputs(pkg, fn, inputPairs)
+			collectHandlerInputs(pkg, fn, decls, inputPairs)
 		}
 	}
 	collectCallerInputs(pkg, inputPairs)
@@ -1766,6 +1791,12 @@ type structPair struct {
 	sdkURLTags bool
 	// via is how an input pair was found; see [Pair.Via].
 	via string
+	// through names, for a pair found through the caller of a helper, the
+	// structs of ours the values went through on the way to the literal, as
+	// a declaration key names a type ("projects.userProjectFilter"), sorted.
+	// A declaration of acceptedMissingInputs written on one of them answers
+	// the pair as it answers that struct's own pair.
+	through []string
 }
 
 // exported renders the pair in its exported form.
@@ -1790,13 +1821,24 @@ func inputPair(mcpNamed *types.Named, mcpStruct *types.Struct, sdkNamed *types.N
 }
 
 // recordInputPair records pair unless a more direct route already recorded
-// the same two structs.
+// the same two structs. A pair recorded through a caller goes through what
+// every route recorded after it went through: only a route through a caller
+// goes through anything, and the kinds are recorded in order, so a later
+// route is through a caller too or adds nothing.
 func recordInputPair(out map[[2]string]structPair, pair structPair) {
 	key := [2]string{pair.mcpName, pair.sdkNamed.Obj().Name()}
-	if _, recorded := out[key]; recorded {
+	recorded, exists := out[key]
+	if !exists {
+		out[key] = pair
 		return
 	}
-	out[key] = pair
+	if recorded.via != ViaCaller {
+		return
+	}
+	merged := append(slices.Clip(recorded.through), pair.through...)
+	slices.Sort(merged)
+	recorded.through = slices.Compact(merged)
+	out[key] = recorded
 }
 
 func sortedPairs(pairs map[[2]string]structPair) []structPair {
@@ -1909,13 +1951,33 @@ func recordConverter(mcpNamed *types.Named, mcpStruct *types.Struct, mcpName str
 // receives under another name. A nested struct is left to
 // [collectNestedInputs], which pairs it with the struct its values are read
 // from rather than with the handler's input.
-func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string]structPair) {
+//
+// A literal fn sends that reads nothing of the input is a lookup of fn's
+// own, and attributed to nothing, unless fn is a handler. A handler is what
+// a model's call reaches, in one of the two shapes the catalog's routes
+// take: answering with an output and an error, or exported and answering
+// with an error alone, as the delete handlers are.
+// pipelines.pipelineFailure is neither: it takes the wait's input, answers
+// with an error alone and lists the failed jobs with constants, and the job
+// list it sends is no request the wait's input describes. It sends the list
+// whether it calls the service itself or hands the literal to a function of
+// decls, the functions of the package with a body, that does, however deep
+// the chain. A builder that sends nothing (systemhooks.hookAddOptions)
+// builds for its input however the literal is filled, a helper call that
+// fills it included, and so does one whose helpers send only options of
+// their own, which it never hands them.
+func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, decls map[*types.Func]*ast.FuncDecl, out map[[2]string]structPair) {
 	if fn.Body == nil {
 		return
 	}
-	mcpNamed, mcpStruct, ok := handlerInputStruct(pkg, fn)
+	mcpNamed, mcpStruct, input, ok := handlerInputParam(pkg, fn)
 	if !ok {
 		return
+	}
+	handler := isHandler(pkg.TypesInfo, fn)
+	var reading map[*ast.CompositeLit]bool
+	if !handler {
+		reading = readingLiterals(pkg.TypesInfo, fn.Body, input, decls)
 	}
 	ast.Inspect(fn.Body, func(node ast.Node) bool {
 		lit, isLit := node.(*ast.CompositeLit)
@@ -1923,11 +1985,434 @@ func collectHandlerInputs(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]st
 			return true
 		}
 		for _, named := range builtRequests(pkg.TypesInfo.TypeOf(lit)) {
+			if !handler && !reading[lit] && sentThrough(pkg.TypesInfo, fn.Body, lit, named.Obj(), decls) {
+				continue
+			}
 			_, st, _ := derefNamedStruct(named)
 			recordInputPair(out, inputPair(mcpNamed, mcpStruct, named, st, ""))
 		}
 		return true
 	})
+}
+
+// isHandler reports whether fn is a function a model's call reaches, in one
+// of the two shapes toolutil.RouteAction and toolutil.RouteVoidAction take:
+// one answering with an output and an error, the shape a handler registered
+// from inside the package has too, and one the package exports answering
+// with an error alone. An exported function of any other shape is a utility
+// no route takes.
+func isHandler(info *types.Info, fn *ast.FuncDecl) bool {
+	return answersOutputAndError(info, fn) || (fn.Name.IsExported() && answersErrorAlone(info, fn))
+}
+
+// answersOutputAndError reports whether fn answers with two results, the
+// second an error. The count is of results, every name of a field that
+// declares several included, so (first, second Output, err error) is three.
+func answersOutputAndError(info *types.Info, fn *ast.FuncDecl) bool {
+	return fn.Type.Results.NumFields() == 2 && lastResultIsError(info, fn)
+}
+
+// answersErrorAlone reports whether fn answers with one result, an error.
+func answersErrorAlone(info *types.Info, fn *ast.FuncDecl) bool {
+	return fn.Type.Results.NumFields() == 1 && lastResultIsError(info, fn)
+}
+
+// lastResultIsError reports whether the last result fn declares is an error.
+// It is asked only of a function that declares one.
+func lastResultIsError(info *types.Info, fn *ast.FuncDecl) bool {
+	results := fn.Type.Results.List
+	return types.Identical(info.TypeOf(results[len(results)-1].Type), types.Universe.Lookup("error").Type())
+}
+
+// readingLiterals returns the composite literals of body that read something
+// of input: one whose values read the input or a variable holding something
+// of it, and one assigned to a variable that holds something of it, which is
+// what a variable filled from the input after the literal built it holds,
+// field by field, through a pointer to it or by a call that fills it, a
+// call of one of decls read through its body. A function whose input has no
+// name reads nothing of it.
+func readingLiterals(info *types.Info, body *ast.BlockStmt, input *types.Var, decls map[*types.Func]*ast.FuncDecl) map[*ast.CompositeLit]bool {
+	if input == nil {
+		return map[*ast.CompositeLit]bool{}
+	}
+	return readingIn(info, body, heldFrom(info, body, input, decls))
+}
+
+// heldFrom returns input and the variables of body that hold something of
+// it, filled from it after they were built included. Of several results of
+// one call of a function of decls assigned at once, only those it hands
+// back something of what it is handed in hold it, as
+// [intermediates.assign] reads them.
+func heldFrom(info *types.Info, body *ast.BlockStmt, input *types.Var, decls map[*types.Func]*ast.FuncDecl) map[*types.Var]bool {
+	filled := holdIntermediates(info, body, input, nil, decls)
+	for filled.fillThroughPointers(body, decls) {
+		filled.hold(body)
+	}
+	return filled.from
+}
+
+// readingIn returns the composite literals of body that read one of held,
+// in their values or through the variable they are assigned to.
+func readingIn(info *types.Info, body *ast.BlockStmt, held map[*types.Var]bool) map[*ast.CompositeLit]bool {
+	reading := map[*ast.CompositeLit]bool{}
+	// A literal is a value of its own on the right of an assignment, so the
+	// target in its place is the one it is assigned to: a call is the only
+	// value assigned to several, and it is no literal.
+	assigned := func(lhs, rhs []ast.Expr) {
+		for i, value := range rhs {
+			if lit := compositeOf(value); lit != nil && held[rootVar(info, lhs[i])] {
+				reading[lit] = true
+			}
+		}
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.CompositeLit:
+			reading[typed] = reading[typed] || reads(info, typed, held)
+		case *ast.AssignStmt:
+			assigned(typed.Lhs, typed.Rhs)
+		case *ast.ValueSpec:
+			assigned(specNames(typed), typed.Values)
+		}
+		return true
+	})
+	return reading
+}
+
+// specNames returns the names a declaration declares, as the targets of an
+// assignment.
+func specNames(spec *ast.ValueSpec) []ast.Expr {
+	names := make([]ast.Expr, len(spec.Names))
+	for i, name := range spec.Names {
+		names[i] = name
+	}
+	return names
+}
+
+// fillThroughPointers runs a pass over body that marks the variables filled
+// from the input through a pointer into them, and reports whether it marked
+// any: the one a pointer that holds something of the input was taken from
+// (p := &opts, then p.Search = &in.Search), and the one a call that is
+// handed something of the input is handed a pointer into, or called on by
+// a method of a pointer receiver (fill(opts, in.Search)), which is how a
+// helper fills what it is handed. A client-go service method sends what it
+// is handed and fills none of it, and a function of decls fills only what
+// its body writes through. What the pass finds is marked once it ends, so
+// the next pass is the first to read it.
+func (h *intermediates) fillThroughPointers(body *ast.BlockStmt, decls map[*types.Func]*ast.FuncDecl) bool {
+	var filled []*types.Var
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.AssignStmt:
+			filled = append(filled, h.aliased(typed.Lhs, typed.Rhs)...)
+		case *ast.ValueSpec:
+			filled = append(filled, h.aliased(specNames(typed), typed.Values)...)
+		case *ast.CallExpr:
+			filled = append(filled, h.filledByCall(typed, decls)...)
+		}
+		return true
+	})
+	grew := false
+	for _, variable := range filled {
+		grew = h.mark(variable) || grew
+	}
+	return grew
+}
+
+// aliased returns the variable each value of rhs points into, when the
+// target it is assigned to holds something of the input.
+func (h *intermediates) aliased(lhs, rhs []ast.Expr) []*types.Var {
+	var filled []*types.Var
+	for i, target := range lhs {
+		value := assignedValue(rhs, i)
+		if value == nil || !h.from[rootVar(h.info, target)] {
+			continue
+		}
+		if pointed := pointee(h.info, value); pointed != nil {
+			filled = append(filled, pointed)
+		}
+	}
+	return filled
+}
+
+// filledByCall returns what call can fill, when something it is handed
+// reads the input: the variable each argument points into, and the receiver
+// of a method of a pointer receiver. When the function called is one of
+// decls, its body says which of them it can fill: only those it writes
+// through, so a helper that reads what it is handed (check(opts,
+// in.Search)) fills nothing. Any other function, one of another package or
+// a function value, is out of sight and can fill every one.
+func (h *intermediates) filledByCall(call *ast.CallExpr, decls map[*types.Func]*ast.FuncDecl) []*types.Var {
+	if sendsRequest(h.info, call) {
+		return nil
+	}
+	fn, receiver := calledFunc(h.info, call)
+	handed := call.Args
+	if receiver != nil {
+		handed = append(slices.Clip(handed), receiver)
+	}
+	if !slices.ContainsFunc(handed, func(expr ast.Expr) bool { return reads(h.info, expr, h.from) }) {
+		return nil
+	}
+	decl := calleeDecl(fn, decls)
+	var filled []*types.Var
+	for i, arg := range call.Args {
+		if pointed := pointee(h.info, arg); pointed != nil && h.writesEntry(decl, paramEntry(h.info, decl, i)) {
+			filled = append(filled, pointed)
+		}
+	}
+	if receiver != nil && isPointer(fn.Signature().Recv().Type()) && h.writesEntry(decl, receiverVar(h.info, decl)) {
+		if variable := rootVar(h.info, receiver); variable != nil {
+			filled = append(filled, variable)
+		}
+	}
+	return filled
+}
+
+// calleeDecl returns the declaration of fn among decls, nil when fn is nil or
+// the package declares no body for it.
+func calleeDecl(fn *types.Func, decls map[*types.Func]*ast.FuncDecl) *ast.FuncDecl {
+	if fn == nil {
+		return nil
+	}
+	return decls[fn.Origin()]
+}
+
+// paramEntry returns the parameter of decl an argument at position is bound
+// to, nil for no declaration or a parameter with no name.
+func paramEntry(info *types.Info, decl *ast.FuncDecl, position int) *types.Var {
+	if decl == nil {
+		return nil
+	}
+	return paramAt(fieldVars(info, decl.Type.Params), position)
+}
+
+// receiverVar returns the variable decl's receiver is bound to, nil for no
+// declaration or a receiver with no name.
+func receiverVar(info *types.Info, decl *ast.FuncDecl) *types.Var {
+	if decl == nil {
+		return nil
+	}
+	return fieldVars(info, decl.Recv)[0]
+}
+
+// writesEntry reports whether a function declared as decl can write through
+// what it takes in entry, the variable a pointer it is handed is bound to:
+// every one can when decl is out of sight, none through an entry with no
+// name, and one that is no pointer can, since what it holds is out of sight
+// (an interface asserted back to the pointer, a variadic list of them).
+// Otherwise it is what [writesThrough] reads in the body.
+func (h *intermediates) writesEntry(decl *ast.FuncDecl, entry *types.Var) bool {
+	if decl == nil {
+		return true
+	}
+	return entry != nil && (!isPointer(entry.Type()) || writesThrough(h.info, decl.Body, entry))
+}
+
+// writesThrough reports whether body can write through variable, a pointer
+// it is bound to: when it assigns, increments or decrements something rooted
+// at the variable other than the variable itself, which an assignment only
+// rebinds; when it takes the address of anything rooted at it or calls a
+// method of a pointer receiver on such a thing, the variable itself
+// included; when it hands on a pointer or an interface rooted at it, in a
+// call, an assignment, a declaration, a literal, a return or a send, to
+// whoever may write through it in turn; or when it hands a slice or a map
+// rooted at it, as the first argument, to one of [inPlaceWriters], which
+// writes in place what that argument holds (copy(opts.Labels, in.Labels),
+// delete(opts.Vars, key)). The variable's own address is counted although
+// taking it writes nothing: it is a pointer to the pointer, and a write
+// through that alias, (*p).N after p := &b, is rooted at p, which this walk
+// does not follow. A body that reads a field of it, compares it or copies
+// what it points to writes nothing through it, and neither does one that
+// hands a slice or a map read off it to any other function, append and
+// slices.Contains among them, or to one of those writers in another place,
+// as copy's source. That leaves the fills this walk misses: a slice or a map
+// read off the variable and written by any other function it is handed to,
+// one of the package included, or through a variable it is assigned to.
+func writesThrough(info *types.Info, body *ast.BlockStmt, variable *types.Var) bool {
+	use := pointerUse{info: info, variable: variable}
+	found := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		found = found || use.writes(node)
+		return !found
+	})
+	return found
+}
+
+// pointerUse is what a body does with variable, a pointer it is bound to.
+type pointerUse struct {
+	info     *types.Info
+	variable *types.Var
+}
+
+// writes reports whether node, on its own, writes through the variable or
+// hands it on: see [writesThrough].
+func (u pointerUse) writes(node ast.Node) bool {
+	switch typed := node.(type) {
+	case *ast.AssignStmt:
+		return slices.ContainsFunc(typed.Lhs, u.writesInto) || u.handsOn(typed.Rhs...)
+	case *ast.IncDecStmt:
+		return u.rooted(typed.X)
+	case *ast.UnaryExpr:
+		return typed.Op == token.AND && u.rooted(typed.X)
+	case *ast.SelectorExpr:
+		return callsPointerMethod(u.info, typed) && u.rooted(typed.X)
+	case *ast.CallExpr:
+		return u.handsOn(typed.Args...) || u.writesInPlace(typed)
+	case *ast.ValueSpec:
+		return u.handsOn(typed.Values...)
+	case *ast.CompositeLit:
+		return u.handsOn(elementValues(typed)...)
+	case *ast.ReturnStmt:
+		return u.handsOn(typed.Results...)
+	case *ast.SendStmt:
+		return u.handsOn(typed.Value)
+	}
+	return false
+}
+
+// rooted reports whether expr is the variable or reaches it through
+// selectors, dereferences and indexes.
+func (u pointerUse) rooted(expr ast.Expr) bool {
+	return writeRoot(u.info, expr) == u.variable
+}
+
+// writesInto reports whether an assignment to lhs writes through the
+// variable: one rooted at it other than the variable itself, which an
+// assignment only rebinds.
+func (u pointerUse) writesInto(lhs ast.Expr) bool {
+	return u.rooted(lhs) && identVar(u.info, identOf(lhs)) != u.variable
+}
+
+// handsOn reports whether one of exprs hands on a pointer or an interface
+// rooted at the variable.
+func (u pointerUse) handsOn(exprs ...ast.Expr) bool {
+	return slices.ContainsFunc(exprs, func(expr ast.Expr) bool { return u.rooted(expr) && aliases(u.info.TypeOf(expr)) })
+}
+
+// writesInPlace reports whether call hands what its first argument holds,
+// rooted at the variable, to one of [inPlaceWriters]. A type-checked call of
+// one of them has a first argument.
+func (u pointerUse) writesInPlace(call *ast.CallExpr) bool {
+	return inPlaceWriters[calleeName(u.info, call)] && u.rooted(call.Args[0])
+}
+
+// inPlaceWriters names the builtins, and by their full names the functions
+// of the standard library's maps, slices and sort packages, that write in
+// place what their first argument holds: the elements of a slice, which
+// every copy of the slice shares with the one a struct holds, or the entries
+// of a map. A function that only reads it, or writes past its length as
+// append does, is none of them.
+var inPlaceWriters = map[string]bool{
+	"clear":  true,
+	"copy":   true,
+	"delete": true,
+
+	"maps.Copy":       true,
+	"maps.DeleteFunc": true,
+	"maps.Insert":     true,
+
+	"slices.Compact":        true,
+	"slices.CompactFunc":    true,
+	"slices.Delete":         true,
+	"slices.DeleteFunc":     true,
+	"slices.Insert":         true,
+	"slices.Replace":        true,
+	"slices.Reverse":        true,
+	"slices.Sort":           true,
+	"slices.SortFunc":       true,
+	"slices.SortStableFunc": true,
+
+	"sort.Float64s":    true,
+	"sort.Ints":        true,
+	"sort.Slice":       true,
+	"sort.SliceStable": true,
+	"sort.Strings":     true,
+}
+
+// calleeName names what call calls the way [inPlaceWriters] does: a builtin
+// by its name, a function by its full name, an explicit instantiation
+// included, and anything else (a function value, a conversion) by nothing.
+func calleeName(info *types.Info, call *ast.CallExpr) string {
+	switch callee := typeutil.Callee(info, call).(type) {
+	case *types.Builtin:
+		return callee.Name()
+	case *types.Func:
+		return callee.FullName()
+	}
+	return ""
+}
+
+// writeRoot returns the variable at the root of a chain of selectors,
+// dereferences, indexes and slicings (opts in opts.Labels[0] and in
+// opts.Labels[1:]), or nil.
+func writeRoot(info *types.Info, expr ast.Expr) *types.Var {
+	for {
+		switch e := ast.Unparen(expr).(type) {
+		case *ast.SelectorExpr:
+			expr = e.X
+		case *ast.StarExpr:
+			expr = e.X
+		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.SliceExpr:
+			expr = e.X
+		default:
+			return identVar(info, identOf(e))
+		}
+	}
+}
+
+// identOf returns expr as an identifier, nil for any other expression.
+func identOf(expr ast.Expr) *ast.Ident {
+	ident, _ := ast.Unparen(expr).(*ast.Ident)
+	return ident
+}
+
+// aliases reports whether a value of type t reaches what another value
+// points to: a pointer or an interface does.
+func aliases(t types.Type) bool {
+	return isPointer(t) || types.IsInterface(t)
+}
+
+// callsPointerMethod reports whether sel names a method of a pointer
+// receiver, which can write through what it is called on.
+func callsPointerMethod(info *types.Info, sel *ast.SelectorExpr) bool {
+	selection, isSelection := info.Selections[sel]
+	if !isSelection || selection.Kind() != types.MethodVal {
+		return false
+	}
+	method, _ := selection.Obj().(*types.Func)
+	return isPointer(method.Signature().Recv().Type())
+}
+
+// sendsRequest reports whether call calls a method of a client-go service.
+func sendsRequest(info *types.Info, call *ast.CallExpr) bool {
+	sel, isSelector := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	if !isSelector {
+		return false
+	}
+	_, isService := shared.ClientGoServiceInterface(info.TypeOf(sel.X))
+	return isService
+}
+
+// pointee returns the variable expr points into: the one whose address, or
+// the address of a field of which, it takes, and the one it reads a pointer
+// off; nil for any other expression.
+func pointee(info *types.Info, expr ast.Expr) *types.Var {
+	if unary, isUnary := ast.Unparen(expr).(*ast.UnaryExpr); isUnary && unary.Op == token.AND {
+		return rootVar(info, unary.X)
+	}
+	if isPointer(info.TypeOf(expr)) {
+		return rootVar(info, expr)
+	}
+	return nil
+}
+
+// isPointer reports whether t is a pointer type.
+func isPointer(t types.Type) bool {
+	_, pointer := t.Underlying().(*types.Pointer)
+	return pointer
 }
 
 // handlerInputStruct returns the first parameter whose type is a struct named
@@ -1939,13 +2424,19 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 
 // handlerInputParam is [handlerInputStruct] together with the variable the
 // input is bound to, nil when the parameter is unnamed.
+//
+// A struct no field of which carries a json tag, its embeds' included, is no
+// input: a model sends JSON, and such a struct names none of the keys it
+// would send. It is a value of ours a function is handed
+// (waitpoll.TransferTarget, the project or group a transfer moved), and the
+// parameters after it are read for the input.
 func handlerInputParam(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, *types.Struct, *types.Var, bool) {
 	if fn.Type.Params == nil {
 		return nil, nil, nil, false
 	}
 	for _, field := range fn.Type.Params.List {
 		named, st, ok := localNamedStruct(pkg, pkg.TypesInfo.TypeOf(field.Type))
-		if !ok {
+		if !ok || !carriesJSONTag(st) {
 			continue
 		}
 		var bound *types.Var
@@ -1993,7 +2484,7 @@ func (r *diffRun) diffPair(pkg, kind string, pair structPair) gap {
 			// Adjudicated legitimate input omission (deliberate rename, nested-object
 			// modeling, deprecated/non-accepted param, or curated subset) — each
 			// carries a rationale in acceptedMissingInputs.
-			if kind == "input" && r.isAcceptedMissingInput(pkg, pair.mcpName, tag) {
+			if kind == "input" && r.isAcceptedMissingInput(pkg, pair.mcpName, tag, pair.through) {
 				continue
 			}
 			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: sdkType})
@@ -2223,6 +2714,35 @@ func flattenFields(st *types.Struct, tagKeys []string) map[string]string {
 	met = met[:0]
 	flattenNamesInto(st, &met, 0)
 	return promote(met, enc)
+}
+
+// carriesJSONTag reports whether an exported field of st, or of an embed
+// under it whose tag names no key, carries a json tag, which is what a
+// struct a model fills from the JSON it sends has. A tag that names no key
+// (json:",omitempty") is one too: encoding/json keys that field by its own
+// name. A tag of "-", the one encoding/json writes nothing for, is not.
+func carriesJSONTag(st *types.Struct) bool {
+	return carriesJSONTagAt(st, 0)
+}
+
+// carriesJSONTagAt is [carriesJSONTag] for a struct depth embeds below the
+// input, which stops at the depth [flattenInto] stops at.
+func carriesJSONTagAt(st *types.Struct, depth int) bool {
+	if st == nil || depth > maxEmbedDepth {
+		return false
+	}
+	for i := range st.NumFields() {
+		field, raw := st.Field(i), reflect.StructTag(st.Tag(i))
+		embedded, isStruct := structUnder(field.Type())
+		if field.Embedded() && isStruct && shared.TagName(raw, []string{tagKeyJSON}) == "" && carriesJSONTagAt(embedded, depth+1) {
+			return true
+		}
+		tag, tagged := raw.Lookup(tagKeyJSON)
+		if tagged && tag != "-" && field.Exported() {
+			return true
+		}
+	}
+	return false
 }
 
 // flattenNamesInto is flattenInto keyed by the Go field name, for a struct that

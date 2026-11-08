@@ -52,6 +52,30 @@ func (s *sdkSource) Requests(key string) (routes, documents []derive.Request, kn
 	return routes, documents, true
 }
 
+// Placements reads where each argument of one client-go method lands in the
+// routes it sends, keyed the way the derivation keys a REST request.
+func (s *sdkSource) Placements(key string) []derive.Placement {
+	var out []derive.Placement
+	for _, placed := range s.sdk.Placements(key) {
+		out = append(out, derive.Placement{Index: placed.Index, Route: placed.Route.String(), Segment: placed.Segment})
+	}
+	return out
+}
+
+// NilChecks reads which routes of one client-go method are sent only behind a
+// nil check of one of its parameters, keyed the way the derivation keys a REST
+// request.
+func (s *sdkSource) NilChecks(key string) map[string][]derive.NilCheck {
+	method, _ := s.sdk.Method(key)
+	out := make(map[string][]derive.NilCheck, len(method.NilGuards))
+	for route, guards := range method.NilGuards {
+		for _, guard := range guards {
+			out[route.String()] = append(out[route.String()], derive.NilCheck{Index: guard.Index, Nil: guard.Nil})
+		}
+	}
+	return out
+}
+
 // postingOrder puts a client-go method's documents in the order it posts
 // them, which the reading of client-go does not keep (it lists them in the
 // order they are declared): every query before every mutation, each kind in

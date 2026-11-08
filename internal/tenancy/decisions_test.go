@@ -33,7 +33,7 @@ var specRequirementIDs = []string{
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
 	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006", "AUT-007",
-	"AUT-008",
+	"AUT-008", "AUT-009",
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
@@ -109,7 +109,9 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // dimensions of telemetry's metrics, which issue 957 gave a row so that its
 // variable and its malformed value are held as every setting's are, is the
 // thirty-seventh ruled row. RQB-013 bounds advisory merge request diff searches
-// and is the thirteenth request bound.
+// and is the thirteenth request bound. AUT-009, the actions GitLab refuses to
+// an OAuth access token on every way (issue 1238), is the thirty-ninth ruled
+// row.
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -121,7 +123,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		want        int
 	}{
 		{"valued", Valued, 33},
-		{"ruled", Ruled, 38},
+		{"ruled", Ruled, 39},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
 		{"request-bound", RequestBound, 13},
@@ -658,14 +660,15 @@ func TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043(t *testing.T) {
 // wrong (Ask the operator), where it used to call the action unknown. AUT-003
 // also records issue 1224, which added the third question the tier is asked on
 // GitLab.com, the plans of the top-level groups the caller is a member of,
-// with its own page size and page bound.
+// with its own page size and page bound, and issue 1239, which refuses a param
+// the tier pruned from a served action's schema with the tier it needs.
 func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
 	for _, tc := range []struct {
 		id      string
 		decided []string
 	}{
 		{"ADM-003", []string{"ADR-0018", "issue 952"}},
-		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224", "issue 956"}},
+		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239"}},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, ok := Lookup(tc.id)
@@ -1737,7 +1740,8 @@ func rowPins() map[string]rowPin {
 
 		"AUT-001": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(WidenScope)},
 		"AUT-002": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(WidenScope)},
-		"AUT-003": {Authorize, Rule, ClassE, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, pinNarrowed(AskOperator)},
+		"AUT-003": {Authorize, Rule, ClassE, Valued, KeyEntry, KeyProcess, KeyNone, KeyNone, append(pinNarrowed(AskOperator),
+			refusalPin{methods: "tools/call", channel: ToolError, answer: AskOperator})},
 		"AUT-004": {Authorize, Rule, ClassP, Ruled, KeyDeployment, KeyDeployment, KeyNone, KeyNone, pinNarrowed(AskOperator)},
 		"AUT-005": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, nil},
 		"AUT-006": {Authorize, Rule, ClassP, Ruled, KeyProcess, KeyProcess, KeyNone, KeyNone, []refusalPin{
@@ -1757,6 +1761,11 @@ func rowPins() map[string]rowPin {
 			},
 			{methods: "tools/list", channel: Absent, answer: WidenScope},
 		}},
+		"AUT-009": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyNone, KeyNone, KeyNone, append(pinNarrowed(Reauthorize),
+			// The answer on a deployment whose door refuses every personal
+			// access token (ADM-004's pin).
+			refusalPin{methods: "tools/call", channel: Withheld, answer: AskOperator},
+		)},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{

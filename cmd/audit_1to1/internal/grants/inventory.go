@@ -4,6 +4,7 @@
 package grants
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -266,18 +267,48 @@ func requestKey(request *actionrequests.RecordRequest) string {
 // cannot be joined when it cannot. A REST row is placed among the live
 // record's routes by the rule the derivation places its own requests by,
 // since the two spell a route's parameters differently and a recorded path
-// may carry a literal where the route has a placeholder.
+// may carry a literal where the route has a placeholder. A recorded path
+// names what a derivation's route only stands for, so a segment of the route
+// may hold several of the path's, which is asked only when no spelling of the
+// path's own length meets it.
 func rowKey(row requestinventory.Row, index *apilive.RouteIndex) (key, request, why string) {
 	if row.Kind == requestinventory.KindGraphQL {
 		kind, roots := parseOperationLabel(row.Operation)
 		return operationKey(kind, roots), row.Operation, ""
 	}
 	request = row.Method + " " + row.Path
-	route, ok := index.Match(row.Method, row.Path)
-	if !ok {
+	if route, ok := index.Match(row.Method, row.Path); ok {
+		return apilive.RouteName(route), request, ""
+	}
+	route, _ := index.MatchAcross(row.Method, row.Path, slashPlaceholders)
+	if route == nil {
 		return "", request, whyNoRoute
 	}
 	return apilive.RouteName(route), request, ""
+}
+
+// staleSlashes names each slash declaration that answers nothing: no recorded
+// row is placed through it, which is also what a declaration of a route the
+// record does not mount reads as. A row some spelling of its own length meets
+// needs no declaration, whatever a declaration would make of it.
+func staleSlashes(rows []requestinventory.Row, index *apilive.RouteIndex) []string {
+	used := map[*apilive.SlashPlaceholder]bool{}
+	for _, row := range rows {
+		if _, ok := index.Match(row.Method, row.Path); ok {
+			continue
+		}
+		_, through := index.MatchAcross(row.Method, row.Path, slashPlaceholders)
+		used[through] = true
+	}
+	var stale []string
+	for i := range slashPlaceholders {
+		declared := &slashPlaceholders[i]
+		if !used[declared] {
+			stale = append(stale, fmt.Sprintf("the slash declaration of :%s on %s answers nothing, since no recorded row is placed through it; remove it from apilive.SlashPlaceholders, or say what it answers now",
+				declared.Param, declared.Route))
+		}
+	}
+	return stale
 }
 
 // parseOperationLabel reads the label the test transport records a GraphQL

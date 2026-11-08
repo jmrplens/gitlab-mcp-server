@@ -8,9 +8,15 @@ package customattributes
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -47,7 +53,7 @@ func TestList_User(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"dept","value":"engineering"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeUser, ResourceID: 1})
+	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeUser, ResourceID: "1"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -68,7 +74,7 @@ func TestList_Group(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"tier","value":"gold"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeGroup, ResourceID: 2})
+	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeGroup, ResourceID: "2"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -86,7 +92,7 @@ func TestList_Project(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeProject, ResourceID: 3})
+	out, err := List(t.Context(), client, ListInput{ResourceType: testTypeProject, ResourceID: "3"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -102,7 +108,7 @@ func TestList_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	_, err := List(t.Context(), client, ListInput{ResourceType: "invalid", ResourceID: 1})
+	_, err := List(t.Context(), client, ListInput{ResourceType: "invalid", ResourceID: "1"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -117,7 +123,7 @@ func TestGet_User(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"dept","value":"engineering"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+	out, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: "1", Key: testKeyDept})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -134,7 +140,7 @@ func TestGet_Error(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	client := testutil.NewTestClient(t, handler)
-	_, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: 1, Key: "missing"})
+	_, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: "1", Key: "missing"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -150,7 +156,7 @@ func TestSet_Group(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"tier","value":"platinum"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Set(t.Context(), client, SetInput{ResourceType: testTypeGroup, ResourceID: 2, Key: "tier", Value: "platinum"})
+	out, err := Set(t.Context(), client, SetInput{ResourceType: testTypeGroup, ResourceID: "2", Key: "tier", Value: "platinum"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -167,7 +173,7 @@ func TestSet_Error(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	})
 	client := testutil.NewTestClient(t, handler)
-	_, err := Set(t.Context(), client, SetInput{ResourceType: testTypeProject, ResourceID: 1, Key: "k", Value: "v"})
+	_, err := Set(t.Context(), client, SetInput{ResourceType: testTypeProject, ResourceID: "1", Key: "k", Value: "v"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -183,7 +189,7 @@ func TestDelete_Project(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, handler)
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeProject, ResourceID: 3, Key: "old_key"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeProject, ResourceID: "3", Key: "old_key"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -197,7 +203,7 @@ func TestDelete_Error(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	client := testutil.NewTestClient(t, handler)
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: "missing"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: "1", Key: "missing"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -258,7 +264,7 @@ func TestFormatGetMarkdown_HostileValue(t *testing.T) {
 	}),
 		"## Custom Attribute\n\n"+
 			"- **Key**: a&#124;b\n"+
-			"- **Value**: x ## injected - item &#91;click](http://attacker.invalid/)\n"+
+			"- **Value**: x ## injected - item &#91;click](http\\://attacker.invalid/)\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'admin.custom_attr_set' to update this attribute\n"+
 			"- Use action 'admin.custom_attr_delete' to remove it\n")
@@ -271,7 +277,7 @@ func TestList_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	_, err := List(t.Context(), client, ListInput{ResourceType: testTypeUser, ResourceID: 0})
+	_, err := List(t.Context(), client, ListInput{ResourceType: testTypeUser, ResourceID: "0"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -287,7 +293,7 @@ func TestGet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	_, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: 0, Key: "k"})
+	_, err := Get(t.Context(), client, GetInput{ResourceType: testTypeUser, ResourceID: "0", Key: "k"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -303,7 +309,7 @@ func TestSet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	_, err := Set(t.Context(), client, SetInput{ResourceType: testTypeGroup, ResourceID: 0, Key: "k", Value: "v"})
+	_, err := Set(t.Context(), client, SetInput{ResourceType: testTypeGroup, ResourceID: "0", Key: "k", Value: "v"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -319,7 +325,7 @@ func TestDelete_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
 	}))
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeProject, ResourceID: 0, Key: "k"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: testTypeProject, ResourceID: "0", Key: "k"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -349,7 +355,7 @@ func TestGet_Group(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Get(t.Context(), client, GetInput{ResourceType: "group", ResourceID: 2, Key: "tier"})
+	out, err := Get(t.Context(), client, GetInput{ResourceType: "group", ResourceID: "2", Key: "tier"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -370,7 +376,7 @@ func TestGet_Project(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Get(t.Context(), client, GetInput{ResourceType: "project", ResourceID: 3, Key: "env"})
+	out, err := Get(t.Context(), client, GetInput{ResourceType: "project", ResourceID: "3", Key: "env"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -384,7 +390,7 @@ func TestGet_Project(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestGet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	_, err := Get(t.Context(), client, GetInput{ResourceType: "invalid", ResourceID: 1, Key: "k"})
+	_, err := Get(t.Context(), client, GetInput{ResourceType: "invalid", ResourceID: "1", Key: "k"})
 	if err == nil {
 		t.Fatal("expected error for invalid resource_type")
 	}
@@ -406,7 +412,7 @@ func TestSet_User(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Set(t.Context(), client, SetInput{ResourceType: "user", ResourceID: 1, Key: "role", Value: "admin"})
+	out, err := Set(t.Context(), client, SetInput{ResourceType: "user", ResourceID: "1", Key: "role", Value: "admin"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -427,7 +433,7 @@ func TestSet_Project(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := Set(t.Context(), client, SetInput{ResourceType: "project", ResourceID: 5, Key: "env", Value: "staging"})
+	out, err := Set(t.Context(), client, SetInput{ResourceType: "project", ResourceID: "5", Key: "env", Value: "staging"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -441,7 +447,7 @@ func TestSet_Project(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestSet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	_, err := Set(t.Context(), client, SetInput{ResourceType: "bad", ResourceID: 1, Key: "k", Value: "v"})
+	_, err := Set(t.Context(), client, SetInput{ResourceType: "bad", ResourceID: "1", Key: "k", Value: "v"})
 	if err == nil {
 		t.Fatal("expected error for invalid resource_type")
 	}
@@ -463,7 +469,7 @@ func TestDelete_User(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: "user", ResourceID: 1, Key: "old"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: "user", ResourceID: "1", Key: "old"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -481,7 +487,7 @@ func TestDelete_Group(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: "group", ResourceID: 2, Key: "stale"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: "group", ResourceID: "2", Key: "stale"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -492,7 +498,7 @@ func TestDelete_Group(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestDelete_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	err := Delete(t.Context(), client, DeleteInput{ResourceType: "bad", ResourceID: 1, Key: "k"})
+	err := Delete(t.Context(), client, DeleteInput{ResourceType: "bad", ResourceID: "1", Key: "k"})
 	if err == nil {
 		t.Fatal("expected error for invalid resource_type")
 	}
@@ -509,7 +515,7 @@ func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
 	}))
-	_, err := List(t.Context(), client, ListInput{ResourceType: "user", ResourceID: 1})
+	_, err := List(t.Context(), client, ListInput{ResourceType: "user", ResourceID: "1"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -588,7 +594,7 @@ func statusHandler(status int) http.Handler {
 func TestResourceTypes_AdvertisedSetIsTheRoutedSet(t *testing.T) {
 	client := testutil.NewTestClient(t, routedTypesHandler())
 
-	_, err := List(t.Context(), client, ListInput{ResourceType: "nonesuch", ResourceID: 1})
+	_, err := List(t.Context(), client, ListInput{ResourceType: "nonesuch", ResourceID: "1"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
@@ -607,7 +613,7 @@ func TestResourceTypes_AdvertisedSetIsTheRoutedSet(t *testing.T) {
 			if _, ok := customAttributeRoutedTypes[typ]; !ok {
 				t.Fatalf("validResourceTypes advertises %q, which no handler routes", typ)
 			}
-			if _, listErr := List(t.Context(), client, ListInput{ResourceType: typ, ResourceID: 1}); listErr != nil {
+			if _, listErr := List(t.Context(), client, ListInput{ResourceType: typ, ResourceID: "1"}); listErr != nil {
 				t.Errorf("List(%q) = %v, want the advertised type to reach its collection", typ, listErr)
 			}
 		})
@@ -629,19 +635,19 @@ func TestHandlers_NotFoundCarriesTheHint_AnotherStatusDoesNot(t *testing.T) {
 		call func(ctx context.Context, client *gitlabclient.Client) error
 	}{
 		{"list", func(ctx context.Context, client *gitlabclient.Client) error {
-			_, err := List(ctx, client, ListInput{ResourceType: testTypeUser, ResourceID: 1})
+			_, err := List(ctx, client, ListInput{ResourceType: testTypeUser, ResourceID: "1"})
 			return err
 		}},
 		{"get", func(ctx context.Context, client *gitlabclient.Client) error {
-			_, err := Get(ctx, client, GetInput{ResourceType: testTypeGroup, ResourceID: 1, Key: testKeyDept})
+			_, err := Get(ctx, client, GetInput{ResourceType: testTypeGroup, ResourceID: "1", Key: testKeyDept})
 			return err
 		}},
 		{"set", func(ctx context.Context, client *gitlabclient.Client) error {
-			_, err := Set(ctx, client, SetInput{ResourceType: testTypeProject, ResourceID: 1, Key: testKeyDept, Value: "eng"})
+			_, err := Set(ctx, client, SetInput{ResourceType: testTypeProject, ResourceID: "1", Key: testKeyDept, Value: "eng"})
 			return err
 		}},
 		{"delete", func(ctx context.Context, client *gitlabclient.Client) error {
-			return Delete(ctx, client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+			return Delete(ctx, client, DeleteInput{ResourceType: testTypeUser, ResourceID: "1", Key: testKeyDept})
 		}},
 	}
 
@@ -687,7 +693,7 @@ func TestDeleteOutput_IsTheConfirmationEveryDestructiveActionGives(t *testing.T)
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: "1", Key: testKeyDept})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -704,11 +710,274 @@ func TestDeleteOutput_IsTheConfirmationEveryDestructiveActionGives(t *testing.T)
 func TestDeleteOutput_Refused_ReportsTheRefusalRatherThanTheConfirmation(t *testing.T) {
 	client := testutil.NewTestClient(t, statusHandler(http.StatusForbidden))
 
-	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: "1", Key: testKeyDept})
 	if err == nil {
 		t.Fatal("DeleteOutput() error = nil, want the instance refusal")
 	}
 	if got.Status != "" {
 		t.Errorf("DeleteOutput() = %+v, want the zero output beside the error", got)
 	}
+}
+
+// requestLog records the requests a mock receives, in the order they arrive, from
+// the goroutines it answers them on.
+type requestLog struct {
+	mu   sync.Mutex
+	sent []*http.Request
+}
+
+// add records one request.
+func (l *requestLog) add(r *http.Request) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sent = append(l.sent, r)
+}
+
+// paths lists the escaped path of each request, as it went on the wire.
+func (l *requestLog) paths() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]string, 0, len(l.sent))
+	for _, r := range l.sent {
+		out = append(out, r.URL.EscapedPath())
+	}
+	return out
+}
+
+// query is the query of the request at index, decoded.
+func (l *requestLog) query(index int) url.Values {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sent[index].URL.Query()
+}
+
+// handlerCalls is one call of each of the four handlers, on the named resource.
+var handlerCalls = []struct {
+	action string
+	// suffix is what the attribute route carries after custom_attributes.
+	suffix string
+	// answer is what GitLab answers the attribute route with.
+	answer string
+	call   func(ctx context.Context, client *gitlabclient.Client, resourceType string, value toolutil.StringOrInt) error
+}{
+	{"list", "", `[]`, func(ctx context.Context, client *gitlabclient.Client, resourceType string, value toolutil.StringOrInt) error {
+		_, err := List(ctx, client, ListInput{ResourceType: resourceType, ResourceID: value})
+		return err
+	}},
+	{"get", "/dept", `{"key":"dept","value":"eng"}`, func(ctx context.Context, client *gitlabclient.Client, resourceType string, value toolutil.StringOrInt) error {
+		_, err := Get(ctx, client, GetInput{ResourceType: resourceType, ResourceID: value, Key: testKeyDept})
+		return err
+	}},
+	{"set", "/dept", `{"key":"dept","value":"eng"}`, func(ctx context.Context, client *gitlabclient.Client, resourceType string, value toolutil.StringOrInt) error {
+		_, err := Set(ctx, client, SetInput{ResourceType: resourceType, ResourceID: value, Key: testKeyDept, Value: "eng"})
+		return err
+	}},
+	{"delete", "/dept", ``, func(ctx context.Context, client *gitlabclient.Client, resourceType string, value toolutil.StringOrInt) error {
+		return Delete(ctx, client, DeleteInput{ResourceType: resourceType, ResourceID: value, Key: testKeyDept})
+	}},
+}
+
+// TestHandlers_AName_IsReadIntoItsIDThenTheAttributeRouteIsCalled verifies each
+// handler with each resource type's name: one read that finds the ID, then the
+// attribute route under that ID, and nothing else. It is the point of the widened
+// field, since client-go's method takes an integer and GitLab takes the name.
+func TestHandlers_AName_IsReadIntoItsIDThenTheAttributeRouteIsCalled(t *testing.T) {
+	names := []struct {
+		resourceType, value, lookup, answer, collection, queryKey, queryValue string
+	}{
+		{testTypeUser, "grace", "/api/v4/users", `[{"id":7,"username":"grace"}]`, "users", "username", "grace"},
+		{testTypeGroup, "top/sub", "/api/v4/groups/top%2Fsub", `{"id":7}`, "groups", "with_projects", "false"},
+		{testTypeProject, "top/app", "/api/v4/projects/top%2Fapp", `{"id":7}`, "projects", "", ""},
+	}
+	for _, name := range names {
+		for _, call := range handlerCalls {
+			t.Run(name.resourceType+"/"+call.action, func(t *testing.T) {
+				var requests requestLog
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests.add(r)
+					if r.URL.EscapedPath() == name.lookup {
+						testutil.RespondJSON(w, http.StatusOK, name.answer)
+						return
+					}
+					respondAttribute(w, call.answer)
+				}))
+
+				if err := call.call(t.Context(), client, name.resourceType, toolutil.StringOrInt(name.value)); err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+				want := []string{name.lookup, "/api/v4/" + name.collection + "/7/custom_attributes" + call.suffix}
+				if got := requests.paths(); !slices.Equal(got, want) {
+					t.Fatalf("requests = %q, want %q", got, want)
+				}
+				if got := requests.query(0).Get(name.queryKey); got != name.queryValue {
+					t.Errorf("lookup query %s = %q, want %q", name.queryKey, got, name.queryValue)
+				}
+			})
+		}
+	}
+}
+
+// respondAttribute answers an attribute route: with answer, or with no content
+// for the delete, which has none.
+func respondAttribute(w http.ResponseWriter, answer string) {
+	if answer == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	testutil.RespondJSON(w, http.StatusOK, answer)
+}
+
+// TestHandlers_ANumber_SendsNoLookup verifies a number goes straight to the route
+// on every handler and resource type, so a caller that names a resource by its ID
+// pays for no second request and needs no permission to read the resource itself.
+func TestHandlers_ANumber_SendsNoLookup(t *testing.T) {
+	for typ, collection := range map[string]string{testTypeUser: "users", testTypeGroup: "groups", testTypeProject: "projects"} {
+		for _, call := range handlerCalls {
+			t.Run(typ+"/"+call.action, func(t *testing.T) {
+				var requests requestLog
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests.add(r)
+					respondAttribute(w, call.answer)
+				}))
+
+				if err := call.call(t.Context(), client, typ, "7"); err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+				want := []string{"/api/v4/" + collection + "/7/custom_attributes" + call.suffix}
+				if got := requests.paths(); !slices.Equal(got, want) {
+					t.Errorf("requests = %q, want %q", got, want)
+				}
+			})
+		}
+	}
+}
+
+// TestResolveResourceID_AValueNoResourceCanHave_IsRefusedWithoutARequest verifies
+// the refusals: nothing, and a number no resource carries, name the field and send
+// nothing, and a name of a type that does not exist says which types do.
+func TestResolveResourceID_AValueNoResourceCanHave_IsRefusedWithoutARequest(t *testing.T) {
+	cases := []struct {
+		name, resourceType string
+		value              toolutil.StringOrInt
+		want               string
+	}{
+		{"nothing", testTypeUser, "", "resource_id is required (must be non-empty)"},
+		{"zero", testTypeUser, "0", "resource_id is required (must be > 0)"},
+		{"below zero", testTypeGroup, "-1", "resource_id is required (must be > 0)"},
+		{"a name of no type", "nonesuch", "top/app", "user, group, project"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			id, err := resolveResourceID(t.Context(), client, "operation", tc.resourceType, tc.value)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("resolveResourceID() error = %v, want it to contain %q", err, tc.want)
+			}
+			if id != 0 {
+				t.Errorf("resolveResourceID() = %d, want 0 beside the refusal", id)
+			}
+		})
+	}
+}
+
+// TestResolveResourceID_ThePositiveBoundary_IsAnID verifies the lowest number a
+// resource can carry goes through as an ID, without a request, where one below it
+// is refused.
+func TestResolveResourceID_ThePositiveBoundary_IsAnID(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	id, err := resolveResourceID(t.Context(), client, "operation", testTypeUser, "1")
+	if err != nil || id != 1 {
+		t.Errorf("resolveResourceID() = %d, %v, want 1 and no error", id, err)
+	}
+}
+
+// TestResolveResourceID_AURLEncodedPath_ReachesGitLabEscapedOnce verifies the form
+// the field's description offers. resource_id is not among the identifiers the
+// dispatchers decode by name, and client-go escapes a path itself, so a value
+// passed through as it came reached GitLab as top%252Fapp, which names nothing.
+func TestResolveResourceID_AURLEncodedPath_ReachesGitLabEscapedOnce(t *testing.T) {
+	for typ, want := range map[string]string{testTypeGroup: "/api/v4/groups/top%2Fapp", testTypeProject: "/api/v4/projects/top%2Fapp"} {
+		t.Run(typ, func(t *testing.T) {
+			var requests requestLog
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.add(r)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":7}`)
+			}))
+			id, err := resolveResourceID(t.Context(), client, "operation", typ, "top%2Fapp")
+			if err != nil || id != 7 {
+				t.Fatalf("resolveResourceID() = %d, %v, want 7 and no error", id, err)
+			}
+			if got := requests.paths(); !slices.Equal(got, []string{want}) {
+				t.Errorf("requests = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestResolveResourceID_EachLookup_CarriesTheContext verifies each of the three
+// reads passes the caller's context, which client-go takes only as a request
+// option: without it a deadline and an abandoned POST would not reach the read.
+func TestResolveResourceID_EachLookup_CarriesTheContext(t *testing.T) {
+	for _, typ := range validResourceTypes {
+		t.Run(typ, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":7}`)
+			})
+			if _, err := resolveResourceID(ctx, client, "operation", typ, "top/app"); !errors.Is(err, context.Canceled) {
+				t.Errorf("resolveResourceID() error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
+// TestResolveResourceID_AUsernameNobodyHas_IsUnresolvedWithNoCause verifies the
+// one lookup whose miss GitLab does not answer with a 404: the list answers an
+// empty page, and the first of no rows must not be read.
+func TestResolveResourceID_AUsernameNobodyHas_IsUnresolvedWithNoCause(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := resolveResourceID(t.Context(), client, "operation", testTypeUser, "nobody")
+	miss, ok := errors.AsType[*unresolvedError](err)
+	if !ok {
+		t.Fatalf("resolveResourceID() error = %v, want an unresolved name", err)
+	}
+	if miss.resourceType != testTypeUser || miss.identifier != "nobody" || miss.cause != nil {
+		t.Errorf("unresolved = %+v, want the user nobody and no cause", miss)
+	}
+}
+
+// TestLookupFailure_EachStatus_ComesToWhatItMeans verifies the two ends: GitLab's
+// 404 becomes the name that names nothing, keeping the answer behind it, and any
+// other status stays GitLab's refusal under the operation's label.
+func TestLookupFailure_EachStatus_ComesToWhatItMeans(t *testing.T) {
+	notFound := httpError(t, http.StatusNotFound)
+	err := lookupFailure("operation", testTypeGroup, "a/b", notFound)
+	miss, ok := errors.AsType[*unresolvedError](err)
+	if !ok {
+		t.Fatalf("lookupFailure(404) = %v, want an unresolved name", err)
+	}
+	if miss.resourceType != testTypeGroup || miss.identifier != "a/b" || !errors.Is(miss.cause, notFound) {
+		t.Errorf("unresolved = %+v, want the group a/b and GitLab's 404", miss)
+	}
+
+	err = lookupFailure("operation", testTypeGroup, "a/b", httpError(t, http.StatusForbidden))
+	if _, isMiss := errors.AsType[*unresolvedError](err); isMiss {
+		t.Errorf("lookupFailure(403) = %#v, want no unresolved name", err)
+	}
+	if !strings.HasPrefix(err.Error(), "operation:") {
+		t.Errorf("lookupFailure(403) = %q, want the operation's label", err)
+	}
+}
+
+// httpError has GitLab answer a read with status, for the error client-go makes
+// of it.
+func httpError(t *testing.T, status int) error {
+	t.Helper()
+	client := testutil.NewTestClient(t, statusHandler(status))
+	_, _, err := client.GL().Groups.GetGroup("a/b", nil, gl.WithContext(t.Context()))
+	if err == nil {
+		t.Fatalf("GetGroup() answered status %d without an error", status)
+	}
+	return err
 }

@@ -932,6 +932,33 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 }
 
+// TestServerConfig_PersonalTokensRefused_FollowsTheOAuthApplicationPin pins
+// the bit every pool entry reads to word the answer to an action GitLab
+// serves only a personal access token (register rows AUT-009 and ADM-004):
+// set where the OAuth door pins the applications it admits, which refuses
+// every personal access token, and clear where the door admits one, an
+// unpinned OAuth deployment and a legacy one, whose door never reads the pin.
+func TestServerConfig_PersonalTokensRefused_FollowsTheOAuthApplicationPin(t *testing.T) {
+	cases := []struct {
+		name    string
+		mode    string
+		uids    []string
+		refused bool
+	}{
+		{name: "OAuth mode pinning an application", mode: AuthModeOAuth, uids: []string{"app"}, refused: true},
+		{name: "OAuth mode pinning none", mode: AuthModeOAuth},
+		{name: "legacy mode naming an application", mode: AuthModeLegacy, uids: []string{"app"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{AuthMode: tc.mode, OAuthClientUIDs: tc.uids}
+			if got := cfg.ServerConfig().PersonalTokensRefused; got != tc.refused {
+				t.Errorf("ServerConfig().PersonalTokensRefused = %t, want %t", got, tc.refused)
+			}
+		})
+	}
+}
+
 // TestLoad_InvalidSkipTLS verifies that Load returns an error when
 // GITLAB_MCP_SKIP_TLS_VERIFY has an invalid boolean value.
 func TestLoad_InvalidSkipTLS(t *testing.T) {

@@ -5,6 +5,7 @@ package projectstoragemoves
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,6 +13,14 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// The operations the project-scoped handlers name in what they report: the
+// resolution of the project, a refusal and a body that does not decode.
+const (
+	opRetrieveForProject = "retrieve project storage moves"
+	opGetForProject      = "get project storage move for project"
+	opSchedule           = "schedule project storage move"
 )
 
 // ListInput holds pagination parameters for listing all project storage moves.
@@ -23,9 +32,9 @@ type ListInput struct {
 
 // ListForProjectInput holds parameters for listing storage moves for a specific project.
 type ListForProjectInput struct {
-	ProjectID int64  `json:"project_id"         jsonschema:"Numeric ID of the project,required"`
-	OrderBy   string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
-	Sort      string `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
+	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)."`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc."`
 	toolutil.PaginationInput
 }
 
@@ -36,14 +45,14 @@ type IDInput struct {
 
 // ProjectMoveInput holds parameters for getting a storage move for a specific project.
 type ProjectMoveInput struct {
-	ProjectID int64 `json:"project_id" jsonschema:"Numeric ID of the project,required"`
-	ID        int64 `json:"id"         jsonschema:"Numeric ID of the storage move,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ID        int64                `json:"id"         jsonschema:"Numeric ID of the storage move,required"`
 }
 
 // ScheduleInput holds parameters for scheduling a storage move for a project.
 type ScheduleInput struct {
-	ProjectID              int64   `json:"project_id"                jsonschema:"Numeric ID of the project,required"`
-	DestinationStorageName *string `json:"destination_storage_name,omitempty" jsonschema:"Name of the destination storage shard"`
+	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
+	DestinationStorageName *string              `json:"destination_storage_name,omitempty" jsonschema:"Name of the destination storage shard"`
 }
 
 // ScheduleAllInput holds parameters for scheduling storage moves for all projects.
@@ -89,6 +98,48 @@ type ScheduleAllOutput struct {
 	Message string `json:"message"`
 }
 
+// unresolvedError says a project's path names nothing GitLab could find, on the
+// read that looks it up. It is a type of its own because the same 404 from the
+// storage move route after it means something else: the project is there, and
+// the move or the permission is not.
+type unresolvedError struct {
+	path string
+	// cause is GitLab's 404.
+	cause error
+}
+
+// Error names what was looked up.
+func (e *unresolvedError) Error() string {
+	return fmt.Sprintf("no project with the path %q was found", e.path)
+}
+
+// Unwrap hands back GitLab's answer.
+func (e *unresolvedError) Unwrap() error { return e.cause }
+
+// resolveProjectID answers the integer client-go's storage move methods take.
+// GitLab's routes take the ID of the project or its URL-encoded path, and
+// client-go types the parameter as an int64 (docs/development/upstream-bugs.md,
+// row 158), so a value that is not a number is read into its ID first. A number
+// sends nothing, and one no project can have is refused here as a missing one.
+func resolveProjectID(ctx context.Context, client *gitlabclient.Client, operation string, value toolutil.StringOrInt) (int64, error) {
+	id, err := value.Int64()
+	if err == nil && id > 0 {
+		return id, nil
+	}
+	if err == nil || value == "" {
+		return 0, toolutil.ErrFieldRequired("project_id")
+	}
+	//gitlab:request optional: a path is read into its ID only when the caller names the project by it, since client-go's storage move methods take an integer
+	project, _, err := client.GL().Projects.GetProject(string(value), nil, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return 0, &unresolvedError{path: string(value), cause: err}
+		}
+		return 0, toolutil.WrapErrWithMessage(operation, err)
+	}
+	return project.ID, nil
+}
+
 // RetrieveAll retrieves all project repository storage moves.
 func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -127,8 +178,9 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	if in.ProjectID == 0 {
-		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
+	projectID, err := resolveProjectID(ctx, client, opRetrieveForProject, in.ProjectID)
+	if err != nil {
+		return ListOutput{}, err
 	}
 
 	opts := gl.RetrieveAllProjectStorageMovesOptions{}
@@ -140,14 +192,14 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 		opts.Sort = in.Sort
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject(in.ProjectID, opts, gl.WithContext(ctx))
+	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve project storage moves", err, http.StatusNotFound,
-			"requires admin; verify project_id (numeric) exists; only storage moves for the given project are returned")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opRetrieveForProject, err, http.StatusNotFound,
+			"requires admin; verify project_id exists; only storage moves for the given project are returned")
 	}
 	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("retrieve project storage moves", err)
+		return ListOutput{}, toolutil.WrapErr(opRetrieveForProject, err)
 	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
@@ -185,22 +237,23 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if in.ProjectID == 0 {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
-	}
 	if in.ID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
+	projectID, err := resolveProjectID(ctx, client, opGetForProject, in.ProjectID)
+	if err != nil {
+		return Output{}, err
+	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(in.ProjectID, in.ID, gl.WithContext(ctx))
+	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(projectID, in.ID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move for project", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opGetForProject, err, http.StatusNotFound,
 			"requires admin; verify the project_id + id pair with storage_move.retrieve_project, which lists this project's own moves; a move id belonging to another project answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("get project storage move for project", err)
+		return Output{}, toolutil.WrapErr(opGetForProject, err)
 	}
 	return toOutput(move, extra), nil
 }
@@ -210,22 +263,23 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if in.ProjectID == 0 {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
+	projectID, err := resolveProjectID(ctx, client, opSchedule, in.ProjectID)
+	if err != nil {
+		return Output{}, err
 	}
 
 	opts := gl.ScheduleStorageMoveForProjectOptions{
 		DestinationStorageName: in.DestinationStorageName,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	move, _, err := client.GL().ProjectRepositoryStorageMove.ScheduleStorageMoveForProject(in.ProjectID, opts, gl.WithContext(ctx))
+	move, _, err := client.GL().ProjectRepositoryStorageMove.ScheduleStorageMoveForProject(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("schedule project storage move", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opSchedule, err, http.StatusBadRequest,
 			"requires admin; destination_storage_name must reference an existing Gitaly storage shard configured on the instance; cannot move to the same shard the project is already on")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("schedule project storage move", err)
+		return Output{}, toolutil.WrapErr(opSchedule, err)
 	}
 	return toOutput(move, extra), nil
 }

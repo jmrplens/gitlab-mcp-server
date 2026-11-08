@@ -13,8 +13,8 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check check-godocs fix-godocs \
 	audit-catalog-first \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-struct-completeness audit-action-coverage audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-report audit-1to1-paths-e2e audit-1to1-grants audit-1to1-grants-report audit-1to1-required audit-1to1-required-report audit-1to1-params audit-1to1-params-report audit-1to1-routes audit-1to1-routes-report audit-1to1-validate-docs gen-audit-1to1-baseline check-audit-1to1-baseline audit-1to1-issues audit-edition-tier \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage e2e-support-coverage e2e-support-coverage-record check-e2e-support-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description check-plan-untracked check-dco check-file-headers fix-file-headers \
@@ -27,7 +27,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema gen-graphql-release-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent check-graphql-sdk-shapes audit-graphql-sdk-sent \
-	gen-api-live check-api-live check-meta-descriptions \
+	gen-api-live check-api-live gen-api-doc-endpoints check-meta-descriptions \
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	gen-tool-reference check-tool-reference \
@@ -136,6 +136,54 @@ E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
 # would head every child's log for the whole run.
 e2e_cover_build = $(if $(COVER),-cover)
 e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_ROOT)/$(1))
+
+# The support packages of the e2e suite, test/e2e/internal/fixture and
+# test/e2e/modeleval, are measured where their code runs (issue 1461): most of
+# it is the part only a GitLab reaches, the fixture builders and the sessions
+# that start the real binary, so their offline tests alone say little about
+# it. The two complete runs, test-e2e-ce and test-e2e-ee, hand the list to
+# run-docker-e2e.sh as E2E_COVERPKG, which builds every test binary of the run
+# with -coverpkg naming them and writes the statements they reached to
+# <stem>-coverprofile.out in the report directory, and `make
+# e2e-support-coverage` merges those profiles with the one the packages'
+# offline tests write (cmd/merge_coverage).
+#
+# Unlike COVER this is always on for those two targets: it instruments the two
+# packages in the test binaries and nothing of the server, costs no build of
+# its own, and a complete run is the only measurement there is of the code only
+# a GitLab reaches. It is spelled once, comma-separated as -coverpkg takes it;
+# .github/workflows/e2e.yml hands the same list to the script it runs directly,
+# and cmd/merge_coverage's tests hold the two to each other. No package the
+# complete runs test imports test/e2e/modeleval, so go test warns that nothing
+# being tested depends on it and the run half reads absent for it: its online
+# code runs under the modeleval targets, which do not measure it.
+E2E_SUPPORT_COVERPKG = ./test/e2e/internal/fixture,./test/e2e/modeleval
+e2e_comma := ,
+E2E_SUPPORT_PACKAGES = $(subst $(e2e_comma), ,$(E2E_SUPPORT_COVERPKG))
+# What e2e-support-coverage writes beside the runs' profiles, named so its
+# pattern for those, *-coverprofile.out, never reads one of them back.
+E2E_SUPPORT_OFFLINE_PROFILE = $(E2E_REPORT_DIR)/e2e-support-offline.out
+E2E_SUPPORT_PROFILE = $(E2E_REPORT_DIR)/e2e-support-coverage.out
+# The offline half, spelled once for the report target and the gate: the two
+# packages' own tests on this tree, with no GitLab, and with the model
+# evaluation's two switches set empty in the environment, which outranks
+# every dotenv file the harness reads, so a .env that names a model or asks
+# for the provider probe cannot turn it into a paid run. The on-demand sweep's
+# two settings are set empty as well: TestSweepOrphans_Leftovers_OnDemand is
+# one of the fixture package's tests, and with E2E_SWEEP_MIN_AGE or
+# E2E_SWEEP_PREFIX exported in the shell, or given on the command line, it
+# would delete what it matches on the instance GITLAB_URL names and add what
+# that reaches to the offline half, which CI's never reaches.
+e2e_support_offline = MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES)
+# The committed record of what the complete runs reached in the two packages,
+# which is the half CI cannot take: make e2e-support-coverage-record writes it
+# after a complete run, and check-e2e-support-coverage, which the coverage job
+# of ci.yml runs, holds each package to it (issue 1461).
+E2E_SUPPORT_RECORD = docs/development/e2e-support-coverage.json
+# How the gate judges a record that predates the tree: checked, as main and a
+# stack's top are, or deferred, below a stack's top, where an excess the
+# stale record explains is a note. CI hands it the FRESHNESS it decides.
+E2E_SUPPORT_FRESHNESS ?= checked
 
 # The revision the e2e run records on its run line, so a recorded baseline
 # says which tree produced it. Overridable for a run of a tree git cannot see.
@@ -469,6 +517,7 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
 	$(call e2e_cover_env,ce) \
+	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
@@ -479,6 +528,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
 	$(call e2e_cover_env,ee) \
+	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
@@ -1234,42 +1284,46 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/36] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/36] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/36] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/36] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/36] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/36] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
-	run_check "[7/36] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/36] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/36] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/36] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
-	run_check "[11/36] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/36] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
-	run_check "[13/36] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/36] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/36] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/36] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/36] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
-	run_check "[18/36] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/36] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/36] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
-	run_check "[21/36] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
-	run_check "[22/36] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
-	run_check "[23/36] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
-	run_check "[24/36] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
-	run_check "[25/36] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
-	run_check "[26/36] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
-	run_check "[27/36] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
-	run_check "[28/36] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
-	run_check "[29/36] parameter requiredness (R-INPUT)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
-	run_check "[30/36] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
-	run_check "[31/36] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
-	run_check "[32/36] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
-	run_check "[33/36] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
-	run_check "[34/36] copyright and license headers" go run ./cmd/audit_file_headers/; \
-	run_check "[35/36] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
-	run_check "[36/36] the OpenVEX document against the dependency set" go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[1/40] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/40] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/40] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/40] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/40] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/40] markdownlint" npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules"; \
+	run_check "[7/40] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/40] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/40] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/40] Markdown escaping" go run ./cmd/audit_md_escaping --check $(MD_ESCAPING_ARGS); \
+	run_check "[11/40] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/40] pinned GraphQL schemas, gitlab.com's and the release's" $(MAKE) --no-print-directory check-graphql-schema; \
+	run_check "[13/40] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/40] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only; \
+	run_check "[15/40] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/40] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/40] GraphQL response shapes, ours and client-go's" $(MAKE) --no-print-directory check-graphql-shapes check-graphql-sdk-shapes; \
+	run_check "[18/40] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/40] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/40] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/40] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
+	run_check "[22/40] SDK calls carry the caller's context" go run ./cmd/audit_sdk_context/ -check; \
+	run_check "[23/40] tenant policy declared once" go run ./cmd/audit_tenancy/ -check; \
+	run_check "[24/40] recorded Orbit answers" go run ./cmd/gen_orbit_record/ -check; \
+	run_check "[25/40] release binaries at module grain" go run ./cmd/audit_binary_vulns/; \
+	run_check "[26/40] fine-grained derivation" $(MAKE) --no-print-directory check-action-grants-derivation; \
+	run_check "[27/40] fine-grained permissions per action" $(MAKE) --no-print-directory check-action-grants; \
+	run_check "[28/40] fine-grained grants (R-GRANT)" go run ./cmd/audit_1to1/ -scope=grants -gaps-only; \
+	run_check "[29/40] parameter requiredness (R-REQUIRED)" go run ./cmd/audit_1to1/ -scope=required -gaps-only; \
+	run_check "[30/40] params of the routes reached (R-PARAM)" go run ./cmd/audit_1to1/ -scope=params -gaps-only; \
+	run_check "[31/40] routes the live record mounts (R-ROUTE)" go run ./cmd/audit_1to1/ -scope=routes -gaps-only; \
+	run_check "[32/40] httptest servers closed while their address is used" go run ./cmd/audit_test_closed_servers/ -check; \
+	run_check "[33/40] Go doc comments" go run ./cmd/godoc_tool/ audit --fail-on-findings; \
+	run_check "[34/40] copyright and license headers" go run ./cmd/audit_file_headers/; \
+	run_check "[35/40] person-facing text from the catalog" go run ./cmd/audit_i18n/ -check; \
+	run_check "[36/40] the OpenVEX document against the dependency set" go run ./cmd/audit_vex/ -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[37/40] SDK parity at the pinned client-go" go run ./cmd/audit_1to1/ -scope=sdk -gaps-only; \
+	run_check "[38/40] enum values (R-ENUM)" go run ./cmd/audit_1to1/ -scope=enums -gaps-only; \
+	run_check "[39/40] report-only 1:1 findings against the committed baseline" go run ./cmd/audit_1to1/ -check-baseline; \
+	run_check "[40/40] discovery metadata (META-001)" go run ./cmd/audit_discovery_completeness/ -gaps-only -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1777,7 +1831,7 @@ publish-lobehub: check-lhm-manifest
 	npx -y @lobehub/market-cli@$(LOBEHUB_MARKET_CLI_VERSION) plugin update --dir "$(CURDIR)"
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, fine-grained permissions per action, token footprint, site stats, llms.txt, the per-domain tool reference, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
+## Generates: brand vectors, fine-grained permissions per action, the 1:1 audit's baseline of report-only findings, token footprint, site stats, llms.txt, the per-domain tool reference, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, so make -j would build them against a file still being written.
@@ -1791,8 +1845,12 @@ publish-lobehub: check-lhm-manifest
 # gen-model-results is in and model-results-record is out for the third time on
 # those terms, and the measurement there is not merely slow: it is a paid run
 # against a provider.
+# gen-audit-1to1-baseline comes right after gen-action-grants, because three of
+# the scopes it reads read the request record that target rewrites. It reads the
+# request inventory too, which no generator here writes (gen-request-inventory
+# needs a suite run), so after one it is run again.
 update-all:
-	@for target in brand gen-action-grants gen-footprint gen-site-stats gen-llms gen-tool-reference gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-action-grants gen-audit-1to1-baseline gen-footprint gen-site-stats gen-llms gen-tool-reference gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -1954,14 +2012,16 @@ audit-catalog-first:
 audit-action-spec-coverage:
 	go run ./cmd/audit_catalog_first/
 
-## audit-1to1: run all four 1:1-audit gap streams (struct/action/metadata/enums), merge
+## audit-1to1: run the three 1:1-audit gap streams (struct/action/enums), merge
 ## into plan/1to1-backlog.json, then gate on SDK parity (audit-1to1-sdk), the request
 ## paths (audit-1to1-paths), the fine-grained grants (audit-1to1-grants), the
 ## parameters each schema requires (audit-1to1-required), the params each reached
 ## route declares (audit-1to1-params) and the routes the live record mounts
 ## (audit-1to1-routes).
 ## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
-## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
+## audit_action_coverage and gen_1to1_backlog. The discovery metadata stream it
+## also carried (R-META, audit-metadata-completeness) is retired: audit-discovery
+## raises the same four flags with a severity, and audit-discovery-check gates them.
 ## The backlog is written first so a gate failure still leaves the artifact behind.
 audit-1to1:
 	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
@@ -1983,7 +2043,9 @@ audit-1to1:
 ## does not declare), an option struct no input fills, a workaround whose predicate
 ## the pinned SDK no longer meets, a captured key the SDK struct beside it models, an
 ## integer input passed where GitLab accepts a path, or a declaration or exemption
-## that has gone stale.
+## that has gone stale. Step 37 of make analyze and a step of CI's generated job, at the
+## client-go go.mod pins; .github/workflows/upstream-drift.yml asks it of the newest
+## client-go every week, so what a bump will have to answer is known before the bump.
 audit-1to1-sdk:
 	go run ./cmd/audit_1to1/ -scope=sdk -gaps-only
 
@@ -1992,25 +2054,37 @@ audit-1to1-sdk:
 ## builds, which is how nine registered tools shipped unable to work. This FAILS on a
 ## GraphQL document the pinned schema refuses, on an action whose owner names no
 ## package under internal/tools, on a package the catalog owns actions in that neither
-## the committed inventory shows issuing a request nor declares a reason, and on a
-## declaration that no longer describes the tree. A silent package means one of two
-## things and the finding cannot tell them apart: no test drives that package, or the
-## inventory is stale (`make gen-request-inventory`). It reads the committed inventory,
+## the committed inventory shows issuing a request nor declares a reason, on a field
+## GitLab sends to an endpoint a package calls that the package publishes nowhere and
+## no declaration in cmd/audit_1to1/internal/paths/sent_declarations.go answers, on a
+## recorded REST endpoint neither the documentation oracle
+## (docs/development/gitlab-api-doc-endpoints.json) nor a declaration in
+## endpoint_declarations.go accounts for, and on a declaration that no longer describes
+## the tree. A silent package means one of two things and the finding cannot tell them
+## apart: no test drives that package, or the inventory is stale (`make
+## gen-request-inventory`). It reads the committed inventory, live record and oracle,
 ## so it needs no network and no suite run.
 audit-1to1-paths:
-	go run ./cmd/audit_1to1/ -scope=paths -gaps-only
+	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only
 
-## audit-1to1-paths-endpoints: the same, plus every recorded REST endpoint compared with
-## GitLab's own API documentation. Needs the network and reads ~250 pages (cached for a
-## week afterwards). It FAILS on an endpoint no declaration in
-## cmd/audit_1to1/internal/paths/endpoint_declarations.go accounts for, and on a
-## declaration that accounts for nothing any more. The declarations are what make the
-## comparison safe to gate on: the oracle is prose, so a deprecated-but-working alias,
-## an endpoint documented under doc/user, and one whose only mention is a sentence all
-## look exactly like a defect, and each of those is written down with its reason.
-audit-1to1-paths-endpoints:
+## audit-1to1-paths-report: the whole R-PATH report, the documentation comparison
+## included, written to plan/1to1-paths.json: every undocumented endpoint with the
+## declaration that answers it, and every finding the reports beside the gate hold.
+## It gates on nothing audit-1to1-paths does not.
+audit-1to1-paths-report:
 	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
 	@echo "R-PATH report written to plan/1to1-paths.json"
+
+## gen-api-doc-endpoints: read GitLab's API documentation (doc/api of gitlab-org/gitlab,
+## ~250 pages through the repository files API) at the tag of the release the live
+## record was taken from, and rewrite docs/development/gitlab-api-doc-endpoints.json,
+## the oracle audit-1to1-paths holds every recorded REST endpoint to. It needs the
+## network and no token, reads nothing a regeneration changes for a tag already read
+## (the pages are cached under .cache/gitlab-api-docs@<tag>), and writes nothing when a
+## page cannot be read. Run it in the change that re-pins the live record
+## (make gen-api-live): audit-1to1-paths refuses an oracle read at another release.
+gen-api-doc-endpoints:
+	go run ./cmd/audit_1to1/ -write-doc-endpoints -output docs/development/gitlab-api-doc-endpoints.json
 
 ## audit-1to1-paths-e2e: the same report, plus the observation question asked per ACTION
 ## instead of per owning package, read from the shards a Docker end-to-end run left under
@@ -2019,7 +2093,8 @@ audit-1to1-paths-endpoints:
 ## action; a trace does, so the record says which actions were themselves seen issuing a
 ## request and which ran without issuing one. It changes nothing the gate fails on: the
 ## shards are a byproduct of a run CI does not schedule, and the counts are floors, since
-## a batch queue that overflowed drops client spans without saying so.
+## a batch queue that overflowed drops client spans without saying so. A directory it
+## cannot read fails the run, since the run asked for an answer it cannot give.
 audit-1to1-paths-e2e:
 	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls $(E2E_CALLS_DIR) -output plan/1to1-paths-e2e.json
 	@echo "R-PATH report with per-action observation written to plan/1to1-paths-e2e.json"
@@ -2050,8 +2125,8 @@ audit-1to1-grants-report:
 	go run ./cmd/audit_1to1/ -scope=grants $(if $(wildcard $(E2E_CALLS_DIR)),-e2e-calls $(E2E_CALLS_DIR)) -output plan/1to1-grants.json
 	@echo "R-GRANT report written to plan/1to1-grants.json"
 
-## audit-1to1-required: gate the parameters every input schema requires (the requiredness
-## rule of R-INPUT, issue 1100). The three surfaces read one required list, the `,required`
+## audit-1to1-required: gate the parameters every input schema requires (R-REQUIRED,
+## issue 1100). The three surfaces read one required list, the `,required`
 ## marker of each field's jsonschema tag, and this holds it to GitLab: a field the schema
 ## leaves optional that every way the action runs sends to a route GitLab requires it on,
 ## and a field the schema requires that some way runs without. It FAILS on either unless
@@ -2069,7 +2144,7 @@ audit-1to1-required:
 audit-1to1-required-report:
 	@mkdir -p plan
 	go run ./cmd/audit_1to1/ -scope=required -output plan/1to1-required.json
-	@echo "R-INPUT requiredness report written to plan/1to1-required.json"
+	@echo "R-REQUIRED report written to plan/1to1-required.json"
 
 ## audit-1to1-params: hold every param a route this server reaches declares to whether
 ## anything here can send it (R-PARAM). A param no recorded request carries is a finding:
@@ -2118,13 +2193,46 @@ audit-1to1-routes-report:
 
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a
-## value offered that the SDK does not declare, or on a stale exemption.
+## value offered that the SDK does not declare, or on a stale exemption. Step 38 of make
+## analyze and a step of CI's generated job.
 audit-1to1-enums:
 	go run ./cmd/audit_1to1/ -scope=enums -gaps-only
 
-## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is still fetchable.
+## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is
+## still fetchable from gitlab-org/gitlab's master. It needs the network, so it is not a step of
+## make analyze; .github/workflows/upstream-drift.yml runs it every week.
 audit-1to1-validate-docs:
 	go run ./cmd/audit_1to1/ -validate-docs
+
+## gen-audit-1to1-baseline: write every finding the 1:1 audit reports without gating to
+## docs/development/audit-1to1-baseline.json, as keys by stream: the struct and action
+## candidates, the four classes of R-PARAM, the R-PATH shapes, always-sent params and
+## identifier leads, the fields R-REQUIRED places on no route, the R-GRANT cross-check with
+## the request inventory and the enum output fields no schema names a value of. A change
+## that adds or settles one regenerates it, and the diff of the file is what the change
+## adds. It reads committed records only, so it needs no network.
+gen-audit-1to1-baseline:
+	go run ./cmd/audit_1to1/ -write-baseline -output docs/development/audit-1to1-baseline.json
+
+## check-audit-1to1-baseline: hold the findings the 1:1 audit reports without gating to
+## docs/development/audit-1to1-baseline.json. FAILS on a finding the file does not hold,
+## naming its stream and key, and on a key of the file no finding answers. It reads the
+## request records make gen-action-grants and make gen-request-inventory commit, so the
+## unit suite's comparison of the file with the tree waits on the FRESHNESS deferral, as
+## R-GRANT's does, and so does its step in CI's generated job. Step 39 of make analyze. No
+## network.
+check-audit-1to1-baseline:
+	go run ./cmd/audit_1to1/ -check-baseline
+
+## audit-1to1-issues: ask GitHub whether every issue a tracked row names is still open: the
+## domain issue of each tracked family row of R-ROUTE and the issue of each tracked
+## identifier of the sdk scope. FAILS on an issue that is closed, is a pull request or is not
+## in the repository, naming the rows that rest on it, and on one it could not ask about (a
+## refused token, a rate limit, no network), which is never a pass. It asks with
+## GITHUB_TOKEN or GH_TOKEN when either is set, and needs the network, so it is not a step of
+## make analyze; .github/workflows/upstream-drift.yml runs it every week.
+audit-1to1-issues:
+	go run ./cmd/audit_1to1/ -check-issues
 
 ## audit-struct-completeness: diff MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT).
 ## Backward-compat wrapper over audit-1to1 -scope=structs.
@@ -2136,11 +2244,6 @@ audit-struct-completeness:
 audit-action-coverage:
 	go run ./cmd/audit_1to1/ -scope=actions -gaps-only
 
-## audit-metadata-completeness: report discovery-metadata gaps across the ActionSpec catalog (R-META).
-## Backward-compat wrapper over audit-1to1 -scope=metadata.
-audit-metadata-completeness:
-	go run ./cmd/audit_1to1/ -scope=metadata -gaps-only
-
 ## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
 audit-edition-tier:
 	go run ./cmd/audit_edition_tier/ -gaps-only
@@ -2149,10 +2252,12 @@ audit-edition-tier:
 audit-discovery:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -output plan/discovery-backlog.json
 
-## audit-discovery-check: CI gate for META-001. Exits non-zero when any error-severity finding is present.
-## Note: post-Phase-0 baseline has ~439 errors (real findings); this gate is
-## designed to drive Phase 1+ waves to zero. Use `make audit-discovery` for
-## the human-readable report.
+## audit-discovery-check: gate META-001, step 40 of make analyze and a step of CI's generated
+## job. FAILS on any error-severity finding: a generic Usage line, a variant that does not tell
+## itself from its siblings, and the alias, related-action and individual description flags of
+## an action whose cluster holds a non-CRUD variant. The catalog reads 0 of them, so a change
+## that adds one fails here; `make audit-discovery` writes the whole report with its warnings
+## and infos.
 audit-discovery-check:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -check
 
@@ -2260,6 +2365,77 @@ e2e-go-coverage:
 	  go tool covdata textfmt -i="$$dirs" -o=$(E2E_COVER_PROFILE); \
 	  go tool covdata percent -i="$$dirs"; \
 	  go tool cover -func=$(E2E_COVER_PROFILE) | tail -n 1'
+
+## e2e-support-coverage: report which statements of the e2e support packages
+## (E2E_SUPPORT_COVERPKG) their offline tests and the complete runs reach
+## together: the offline half run here, merged with every run profile in
+## $(E2E_REPORT_DIR), the per-package table, and the merged profile in
+## $(E2E_SUPPORT_PROFILE). E2E_SUPPORT_SUMMARY names a Markdown file the table
+## is appended to as well, and E2E_SUPPORT_WRITE_RECORD a record of what the
+## runs reached, which is how e2e-support-coverage-record writes it.
+#
+# The offline half is run here rather than read from somewhere else, so both
+# halves are of one tree whenever the runs were: a run profile whose blocks
+# disagree with the offline half's, which is what another version of a file
+# looks like, is refused by the merge, naming the file, rather than folded in.
+# The merge sees only the blocks, so a run of another version whose blocks
+# happen to agree is not caught: the runs are to be of this tree.
+# It is e2e_support_offline, the two packages' own tests with no GitLab, as
+# the harness tests run in CI.
+#
+# The run half is every <stem>-coverprofile.out the report directory holds, so
+# a CE run, its final pass and a licensed run fold into one figure, as
+# e2e-go-coverage folds the server's; run-docker-e2e.sh removes its own before
+# it starts, so a stale one is only ever another stem's. With none there the
+# target refuses rather than reporting the offline half alone, which is the
+# figure issue 1461 says is not the measurement.
+e2e-support-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c 'set -eu; shopt -s nullglob; \
+	  runs=($(E2E_REPORT_DIR)/*-coverprofile.out); \
+	  if [ "$${#runs[@]}" -eq 0 ]; then \
+	    echo "no run profile under $(E2E_REPORT_DIR): run make test-e2e-ce or make test-e2e-ee first, which write <stem>-coverprofile.out there" >&2; \
+	    exit 1; \
+	  fi; \
+	  online=(); for run in "$${runs[@]}"; do online+=(-online "$$run"); done; \
+	  $(e2e_support_offline); \
+	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" -o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") $(if $(E2E_SUPPORT_WRITE_RECORD),-write-record "$(E2E_SUPPORT_WRITE_RECORD)")'
+
+## e2e-support-coverage-record: write $(E2E_SUPPORT_RECORD), the committed
+## record of what the complete runs reached in the e2e support packages, from
+## the run profiles in $(E2E_REPORT_DIR) and the offline half of this tree.
+## Run it after the complete runs the instance allows on the tree being
+## committed, make test-e2e-ce and, with an EE license, make test-e2e-ee,
+## which is the regeneration a stack's top makes when it changes the two
+## packages; it needs a GitLab only through those runs, so it is a
+## maintainer's command and deliberately not a member of update-all. A record
+## of the CE run alone leaves what only the licensed run reaches to neither
+## half, inside the ceiling, until a licensed run is recorded.
+#
+# It is e2e-support-coverage writing the record, so the record is folded from
+# exactly the halves the report beside it shows. The record is taken only of
+# complete runs of the two packages' sources as this tree holds them:
+# run-docker-e2e.sh stamps those sources before each pass of a complete run
+# builds and keeps the stamp, <stem>-coverprofile.complete, only once the run
+# ended with status 0, and merge_coverage -write-record refuses a run profile
+# without one, or whose stamp is not this tree's, before it writes anything.
+# The scenarios, the harness and the server that drive the two packages are
+# not stamped.
+e2e-support-coverage-record:
+	@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=$(E2E_SUPPORT_RECORD)
+
+## check-e2e-support-coverage: the gate the coverage job of ci.yml runs over
+## the e2e support packages: their offline half on this tree, merged with
+## the runs' half from $(E2E_SUPPORT_RECORD), and each package held to the
+## number of statements the record says neither half reached. No GitLab and
+## no Docker. E2E_SUPPORT_FRESHNESS=deferred, below a stack's top, makes an
+## excess a record that predates the tree explains a note; until the first
+## record is committed it reports the offline half and holds nothing.
+check-e2e-support-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c 'set -eu; \
+	  $(e2e_support_offline); \
+	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) -check-record $(E2E_SUPPORT_RECORD) -freshness $(E2E_SUPPORT_FRESHNESS) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package
@@ -2530,7 +2706,9 @@ check-graphql-schema:
 ## feature_available? when a request is served and not when a class is defined.
 ## This is the only oracle here that is evaluated rather than parsed, which is
 ## what lets it see the ~600 fields GeoSiteStatus exposes through a loop where
-## a scan of the same source sees 26.
+## a scan of the same source sees 26. A re-pin onto a new release regenerates the
+## documentation oracle beside it (make gen-api-doc-endpoints), which
+## audit-1to1-paths refuses when it was read at another release than this record's.
 gen-api-live:
 	go run ./cmd/gen_api_live/
 

@@ -17,7 +17,9 @@ package fixture
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -197,42 +199,105 @@ func retryWhen[O any](e *harness.Env, label string, attempts int, retryable func
 // report its retries to rather than an Env: the World's extras, which run
 // under a budget of their own derived from the first asking test's context
 // and must never fail that test.
+//
+// A 429 that names a Retry-After is waited out before the next attempt
+// (rateLimitWait), on top of the backoff every retry gets: GitLab answers
+// some creations from a fixed window, ten service accounts a minute per
+// user, and backing off a few seconds against a one-minute window spent five
+// attempts in about 23 seconds and failed the world. The last attempt waits
+// for nothing, since nothing follows it.
 func retryWhenIn[O any](ctx context.Context, tb testing.TB, label string, attempts int, retryable func(error) bool, op func() (O, error)) (O, error) {
 	tb.Helper()
-	return harness.Retry(ctx, tb, label, attempts, retryBaseDelay, func(int) (O, bool, string, error) {
+	return harness.Retry(ctx, tb, label, attempts, retryBaseDelay, func(attempt int) (O, bool, string, error) {
 		out, err := op()
 		if err == nil {
 			return out, false, "", nil
 		}
-		return out, retryable(err), describeRetry(err), err
+		retry, reason := retryable(err), describeRetry(err)
+		if wait := rateLimitWait(err); retry && wait > 0 && attempt < attempts-1 {
+			waitOut(ctx, wait)
+			reason += fmt.Sprintf(", waited %s as its Retry-After asked", wait)
+		}
+		return out, retry, reason, err
 	})
+}
+
+// maxRateLimitWait bounds how long one attempt waits out a rate limit window,
+// so a Retry-After far longer than any window GitLab uses cannot hold a world
+// past its test's own budget. It is two minutes, written as nanoseconds
+// rather than as a product of time.Second: a product at package level is an
+// arithmetic mutant no coverage profile reaches, so gremlins reports it as
+// never covered although a test holds the value to two minutes.
+const maxRateLimitWait time.Duration = 120e9
+
+// rateLimitWait is how long a 429 asks the next attempt to wait: its
+// Retry-After, in the whole seconds GitLab writes it in, bounded by
+// maxRateLimitWait. Any other failure, and a 429 that names no positive
+// number of seconds, asks for nothing.
+func rateLimitWait(err error) time.Duration {
+	var response *gl.ErrorResponse
+	if !errors.As(err, &response) || response.Response == nil || response.Response.StatusCode != http.StatusTooManyRequests {
+		return 0
+	}
+	seconds, parseErr := strconv.Atoi(response.Response.Header.Get("Retry-After"))
+	if parseErr != nil || seconds <= 0 {
+		return 0
+	}
+	return min(time.Duration(seconds)*time.Second, maxRateLimitWait)
+}
+
+// waitOut waits for d or until ctx ends, whichever comes first. A variable,
+// so a test can see the wait asked for without sitting through it.
+var waitOut = func(ctx context.Context, d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }
 
 // describeRetry names the class of a retried failure for the log line, so a
 // retried run reads as a story rather than as the same error three times.
+//
+// It is a chain of ifs rather than a tagless switch because gremlins reports
+// the comparison in a case expression as not covered whatever the tests do,
+// which would leave the status classes unjudged.
 func describeRetry(err error) string {
-	switch {
-	case IsTransientNetwork(err):
+	if IsTransientNetwork(err) {
 		return "transient network error"
-	case statusOf(err) == http.StatusTooManyRequests:
-		return "rate limited"
-	case statusOf(err) >= http.StatusInternalServerError:
-		return "server error"
-	case statusOf(err) == http.StatusNotFound:
-		return "not visible yet"
-	case branchNotReady(err):
-		return "branch not ready"
-	case strings.Contains(err.Error(), "already been taken"):
-		return "name collision inside GitLab's own validation"
-	default:
-		return "retryable error"
 	}
+	status := statusOf(err)
+	if status == http.StatusTooManyRequests {
+		return "rate limited"
+	}
+	if status >= http.StatusInternalServerError {
+		return "server error"
+	}
+	if status == http.StatusNotFound {
+		return "not visible yet"
+	}
+	if branchNotReady(err) {
+		return "branch not ready"
+	}
+	if strings.Contains(err.Error(), "already been taken") {
+		return "name collision inside GitLab's own validation"
+	}
+	return "retryable error"
 }
 
 // budget returns the wait a step is allowed, larger on a licensed instance,
 // where every write does more work and takes measurably longer.
 func budget(e *harness.Env, base, enterprise time.Duration) time.Duration {
-	if e.Runtime().Tier.IsEnterprise() && enterprise > base {
+	return budgetFor(e.Runtime().Tier.IsEnterprise(), base, enterprise)
+}
+
+// budgetFor is [budget] for an instance known to be licensed or not: the
+// enterprise wait on a licensed one when it is the longer of the two, and the
+// base wait otherwise. It is apart from the Env so a test can ask it about a
+// licensed instance, which no detached Env describes.
+func budgetFor(licensed bool, base, enterprise time.Duration) time.Duration {
+	if licensed && enterprise > base {
 		return enterprise
 	}
 	return base
@@ -240,7 +305,7 @@ func budget(e *harness.Env, base, enterprise time.Duration) time.Duration {
 
 // cleanupContextTimeout bounds one cleanup's own context when the ledger's
 // context is already gone, which a hook that runs after the tests uses.
-const cleanupContextTimeout = 60 * time.Second
+const cleanupContextTimeout = time.Minute
 
 // withCleanupTimeout returns ctx bounded by the cleanup budget when ctx
 // carries no deadline of its own.

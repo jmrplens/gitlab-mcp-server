@@ -370,7 +370,7 @@ Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -433,7 +433,7 @@ Add a project to a project's CI/CD job token inbound allowlist. Returns: the new
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -1777,7 +1777,7 @@ Delete a custom attribute. Returns: a success status. See also: gitlab_get_custo
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Attribute key to delete
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -3584,7 +3584,7 @@ Get a custom attribute by key. Returns: the attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -3836,7 +3836,7 @@ Get a single repository storage move for a specific group. Returns: the storage 
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `id` (integer) (required): Numeric ID of the storage move
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -4158,7 +4158,7 @@ Get a single repository storage move for a specific project by project_id and mo
 **Parameters:**
 
 - `id` (integer) (required): Numeric ID of the storage move
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -7704,7 +7704,7 @@ List custom attributes for a resource. Returns: an array of key/value custom att
 
 **Parameters:**
 
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -9347,7 +9347,7 @@ Create a pending draft note on a merge request. Returns: the created draft note 
 - `in_reply_to_discussion_id` (string): Discussion ID to reply to
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string) (required): Note body text (Markdown)
-- `position` (object): Diff position for inline comments on specific lines. Omit for general MR comments.
+- `position` (object): Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `resolve_discussion` (boolean): Resolve the discussion when published
 
@@ -9421,14 +9421,14 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_draft_note_update
 
-Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
+Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request internal ID
-- `note` (string): Updated note body text (Markdown)
+- `note` (string): Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both
 - `note_id` (integer) (required): Draft note ID
-- `position` (object): Updated diff position for inline comments
+- `position` (object): Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -12238,16 +12238,16 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_pull_mirror_configure
 
-Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
+Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces each diverged branch the mirror pulls with the source's version and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
 
 **Parameters:**
 
 - `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
-- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `enabled` (boolean): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
-- `mirror_overwrites_diverged_branches` (boolean): Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true
+- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -12604,6 +12604,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `ci_restrict_pipeline_cancellation_role` (string): Role required to cancel pipelines/jobs (developer, maintainer, no_one)
 - `ci_separated_caches` (boolean): Use separate caches for protected branches
 - `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -12640,7 +12641,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
 - `mirror_branch_regex` (string): Only mirror branches matching this regex
-- `mirror_overwrites_diverged_branches` (boolean): Overwrite diverged branches when mirroring
+- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `mirror_user_id` (integer): User ID used to run mirror updates (admin only)
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
@@ -13323,7 +13324,7 @@ Remove a group from a project's CI/CD job token allowlist. Returns: a success co
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -13335,7 +13336,7 @@ Remove a project from a project's CI/CD job token inbound allowlist. Returns: a 
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -13594,7 +13595,7 @@ List repository storage moves for a single group. Returns: the group's storage m
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
@@ -13611,7 +13612,7 @@ List repository storage moves for a single project. Returns: each move's id, sta
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sort` (string): Sort direction: asc or desc.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -14200,7 +14201,7 @@ Schedule a repository storage move for a single group. Returns: the scheduled st
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14225,7 +14226,7 @@ Schedule a repository storage move for a single project to another Gitaly storag
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14410,7 +14411,7 @@ Set a custom attribute. Returns: the stored attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 - `value` (string) (required): Attribute value
 

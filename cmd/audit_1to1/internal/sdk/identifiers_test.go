@@ -785,7 +785,7 @@ type identifiersInputs struct {
 func analyzeIdentifiersFixture(t *testing.T, tool *strings.Replacer, routes []apilive.Route, declared []identifierDeclaration) (identifiersReport, []string) {
 	t.Helper()
 	root, inputs := identifiersFixture(t, tool, routes)
-	return analyzeIdentifiers(root, inputs.pkgs, inputs.usage, declared)
+	return analyzeIdentifiers(root, inputs.pkgs, inputs.usage, declared, narrowingTable{})
 }
 
 // standInIdentifierDeclarations answer three of the stand-in's inputs, one
@@ -1007,23 +1007,23 @@ func TestAnalyzeIdentifiers_AStandInTree_HoldsEachIntegerToWhatItsPlaceholderTak
 		t.Errorf("stale = %q, want %q", stale, wantStale)
 	}
 	wantSDK := []sdkNarrowing{
-		{Method: "Widgets.CloneGadget", Param: "gid", Type: "int64", Placeholders: []placeholder{
+		{Method: "Widgets.CloneGadget", Param: "gid", Type: "int64", Status: narrowingUncalled, Placeholders: []placeholder{
 			{Route: "POST /gadgets/:id/clone", Name: "id", Type: "String", Desc: "Path of the gadget.", Takes: takesName},
 			{Route: "POST /gadgets/:id/copy", Name: "id", Type: "String", Desc: "Path of the gadget.", Takes: takesName},
 		}},
-		{Method: "Widgets.CopyGadget", Param: "gid", Type: "int64", Placeholders: []placeholder{
+		{Method: "Widgets.CopyGadget", Param: "gid", Type: "int64", Status: narrowingUncalled, Placeholders: []placeholder{
 			{Route: "POST /gadgets/:id/copy", Name: "id", Type: "String", Desc: "Path of the gadget.", Takes: takesName},
 		}},
-		{Method: "Widgets.GetWidgetOwner", Param: "wid", Type: "int64", Called: true, Placeholders: []placeholder{
+		{Method: "Widgets.GetWidgetOwner", Param: "wid", Type: "int64", Called: true, Status: narrowingUndeclared, Inputs: []string{"widgets.OwnerInput.WidgetID"}, Placeholders: []placeholder{
 			{Route: "GET /widgets/:id/owner", Name: "id", Type: "String", Desc: "The ID or URL-encoded path of the widget", Takes: takesName},
 		}},
-		{Method: "Widgets.MoveGadget", Param: "gid", Type: "int64", Placeholders: []placeholder{
+		{Method: "Widgets.MoveGadget", Param: "gid", Type: "int64", Status: narrowingUncalled, Placeholders: []placeholder{
 			{Route: "PUT /gadgets/:id/move/:target_id", Name: "id", Type: "String", Desc: "Name of the gadget.", DescribedBy: "PUT /gadgets/:id", Takes: takesName},
 		}},
-		{Method: "Widgets.MoveGadget", Param: "target", Type: "int64", Placeholders: []placeholder{
+		{Method: "Widgets.MoveGadget", Param: "target", Type: "int64", Status: narrowingUncalled, Placeholders: []placeholder{
 			{Route: "PUT /gadgets/:id/move/:target_id", Name: "target_id", Type: "String", Desc: "Path of the target group.", Takes: takesName},
 		}},
-		{Method: "Widgets.UpdateGadget", Param: "gid", Type: "int64", Placeholders: []placeholder{
+		{Method: "Widgets.UpdateGadget", Param: "gid", Type: "int64", Status: narrowingUncalled, Placeholders: []placeholder{
 			{Route: "PUT /gadgets/:id", Name: "id", Type: "String", Desc: "Name of the gadget.", Takes: takesName},
 		}},
 	}
@@ -1170,12 +1170,19 @@ func TestIdentifierStatus_EachPlaceholderSet_ComesToOneStatus(t *testing.T) {
 // TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept
 // verifies every status is counted under its own counter, the unfollowed
 // method values and the client-go narrowings beside them, and that the
-// gaps-only filter keeps the four statuses that are findings and every
-// unfollowed method value, and none of the narrowings, as an empty list.
+// gaps-only filter keeps the four statuses that are findings, every
+// unfollowed method value, and the two narrowing statuses that are findings.
 func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t *testing.T) {
 	statuses := []string{identifierIDOnly, identifierDeclared, identifierNotFromInput, identifierNarrowed, identifierUndescribed, identifierUnplaced, identifierUntraced, identifierNarrowed}
 	unfollowed := []unfollowedValue{{Site: "a.F", Method: "A.B", Value: "c.A.B"}, {Site: "a.G", Method: "A.C", Value: "c.A.C"}}
-	report := identifiersReport{Unfollowed: unfollowed, SDKNarrowed: []sdkNarrowing{{Method: "A.B"}}}
+	report := identifiersReport{Unfollowed: unfollowed, SDKNarrowed: []sdkNarrowing{
+		{Method: "A.Resolved", Status: narrowingResolved},
+		{Method: "A.Undeclared", Status: narrowingUndeclared},
+		{Method: "A.Unresolved", Status: narrowingUnresolved},
+		{Method: "A.Unresolved2", Status: narrowingUnresolved},
+		{Method: "A.NotFromInput", Status: narrowingNotFromInput},
+		{Method: "A.Uncalled", Status: narrowingUncalled},
+	}}
 	for _, status := range statuses {
 		report.Arguments = append(report.Arguments, identifierArgument{Status: status})
 	}
@@ -1184,7 +1191,8 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 	want := reportSummary{
 		IdentifierArguments: 8, IdentifiersIDOnly: 1, IdentifiersDeclared: 1, IdentifiersNotFromInput: 1,
 		IdentifiersNarrowed: 2, IdentifiersUndescribed: 1, IdentifiersUnplaced: 1, IdentifiersUntraced: 1,
-		IdentifiersUnfollowed: 2, SDKNarrowed: 1,
+		IdentifiersUnfollowed: 2, SDKNarrowed: 6, SDKNarrowedResolved: 1, SDKNarrowedUndeclared: 1,
+		SDKNarrowedUnresolved: 2, SDKNarrowedNotFromInput: 1, SDKNarrowedUncalled: 1,
 	}
 	if summary != want {
 		t.Errorf("summary = %+v, want %+v", summary, want)
@@ -1194,11 +1202,21 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 	for _, argument := range kept.Arguments {
 		keptStatuses = append(keptStatuses, argument.Status)
 	}
-	if !slices.Equal(keptStatuses, []string{identifierNarrowed, identifierUndescribed, identifierUnplaced, identifierUntraced, identifierNarrowed}) || kept.SDKNarrowed == nil || len(kept.SDKNarrowed) != 0 {
-		t.Errorf("kept %q and %v, want the five findings and an empty list of narrowings", keptStatuses, kept.SDKNarrowed)
+	if !slices.Equal(keptStatuses, []string{identifierNarrowed, identifierUndescribed, identifierUnplaced, identifierUntraced, identifierNarrowed}) {
+		t.Errorf("kept %q, want the five findings", keptStatuses)
+	}
+	var keptNarrowings []string
+	for _, narrowing := range kept.SDKNarrowed {
+		keptNarrowings = append(keptNarrowings, narrowing.Method)
+	}
+	if !slices.Equal(keptNarrowings, []string{"A.Undeclared", "A.Unresolved", "A.Unresolved2"}) {
+		t.Errorf("kept narrowings %q, want the undeclared one and the two unresolved", keptNarrowings)
 	}
 	if !slices.Equal(kept.Unfollowed, unfollowed) {
 		t.Errorf("kept unfollowed %+v, want %+v", kept.Unfollowed, unfollowed)
+	}
+	if empty := keepIdentifierFindings(identifiersReport{}); empty.SDKNarrowed == nil {
+		t.Errorf("a report with no narrowings kept %v, want an empty list that encodes as one", empty.SDKNarrowed)
 	}
 }
 
@@ -1207,21 +1225,26 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 // method and input field, its status and the record's route and
 // placeholder, spelled as the report spells them.
 var witnessIdentifierArguments = map[string]string{
-	"users.GetStatus Users.GetUserStatus users.GetStatusInput.UserID":                                                                 "declared tracked GET /users/:user_id/status user_id name-or-path",
-	"users.ListContributionEvents Users.ListUserContributionEvents users.ListContributionEventsInput.UserID":                          "declared tracked GET /users/:id/events id name-or-path",
-	"users.ListSSHKeysForUser Users.ListSSHKeysForUser users.ListSSHKeysForUserInput.UserID":                                          "declared tracked GET /users/:user_id/keys user_id name-or-path",
-	"containerregistry.GetRepository ContainerRegistry.GetSingleRegistryRepository containerregistry.GetRepositoryInput.RepositoryID": "id_only  GET /registry/repositories/:id id id",
-	"runners.Get Runners.GetRunnerDetails runners.GetInput.RunnerID":                                                                  "id_only  GET /runners/:id id id",
-	"runners.ListJobs Runners.ListRunnerJobs runners.ListJobsInput.RunnerID":                                                          "id_only  GET /runners/:id/jobs id id",
-	"runners.ListManagers Runners.ListRunnerManagers runners.ListManagersInput.RunnerID":                                              "id_only  GET /runners/:id/managers id id",
-	"runners.Remove Runners.RemoveRunner runners.RemoveInput.RunnerID":                                                                "id_only  DELETE /runners/:id id id",
-	"runners.Update Runners.UpdateRunnerDetails runners.UpdateInput.RunnerID":                                                         "id_only  PUT /runners/:id id id",
+	"users.GetStatus Users.GetUserStatus users.GetStatusInput.UserID":                                                                           "declared tracked GET /users/:user_id/status user_id name-or-path",
+	"users.ListContributionEvents Users.ListUserContributionEvents users.ListContributionEventsInput.UserID":                                    "declared tracked GET /users/:id/events id name-or-path",
+	"users.ListSSHKeysForUser Users.ListSSHKeysForUser users.ListSSHKeysForUserInput.UserID":                                                    "declared tracked GET /users/:user_id/keys user_id name-or-path",
+	"containerregistry.GetRepository ContainerRegistry.GetSingleRegistryRepository containerregistry.GetRepositoryInput.RepositoryID":           "id_only  GET /registry/repositories/:id id id",
+	"runners.Get Runners.GetRunnerDetails runners.GetInput.RunnerID":                                                                            "id_only  GET /runners/:id id id",
+	"runners.ListJobs Runners.ListRunnerJobs runners.ListJobsInput.RunnerID":                                                                    "id_only  GET /runners/:id/jobs id id",
+	"runners.ListManagers Runners.ListRunnerManagers runners.ListManagersInput.RunnerID":                                                        "id_only  GET /runners/:id/managers id id",
+	"runners.Remove Runners.RemoveRunner runners.RemoveInput.RunnerID":                                                                          "id_only  DELETE /runners/:id id id",
+	"runners.Update Runners.UpdateRunnerDetails runners.UpdateInput.RunnerID":                                                                   "id_only  PUT /runners/:id id id",
+	"jobtokenscope.AddGroupAllowlist JobTokenScope.AddGroupToJobTokenAllowlist jobtokenscope.AddGroupAllowlistInput.ProjectID":                  "id_only  POST /projects/:id/job_token_scope/groups_allowlist id id",
+	"jobtokenscope.AddProjectAllowlist JobTokenScope.AddProjectToJobScopeAllowList jobtokenscope.AddProjectAllowlistInput.ProjectID":            "id_only  POST /projects/:id/job_token_scope/allowlist id id",
+	"jobtokenscope.RemoveGroupAllowlist JobTokenScope.RemoveGroupFromJobTokenAllowlist jobtokenscope.RemoveGroupAllowlistInput.ProjectID":       "id_only  DELETE /projects/:id/job_token_scope/groups_allowlist/:target_group_id id id",
+	"jobtokenscope.RemoveProjectAllowlist JobTokenScope.RemoveProjectFromJobScopeAllowList jobtokenscope.RemoveProjectAllowlistInput.ProjectID": "id_only  DELETE /projects/:id/job_token_scope/allowlist/:target_project_id id id",
 }
 
-// witnessSDKNarrowed is what the witness expects client-go v3.30.0 to
+// witnessSDKNarrowed is what the witness expects client-go v3.30.1 to
 // narrow: each method and parameter that takes an int64 where the record
 // says the group's, the project's or the user's ID or path is taken, every
-// one of them called by a handler.
+// one of them called by a handler, answered by a declaration and read from an
+// input that takes a name.
 var witnessSDKNarrowed = []string{
 	"CustomAttributes.DeleteCustomGroupAttribute group", "CustomAttributes.DeleteCustomProjectAttribute project",
 	"CustomAttributes.DeleteCustomUserAttribute user", "CustomAttributes.GetCustomGroupAttribute group",
@@ -1245,8 +1268,9 @@ type identifiersWitness struct {
 			Placeholders                          []struct{ Route, Name, Takes string }
 		}
 		SDKNarrowed []struct {
-			Method, Param string
-			Called        bool
+			Method, Param, Status, Action string
+			Called                        bool
+			Inputs                        []string
 		} `json:"sdk_narrowed"`
 	}
 }
@@ -1263,11 +1287,11 @@ type identifiersWitness struct {
 // record says takes an ID alone. Beside them client-go narrows eighteen
 // parameters itself, the custom attributes and repository storage moves of
 // a group, a project or a user taking an int64 where the record says an ID
-// or a path, which is backlog upstream and gates nothing. Both lists come
-// out the same on client-go v3.38.0: B4 of the bump stack widens the three
-// inputs, which turns their declarations stale and drops them from the
-// arguments, and the narrowings change only when client-go widens those
-// parameters.
+// or a path, and each is answered by the action that reads a name into its
+// ID before the call. Both lists come out the same on client-go v3.38.0: B4 of
+// the bump stack widens the three inputs, which turns their declarations stale
+// and drops them from the arguments, and the narrowings change only when
+// client-go widens those parameters, which turns theirs stale too.
 //
 // It reads the report as plain JSON and spells what it expects, so copied
 // on its own into a tree that has no such section it compiles and fails
@@ -1314,6 +1338,9 @@ func TestRun_Repository_DeclaresTheUserIdentifiersThatTakeAUsernameAtClientGoV33
 		narrowed = append(narrowed, narrowing.Method+" "+narrowing.Param)
 		if !narrowing.Called {
 			t.Errorf("%s %s is called by no handler, want every narrowing called", narrowing.Method, narrowing.Param)
+		}
+		if narrowing.Status != narrowingResolved || narrowing.Action == "" || len(narrowing.Inputs) == 0 {
+			t.Errorf("%s %s = %q by %q from %q, want it resolved by an action from an input", narrowing.Method, narrowing.Param, narrowing.Status, narrowing.Action, narrowing.Inputs)
 		}
 	}
 	if !slices.Equal(narrowed, witnessSDKNarrowed) {

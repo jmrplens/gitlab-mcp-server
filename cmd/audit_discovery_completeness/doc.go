@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 // Command audit_discovery_completeness reports discovery-metadata gaps that
-// affect how well models can find and choose the right action. It extends the
-// existing R-META auditor (cmd/audit_metadata_completeness) with two new
-// dimensions:
+// affect how well models can find and choose the right action. It extended
+// the R-META auditor (cmd/audit_metadata_completeness, later the metadata
+// scope of cmd/audit_1to1, now retired) with two new dimensions, and is the
+// one place the R-META flags are reported:
 //
 //   - Check B — Field-level: empty_param_description (input-schema property
 //     descriptions that are blank or boilerplate) and empty_output_description
@@ -19,7 +20,7 @@
 //     class of gap that motivated the discovery program.
 //
 // Check A — Action-level (weak_aliases, generic_usage, empty_related,
-// weak_individual_description) reuses the R-META logic. missing_next_steps is
+// weak_individual_description) is the R-META logic. missing_next_steps is
 // a Phase 0 stub (see TODO) — Phase 1 will wire it to the markdown formatter
 // registry via an exported HasRegisteredMarkdownFormatter helper.
 //

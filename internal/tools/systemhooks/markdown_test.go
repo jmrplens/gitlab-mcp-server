@@ -124,8 +124,8 @@ func TestFormatListMarkdown(t *testing.T) {
 		})),
 			"## System Hooks (2)\n\n"+
 				hookTableHeader+
-				"| 1 | My Hook | https://example.com/hook | - | ✅ | ❌ | ❌ | ❌ | ✅ |\n"+
-				"| 2 | Broken | https://example.com/broken | temporarily_disabled until 3 Feb 2026 04:05 UTC | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
+				"| 1 | My Hook | https\\://example.com/hook | - | ✅ | ❌ | ❌ | ❌ | ✅ |\n"+
+				"| 2 | Broken | https\\://example.com/broken | temporarily_disabled until 3 Feb 2026 04:05 UTC | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
 				hookListHints)
 	})
 	t.Run("a status GitLab set no expiry on", func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestFormatListMarkdown(t *testing.T) {
 		})),
 			"## System Hooks (1)\n\n"+
 				hookTableHeader+
-				"| 3 | Watched | "+testHookURL+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
+				"| 3 | Watched | "+testHookURLText+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
 				hookListHints)
 	})
 	t.Run("a page of a longer list", func(t *testing.T) {
@@ -145,7 +145,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			"## System Hooks (2)\n\n"+
 				"Showing 1 of 2 results (page 1 of 2)\n\n"+
 				hookTableHeader+
-				"| 3 | Watched | "+testHookURL+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
+				"| 3 | Watched | "+testHookURLText+" | executable | ❌ | ❌ | ❌ | ❌ | ❌ |\n"+
 				"\nPage 1 of 2 | 2 items total | 1 per page\n"+
 				hookListHints)
 	})
@@ -166,7 +166,7 @@ func TestFormatListMarkdown_OneFlagAtATime(t *testing.T) {
 			assertRendered(t, hookText(t, FormatListMarkdown(ListOutput{Hooks: []HookItem{item}})),
 				"## System Hooks (1)\n\n"+
 					hookTableHeader+
-					"| 1 | Hook | "+testHookURL+" | - | "+hookRowFlags(column)+" |\n"+
+					"| 1 | Hook | "+testHookURLText+" | - | "+hookRowFlags(column)+" |\n"+
 					hookListHints)
 		})
 	}
@@ -185,7 +185,7 @@ func TestFormatHookMarkdown(t *testing.T) {
 				"- **ID**: 1\n"+
 				"- **Name**: My Hook\n"+
 				"- **Description**: A test hook\n"+
-				"- **URL**: https://example.com/hook\n"+
+				"- **URL**: https\\://example.com/hook\n"+
 				hookCardFlagRows("Push Events")+
 				hookCardHints)
 	})
@@ -195,7 +195,7 @@ func TestFormatHookMarkdown(t *testing.T) {
 		})),
 			"## System Hook #1\n\n"+
 				"- **ID**: 1\n"+
-				"- **URL**: https://example.com/hook\n"+
+				"- **URL**: https\\://example.com/hook\n"+
 				hookCardFlagRows("")+
 				"- **Created At**: 1 Jan 2026 00:00 UTC\n"+
 				hookCardHints)
@@ -215,7 +215,7 @@ func TestFormatHookMarkdown_OneFlagAtATime(t *testing.T) {
 			assertRendered(t, hookText(t, FormatHookMarkdown(item)),
 				"## System Hook #1\n\n"+
 					"- **ID**: 1\n"+
-					"- **URL**: "+testHookURL+"\n"+
+					"- **URL**: "+testHookURLText+"\n"+
 					hookCardFlagRows(flag.label)+
 					hookCardHints)
 		})
@@ -241,7 +241,7 @@ func TestFormatHookMarkdown_SentFields(t *testing.T) {
 		})),
 			"## System Hook #1\n\n"+
 				"- **ID**: 1\n"+
-				"- **URL**: https://example.com/hook\n"+
+				"- **URL**: https\\://example.com/hook\n"+
 				"- **Alert Status**: temporarily_disabled\n"+
 				"- **Disabled Until**: 3 Feb 2026 04:05 UTC\n"+
 				"- **Push Events**: ❌\n"+
@@ -298,7 +298,7 @@ func TestFormatTestMarkdown(t *testing.T) {
 			"- **Path**: group/test\n"+
 			"- **Project ID**: 42\n"+
 			"- **Owner Name**: Alice\n"+
-			"- **Owner Email**: alice@example.com\n\n"+
+			"- **Owner Email**: alice\\@example.com\n\n"+
 			"GitLab sent its own fixed sample payload to the hook URL. This response carries that payload, not the receiver's status code, so it does not say whether the delivery arrived.\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- Use action 'admin.system_hook_get' to read the hook's alert status, which does record repeated delivery failures\n"+

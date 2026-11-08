@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ import (
 // runScope runs one scope the way the command runs it with -gaps-only and no
 // documentation comparison, which is what every case below asks for.
 func runScope(scope, outputPath string) error {
-	return run(context.Background(), options{scope: scope, gapsOnly: true, outputPath: outputPath})
+	return run(options{scope: scope, gapsOnly: true, outputPath: outputPath})
 }
 
 // captureFatal replaces fatalf with a recorder and returns the messages it
@@ -59,8 +60,9 @@ func resetFlags(t *testing.T, args ...string) {
 
 // TestMain_Arguments_DispatchToTheModeAndReportFatalErrors runs main itself:
 // a single-scope audit writes its report and exits normally, an invalid scope
-// reaches the fatal path with the parse error, and -validate-docs in offline
-// mode with nothing cached reaches the fatal path with the stale citations.
+// and the retired metadata scope reach the fatal path with the parse error,
+// and -validate-docs in offline mode with nothing cached reaches the fatal
+// path with the stale citations.
 func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 	cases := []struct {
 		name string
@@ -72,17 +74,22 @@ func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 		wantFatal string
 	}{
 		{
-			name: "metadata_scope_writes_its_report",
+			name: "actions_scope_writes_its_report",
 			args: func(t *testing.T) ([]string, string) {
 				t.Helper()
-				output := filepath.Join(t.TempDir(), "metadata.json")
-				return []string{"-scope=metadata", "-gaps-only", "-output", output}, output
+				output := filepath.Join(t.TempDir(), "actions.json")
+				return []string{"-scope=actions", "-gaps-only", "-output", output}, output
 			},
 		},
 		{
 			name:      "invalid_scope_is_fatal",
 			args:      func(*testing.T) ([]string, string) { return []string{"-scope=bogus"}, "" },
 			wantFatal: `invalid scope "bogus"`,
+		},
+		{
+			name:      "retired_metadata_scope_is_fatal",
+			args:      func(*testing.T) ([]string, string) { return []string{"-scope=metadata"}, "" },
+			wantFatal: `scope "metadata" (R-META) is retired`,
 		},
 		{
 			name: "validate_docs_offline_without_a_cache_is_fatal",
@@ -124,7 +131,7 @@ func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
 	t.Cleanup(func() { repositoryRoot = original })
 	repositoryRoot = func(string) (string, error) { return "", errors.New("no go.mod above here") }
 
-	runValidateDocsMode(filepath.Join(t.TempDir(), "docs.json"), false, true, 0)
+	runValidateDocsMode(filepath.Join(t.TempDir(), "docs.json"), "", false, true, 0)
 	if len(*messages) != 1 || !strings.Contains((*messages)[0], "find repository root: no go.mod above here") {
 		t.Errorf("fatal messages = %v, want the root error", *messages)
 	}
@@ -138,14 +145,14 @@ func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
 // between them was evaluated one way in every run and a mode that always
 // exited fatally would have passed. The tree is planted, because the
 // repository's own citations are hundreds of pages nothing local can answer
-// for; the cache is the one the fetcher reads for that root, so the mode
-// builds its own fetcher exactly as it does in production.
+// for; the cache is the one the fetcher reads for that root at master, so the
+// mode builds its own fetcher exactly as it does in production.
 func TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"cmd/audit_1to1/main.go":              "package main // see doc/api/alpha.md",
-		".cache/gitlab-api-docs/alpha.md":     "# alpha",
-		".cache/gitlab-api-docs/unrelated.md": "# not cited by the planted source",
+		"cmd/audit_1to1/main.go":                     "package main // see doc/api/alpha.md",
+		".cache/gitlab-api-docs@master/alpha.md":     "# alpha",
+		".cache/gitlab-api-docs@master/unrelated.md": "# not cited by the planted source",
 	})
 
 	original := repositoryRoot
@@ -154,7 +161,7 @@ func TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal(t *testing.T
 	messages := captureFatal(t)
 
 	output := filepath.Join(t.TempDir(), "docs.json")
-	runValidateDocsMode(output, false, true, 0)
+	runValidateDocsMode(output, "", false, true, 0)
 
 	if len(*messages) != 0 {
 		t.Fatalf("runValidateDocsMode reported %v, want a clean exit", *messages)
@@ -181,19 +188,19 @@ func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
 	original := pathsRun
 	t.Cleanup(func() { pathsRun = original })
 	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+	pathsRun = func(_ string, opts paths.Options) ([]byte, bool, error) {
 		got = opts
 		return []byte("{}\n"), true, nil
 	}
 
 	cases := []struct {
-		name      string
-		args      []string
-		wantGaps  bool
-		wantFetch bool
-		wantDir   string
+		name          string
+		args          []string
+		wantGaps      bool
+		wantEndpoints bool
+		wantDir       string
 	}{
-		{name: "endpoints_without_gaps_only", args: []string{"-check-endpoints"}, wantFetch: true},
+		{name: "endpoints_without_gaps_only", args: []string{"-check-endpoints"}, wantEndpoints: true},
 		{name: "gaps_only_without_endpoints", args: []string{"-gaps-only"}, wantGaps: true},
 		{name: "the_shard_directory", args: []string{"-e2e-calls", "/tmp/e2e-calls-fixture"}, wantDir: "/tmp/e2e-calls-fixture"},
 	}
@@ -212,8 +219,8 @@ func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
 			if got.GapsOnly != testCase.wantGaps {
 				t.Errorf("GapsOnly = %v, want %v", got.GapsOnly, testCase.wantGaps)
 			}
-			if (got.Fetcher != nil) != testCase.wantFetch {
-				t.Errorf("Fetcher present = %v, want %v", got.Fetcher != nil, testCase.wantFetch)
+			if got.CheckEndpoints != testCase.wantEndpoints {
+				t.Errorf("CheckEndpoints = %v, want %v", got.CheckEndpoints, testCase.wantEndpoints)
 			}
 			if got.E2ECallsDir != testCase.wantDir {
 				t.Errorf("E2ECallsDir = %q, want %q", got.E2ECallsDir, testCase.wantDir)
@@ -450,7 +457,7 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				t.Helper()
 				original := pathsRun
 				t.Cleanup(func() { pathsRun = original })
-				pathsRun = func(context.Context, string, paths.Options) ([]byte, bool, error) {
+				pathsRun = func(string, paths.Options) ([]byte, bool, error) {
 					return []byte("{}\n"), false, nil
 				}
 			},
@@ -564,7 +571,7 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 		}
 		return []byte("{}\n"), false, nil
 	}
-	content, clean, err := runSingle(t.Context(), "enums", options{gapsOnly: true})
+	content, clean, err := runSingle("enums", options{gapsOnly: true})
 	if err != nil || clean || string(content) != "{}\n" {
 		t.Fatalf("runSingle(enums) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
 	}
@@ -572,7 +579,8 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 
 // TestParseScope covers the happy and error paths of -scope parsing in one
 // table: explicit/keyword/empty expansion to all three, single scope,
-// deduplication, whitespace trimming, and rejection of unknown/garbage values.
+// deduplication, whitespace trimming, and rejection of unknown/garbage values
+// and of the retired metadata scope wherever it is named.
 func TestParseScope(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -582,15 +590,17 @@ func TestParseScope(t *testing.T) {
 		wantErr   bool
 		errSubstr string // required error substring when wantErr; "" to skip
 	}{
-		{name: "explicit all four", input: "structs,actions,metadata,enums", wantCount: 4},
-		{name: "keyword all expands", input: "all", wantCount: 4},
-		{name: "empty expands to all", input: "", wantCount: 4},
+		{name: "explicit all three", input: "structs,actions,enums", wantCount: 3},
+		{name: "keyword all expands", input: "all", wantCount: 3},
+		{name: "empty expands to all", input: "", wantCount: 3},
 		{name: "single scope", input: "structs", wantCount: 1, wantFirst: "structs"},
 		{name: "sdk scope", input: "sdk", wantCount: 1, wantFirst: "sdk"},
 		{name: "enums scope", input: "enums", wantCount: 1, wantFirst: "enums"},
 		{name: "grants scope", input: "grants", wantCount: 1, wantFirst: "grants"},
 		{name: "deduplicates repeats", input: "structs,structs,actions,actions", wantCount: 2},
-		{name: "trims whitespace", input: " structs , actions , metadata , enums ", wantCount: 4},
+		{name: "trims whitespace", input: " structs , actions , enums ", wantCount: 3},
+		{name: "rejects the retired metadata scope", input: "metadata", wantErr: true, errSubstr: "audit_discovery_completeness"},
+		{name: "rejects it after a valid scope", input: "structs, metadata", wantErr: true, errSubstr: `scope "metadata" (R-META) is retired`},
 		{name: "rejects unknown token", input: "structs,unknown", wantErr: true, errSubstr: "unknown"},
 		{name: "rejects garbage word", input: "foo", wantErr: true},
 		{name: "rejects mixed garbage", input: "structs,bar", wantErr: true},
@@ -625,7 +635,7 @@ func TestParseScope(t *testing.T) {
 // attributes each analyzer's figures to the summary key that names its stream,
 // driven through the seams with three reports whose numbers share no value.
 //
-// The four reports reach the merge as four byte slices of one type, and each
+// The three reports reach the merge as three byte slices of one type, and each
 // decodes into a report that ignores every key it does not name, so a crossed
 // pair produces a backlog with both streams simply absent rather than a parse
 // failure. The only assertion that ran over this path checked that the summary
@@ -634,7 +644,8 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 	originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
 	t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
 	structsRun = func(string, bool) ([]byte, error) {
-		return []byte(`{"packages":[{"package":"alpha","missing_input_count":7,` +
+		return []byte(`{"summary":{"packages":31,"missing_input_fields":7,"missing_output_fields":11,` +
+			`"extra_output_fields":13,"type_mismatches":29},"packages":[{"package":"alpha","missing_input_count":7,` +
 			`"missing_output_count":11,"extra_output_count":13}]}`), nil
 	}
 	actionsRun = func(string, bool) ([]byte, error) {
@@ -642,7 +653,8 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 			`"api_methods":23,"covered_methods":20,"missing_methods":["One","Two","Three"]}]}`), nil
 	}
 	enumsRun = func(string, bool) ([]byte, bool, error) {
-		return []byte(`{"packages":[{"package":"gamma","missing_values":17,"extra_values":19}]}`), true, nil
+		return []byte(`{"summary":{"missing_values":17,"extra_values":19},` +
+			`"packages":[{"package":"gamma","missing_values":17,"extra_values":19}]}`), true, nil
 	}
 
 	path := filepath.Join(t.TempDir(), "backlog.json")
@@ -655,9 +667,12 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 		key  string
 		want float64
 	}{
+		{key: "packages", want: 31},
+		{key: "packages_with_gaps", want: 3},
 		{key: "struct_missing_input", want: 7},
 		{key: "struct_missing_output", want: 11},
 		{key: "struct_extra_output", want: 13},
+		{key: "struct_type_mismatches", want: 29},
 		{key: "action_missing_methods", want: 3},
 		{key: "enum_missing_values", want: 17},
 		{key: "enum_extra_values", want: 19},
@@ -671,42 +686,228 @@ func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
 	}
 }
 
-// TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags
-// verifies the fetcher the endpoint comparison is handed was configured from
-// the documentation flags, by asking it for an area nothing cached: offline, it
-// must say so rather than reach for the network.
+// TestRunMerged_Summary_DescribesTheTreeWhateverGapsOnlySays holds the merged
+// summary to the rule every stream's own summary follows: it counts the tree,
+// so -gaps-only shortens packages[] and changes no count. The three streams
+// are stand-ins that answer the way the real ones do, the same summary in
+// both modes and a list without the clean entries under the flag.
 //
-// -refresh and -offline are two booleans of one options struct that no test
-// distinguished: every case asserted the fetcher was present and nothing about
-// what it was built to do, so a run told to stay offline could have been
-// handed one that downloads. The root is a planted directory, so the cache the
-// fetcher derives from it holds nothing whatever this machine has fetched
-// before.
-func TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags(t *testing.T) {
-	originalRoot, originalPaths := repositoryRoot, pathsRun
-	t.Cleanup(func() { repositoryRoot, pathsRun = originalRoot, originalPaths })
+// It also holds the two counts the measurement of 2026-10-31 found wrong. A
+// client-go method no handler calls is one finding however many packages call
+// its service, so the method BetaService misses, which three packages share,
+// counts once, where the merge used to count it once per package (41 for 18
+// on the tree). And the struct stream's type mismatches reach the summary,
+// which carried no counter for them.
+func TestRunMerged_Summary_DescribesTheTreeWhateverGapsOnlySays(t *testing.T) {
+	originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
+	t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
+	structsRun = func(_ string, gapsOnly bool) ([]byte, error) {
+		listed := `{"package":"alpha","missing_input_count":2,"missing_output_count":3,"extra_output_count":5}`
+		if !gapsOnly {
+			listed += `,{"package":"beta"},{"package":"clean"},{"package":"gamma"}`
+		}
+		return []byte(`{"summary":{"packages":4,"packages_with_gaps":1,"missing_input_fields":2,` +
+			`"missing_output_fields":3,"extra_output_fields":5,"type_mismatches":7},"packages":[` + listed + `]}`), nil
+	}
+	actionsRun = func(_ string, gapsOnly bool) ([]byte, error) {
+		listed := `{"service":"BetaServiceInterface","packages":["alpha","beta","gamma"],"api_methods":4,"covered_methods":3,"missing_methods":["One"]}`
+		if !gapsOnly {
+			listed += `,{"service":"CleanServiceInterface","packages":["clean"],"api_methods":2,"covered_methods":2}`
+		}
+		return []byte(`{"services":[` + listed + `]}`), nil
+	}
+	enumsRun = func(string, bool) ([]byte, bool, error) {
+		return []byte(`{"summary":{"missing_values":0,"extra_values":0},"packages":[]}`), true, nil
+	}
+
+	summaries := map[bool]map[string]any{}
+	// sequential: the two runs write the two summaries compared below, not cases of their own
+	for _, gapsOnly := range []bool{false, true} {
+		path := filepath.Join(t.TempDir(), "backlog.json")
+		if err := run(options{scope: "all", gapsOnly: gapsOnly, outputPath: path}); err != nil {
+			t.Fatalf("run(all, gaps-only %t): %v", gapsOnly, err)
+		}
+		summaries[gapsOnly], _ = readJSONFile(t, path)["summary"].(map[string]any)
+	}
+	if !reflect.DeepEqual(summaries[false], summaries[true]) {
+		t.Errorf("the summary changes with -gaps-only:\nfull:      %v\ngaps-only: %v", summaries[false], summaries[true])
+	}
+	for _, testCase := range []struct {
+		key  string
+		want float64
+	}{
+		{key: "packages", want: 4},
+		{key: "packages_with_gaps", want: 3},
+		{key: "struct_type_mismatches", want: 7},
+		{key: "action_missing_methods", want: 1},
+	} {
+		t.Run(testCase.key, func(t *testing.T) {
+			if got, _ := summaries[true][testCase.key].(float64); got != testCase.want {
+				t.Errorf("summary[%q] = %v, want %v", testCase.key, summaries[true][testCase.key], testCase.want)
+			}
+		})
+	}
+}
+
+// TestRun_MetadataScope_IsRefusedNamingTheAuditThatGatesIt verifies R-META is
+// retired rather than left to report: the scope, alone or in the set the
+// merged backlog used to be, is refused before any analyzer runs, and the
+// refusal names the command that gates discovery metadata, so whoever ran it
+// out of habit learns where its four flags went.
+func TestRun_MetadataScope_IsRefusedNamingTheAuditThatGatesIt(t *testing.T) {
+	for _, scope := range []string{"metadata", "structs,actions,metadata,enums"} {
+		t.Run(scope, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "out.json")
+			err := runScope(scope, output)
+			if err == nil || !strings.Contains(err.Error(), "audit_discovery_completeness") {
+				t.Fatalf("run(%q) = %v, want a refusal naming audit_discovery_completeness", scope, err)
+			}
+			if _, statErr := os.Stat(output); statErr == nil {
+				t.Errorf("run(%q) wrote a report before refusing", scope)
+			}
+		})
+	}
+}
+
+// stubDocEndpoints replaces the oracle generator's two seams and the root, so
+// a case can drive -write-doc-endpoints through main without the network or a
+// live record. It returns what the generator was handed: the fetcher and the
+// ref.
+func stubDocEndpoints(t *testing.T, release string, built []byte) (fetcher **apidocs.Fetcher, ref *string) {
+	t.Helper()
+	originalRoot, originalRelease, originalBuild := repositoryRoot, releaseRef, buildDocEndpoints
+	t.Cleanup(func() { repositoryRoot, releaseRef, buildDocEndpoints = originalRoot, originalRelease, originalBuild })
 	root := t.TempDir()
 	repositoryRoot = func(string) (string, error) { return root, nil }
-	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
-		got = opts
-		return []byte("{}\n"), true, nil
+	releaseRef = func(string) (string, error) { return release, nil }
+	var gotFetcher *apidocs.Fetcher
+	var gotRef string
+	buildDocEndpoints = func(_ context.Context, f *apidocs.Fetcher, r string) ([]byte, error) {
+		gotFetcher, gotRef = f, r
+		return built, nil
 	}
+	return &gotFetcher, &gotRef
+}
 
-	messages := captureFatal(t)
-	resetFlags(t, "-scope=paths", "-check-endpoints", "-offline",
-		"-output", filepath.Join(t.TempDir(), "paths.json"))
-	main()
+// TestMain_WriteDocEndpoints_WritesTheOracleAtTheRef verifies the generator
+// mode end to end through the flag set: it reads at the tag of the live
+// record's release unless -doc-ref names another, writes what the sweep built
+// to -output, and builds its fetcher from the documentation flags, which the
+// offline case shows by asking the fetcher for a page nothing cached. The root
+// is a planted directory, so the cache the fetcher derives from it holds
+// nothing whatever this machine has fetched before.
+func TestMain_WriteDocEndpoints_WritesTheOracleAtTheRef(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantRef string
+	}{
+		{name: "the_live_records_release", wantRef: "v19.5.0-ee"},
+		{name: "a_ref_the_caller_names", args: []string{"-doc-ref", "master"}, wantRef: "master"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fetcher, ref := stubDocEndpoints(t, "v19.5.0-ee", []byte("{\"schema_version\": 1}\n"))
+			messages := captureFatal(t)
+			output := filepath.Join(t.TempDir(), "oracle.json")
+			resetFlags(t, append([]string{"-write-doc-endpoints", "-offline", "-output", output}, testCase.args...)...)
 
-	if len(*messages) != 0 {
-		t.Fatalf("main reported %v, want a clean run", *messages)
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want the oracle written", *messages)
+			}
+			if *ref != testCase.wantRef {
+				t.Errorf("ref = %q, want %q", *ref, testCase.wantRef)
+			}
+			if written, err := os.ReadFile(output); err != nil || string(written) != "{\"schema_version\": 1}\n" {
+				t.Errorf("output = %q, %v; want what the sweep built", written, err)
+			}
+			if _, err := (*fetcher).Fetch(t.Context(), "an-area-nothing-cached"); err == nil || !strings.Contains(err.Error(), "not cached and offline") {
+				t.Errorf("fetching an uncached area = %v, want the offline refusal", err)
+			}
+		})
 	}
-	if got.Fetcher == nil {
-		t.Fatal("-check-endpoints was passed no fetcher")
+}
+
+// TestMain_WriteDocEndpoints_AFailure_IsFatalAndWritesNothing verifies that
+// every way the generator cannot finish reaches the fatal path with what
+// stopped it, and leaves the output where it was: a root it cannot find, a
+// live record that names no release, a ref that is not one, a sweep that
+// failed, and an output it cannot write.
+func TestMain_WriteDocEndpoints_AFailure_IsFatalAndWritesNothing(t *testing.T) {
+	boom := errors.New("boom")
+	cases := []struct {
+		name    string
+		args    []string
+		arrange func(t *testing.T)
+		output  func(t *testing.T) string
+		want    string
+	}{
+		{
+			name: "no_repository_root",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				repositoryRoot = func(string) (string, error) { return "", boom }
+			},
+			want: "find repository root: boom",
+		},
+		{
+			name: "no_release_in_the_live_record",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				releaseRef = func(string) (string, error) { return "", boom }
+			},
+			want: "read the release to read the documentation at: boom",
+		},
+		{
+			name: "a_ref_that_is_not_one",
+			args: []string{"-doc-ref", "feature/x"},
+			want: `"feature/x" is not a ref`,
+		},
+		{
+			name: "a_sweep_that_failed",
+			arrange: func(t *testing.T) {
+				t.Helper()
+				buildDocEndpoints = func(context.Context, *apidocs.Fetcher, string) ([]byte, error) { return nil, boom }
+			},
+			want: "boom",
+		},
+		{
+			name: "an_output_it_cannot_write",
+			output: func(t *testing.T) string {
+				t.Helper()
+				file := filepath.Join(t.TempDir(), "file")
+				if err := os.WriteFile(file, nil, 0o600); err != nil {
+					t.Fatalf("prepare the output: %v", err)
+				}
+				return filepath.Join(file, "oracle.json")
+			},
+			want: "write output",
+		},
 	}
-	_, err := got.Fetcher.Fetch(t.Context(), "an-area-nothing-cached")
-	if err == nil || !strings.Contains(err.Error(), "not cached and offline") {
-		t.Errorf("fetching an uncached area = %v, want the offline refusal", err)
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stubDocEndpoints(t, "v19.5.0-ee", []byte("{}\n"))
+			if testCase.arrange != nil {
+				testCase.arrange(t)
+			}
+			output := filepath.Join(t.TempDir(), "oracle.json")
+			if testCase.output != nil {
+				output = testCase.output(t)
+			}
+			messages := captureFatal(t)
+			resetFlags(t, append([]string{"-write-doc-endpoints", "-output", output}, testCase.args...)...)
+
+			main()
+
+			if len(*messages) != 1 || !strings.Contains((*messages)[0], testCase.want) {
+				t.Errorf("main reported %v, want one fatal message containing %q", *messages, testCase.want)
+			}
+			if _, err := os.Stat(output); err == nil {
+				t.Errorf("main wrote %s, want nothing written", output)
+			}
+		})
 	}
 }
 
@@ -751,22 +952,73 @@ func TestMain_ValidateDocsOffline_ReportsTheOfflineReason(t *testing.T) {
 	}
 }
 
-// TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough verifies the wiring
+// TestMain_ValidateDocs_ReadsTheCitedPagesAtTheRef verifies -validate-docs
+// reads the cited pages through the repository files API at a ref, master
+// unless -doc-ref names another, rather than through the raw web route the
+// shared fetcher defaults to, which answered a weekly sweep with HTTP 429. The
+// cache each fetcher keeps says which one ran, so each case caches the cited
+// page where one of them would look and runs offline: a page cached under the
+// ref passes, and the same page cached where the raw route's fetcher keeps it
+// is a stale citation, since nothing reads there any more. A -doc-ref that is
+// not a ref is refused before anything is read.
+func TestMain_ValidateDocs_ReadsTheCitedPagesAtTheRef(t *testing.T) {
+	tests := []struct {
+		name string
+		// cached is where under the root the cited page is cached, relative
+		// to the fetchers' shared cache directory name.
+		cached    string
+		args      []string
+		wantFatal string
+	}{
+		{name: "master by default", cached: "@master"},
+		{name: "the ref -doc-ref names", cached: "@v19.5.0-ee", args: []string{"-doc-ref", "v19.5.0-ee"}},
+		{name: "the raw route's cache is not read", cached: "", wantFatal: "stale doc/api citations found"},
+		{name: "another ref's cache is not read", cached: "@v19.5.0-ee", wantFatal: "stale doc/api citations found"},
+		{name: "a doc-ref that is not a ref is refused", cached: "@master", args: []string{"-doc-ref", "not a ref"}, wantFatal: `"not a ref" is not a ref this can read doc/api at`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTree(t, root, map[string]string{"cmd/audit_1to1/main.go": "package main // see doc/api/delta.md"})
+			cache := apidocs.CacheDir(root) + tt.cached
+			writeTree(t, cache, map[string]string{"delta.md": "# Delta API\n"})
+			original := repositoryRoot
+			t.Cleanup(func() { repositoryRoot = original })
+			repositoryRoot = func(string) (string, error) { return root, nil }
+			messages := captureFatal(t)
+
+			output := filepath.Join(t.TempDir(), "docs.json")
+			resetFlags(t, append([]string{"-validate-docs", "-offline", "-output", output}, tt.args...)...)
+			main()
+
+			if tt.wantFatal == "" {
+				if len(*messages) != 0 {
+					t.Fatalf("main reported %v, want every citation read from %s", *messages, cache)
+				}
+				if ok, _ := readJSONFile(t, output)["ok"].(float64); ok != 1 {
+					t.Errorf("report ok = %v, want the one cited page", ok)
+				}
+				return
+			}
+			if len(*messages) != 1 || !strings.Contains((*messages)[0], tt.wantFatal) {
+				t.Errorf("main reported %v, want one fatal message containing %q", *messages, tt.wantFatal)
+			}
+		})
+	}
+}
+
+// TestRunSingle_PathsScope_PassesTheEndpointSwitchThrough verifies the wiring
 // of the dimension that reads the recorded requests: the flag decides whether
-// the documentation comparison gets a fetcher at all, and the scope's own
-// verdict is what the run reports.
-//
-// Nil is the interesting half. The comparison needs the network and 250 pages
-// of it, and it gates nothing, so a run that did not ask for it must be handed
-// nothing to fetch with rather than a fetcher it might use. The shard
-// directory is the same shape of input one layer along: an end-to-end record
-// exists only after a Docker session wrote one, so a run that named none must
-// be handed the empty string and not a path it might read.
-func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
+// the documentation comparison runs at all, and the scope's own verdict is
+// what the run reports. The shard directory is the same shape of input one
+// field along: an end-to-end record exists only after a Docker session wrote
+// one, so a run that named none must be handed the empty string and not a path
+// it might read.
+func TestRunSingle_PathsScope_PassesTheEndpointSwitchThrough(t *testing.T) {
 	original := pathsRun
 	t.Cleanup(func() { pathsRun = original })
 	var got paths.Options
-	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+	pathsRun = func(_ string, opts paths.Options) ([]byte, bool, error) {
 		got = opts
 		return []byte("{}\n"), true, nil
 	}
@@ -775,17 +1027,16 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 		name      string
 		endpoints bool
 		e2eCalls  string
-		wantNil   bool
 	}{
-		{name: "without -check-endpoints", endpoints: false, wantNil: true},
-		{name: "with -check-endpoints", endpoints: true, wantNil: false},
-		{name: "with -e2e-calls", endpoints: false, e2eCalls: "/tmp/e2e-calls", wantNil: true},
+		{name: "without -check-endpoints", endpoints: false},
+		{name: "with -check-endpoints", endpoints: true},
+		{name: "with -e2e-calls", endpoints: false, e2eCalls: "/tmp/e2e-calls"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			got = paths.Options{}
 
-			content, clean, err := runSingle(t.Context(), scopePaths,
+			content, clean, err := runSingle(scopePaths,
 				options{gapsOnly: true, endpoints: testCase.endpoints, e2eCalls: testCase.e2eCalls})
 
 			if err != nil || !clean || string(content) != "{}\n" {
@@ -794,8 +1045,8 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 			if !got.GapsOnly {
 				t.Error("runSingle(paths) did not pass -gaps-only through")
 			}
-			if (got.Fetcher == nil) != testCase.wantNil {
-				t.Errorf("runSingle(paths) fetcher = %v, want nil == %v", got.Fetcher, testCase.wantNil)
+			if got.CheckEndpoints != testCase.endpoints {
+				t.Errorf("runSingle(paths) CheckEndpoints = %v, want %v", got.CheckEndpoints, testCase.endpoints)
 			}
 			if got.E2ECallsDir != testCase.e2eCalls {
 				t.Errorf("runSingle(paths) e2e calls = %q, want %q", got.E2ECallsDir, testCase.e2eCalls)
@@ -808,7 +1059,7 @@ func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 // scope name it does not know instead of running nothing silently, and that a
 // refusal reports the gate as failed rather than clean.
 func TestRunSingle_UnknownScope(t *testing.T) {
-	_, clean, err := runSingle(t.Context(), "bogus", options{})
+	_, clean, err := runSingle("bogus", options{})
 	if err == nil {
 		t.Fatal("expected error for unknown scope")
 	}
@@ -821,19 +1072,19 @@ func TestRunSingle_UnknownScope(t *testing.T) {
 }
 
 // TestIsMergedScope_Combinations_MatchOnlyTheMergedSet verifies the merged
-// backlog runs for exactly the four merged streams. Adding the sdk scope made
-// a count-based test wrong: structs,actions,metadata,sdk also has four
-// entries and must not be merged.
+// backlog runs for exactly the three merged streams. Adding the sdk scope made
+// a count-based test wrong: structs,actions,sdk also has three entries and
+// must not be merged.
 func TestIsMergedScope_Combinations_MatchOnlyTheMergedSet(t *testing.T) {
 	cases := []struct {
 		name   string
 		scopes []string
 		want   bool
 	}{
-		{name: "the_merged_set", scopes: []string{"actions", "enums", "metadata", "structs"}, want: true},
-		{name: "old_trio_without_enums", scopes: []string{"actions", "metadata", "structs"}, want: false},
-		{name: "set_with_sdk_substituted", scopes: []string{"actions", "metadata", "sdk", "structs"}, want: false},
-		{name: "all_five", scopes: []string{"actions", "enums", "metadata", "sdk", "structs"}, want: false},
+		{name: "the_merged_set", scopes: []string{"actions", "enums", "structs"}, want: true},
+		{name: "pair_without_enums", scopes: []string{"actions", "structs"}, want: false},
+		{name: "set_with_sdk_substituted", scopes: []string{"actions", "sdk", "structs"}, want: false},
+		{name: "all_four", scopes: []string{"actions", "enums", "sdk", "structs"}, want: false},
 		{name: "single", scopes: []string{"sdk"}, want: false},
 		{name: "empty", scopes: nil, want: false},
 	}
@@ -881,8 +1132,7 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 	}{
 		{name: "unknown_scope", scope: "bogus", wantErr: `invalid scope "bogus"`},
 		{name: "two_scopes", scope: "structs,actions", wantErr: "other combinations are not supported"},
-		{name: "the_old_trio_without_enums", scope: "structs,actions,metadata", wantErr: "other combinations are not supported"},
-		{name: "four_scopes_that_are_not_the_merged_set", scope: "structs,actions,metadata,sdk", wantErr: "other combinations are not supported"},
+		{name: "three_scopes_that_are_not_the_merged_set", scope: "structs,actions,sdk", wantErr: "other combinations are not supported"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -897,11 +1147,12 @@ func TestRun_ScopeSelection_RejectsUnsupportedScopes(t *testing.T) {
 // TestRun_EachScope_WritesItsReportShape runs the single-scope reports and
 // the merged backlog through the seam against the real tree and checks each
 // lands in its file in the analyzer's native shape: the struct report names
-// the client-go path, the action report lists services, the metadata report
-// lists packages, the enum report lists packages under the client-go path,
-// the sdk report carries the enum fields beside its services, and the merged
-// backlog carries the note and the per-stream summary. A write failure
-// surfaces as such.
+// the client-go path, the action report lists services, the enum report
+// lists packages under the client-go path, the sdk report carries the enum
+// fields beside its services, and the merged backlog carries the note and
+// the per-stream summary, which is the same with and without -gaps-only and
+// counts what each stream's own report counts. A write failure surfaces as
+// such.
 func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	dir := t.TempDir()
 	cases := []struct {
@@ -909,7 +1160,6 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 		scope    string
 		wantKeys []string
 	}{
-		{name: "metadata", scope: "metadata", wantKeys: []string{"schema_version", "summary", "packages"}},
 		{name: "structs", scope: "structs", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
 		{name: "actions", scope: "actions", wantKeys: []string{"schema_version", "client_go_path", "summary", "services"}},
 		{name: "enums", scope: "enums", wantKeys: []string{"schema_version", "client_go_path", "summary", "packages"}},
@@ -935,26 +1185,80 @@ func TestRun_EachScope_WritesItsReportShape(t *testing.T) {
 	}
 
 	t.Run("merged_summary_carries_every_stream", func(t *testing.T) {
-		doc := readJSONFile(t, filepath.Join(dir, "all.json"))
-		summary, _ := doc["summary"].(map[string]any)
-		for _, key := range []string{"struct_missing_input", "action_missing_methods", "meta_generic_usage", "enum_missing_values", "enum_extra_values"} {
-			t.Run(key, func(t *testing.T) {
-				if _, ok := summary[key]; !ok {
-					t.Errorf("merged summary lacks %q (keys %v)", key, keysOf(summary))
-				}
-			})
-		}
-		if note, _ := doc["note"].(string); !strings.HasPrefix(note, "Merged 1:1 audit backlog.") {
-			t.Errorf("merged note = %q, want the backlog note", note)
-		}
+		checkMergedSummaryKeys(t, readJSONFile(t, filepath.Join(dir, "all.json")))
+	})
+
+	t.Run("merged_summary_counts_what_the_streams_count_in_both_modes", func(t *testing.T) {
+		checkMergedSummaryOnTheTree(t, dir)
 	})
 
 	t.Run("write_failure", func(t *testing.T) {
-		err := runScope("metadata", dir)
+		err := runScope("actions", dir)
 		if err == nil || !strings.HasPrefix(err.Error(), "write output: ") {
 			t.Fatalf("run to a directory path = %v, want a write output error", err)
 		}
 	})
+}
+
+// checkMergedSummaryKeys holds a merged backlog to carrying the summary key
+// of each stream, no key of the retired R-META stream, and the backlog note.
+func checkMergedSummaryKeys(t *testing.T, doc map[string]any) {
+	t.Helper()
+	summary, _ := doc["summary"].(map[string]any)
+	for _, key := range []string{"packages", "packages_with_gaps", "struct_missing_input", "struct_type_mismatches", "action_missing_methods", "enum_missing_values", "enum_extra_values"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := summary[key]; !ok {
+				t.Errorf("merged summary lacks %q (keys %v)", key, keysOf(summary))
+			}
+		})
+	}
+	for key := range summary {
+		if strings.HasPrefix(key, "meta_") {
+			t.Errorf("merged summary still carries the retired R-META key %q", key)
+		}
+	}
+	if note, _ := doc["note"].(string); !strings.HasPrefix(note, "Merged 1:1 audit backlog.") {
+		t.Errorf("merged note = %q, want the backlog note", note)
+	}
+}
+
+// checkMergedSummaryOnTheTree holds the merged summary dir's gaps-only
+// backlog carries to the one a full run writes, and each of its counts to the
+// count the stream that owns it reports in dir: a summary that summed
+// packages[] would read fewer packages and type mismatches under -gaps-only,
+// and one that summed the actions of every package would count a method once
+// per package that calls its service, 41 for the 18 the actions stream lists
+// on the tree of 2026-10-31.
+func checkMergedSummaryOnTheTree(t *testing.T, dir string) {
+	t.Helper()
+	full := filepath.Join(t.TempDir(), "full.json")
+	if err := run(options{scope: "all", outputPath: full}); err != nil {
+		t.Fatalf("run(all) without -gaps-only: %v", err)
+	}
+	merged, _ := readJSONFile(t, filepath.Join(dir, "all.json"))["summary"].(map[string]any)
+	if fullSummary, _ := readJSONFile(t, full)["summary"].(map[string]any); !reflect.DeepEqual(merged, fullSummary) {
+		t.Errorf("the merged summary changes with -gaps-only:\nfull:      %v\ngaps-only: %v", fullSummary, merged)
+	}
+	streams := map[string]map[string]any{}
+	for _, scope := range []string{"structs", "actions", "enums"} {
+		streams[scope], _ = readJSONFile(t, filepath.Join(dir, scope+".json"))["summary"].(map[string]any)
+	}
+	for _, testCase := range []struct{ key, scope, streamKey string }{
+		{key: "packages", scope: "structs", streamKey: "packages"},
+		{key: "struct_missing_input", scope: "structs", streamKey: "missing_input_fields"},
+		{key: "struct_missing_output", scope: "structs", streamKey: "missing_output_fields"},
+		{key: "struct_extra_output", scope: "structs", streamKey: "extra_output_fields"},
+		{key: "struct_type_mismatches", scope: "structs", streamKey: "type_mismatches"},
+		{key: "action_missing_methods", scope: "actions", streamKey: "missing_methods"},
+		{key: "enum_missing_values", scope: "enums", streamKey: "missing_values"},
+		{key: "enum_extra_values", scope: "enums", streamKey: "extra_values"},
+	} {
+		t.Run(testCase.key, func(t *testing.T) {
+			if got, want := merged[testCase.key], streams[testCase.scope][testCase.streamKey]; got != want || got == nil {
+				t.Errorf("merged %s = %v, want the %v the %s stream reports as %s", testCase.key, got, want, testCase.scope, testCase.streamKey)
+			}
+		})
+	}
 }
 
 // TestValidateDocs_Outcomes_ReportAndGate verifies the -validate-docs seam:

@@ -2706,3 +2706,110 @@ func schemaIntegers(enum any) []int {
 	}
 	return out
 }
+
+// boardUpdateRecorder is an instance that records every board update it is
+// sent, method, path and body, and answers it with a board.
+type boardUpdateRecorder struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+// handler records the request and answers with the board it updated.
+func (r *boardUpdateRecorder) handler(t *testing.T) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body := make([]byte, 4096)
+		n, _ := req.Body.Read(body)
+		r.mu.Lock()
+		r.sent = append(r.sent, req.Method+" "+req.URL.Path+" "+string(body[:n]))
+		r.mu.Unlock()
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"name":"x","project":{"id":42}}`)
+	})
+}
+
+// updates is what the instance was sent so far.
+func (r *boardUpdateRecorder) updates() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.sent)
+}
+
+// TestBuildActionCatalog_TierPrunedParam_IsRefusedWithItsTierAndNeverSent pins
+// issue 1239 at the meta dispatcher, the one surface the param still reached
+// GitLab through: on a Free catalog, a board update sending the Premium
+// assignee_id is refused with the tier it needs and the tier the session was
+// built for before anything is sent, a call spelling a served param by an
+// alias the handler accepts is sent, and on a Premium catalog assignee_id is
+// served and sent.
+func TestBuildActionCatalog_TierPrunedParam_IsRefusedWithItsTierAndNeverSent(t *testing.T) {
+	call := func(t *testing.T, tier edition.Tier, params map[string]any) (string, []string) {
+		t.Helper()
+		recorder := &boardUpdateRecorder{}
+		catalog, err := BuildActionCatalog(testutil.NewTestClient(t, recorder.handler(t)), ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(%s) error = %v", tier, err)
+		}
+		group, ok := catalog.Group("gitlab_project")
+		if !ok {
+			t.Fatal("the catalog holds no gitlab_project group")
+		}
+		handler := toolutil.MakeMetaHandler("gitlab_project", group.ActionMap(), nil)
+		ctx := toolutil.WithSessionTier(t.Context(), edition.Free, true)
+		result, _, callErr := handler(ctx, &mcp.CallToolRequest{}, toolutil.MetaToolInput{Action: "board_update", Params: params})
+		if callErr != nil || result == nil || len(result.Content) == 0 {
+			t.Fatalf("board_update = %+v, %v", result, callErr)
+		}
+		text, _ := result.Content[0].(*mcp.TextContent)
+		return text.Text, recorder.updates()
+	}
+
+	t.Run("a Premium param at a pinned Free tier", func(t *testing.T) {
+		text, sent := call(t, edition.Free, map[string]any{"project_id": "42", "board_id": 7, "name": "x", "assignee_id": 5})
+		const want = `gitlab_project/board_update: param "assignee_id" needs GitLab Premium or Ultimate, and this deployment is configured for GitLab Free, so the action's schema at this tier leaves it out and nothing was sent. If the instance is licensed for it, ask the operator to configure the tier it has with GITLAB_MCP_TIER or --tier. Send the call without it to run the action at this tier.`
+		if text != want {
+			t.Errorf("board_update text = %q, want %q", text, want)
+		}
+		if len(sent) != 0 {
+			t.Errorf("the instance was sent %v, want nothing", sent)
+		}
+	})
+	t.Run("an alias of a served param at Free", func(t *testing.T) {
+		_, sent := call(t, edition.Free, map[string]any{"project_path": "42", "board_id": 7, "name": "x"})
+		if len(sent) != 1 || !strings.HasPrefix(sent[0], "PUT /api/v4/projects/42/boards/7") {
+			t.Errorf("the instance was sent %v, want the board update", sent)
+		}
+	})
+	t.Run("the Premium param at Premium", func(t *testing.T) {
+		_, sent := call(t, edition.Premium, map[string]any{"project_id": "42", "board_id": 7, "name": "x", "assignee_id": 5})
+		if len(sent) != 1 || !strings.Contains(sent[0], `"assignee_id":5`) {
+			t.Errorf("the instance was sent %v, want the board update carrying assignee_id", sent)
+		}
+	})
+}
+
+// TestBuildActionCatalog_TierPruned_CarriesWhatTheTierLeftOut verifies the
+// route carries the fields the catalog pruned at its tier, each with the tier
+// it asks for, and nothing at a tier that serves them all.
+func TestBuildActionCatalog_TierPruned_CarriesWhatTheTierLeftOut(t *testing.T) {
+	for _, tc := range []struct {
+		tier edition.Tier
+		want string
+	}{
+		{tier: edition.Free, want: "premium"},
+		{tier: edition.Ultimate, want: ""},
+	} {
+		t.Run(tc.tier.String(), func(t *testing.T) {
+			catalog, err := SharedBaseCatalog(false, ActionCatalogOptions{Tier: tc.tier, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("SharedBaseCatalog() error = %v", err)
+			}
+			action, ok := catalog.Action("project.board_update")
+			if !ok {
+				t.Fatal("the catalog holds no project.board_update")
+			}
+			if got := action.Route.TierPruned["assignee_id"]; got != tc.want {
+				t.Errorf("TierPruned[assignee_id] = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

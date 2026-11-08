@@ -345,26 +345,12 @@ type Registry struct {
 	ambiguousAliases map[string][]string
 	handlers         map[string]toolHandler
 	SearchIndex      searchIndex
-	// withheldByScope and withheldByOperator name actions the catalog carries
-	// but this session may not execute, so asking for one can be answered with
-	// the reason instead of with "unknown action". Both are empty when nothing
-	// was filtered. They are separate because only the first is something the
-	// caller can resolve: a narrow credential can be reauthorized, an operator
-	// running the deployment read-only cannot be argued with by the client.
-	// The first maps each key to the scopes the credential lacks for it, kept
-	// apart by who asks for them, which the answer names.
-	withheldByScope    map[string]actioncatalog.ScopeWithheld
-	withheldByOperator map[string]struct{}
-	// withheldByTier names the actions the instance's licensing tier removed,
-	// each key with the lowest tier that serves its action and what would
-	// still withhold it once the tier did, and sessionTier and tierPinned are
-	// the tier the session was built for and whether an operator named it.
-	// Like the operator's narrowing it is not the caller's to resolve, and
-	// unlike it the answer allows that a detected tier may be wrong (issue
-	// 956).
-	withheldByTier map[string]actioncatalog.TierWithheld
-	sessionTier    edition.Tier
-	tierPinned     bool
+	// withheld names the actions the catalog carries but this session may not
+	// execute, by cause, so asking for one can be answered with the reason
+	// instead of with "unknown action". It is empty when nothing was
+	// filtered, and the meta surface answers from the same record and in the
+	// same words (issue 1282).
+	withheld actioncatalog.Withheld
 }
 
 // RegistryOption configures the dynamic registry at registration time.
@@ -382,8 +368,7 @@ type RegistryOption func(*Registry)
 // that the credential needs widening.
 func WithWithheldActions(byTokenScope []actioncatalog.ScopeWithheld, byOperator []string) RegistryOption {
 	return func(r *Registry) {
-		r.withheldByScope = withheldScopes(byTokenScope)
-		r.withheldByOperator = withheldKeySet(byOperator)
+		r.withheld.RecordActions(byTokenScope, byOperator)
 	}
 }
 
@@ -402,60 +387,23 @@ func WithWithheldActions(byTokenScope []actioncatalog.ScopeWithheld, byOperator 
 // in internal/tools, which builds the list, leaves them out.
 func WithTierWithheld(byTier []actioncatalog.TierWithheld, tier edition.Tier, pinned bool) RegistryOption {
 	return func(r *Registry) {
-		r.withheldByTier = withheldTiers(byTier)
-		r.sessionTier = tier
-		r.tierPinned = pinned
+		r.withheld.RecordTier(byTier, tier, pinned)
 	}
 }
 
-// withheldTiers indexes the actions the tier withheld by key. An entry with no
-// key withholds nothing.
-func withheldTiers(withheld []actioncatalog.TierWithheld) map[string]actioncatalog.TierWithheld {
-	if len(withheld) == 0 {
-		return nil
+// WithCredentialKindWithheld tells the registry which action keys were
+// filtered out because GitLab refuses them to the session's kind of
+// credential, an OAuth access token, on every way whatever its scopes (issue
+// 1238), each with the scopes the credential lacks for it besides, and
+// whether the deployment refuses every personal access token. A call for one
+// is answered that it exists and needs a personal access token carrying
+// those scopes, or on a deployment that refuses one that only the operator
+// can provide it, rather than as unknown, and a cross-link to one is
+// published like any withheld action's.
+func WithCredentialKindWithheld(byCredentialKind []actioncatalog.ScopeWithheld, personalTokensRefused bool) RegistryOption {
+	return func(r *Registry) {
+		r.withheld.RecordCredentialKind(byCredentialKind, personalTokensRefused)
 	}
-	tiers := make(map[string]actioncatalog.TierWithheld, len(withheld))
-	for _, entry := range withheld {
-		if key := strings.ToLower(strings.TrimSpace(entry.ID)); key != "" {
-			tiers[key] = entry
-		}
-	}
-	return tiers
-}
-
-// withheldScopes indexes the actions a credential's scopes withheld by key,
-// each with the scopes it lacks. An entry naming none is recorded as lacking
-// api for GitLab, the scope every classic narrowing of a write lacks, so the
-// answer always names something to reauthorize with.
-func withheldScopes(withheld []actioncatalog.ScopeWithheld) map[string]actioncatalog.ScopeWithheld {
-	if len(withheld) == 0 {
-		return nil
-	}
-	scopes := make(map[string]actioncatalog.ScopeWithheld, len(withheld))
-	for _, entry := range withheld {
-		key := strings.ToLower(strings.TrimSpace(entry.ID))
-		if key == "" {
-			continue
-		}
-		if len(entry.Missing()) == 0 {
-			entry.ByGitLab = []string{"api"}
-		}
-		scopes[key] = entry
-	}
-	return scopes
-}
-
-func withheldKeySet(keys []string) map[string]struct{} {
-	if len(keys) == 0 {
-		return nil
-	}
-	set := make(map[string]struct{}, len(keys))
-	for _, key := range keys {
-		if normalized := strings.ToLower(strings.TrimSpace(key)); normalized != "" {
-			set[normalized] = struct{}{}
-		}
-	}
-	return set
 }
 
 // RegisterCatalogFindExecuteTools registers the dynamic find and execute tools
@@ -972,6 +920,15 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	}
 	if len(commonParamExplanations)+len(actionParamExplanations) > 0 {
 		slog.DebugContext(ctx, "normalized dynamic action params", "action", entry.ID, "normalizations", len(commonParamExplanations)+len(actionParamExplanations))
+	}
+	// A param the action's tier left out of its schema is told apart from an
+	// unknown one and answered with the tier it needs, before the unknown
+	// params are listed with their near misses, which read as a typo of a
+	// param this session can never send (issue 1239).
+	if pruned := toolutil.TierPrunedParams(entry.Route, params); len(pruned) > 0 {
+		tier, pinned, known := r.withheld.SessionTier()
+		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
+		return toolutil.TierPrunedParamsRefusal(executeCallName(entry.ID), entry.Route, pruned, tier, pinned, known), nil, nil
 	}
 	if result := validateDynamicExecuteParams(entry, params); result != nil {
 		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
@@ -2989,21 +2946,10 @@ func (r *Registry) publishableRelatedAction(id string) (string, bool) {
 }
 
 // actionWithheld reports whether the catalog carried this action and one of
-// the deployment's filters took it away, under either cause.
-//
-// [Registry.withheldActionMessage] keeps the two causes apart because only one
-// of them is something the caller can act on. Here the question is narrower:
-// whether asking for the action produces an answer that explains itself.
+// the deployment's filters took it away, under any cause
+// ([actioncatalog.Withheld.Holds]).
 func (r *Registry) actionWithheld(action string) bool {
-	key := strings.ToLower(strings.TrimSpace(action))
-	if _, byScope := r.withheldByScope[key]; byScope {
-		return true
-	}
-	if _, byOperator := r.withheldByOperator[key]; byOperator {
-		return true
-	}
-	_, byTier := r.withheldByTier[key]
-	return byTier
+	return r.withheld.Holds(action)
 }
 
 func cloneParameterGuidance(guidance map[string]toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {
@@ -3049,123 +2995,10 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 }
 
 // withheldActionMessage explains an action the catalog knows about but this
-// session may not run, rather than calling it unknown.
-//
-// Reporting a scope narrowing as a typo is actively misleading: the suggestions
-// are all real read-only actions, so the answer looks authoritative, and the
-// reader concludes the server lacks the capability instead of learning that the
-// credential is what is narrow.
-//
-// The scope answer names the scopes the credential lacks for this action, and
-// who asks for each, since only one of them is GitLab: api when GitLab refuses
-// read_api for what the action sends, and admin_mode when this server serves
-// the action's catalog group only to a credential carrying it, which GitLab
-// does not ask of every action in such a group, nor of any on an instance
-// with Admin Mode off. A token lacking only admin_mode was told to reauthorize
-// with api until ADR-0026, which sent a caller that already held api round in
-// a circle, and was then told GitLab required admin_mode for reads GitLab
-// serves any authenticated token.
+// session may not run, rather than calling it unknown, in the words
+// [actioncatalog.Withheld.Message] writes for every surface that answers one.
 func (r *Registry) withheldActionMessage(toolName, action string) (string, bool) {
-	key := strings.ToLower(strings.TrimSpace(action))
-	if withheld, ok := r.withheldByScope[key]; ok {
-		scopes, _ := scopeWords(withheld.Missing())
-		return fmt.Sprintf("%s: action %q exists but is not available to this session: %s, so a narrowed action surface was built for it. Reauthorize with %s to use it; do not report the capability as missing.", toolName, action, scopeCauses(withheld), scopes), true
-	}
-	if _, ok := r.withheldByOperator[key]; ok {
-		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
-	}
-	if withheld, ok := r.withheldByTier[key]; ok {
-		return r.tierWithheldMessage(toolName, action, withheld), true
-	}
-	return "", false
-}
-
-// tierWithheldMessage explains an action the instance's licensing tier
-// removed (issue 956, register row AUT-003). The caller cannot change the
-// tier, so the answer asks the operator, and it says which tier the action
-// needs and which one the session was built for. Where the server detected the
-// tier rather than an operator naming it, the answer allows that the detection
-// may be wrong, since a tier nothing answered for resolves to Free and pinning
-// it is how an operator corrects that. What would still withhold the action
-// once the tier served it is said in the same answer ([tierAlsoWithheld]).
-func (r *Registry) tierWithheldMessage(toolName, action string, withheld actioncatalog.TierWithheld) string {
-	required := "GitLab Premium or Ultimate"
-	if edition.TierFromEdition(withheld.Edition) == edition.Ultimate {
-		required = "GitLab Ultimate"
-	}
-	var message string
-	if r.tierPinned {
-		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this deployment is configured for GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, ask the operator to configure the tier it has with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(r.sessionTier))
-	} else {
-		message = fmt.Sprintf("%s: action %q exists but is not available: it needs %s, and this instance's tier was detected as GitLab %s, so a narrowed action surface was built. If the instance is licensed for it, the detection was wrong: ask the operator to pin the tier with GITLAB_MCP_TIER or --tier.", toolName, action, required, tierName(r.sessionTier))
-	}
-	return message + tierAlsoWithheld(withheld) + " Do not report the capability as missing."
-}
-
-// tierAlsoWithheld is the sentence the tier's answer adds when pinning the
-// tier would only uncover the next refusal: the deployment's read-only mode
-// for a write, or the scopes the credential lacks for the action and who asks
-// for each, in the words the scope narrowing's own answer uses. Without it a
-// Premium write on a read-only Free deployment sent the model to ask the
-// operator to pin the tier, and the pinned deployment then answered that it
-// withholds the action, so the operator was asked twice. It is empty when
-// nothing else stands in the way.
-func tierAlsoWithheld(withheld actioncatalog.TierWithheld) string {
-	if withheld.ReadOnlyMode {
-		return " This deployment is also read-only, which withholds the action at any tier, so the operator would have to allow writes as well."
-	}
-	scope := actioncatalog.ScopeWithheld{ByGitLab: withheld.ByGitLab, ByServer: withheld.ByServer}
-	missing := scope.Missing()
-	if len(missing) == 0 {
-		return ""
-	}
-	scopes, _ := scopeWords(missing)
-	return " Once the tier serves it, " + scopeCauses(scope) + ": reauthorize with " + scopes + " as well."
-}
-
-// tierName spells a tier as GitLab names it in prose.
-func tierName(tier edition.Tier) string {
-	switch tier {
-	case edition.Premium:
-		return "Premium"
-	case edition.Ultimate:
-		return "Ultimate"
-	default:
-		return "Free"
-	}
-}
-
-// scopeCauses says who asks for each scope a credential lacks for an action,
-// GitLab for what the action sends and this server for the group the action
-// belongs to, and that the credential carries none of them: "GitLab requires
-// the api scope for it and the credential in use does not carry it", or both
-// causes before a shared ending. Every entry names at least one scope, since
-// [withheldScopes] records GitLab's api for one that names none.
-func scopeCauses(withheld actioncatalog.ScopeWithheld) string {
-	var causes []string
-	if len(withheld.ByGitLab) > 0 {
-		gitlab, _ := scopeWords(withheld.ByGitLab)
-		causes = append(causes, "GitLab requires "+gitlab+" for it")
-	}
-	if len(withheld.ByServer) > 0 {
-		server, _ := scopeWords(withheld.ByServer)
-		causes = append(causes, "this server serves this action's group only to a credential carrying "+server)
-	}
-	_, pronoun := scopeWords(withheld.Missing())
-	if len(causes) == 1 {
-		return causes[0] + " and the credential in use does not carry " + pronoun
-	}
-	return strings.Join(causes, ", ") + ", and the credential in use does not carry " + pronoun
-}
-
-// scopeWords spells scopes as the withheld answer names them, "the api scope"
-// or "the admin_mode and api scopes", with the pronoun that refers back to
-// them.
-func scopeWords(scopes []string) (named, pronoun string) {
-	if len(scopes) == 1 {
-		return "the " + scopes[0] + " scope", "it"
-	}
-	return "the " + strings.Join(scopes, " and ") + " scopes", "them"
+	return r.withheld.Message(toolName, action, action)
 }
 
 func (r *Registry) ambiguousAliasTargets(action string) []string {
@@ -4775,16 +4608,19 @@ func actionColumnsFor(rows []actionRow) actionColumns {
 
 // actionRowCells renders one row in the order of [actionMatchColumns]. The
 // guidance and why cells are escaped here even though the two renderers that
-// build them escape as well: the escaper is idempotent, so the rendering is
+// build them escape as well: the escapers are idempotent, so the rendering is
 // unchanged, and the cell is escaped where the cell is written rather than
-// two calls away, which is the rule every other formatter is held to.
+// two calls away, which is the rule every other formatter is held to. Each
+// takes the escaper its text needs: the guidance is the catalog's own prose,
+// whose example addresses a caller copies as written, and the why can quote
+// the caller's query.
 func actionRowCells(row actionRow, cols actionColumns) []string {
 	return selectColumns([]string{
 		toolutil.MdCodeSpanCell(row.id),
 		strconv.Itoa(row.score),
 		destructiveCell(row.destructive),
 		requiredParamsCell(row.requiredParams, row.alternatives, row.exclusive),
-		toolutil.EscapeMdTableCell(row.guidance),
+		toolutil.EscapeMdServerProse(row.guidance),
 		toolutil.EscapeMdTableCell(row.why),
 	}, cols)
 }
@@ -4975,15 +4811,20 @@ func formatDescribeOutput(output DescribeOutput) string {
 // caller copies from. The usage note, the parameter guidance and the example
 // are written here because the card used to compute all three and print none
 // of them, which left the one surface that has room for them showing less
-// than the finder's table.
+// than the finder's table. The usage note and the guidance are the catalog's
+// own prose, so they keep the addresses a caller copies from them as written,
+// which [toolutil.Card.Field] would escape.
 func writeActionDescription(c *toolutil.Card, action ActionDescription) {
 	c.Code("Tool", action.Tool)
 	c.Code("Action", action.Action)
 	c.Warn("Destructive", action.Destructive)
-	c.Field("Usage", action.Usage)
+	//gitlab:allow-unescaped toolutil.EscapeMdServerProse(action.Usage): the usage note an ActionSpec declares, compiled in rather than read from GitLab, whose addresses a caller copies.
+	c.Markdown("Usage", toolutil.EscapeMdServerProse(action.Usage))
 	c.Field("Required params", withAlternatives(codeSpanList(action.RequiredParams), actioncatalog.AlternativesPhrase(action.RequiredParamsAnyOf, action.ExclusiveGroups, backtickString)))
 	c.Field("Related actions", codeSpanList(action.RelatedActions))
-	c.Field("Parameter guidance", compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...))
+	guidance := compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...)
+	//gitlab:allow-unescaped toolutil.EscapeMdServerProse(guidance): the parameter guidance an ActionSpec declares, compiled in rather than read from GitLab, whose example addresses a caller copies.
+	c.Markdown("Parameter guidance", toolutil.EscapeMdServerProse(guidance))
 	c.Code("Schema URI", action.SchemaURI)
 	c.Fence("Input schema", "json", compactSchemaJSON(action.InputSchema))
 	c.Fence("Example call", "json", compactExampleJSON(action.Example))
@@ -5095,7 +4936,8 @@ func compactSearchGuidance(result SearchResult) string {
 
 // compactGuidance renders the Guidance cell of one row: the disambiguation
 // note, the parameter bindings worth naming, and the confirmation a
-// destructive action needs, in that order.
+// destructive action needs, in that order. All of it is the catalog's own
+// prose, so an address it spells stays as a caller copies it.
 func compactGuidance(usage string, guidance map[string]toolutil.ParameterGuidance, requiredParams []string, destructive bool) string {
 	parts := make([]string, 0, 3)
 	if usage = strings.TrimSpace(usage); usage != "" {
@@ -5110,7 +4952,7 @@ func compactGuidance(usage string, guidance map[string]toolutil.ParameterGuidanc
 	if len(parts) == 0 {
 		return dashCell
 	}
-	return toolutil.EscapeMdTableCell(strings.Join(parts, " "))
+	return toolutil.EscapeMdServerProse(strings.Join(parts, " "))
 }
 
 func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int, requiredParams ...string) string {

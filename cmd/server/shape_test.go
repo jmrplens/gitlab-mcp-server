@@ -103,6 +103,10 @@ func TestServerShapeKey_EveryCatalogDecidingFieldChangesTheShape(t *testing.T) {
 		// carries the same; it is in the key because the shell installs it, and
 		// a shape built for one language must not serve another.
 		{name: "the language", change: func(c *config.ServerConfig) { c.Language = "xx" }},
+		// Whether the door refuses every personal access token is the
+		// deployment's as well; it words the answer the server holds for an
+		// action GitLab serves only such a token (AUT-009, ADM-004).
+		{name: "a door refusing personal access tokens", change: func(c *config.ServerConfig) { c.PersonalTokensRefused = true }},
 	}
 
 	for _, tt := range tests {
@@ -776,7 +780,7 @@ func TestStartShapeRegistration_ForgetsThroughTheRegistry(t *testing.T) {
 // of the same values would group them alike; what the names add is that
 // whoever reads a key, in a debugger or a failure message, is told which value
 // each part is. So every value is held to the name in front of it, with the
-// three flags set one at a time, since a key in which two flags agree cannot
+// four flags set one at a time, since a key in which two flags agree cannot
 // show that they traded places.
 func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
 	named := []string{"surface=meta|", "capability=minimal|", "schema=compact|", "tier=premium|", "|lang=xx"}
@@ -789,17 +793,22 @@ func TestServerShapeKey_NamesTheFieldsItHashes(t *testing.T) {
 		{
 			name:  "the tier pinned",
 			set:   func(c *config.ServerConfig) { c.TierExplicit = true },
-			flags: []string{"tierPinned=true|", "dotcom=false|", "stateless=false"},
+			flags: []string{"tierPinned=true|", "dotcom=false|", "stateless=false|", "personalTokensRefused=false|"},
 		},
 		{
 			name:   "gitlab.com",
 			dotcom: true,
-			flags:  []string{"tierPinned=false|", "dotcom=true|", "stateless=false"},
+			flags:  []string{"tierPinned=false|", "dotcom=true|", "stateless=false|", "personalTokensRefused=false|"},
 		},
 		{
 			name:  "stateless",
 			set:   func(c *config.ServerConfig) { c.Stateless = true },
-			flags: []string{"tierPinned=false|", "dotcom=false|", "stateless=true"},
+			flags: []string{"tierPinned=false|", "dotcom=false|", "stateless=true|", "personalTokensRefused=false|"},
+		},
+		{
+			name:  "personal access tokens refused",
+			set:   func(c *config.ServerConfig) { c.PersonalTokensRefused = true },
+			flags: []string{"tierPinned=false|", "dotcom=false|", "stateless=false|", "personalTokensRefused=true|"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -49,7 +49,7 @@ const (
 		"- **Updated**: 1 Feb 2026 00:00 UTC\n"
 
 	datadogConfigurationRows = "- **Datadog Configuration**:\n" +
-		"  - **API URL**: https://api.datadoghq.com\n" +
+		"  - **API URL**: https\\://api.datadoghq.com\n" +
 		"  - **Datadog Env**: prod\n" +
 		"  - **Datadog Service**: gitlab\n" +
 		"  - **Datadog Site**: datadoghq.com\n" +
@@ -262,7 +262,7 @@ func TestFormatSetGroupDatadogMarkdownString(t *testing.T) {
 				"- **Slug**: `datadog`\n"+
 				"- **Active**: ✅\n"+
 				"- **Datadog Configuration**:\n"+
-				"  - **API URL**: https://api.datadoghq.com\n"+
+				"  - **API URL**: https\\://api.datadoghq.com\n"+
 				"  - **Datadog Env**: prod\n"+
 				"  - **Datadog Service**: gitlab\n"+
 				"  - **Datadog Site**: datadoghq.com\n"+

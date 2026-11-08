@@ -166,17 +166,15 @@ func runLine(records []modelrecord.Record) (modelrecord.Run, error) {
 // names. A line naming an attempt the shard has no line for is an error: it is
 // evidence of a truncated shard, and dropping it would score a conversation
 // with a hole in it as a shorter conversation.
+//
+// The record's kind is read with a chain of ifs rather than a tagless switch,
+// because the coverage profile gremlins reads gives a case expression no block
+// of its own, so every mutant of one is reported as not covered however many
+// tests reach it.
 func attachLines(records []modelrecord.Record, byID map[string]*Attempt) error {
 	for _, record := range records {
-		var owner string
-		switch {
-		case record.Turn != nil:
-			owner = record.Turn.Attempt
-		case record.Call != nil:
-			owner = record.Call.Attempt
-		case record.Verify != nil:
-			owner = record.Verify.Attempt
-		default:
+		owner, attached := lineOwner(record)
+		if !attached {
 			continue
 		}
 		attempt, known := byID[owner]
@@ -184,16 +182,32 @@ func attachLines(records []modelrecord.Record, byID map[string]*Attempt) error {
 			return fmt.Errorf("a %s line names attempt %q, which the shard has no line for",
 				record.Type, owner)
 		}
-		switch {
-		case record.Turn != nil:
+		if record.Turn != nil {
 			attempt.Turns = append(attempt.Turns, *record.Turn)
-		case record.Call != nil:
-			attempt.Calls = append(attempt.Calls, *record.Call)
-		default:
-			attempt.Verifies = append(attempt.Verifies, *record.Verify)
+			continue
 		}
+		if record.Call != nil {
+			attempt.Calls = append(attempt.Calls, *record.Call)
+			continue
+		}
+		attempt.Verifies = append(attempt.Verifies, *record.Verify)
 	}
 	return nil
+}
+
+// lineOwner names the attempt a turn, call or verify line belongs to, and
+// reports whether the record is one of those three at all.
+func lineOwner(record modelrecord.Record) (string, bool) {
+	if record.Turn != nil {
+		return record.Turn.Attempt, true
+	}
+	if record.Call != nil {
+		return record.Call.Attempt, true
+	}
+	if record.Verify != nil {
+		return record.Verify.Attempt, true
+	}
+	return "", false
 }
 
 // surface returns the tool surface this attempt ran on. The attempt's own

@@ -58,7 +58,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## Enterprise User: Alice Wonderland\n\n" +
 				"- **ID**: 10\n" +
 				"- **Username**: alice\n" +
-				"- **Email**: alice@example.com\n" +
+				"- **Email**: alice\\@example.com\n" +
 				"- **State**: active\n" +
 				"- **Admin**: ✅\n" +
 				"- **2FA Enabled**: ✅\n" +
@@ -82,7 +82,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## Enterprise User: Bob\n\n" +
 				"- **ID**: 5\n" +
 				"- **Username**: bob\n" +
-				"- **Email**: bob@example.com\n" +
+				"- **Email**: bob\\@example.com\n" +
 				"- **State**: blocked\n" +
 				"- **Admin**: ❌\n" +
 				"- **2FA Enabled**: ❌\n" +
@@ -108,7 +108,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## Enterprise User: Admin\n\n" +
 				"- **ID**: 99\n" +
 				"- **Username**: admin_user\n" +
-				"- **Email**: admin@example.com\n" +
+				"- **Email**: admin\\@example.com\n" +
 				"- **State**: active\n" +
 				"- **Admin**: ✅\n" +
 				"- **2FA Enabled**: ❌\n" +
@@ -131,7 +131,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## Enterprise User: User | With Pipe\n\n" +
 				"- **ID**: 7\n" +
 				"- **Username**: pipe_user\n" +
-				"- **Email**: pipe@example.com\n" +
+				"- **Email**: pipe\\@example.com\n" +
 				"- **State**: active\n" +
 				"- **Admin**: ❌\n" +
 				"- **2FA Enabled**: ❌\n" +
@@ -189,7 +189,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			want: "## Enterprise Users (1)\n\n" +
 				"| ID | Username | Name | Email | State | 2FA |\n" +
 				"| --- | --- | --- | --- | --- | --- |\n" +
-				"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active | ✅ |\n" +
+				"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice\\@example.com | active | ✅ |\n" +
 				"\nPage 1 of 1 | 1 items total\n" +
 				listHints,
 		},
@@ -222,8 +222,8 @@ func TestFormatListMarkdown(t *testing.T) {
 				"Showing 2 of 45 results (page 1 of 3)\n\n" +
 				"| ID | Username | Name | Email | State | 2FA |\n" +
 				"| --- | --- | --- | --- | --- | --- |\n" +
-				"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active | ✅ |\n" +
-				"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked | ❌ |\n" +
+				"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice\\@example.com | active | ✅ |\n" +
+				"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob\\@example.com | blocked | ❌ |\n" +
 				"\nPage 1 of 3 | 45 items total | 2 per page\n" +
 				listHints,
 		},
@@ -244,7 +244,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			want: "## Enterprise Users (1)\n\n" +
 				"| ID | Username | Name | Email | State | 2FA |\n" +
 				"| --- | --- | --- | --- | --- | --- |\n" +
-				"| 3 | @pipe_user | User&#124;Pipe | pipe@example.com | active | ❌ |\n" +
+				"| 3 | @pipe_user | User&#124;Pipe | pipe\\@example.com | active | ❌ |\n" +
 				"\nPage 1 of 1 | 1 items total\n" +
 				listHints,
 		},

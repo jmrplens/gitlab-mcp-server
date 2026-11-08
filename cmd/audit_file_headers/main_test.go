@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -366,6 +367,10 @@ func readRepositoryFile(t *testing.T, name string) string {
 	return string(data)
 }
 
+// earlierAnalyzeTotal finds an analyze step numbered out of a total make
+// analyze has had before (31 to 39), which a renumbering left behind.
+var earlierAnalyzeTotal = regexp.MustCompile(`\[\d+/3[1-9]\] `)
+
 // TestMakefile_FileHeaderTargets_RunTheCommand holds the make targets to the
 // command: check-file-headers runs the gate, fix-file-headers its fix mode,
 // and make analyze runs the gate as its thirty-fourth step, with every step
@@ -375,8 +380,8 @@ func TestMakefile_FileHeaderTargets_RunTheCommand(t *testing.T) {
 	tests := []struct{ name, want string }{
 		{name: "check", want: "\ncheck-file-headers:\n\tgo run ./cmd/audit_file_headers/\n"},
 		{name: "fix", want: "\nfix-file-headers:\n\tgo run ./cmd/audit_file_headers/ -fix\n"},
-		{name: "analyze", want: "\trun_check \"[34/36] copyright and license headers\" go run ./cmd/audit_file_headers/; \\\n"},
-		{name: "first step renumbered", want: "\trun_check \"[1/36] golangci-lint config verify\""},
+		{name: "analyze", want: "\trun_check \"[34/40] copyright and license headers\" go run ./cmd/audit_file_headers/; \\\n"},
+		{name: "first step renumbered", want: "\trun_check \"[1/40] golangci-lint config verify\""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -385,8 +390,8 @@ func TestMakefile_FileHeaderTargets_RunTheCommand(t *testing.T) {
 			}
 		})
 	}
-	if strings.Contains(makefile, "/31] ") || strings.Contains(makefile, "/32] ") || strings.Contains(makefile, "/33] ") || strings.Contains(makefile, "/34] ") || strings.Contains(makefile, "/35] ") {
-		t.Error("Makefile still numbers an analyze step out of an earlier total")
+	if stale := earlierAnalyzeTotal.FindString(makefile); stale != "" {
+		t.Errorf("Makefile still numbers an analyze step out of an earlier total: %q", stale)
 	}
 }
 

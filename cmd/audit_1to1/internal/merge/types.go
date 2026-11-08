@@ -7,8 +7,11 @@ import "encoding/json"
 
 // --- Input report shapes (subsets of the three auditor JSON documents) ---
 
-// structReport mirrors the fields consumed from audit_struct_completeness.
+// structReport mirrors the fields consumed from the structs scope.
 type structReport struct {
+	// Summary is the stream's own count of the tree, which -gaps-only leaves
+	// as it is while it drops the clean packages from Packages.
+	Summary structSummary `json:"summary"`
 	// StaleDeclarations is the struct stream's other kind of finding: a key of
 	// one of its declaration tables that answered no candidate. It belongs to
 	// no package the report lists, since the package a key names may be the
@@ -23,7 +26,17 @@ type structReport struct {
 	} `json:"packages"`
 }
 
-// actionReport mirrors the fields consumed from audit_action_coverage.
+// structSummary is the part of the structs scope's summary the backlog
+// repeats.
+type structSummary struct {
+	Packages            int `json:"packages"`
+	MissingInputFields  int `json:"missing_input_fields"`
+	MissingOutputFields int `json:"missing_output_fields"`
+	ExtraOutputFields   int `json:"extra_output_fields"`
+	TypeMismatches      int `json:"type_mismatches"`
+}
+
+// actionReport mirrors the fields consumed from the actions scope.
 type actionReport struct {
 	Services []struct {
 		Service        string   `json:"service"`
@@ -34,30 +47,23 @@ type actionReport struct {
 	} `json:"services"`
 }
 
-// metadataReport mirrors the fields consumed from audit_metadata_completeness.
-type metadataReport struct {
-	Packages []struct {
-		Package  string        `json:"package"`
-		Findings []metaFinding `json:"findings"`
-	} `json:"packages"`
-}
-
-// metaFinding is one action's R-META flags, passed through to the backlog.
-type metaFinding struct {
-	Action string   `json:"action"`
-	Tool   string   `json:"tool,omitempty"`
-	Usage  string   `json:"usage,omitempty"`
-	Flags  []string `json:"flags"`
-}
-
 // enumReport mirrors the fields consumed from the enums scope.
 type enumReport struct {
+	// Summary is the stream's own count of the tree, which -gaps-only leaves
+	// as it is.
+	Summary  enumSummary `json:"summary"`
 	Packages []struct {
 		Package       string          `json:"package"`
 		MissingValues int             `json:"missing_values"`
 		ExtraValues   int             `json:"extra_values"`
 		Findings      json.RawMessage `json:"findings"`
 	} `json:"packages"`
+}
+
+// enumSummary is the part of the enums scope's summary the backlog repeats.
+type enumSummary struct {
+	MissingValues int `json:"missing_values"`
+	ExtraValues   int `json:"extra_values"`
 }
 
 // --- Merged backlog output shapes ---
@@ -74,27 +80,32 @@ type backlog struct {
 }
 
 type backlogSummary struct {
-	Packages                      int `json:"packages"`
-	StructMissingInput            int `json:"struct_missing_input"`
-	StructMissingOutput           int `json:"struct_missing_output"`
-	StructExtraOutput             int `json:"struct_extra_output"`
-	StructStaleDeclarations       int `json:"struct_stale_declarations"`
-	ActionMissingMethods          int `json:"action_missing_methods"`
-	MetaGenericUsage              int `json:"meta_generic_usage"`
-	MetaAliasesOnlyToolname       int `json:"meta_aliases_only_toolname"`
-	MetaEmptyRelated              int `json:"meta_empty_related"`
-	MetaWeakIndividualDescription int `json:"meta_weak_individual_description"`
-	EnumMissingValues             int `json:"enum_missing_values"`
-	EnumExtraValues               int `json:"enum_extra_values"`
+	Packages                int `json:"packages"`
+	PackagesWithGaps        int `json:"packages_with_gaps"`
+	StructMissingInput      int `json:"struct_missing_input"`
+	StructMissingOutput     int `json:"struct_missing_output"`
+	StructExtraOutput       int `json:"struct_extra_output"`
+	StructTypeMismatches    int `json:"struct_type_mismatches"`
+	StructStaleDeclarations int `json:"struct_stale_declarations"`
+	ActionMissingMethods    int `json:"action_missing_methods"`
+	EnumMissingValues       int `json:"enum_missing_values"`
+	EnumExtraValues         int `json:"enum_extra_values"`
 }
 
-// backlogPackage carries the four gap streams for one internal/tools package.
+// backlogPackage carries the three gap streams for one internal/tools package.
 type backlogPackage struct {
-	Package  string        `json:"package"`
-	Struct   *structGaps   `json:"struct,omitempty"`
-	Actions  []actionGap   `json:"actions,omitempty"`
-	Metadata *metadataGaps `json:"metadata,omitempty"`
-	Enums    *enumGaps     `json:"enums,omitempty"`
+	Package string      `json:"package"`
+	Struct  *structGaps `json:"struct,omitempty"`
+	Actions []actionGap `json:"actions,omitempty"`
+	Enums   *enumGaps   `json:"enums,omitempty"`
+}
+
+// hasFindings reports whether the package carries a finding of any stream: a
+// missing or extra field, a missing method or a value gap. A struct section
+// whose counts are all zero is the census entry of a clean package, and the
+// action and enum sections exist only for a finding.
+func (p backlogPackage) hasFindings() bool {
+	return p.Struct.hasFindings() || len(p.Actions) > 0 || p.Enums != nil
 }
 
 // enumGaps is the R-ENUM slice of one package: the value counts and the
@@ -112,17 +123,16 @@ type structGaps struct {
 	Gaps          json.RawMessage `json:"gaps,omitempty"`
 }
 
+// hasFindings reports whether the section carries a missing or an extra
+// field, which is what the struct stream itself counts a package with gaps
+// by. A nil section carries none.
+func (g *structGaps) hasFindings() bool {
+	return g != nil && (g.MissingInput != 0 || g.MissingOutput != 0 || g.ExtraOutput != 0)
+}
+
 type actionGap struct {
 	Service        string   `json:"service"`
 	APIMethods     int      `json:"api_methods"`
 	CoveredMethods int      `json:"covered_methods"`
 	MissingMethods []string `json:"missing_methods"`
-}
-
-type metadataGaps struct {
-	GenericUsage              int           `json:"generic_usage"`
-	AliasesOnlyToolname       int           `json:"aliases_only_toolname"`
-	EmptyRelated              int           `json:"empty_related"`
-	WeakIndividualDescription int           `json:"weak_individual_description"`
-	Findings                  []metaFinding `json:"findings"`
 }

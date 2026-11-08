@@ -269,8 +269,8 @@ func TestFormatListMarkdown(t *testing.T) {
 	want := "## Applications (2)\n\n" +
 		"| ID | Name | App ID | Callback URL | Confidential | Scopes |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n" +
-		"| 1 | App1 | `aid-1` | http://localhost | " + toolutil.BoolEmoji(true) + " | api, read_user |\n" +
-		"| 2 | App2 | `aid-2` | http://localhost/two | " + toolutil.BoolEmoji(false) + " |  |\n" +
+		"| 1 | App1 | `aid-1` | http\\://localhost | " + toolutil.BoolEmoji(true) + " | api, read_user |\n" +
+		"| 2 | App2 | `aid-2` | http\\://localhost/two | " + toolutil.BoolEmoji(false) + " |  |\n" +
 		appListHints
 
 	if got := FormatListMarkdown(out); got != want {
@@ -299,7 +299,7 @@ func TestFormatCreateMarkdown(t *testing.T) {
 		"- **ID**: 2\n" +
 		"- **Name**: New\n" +
 		"- **App ID**: `aid-2`\n" +
-		"- **Callback URL**: http://cb\n" +
+		"- **Callback URL**: http\\://cb\n" +
 		"- **Confidential**: " + toolutil.BoolEmoji(false) + "\n" +
 		"- **Secret**: `sec`\n" +
 		"- **Scopes**: api\n" +
@@ -321,7 +321,7 @@ func TestFormatCreateMarkdown_NoScopes(t *testing.T) {
 		"- **ID**: 3\n" +
 		"- **Name**: Bare\n" +
 		"- **App ID**: `aid-3`\n" +
-		"- **Callback URL**: http://cb\n" +
+		"- **Callback URL**: http\\://cb\n" +
 		"- **Confidential**: " + toolutil.BoolEmoji(false) + "\n" +
 		"- **Secret**: `sec`\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
@@ -345,7 +345,7 @@ func TestFormatRenewSecretMarkdown(t *testing.T) {
 		"- **ID**: 2\n" +
 		"- **Name**: Rotated\n" +
 		"- **App ID**: `aid-2`\n" +
-		"- **Callback URL**: http://cb\n" +
+		"- **Callback URL**: http\\://cb\n" +
 		"- **Confidential**: " + toolutil.BoolEmoji(true) + "\n" +
 		"- **New Secret**: `freshsecret`\n" +
 		"- **Scopes**: api\n" +

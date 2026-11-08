@@ -164,7 +164,7 @@ func fixtureLive() apilive.Document {
 	route := func(method, path string, params map[string]apilive.Param) apilive.Route {
 		return apilive.Route{Method: method, Path: apilive.EndpointPrefix + path, Params: params}
 	}
-	str, array, hash, file := param("String"), param("Array"), param("Hash"), param(workhorseFile)
+	str, array, hash, file := param("String"), param("Array"), param("Hash"), param(apilive.WorkhorseFile)
 	return apilive.Document{Routes: []apilive.Route{
 		route("GET", "/projects/:id/widgets", map[string]apilive.Param{
 			"id": param("[String, Integer]"), "page": param("Integer"), "search": str, "labels": str,
@@ -435,6 +435,149 @@ func TestRun_AClientGoThatModelsTheParam_RetiresItsUpstreamDeclaration(t *testin
 	})
 }
 
+// workhorseSDK is a stand-in client-go for the routes whose body Workhorse
+// rewrites: a commit sent as JSON, an upload whose form carries its file
+// under another name, and an import that writes its own multipart form under
+// the name its options carry.
+const workhorseSDK = `package gitlab
+
+import "net/http"
+
+var (
+	routeCommits = route("projects/%s/widgets/commits")
+	routeFile    = route("projects/%s/widgets/file")
+	routeImport  = route("widgets/import")
+)
+
+type UploadType string
+
+const UploadAvatar UploadType = "avatar"
+
+type CommitWidgetsOptions struct {
+	Branch *string ` + tick + `url:"branch,omitempty" json:"branch,omitempty"` + tick + `
+}
+
+type ImportWidgetsOptions struct {
+	Name *string ` + tick + `url:"name,omitempty" json:"name,omitempty"` + tick + `
+	File *string ` + tick + `url:"file,omitempty" json:"file,omitempty"` + tick + `
+}
+
+func (s *WidgetsService) CommitWidgets(pid any, opt *CommitWidgetsOptions, options ...RequestOptionFunc) (*Widget, *Response, error) {
+	return do[*Widget](s.client, withMethod(http.MethodPost), withPath(routeCommits, ProjectID{pid}), withAPIOpts(opt))
+}
+
+func (s *WidgetsService) UploadWidgetFile(pid any, options ...RequestOptionFunc) (*Widget, *Response, error) {
+	return do[*Widget](s.client, withMethod(http.MethodPost), withPath(routeFile, ProjectID{pid}), withUpload(nil, "w.bin", UploadAvatar))
+}
+
+func (s *WidgetsService) ImportWidgets(opt *ImportWidgetsOptions, options ...RequestOptionFunc) (*Widget, *Response, error) {
+	return do[*Widget](s.client, withMethod(http.MethodPost), withPath(routeImport), withAPIOpts(opt))
+}
+`
+
+// useWorkhorseFixtures points every seam at a tree of six routes: five
+// declaring a required WorkhorseFile param and nothing else beside its path,
+// reached by the five ways a request can carry, or not carry, that file, and
+// one whose file is optional beside a required param of another type.
+func useWorkhorseFixtures(t *testing.T) {
+	t.Helper()
+	useFixtures(t, false)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sdk.go"), []byte(workhorseSDK), 0o600); err != nil {
+		t.Fatalf("write the stand-in: %v", err)
+	}
+	readRecord = func(string) (actionrequests.Record, error) {
+		return actionrequests.Record{Actions: []actionrequests.RecordAction{
+			{ID: "widget.commit", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/widgets/commits", []string{"Widgets.CommitWidgets"})}},
+			{ID: "widget.file", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/widgets/file", []string{"Widgets.UploadWidgetFile"})}},
+			{ID: "widget.import", Requests: []actionrequests.RecordRequest{rest("POST /widgets/import", []string{"Widgets.ImportWidgets"})}},
+			{ID: "widget.state", Requests: []actionrequests.RecordRequest{rest("PUT /projects/:id/widgets/state", nil, "widgets.putState")}},
+			{ID: "widget.attach", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/widgets/attach", nil, "widgets.attach")}},
+			{ID: "widget.plain", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/widgets/plain", []string{"Widgets.CommitWidgets"})}},
+		}}, nil
+	}
+	file := apilive.Param{Required: true, Type: apilive.WorkhorseFile}
+	readLive = func(string) (apilive.Document, error) {
+		route := func(method, path string) apilive.Route {
+			return apilive.Route{Method: method, Path: apilive.EndpointPrefix + path, Params: map[string]apilive.Param{"id": {}, "file": file}}
+		}
+		return apilive.Document{Routes: []apilive.Route{
+			route("POST", "/projects/:id/widgets/commits"),
+			route("POST", "/projects/:id/widgets/file"),
+			{Method: "POST", Path: apilive.EndpointPrefix + "/widgets/import", Params: map[string]apilive.Param{"file": file}},
+			route("PUT", "/projects/:id/widgets/state"),
+			route("POST", "/projects/:id/widgets/attach"),
+			{Method: "POST", Path: apilive.EndpointPrefix + "/projects/:id/widgets/plain", Params: map[string]apilive.Param{
+				"id": {}, "file": {Type: apilive.WorkhorseFile}, "title": {Required: true, Type: "String"},
+			}},
+		}}, nil
+	}
+	readInventory = func(string) (requestinventory.Inventory, error) { return requestinventory.Inventory{}, nil }
+	rawRequests = func(string) ([]sdk.RawRequest, string, error) {
+		return []sdk.RawRequest{
+			{Site: "widgets.putState", Constructor: "NewRequest", Verb: "PUT"},
+			{Site: "widgets.attach", Constructor: "UploadRequest", Verb: "POST", UploadField: "attachment"},
+		}, dir, nil
+	}
+	declarations = func() []paramDeclaration { return nil }
+}
+
+// TestRun_ARequiredFileNoFormCarries_IsTheBodyWorkhorseRewrote is the planted
+// defect of #1688 (P13): repository.commit_create's file, which the record
+// declares as the one param of POST /projects/:id/repository/commits beside
+// the project, used to be reported as a param client-go cannot send. A
+// required WorkhorseFile param on a request built with no multipart form,
+// through client-go or by hand, that no option struct models, reaches GitLab
+// only as the file Workhorse writes the request's body to, and is covered as
+// that body. A form that carries its file under another name, through
+// client-go or by hand, is still a finding, and so is a file client-go's
+// options model (its group import writes its own multipart form under that
+// name), which an input can offer today, and so are an optional file and a
+// required param of another type on a request with no form.
+func TestRun_ARequiredFileNoFormCarries_IsTheBodyWorkhorseRewrote(t *testing.T) {
+	useWorkhorseFixtures(t)
+	content, clean, err := Run("root", Options{})
+	if err != nil || !clean {
+		t.Fatalf("Run = clean %t, error %v; want a clean run", clean, err)
+	}
+	report := decode(t, content)
+	wantVerdicts := []string{
+		"POST /projects/:id/widgets/attach file unmodeled",
+		"POST /projects/:id/widgets/file file unmodeled",
+		"POST /projects/:id/widgets/plain file unmodeled",
+		"POST /projects/:id/widgets/plain title unmodeled",
+		"POST /widgets/import file not_offered",
+	}
+	if got := verdicts(report); !slices.Equal(got, wantVerdicts) {
+		t.Errorf("verdicts =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantVerdicts, "\n"))
+	}
+	wantBodies := []string{"POST /projects/:id/widgets/commits file", "PUT /projects/:id/widgets/state file"}
+	if !slices.Equal(report.WorkhorseBodies, wantBodies) || report.Summary.WorkhorseBodies != 2 || report.Summary.Covered != 2 {
+		t.Errorf("bodies = %v, summary %+v; want %v covered", report.WorkhorseBodies, report.Summary, wantBodies)
+	}
+	content, _, err = Run("root", Options{GapsOnly: true})
+	if err != nil {
+		t.Fatalf("Run -gaps-only: %v", err)
+	}
+	if gaps := decode(t, content); gaps.WorkhorseBodies != nil || gaps.Summary != report.Summary {
+		t.Errorf("-gaps-only = bodies %v, summary %+v; want the list dropped and the summary %+v", gaps.WorkhorseBodies, gaps.Summary, report.Summary)
+	}
+}
+
+// TestRecordedByRoute_TwoPackagesRecordingOneRoute_KeepEachOthersParams
+// verifies a route two inventory rows record, as two packages that drove it
+// leave it, carries the params of both rather than those of the last.
+func TestRecordedByRoute_TwoPackagesRecordingOneRoute_KeepEachOthersParams(t *testing.T) {
+	index := apilive.NewRouteIndex([]apilive.Route{{Method: "GET", Path: apilive.EndpointPrefix + "/widgets"}})
+	got := recordedByRoute([]requestinventory.Row{
+		{Kind: requestinventory.KindREST, Method: "GET", Path: "/widgets", Query: []string{"page"}},
+		{Kind: requestinventory.KindREST, Method: "GET", Path: "/widgets", Body: []string{"title"}},
+	}, index)
+	if want := []string{"page", "title"}; !slices.Equal(sortedKeys(got["GET /widgets"]), want) {
+		t.Errorf("recorded = %v, want the params of both rows, %v", got, want)
+	}
+}
+
 // TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt verifies each input's
 // failure surfaces with what failed, and that a report that cannot be
 // encoded is an error rather than an empty file.
@@ -564,9 +707,7 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // route does not either; and a protected environment's approval rule takes
 // an id, nested under the approval_rules the inventory records, which
 // EnvironmentApprovalRuleOptions does not model. The service account external
-// flag and the four duo flags a create drops are declared, and so is every
-// param of the four label collection routes, which client-go takes only for
-// a label argument the handlers never leave nil.
+// flag and the four duo flags a create drops are declared.
 //
 // The custom header keys of a project hook are carried by the struct its raw
 // request sends: on the add, whose recorded body carries custom_headers,
@@ -756,10 +897,6 @@ func witnessCases() []witnessCase {
 		want{"POST /projects/:id/protected_environments", "approval_rules[id]", ClassUnmodeled, ""},
 		want{"POST /service_accounts", "external", ClassUnmodeled, categoryUpstream},
 		want{"PATCH /service_accounts/:user_id", "external", ClassUnmodeled, categoryUpstream},
-		want{"PUT /projects/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"DELETE /projects/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"PUT /groups/:id/labels", "label_id", ClassOfferedUnrecorded, categoryBranchNotTaken},
-		want{"DELETE /groups/:id/labels", "name", ClassNotOffered, categoryBranchNotTaken},
 	)
 	return cases
 }

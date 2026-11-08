@@ -126,10 +126,13 @@ func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) 
 				OptionStructs: 9, OptionPaired: 5, OptionConverted: 1, OptionCopied: 1, OptionDeclared: 2,
 				UpstreamWaits: 47, WaitsHolding: 41, Workarounds: 55,
 				CapturedTypes: 86, CapturedKeysShared: 77, CapturesKept: 77, CapturesAnswerNoStruct: 2,
-				IdentifierArguments: 10, IdentifiersIDOnly: 6, IdentifiersDeclared: 3, IdentifiersNotFromInput: 1, SDKNarrowed: 18,
+				IdentifierArguments: 10, IdentifiersIDOnly: 6, IdentifiersDeclared: 3, IdentifiersNotFromInput: 1,
+				SDKNarrowed: 18, SDKNarrowedResolved: 15, SDKNarrowedNotFromInput: 1, SDKNarrowedUncalled: 2,
 			},
 			want: true,
 		},
+		{name: "a client-go parameter that narrows a name, called, and no declaration", summary: reportSummary{SDKNarrowedUndeclared: 1}},
+		{name: "a declared client-go parameter handed an integer from an input that offers no name", summary: reportSummary{SDKNarrowedUnresolved: 1}},
 		{name: "an integer handed where the record takes a name or a path", summary: reportSummary{IdentifiersNarrowed: 1}},
 		{name: "an integer handed where the record describes nothing", summary: reportSummary{IdentifiersUndescribed: 1}},
 		{name: "an integer handed where the record holds no route", summary: reportSummary{IdentifiersUnplaced: 1}},
@@ -305,8 +308,10 @@ func fixtureReport(t *testing.T, root string, declaredBy map[string]declaration,
 	if err != nil {
 		t.Fatalf("GraphQLInterface: %v", err)
 	}
-	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), serviceIndex(services), aliases, decisions)
-	stale := mergeStale(staleServiceDeclarations(services, declaredBy), staleGraphQLDecisions(operations, decisions))
+	byName := serviceIndex(services)
+	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), byName, aliases, decisions)
+	stale := mergeStale(staleServiceDeclarations(services, declaredBy), staleGraphQLDecisions(operations, decisions),
+		staleGraphQLReplaces(decisions, byName, aliases, shared.CollectServiceUsage(pkgs)))
 	return report{Summary: summarize(services, operations, enums.Summary{}, stale), Services: services, GraphQLOperations: operations, StaleDeclarations: stale}
 }
 
@@ -371,7 +376,7 @@ func TestFixture_GraphQLOperationsAreReportedPerFunction(t *testing.T) {
 	rep := fixtureReport(t, root,
 		map[string]declaration{"Widgets": {coveredGraphQL, "reached over GraphQL"}, "Gadgets": {unwrappedTracked, "not exposed"}},
 		nil,
-		map[string]decision{"widgets.List": {decisionKeep, "the wrapper returns a different shape"}})
+		map[string]decision{"widgets.List": {Decision: decisionKeep, Reason: "the wrapper returns a different shape"}})
 
 	if len(rep.GraphQLOperations) != 3 {
 		t.Fatalf("operations = %+v, want List, Mutate and the helper", rep.GraphQLOperations)
@@ -426,9 +431,9 @@ type SprocketsServiceInterface interface {
 		"Gadgets": {unwrappedTracked, "not exposed"},
 	}
 	decisions := map[string]decision{
-		"widgets.List":   {decisionKeep, "kept"},
-		"widgets.Mutate": {decisionKeep, "kept"},
-		"widgets.exec":   {decisionKeep, "kept"},
+		"widgets.List":   {Decision: decisionKeep, Reason: "kept"},
+		"widgets.Mutate": {Decision: decisionKeep, Reason: "kept"},
+		"widgets.exec":   {Decision: decisionKeep, Reason: "kept"},
 	}
 	rep := fixtureReport(t, root, declaredBy, nil, decisions)
 	if statusOf(rep.Services)["Sprockets"] != statusUndeclared {
@@ -457,7 +462,7 @@ func TestFixture_StaleDeclarationsFailTheGate(t *testing.T) {
 			"Gadgets":  {unwrappedTracked, "not exposed"},
 		},
 		nil,
-		map[string]decision{"widgets.Gone": {decisionKeep, "stale: no such operation"}})
+		map[string]decision{"widgets.Gone": {Decision: decisionKeep, Reason: "stale: no such operation"}})
 
 	want := []string{
 		"graphql widgets.Gone",
@@ -469,6 +474,110 @@ func TestFixture_StaleDeclarationsFailTheGate(t *testing.T) {
 	}
 	if rep.Summary.StaleDeclarations != 3 || rep.Summary.clean() {
 		t.Errorf("summary = %+v, want 3 stale declarations and a failing gate", rep.Summary)
+	}
+}
+
+// TestFixture_Replaces_AnswerAMethodOfTheirServiceNoHandlerCalls holds the
+// Replaces of a decision on a module whose universe is known. A KEEP
+// operation of the branches package naming Branches.CreateBranch, a method of
+// the service its package resolves to that a handler calls and no handler
+// calls the method of, answers it: the gate stays green and R-ACTION is
+// handed the method with the operation and its reason. The same method named
+// by a second KEEP decision of the package is answered once, by the first in
+// key order, and the second is stale; one an operation of the widgets
+// package names is stale, since that operation is adjudicated against
+// Widgets and cannot read in place of a method of Branches; and one a
+// MIGRATE decision names is stale. Neither of the last two is handed to
+// R-ACTION.
+func TestFixture_Replaces_AnswerAMethodOfTheirServiceNoHandlerCalls(t *testing.T) {
+	root := fixtureModule(t, map[string]string{
+		"internal/tools/branches/graphql.go": `package branches
+
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+
+// Create writes a branch over raw GraphQL, where Branches has CreateBranch.
+func Create(c *gl.Client) error {
+	return c.GraphQL.Do(gl.GraphQLQuery{Query: "mutation { createBranch }"}, nil)
+}
+
+// Rename is a second operation of the package.
+func Rename(c *gl.Client) error {
+	return c.GraphQL.Do(gl.GraphQLQuery{Query: "mutation { renameBranch }"}, nil)
+}
+`,
+	})
+	declaredBy := map[string]declaration{
+		"Widgets": {coveredGraphQL, "reached over GraphQL"},
+		"Gadgets": {unwrappedTracked, "not exposed"},
+	}
+	answered := map[string]decision{
+		"branches.Create": {Decision: decisionKeep, Reason: "pages", Replaces: []string{"Branches.CreateBranch"}},
+		"branches.Rename": {Decision: decisionKeep, Reason: "kept"},
+		"widgets.List":    {Decision: decisionKeep, Reason: "kept"},
+		"widgets.Mutate":  {Decision: decisionKeep, Reason: "kept"},
+		"widgets.exec":    {Decision: decisionKeep, Reason: "kept"},
+	}
+	if rep := fixtureReport(t, root, declaredBy, nil, answered); !rep.Summary.clean() {
+		t.Errorf("a Replaces that answers a method failed the gate: %v %v", rep.StaleDeclarations, rep.Summary)
+	}
+	if got, want := keptReplacements(answered, nil), map[string]string{"Branches.CreateBranch": "branches.Create: pages"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("keptReplacements = %v, want %v", got, want)
+	}
+
+	answered["branches.Rename"] = decision{Decision: decisionKeep, Reason: "kept", Replaces: []string{"Branches.CreateBranch"}}
+	answered["widgets.List"] = decision{Decision: decisionKeep, Reason: "kept", Replaces: []string{"Branches.CreateBranch"}}
+	answered["widgets.exec"] = decision{Decision: decisionMigrate, Reason: "moves", Replaces: []string{"Gadgets.ListGadgets"}}
+	rep := fixtureReport(t, root, declaredBy, nil, answered)
+	want := []string{
+		"graphql branches.Rename (replaces Branches.CreateBranch: graphql branches.Create replaces it too)",
+		"graphql widgets.List (replaces Branches.CreateBranch: the operation's package, widgets, does not resolve to this service)",
+		"graphql widgets.exec (replaces Gadgets.ListGadgets: only a KEEP decision stands in for a method)",
+	}
+	if !reflect.DeepEqual(rep.StaleDeclarations, want) {
+		t.Errorf("stale = %v, want %v", rep.StaleDeclarations, want)
+	}
+	if got, want := keptReplacements(answered, nil), map[string]string{"Branches.CreateBranch": "branches.Create: pages"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("keptReplacements = %v, want %v, the first KEEP decision of the service answering and the others handing nothing", got, want)
+	}
+}
+
+// TestKeptReplacements_AMethodOfAnotherService_IsHandedToNobody verifies that
+// R-ACTION is handed a method only by an operation of the method's service,
+// which the operation's package resolves to by its name in any case or, when
+// it has one, by its alias alone: a decision earlier in key order whose
+// operation is of another service leaves the method to the next decision of
+// its own, and an aliased package does not resolve to the service its own
+// name would.
+func TestKeptReplacements_AMethodOfAnotherService_IsHandedToNobody(t *testing.T) {
+	aliases := map[string]string{"vulns": "ProjectVulnerabilities"}
+	decisions := map[string]decision{
+		"alpha.List":    {Decision: decisionKeep, Reason: "another service", Replaces: []string{"Branches.CreateBranch", "ProjectVulnerabilities.ListProjectVulnerabilities"}},
+		"branches.List": {Decision: decisionKeep, Reason: "its own", Replaces: []string{"Branches.CreateBranch"}},
+		"vulns.List":    {Decision: decisionKeep, Reason: "aliased", Replaces: []string{"ProjectVulnerabilities.ListProjectVulnerabilities", "Vulns.ListVulns"}},
+	}
+	want := map[string]string{
+		"Branches.CreateBranch":                             "branches.List: its own",
+		"ProjectVulnerabilities.ListProjectVulnerabilities": "vulns.List: aliased",
+	}
+	if got := keptReplacements(decisions, aliases); !reflect.DeepEqual(got, want) {
+		t.Errorf("keptReplacements = %v, want %v", got, want)
+	}
+}
+
+// TestCoveredGraphQLMethods_TheCommittedDecisions_HandRActionWhatTheyReplace
+// verifies the accessor R-ACTION derives COVERED_GRAPHQL from reads the
+// committed table: every method a KEEP decision names, with that decision's
+// key and reason.
+func TestCoveredGraphQLMethods_TheCommittedDecisions_HandRActionWhatTheyReplace(t *testing.T) {
+	got := CoveredGraphQLMethods()
+	want := map[string]string{}
+	for key, adjudged := range graphqlDecisions {
+		for _, method := range adjudged.Replaces {
+			want[method] = key + ": " + adjudged.Reason
+		}
+	}
+	if len(want) == 0 || !reflect.DeepEqual(got, want) {
+		t.Errorf("CoveredGraphQLMethods = %v, want %v", got, want)
 	}
 }
 
@@ -544,6 +653,72 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 	}
 	if rep.Summary.SDKServices < 100 {
 		t.Errorf("sdk_services = %d, want the SDK's full service surface", rep.Summary.SDKServices)
+	}
+}
+
+// TestBuildReport_Repository_ReplacesThatAnswerNothing_FailTheGate plants, in
+// a copy of the committed decisions, one Replaces of each kind that answers
+// no method R-ACTION would list, and holds the gate to naming each: a method
+// the service does not declare, a service client-go does not declare, a
+// service no handler calls (whose own declaration answers it), a method a
+// handler calls, a method a MIGRATE decision names (which moves to the
+// wrapper rather than standing in for it), a method a second decision names,
+// the first in key order answering it, and a method of a service other than
+// the one the operation's package resolves to, by its own name (orbit) and
+// through graphqlServiceAliases (vulnerabilities). It runs on the tree, so
+// the services, the calls and the operations are the real ones, and the one
+// Replaces the tree carries, TerraformStates.List, stays answered by
+// terraformstates.listPage although orbit.Status, earlier in key order, names
+// it too. R-ACTION is handed no method of another service, so the
+// Groups.ListSubGroups the vulnerabilities plant names stays on its list;
+// the plants that name a method R-ACTION does not list are handed on, and
+// hide nothing, since the gate fails on each.
+func TestBuildReport_Repository_ReplacesThatAnswerNothing_FailTheGate(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	original := graphqlDecisions
+	t.Cleanup(func() { graphqlDecisions = original })
+	planted := maps.Clone(original)
+	const reason = "planted to answer nothing"
+	planted["terraformstates.listPage"] = decision{Decision: decisionKeep, Reason: reason, Replaces: []string{"TerraformStates.List", "TerraformStates.Lst", "TerraformStates.Get"}}
+	planted["epicissues.List"] = decision{Decision: decisionKeep, Reason: reason, Replaces: []string{"EpicIssues.ListEpicIssues"}}
+	planted["vulnerabilities.Get"] = decision{Decision: decisionKeep, Reason: reason, Replaces: []string{"Sprockets.ListSprockets", "Groups.ListSubGroups"}}
+	planted["vulnerabilities.List"] = decision{Decision: decisionMigrate, Reason: reason, Replaces: []string{"ProjectVulnerabilities.ListProjectVulnerabilities"}}
+	planted["orbit.Status"] = decision{Decision: decisionKeep, Reason: reason, Replaces: []string{"Orbit.GetStatus", "TerraformStates.List"}}
+	planted["orbit.schemaPage"] = decision{Decision: decisionKeep, Reason: reason, Replaces: []string{"Orbit.GetStatus"}}
+	graphqlDecisions = planted
+
+	rep, err := buildReport(root, true)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	want := []string{
+		"graphql epicissues.List (replaces EpicIssues.ListEpicIssues: no handler calls the service, which its declaration answers)",
+		"graphql orbit.Status (replaces TerraformStates.List: the operation's package, orbit, does not resolve to this service)",
+		"graphql orbit.schemaPage (replaces Orbit.GetStatus: graphql orbit.Status replaces it too)",
+		"graphql terraformstates.listPage (replaces TerraformStates.Get: a handler calls it)",
+		"graphql terraformstates.listPage (replaces TerraformStates.Lst: the service declares no such method)",
+		"graphql vulnerabilities.Get (replaces Groups.ListSubGroups: the operation's package, vulnerabilities, does not resolve to this service)",
+		"graphql vulnerabilities.Get (replaces Sprockets.ListSprockets: client-go declares no such service)",
+		"graphql vulnerabilities.List (replaces ProjectVulnerabilities.ListProjectVulnerabilities: only a KEEP decision stands in for a method)",
+	}
+	if !reflect.DeepEqual(rep.StaleDeclarations, want) {
+		t.Errorf("stale declarations =\n%s\nwant\n%s", strings.Join(rep.StaleDeclarations, "\n"), strings.Join(want, "\n"))
+	}
+	if rep.Summary.clean() {
+		t.Error("the gate passed with eight Replaces that answer nothing")
+	}
+	handed := map[string]string{
+		"EpicIssues.ListEpicIssues": "epicissues.List: " + reason,
+		"Orbit.GetStatus":           "orbit.Status: " + reason,
+		"TerraformStates.Get":       "terraformstates.listPage: " + reason,
+		"TerraformStates.List":      "terraformstates.listPage: " + reason,
+		"TerraformStates.Lst":       "terraformstates.listPage: " + reason,
+	}
+	if got := CoveredGraphQLMethods(); !reflect.DeepEqual(got, handed) {
+		t.Errorf("CoveredGraphQLMethods =\n%v\nwant\n%v, no method of a service other than its operation's", got, handed)
 	}
 }
 

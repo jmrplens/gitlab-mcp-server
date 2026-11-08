@@ -669,6 +669,10 @@ func TestDigest_MovesForEveryFieldACaseDeclares(t *testing.T) {
 			field: "key.Steps.Args.Truth.Authored",
 			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Authored = true },
 		},
+		{
+			field: "key.Steps.Args.Truth.Implied",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Implied = "true" },
+		},
 	}
 
 	unmoved := digestOf(declared())

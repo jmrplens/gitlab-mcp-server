@@ -63,7 +63,7 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 		return 1
 	}
 	fmt.Fprintf(stderr, "%s: measuring the %d packages below cmd/ and internal/, %d at a time, with GOBCO_GATE=%s and GOBCO_MODE=%s\n", toolName, len(packages), *parallel, *gate, *mode)
-	m := measurer{run: run, dir: *dir, system: localSystem, records: *records, env: []string{"GOBCO_GATE=" + *gate, "GOBCO_MODE=" + *mode}}
+	m := measurer{run: run, list: list, dir: *dir, system: localSystem, records: *records, env: []string{"GOBCO_GATE=" + *gate, "GOBCO_MODE=" + *mode}, mode: *mode}
 	if err = measureAll(ctx, m, packages, *parallel, stderr); err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
@@ -99,12 +99,12 @@ func measureAll(ctx context.Context, m measurer, packages []string, parallel int
 	for range parallel {
 		wg.Go(func() {
 			for pkg := range work {
-				status, err := measurePackage(ctx, m, pkg, io.Discard)
+				status, nothing, err := measurePackage(ctx, m, pkg, io.Discard)
 				mu.Lock()
 				if err != nil {
 					failures = append(failures, err)
 				} else {
-					fmt.Fprintf(progress, "%s: %s: %s\n", toolName, pkg, verdict(status))
+					fmt.Fprintf(progress, "%s: %s: %s\n", toolName, pkg, verdict(status, nothing))
 				}
 				mu.Unlock()
 			}

@@ -597,7 +597,7 @@ func TestMutationFieldProblems_HoldsTheFieldsDirectivesToTheClasss(t *testing.T)
 // TestTodoProblems_HoldsTheComputedSetToTheListGitLabShips verifies refusal 8
 // of the design: GitLab keeps its todo list exact, so the set its own rule
 // computes in the image and the list it ships are equal, and a difference
-// means the walk saw another schema.
+// means the walk saw another schema or applied another rule.
 //
 // PageInfo is the case the design names: the rule calls it undeclared and the
 // check never runs on it. That is not a difference between the two sets, and
@@ -630,7 +630,7 @@ func TestTodoProblems_HoldsTheComputedSetToTheListGitLabShips(t *testing.T) {
 				a.UndeclaredByTodoRule.Types = append(a.UndeclaredByTodoRule.Types, "BranchRule")
 			},
 			want: []string{"the undeclared GraphQL types computed with GitLab's todo rule differ from its authorization_todo.txt " +
-				"(1 only computed: BranchRule; none only listed): the walk did not see the schema GitLab's task sees"},
+				"(1 only computed: BranchRule; none only listed): the walk did not see the schema, or apply the rule, that GitLab's task does"},
 		},
 		{
 			name: "types each side holds that the other does not",
@@ -639,7 +639,7 @@ func TestTodoProblems_HoldsTheComputedSetToTheListGitLabShips(t *testing.T) {
 				a.Todo.Types = append(a.Todo.Types, "Epic")
 			},
 			want: []string{"the undeclared GraphQL types computed with GitLab's todo rule differ from its authorization_todo.txt " +
-				"(2 only computed: BranchRule, CustomEmoji; 1 only listed: Epic): the walk did not see the schema GitLab's task sees"},
+				"(2 only computed: BranchRule, CustomEmoji; 1 only listed: Epic): the walk did not see the schema, or apply the rule, that GitLab's task does"},
 		},
 		{
 			// A type GitLab renamed between the list and the schema leaves
@@ -652,13 +652,24 @@ func TestTodoProblems_HoldsTheComputedSetToTheListGitLabShips(t *testing.T) {
 				a.Todo.Types = append(a.Todo.Types, "WorkItemWidgetOld")
 			},
 			want: []string{"the undeclared GraphQL types computed with GitLab's todo rule differ from its authorization_todo.txt " +
-				"(1 only computed: WorkItemWidgetNew; 1 only listed: WorkItemWidgetOld): the walk did not see the schema GitLab's task sees"},
+				"(1 only computed: WorkItemWidgetNew; 1 only listed: WorkItemWidgetOld): the walk did not see the schema, or apply the rule, that GitLab's task does"},
+		},
+		{
+			// What a walk that kept the rule by name reports on 19.6, whose
+			// rule tells the types GraphQL Ruby generates apart by class and
+			// so lists a hand-written type named like one of them.
+			name: "types only the list holds",
+			mutate: func(a *apilive.GraphQLAuthz) {
+				a.Todo.Types = append(a.Todo.Types, "DependencyPathEdge")
+			},
+			want: []string{"the undeclared GraphQL types computed with GitLab's todo rule differ from its authorization_todo.txt " +
+				"(none only computed; 1 only listed: DependencyPathEdge): the walk did not see the schema, or apply the rule, that GitLab's task does"},
 		},
 		{
 			name:   "mutations only the list holds",
 			mutate: func(a *apilive.GraphQLAuthz) { a.Todo.Mutations = append(a.Todo.Mutations, "BoardEpicCreate") },
 			want: []string{"the undeclared GraphQL mutations computed with GitLab's todo rule differ from its authorization_todo.txt " +
-				"(none only computed; 1 only listed: BoardEpicCreate): the walk did not see the schema GitLab's task sees"},
+				"(none only computed; 1 only listed: BoardEpicCreate): the walk did not see the schema, or apply the rule, that GitLab's task does"},
 		},
 		{
 			name:   "an entry of a kind nothing compares",

@@ -3,7 +3,11 @@
 
 package required
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
+)
 
 // declaration answers one disagreement this scope finds, which the schema
 // keeps on purpose.
@@ -36,10 +40,6 @@ const (
 	// whose every other attribute the action does not send, so a call
 	// without it changes nothing.
 	categorySoleAttribute = "sole-attribute"
-	// categorySDKPositional is a parameter client-go takes as a positional
-	// argument and writes into the path whatever its value, so the call
-	// cannot leave it out.
-	categorySDKPositional = "sdk-positional"
 	// categoryModelRequires is a parameter Grape leaves optional and the
 	// model the route builds refuses to save without, so a call without it is
 	// refused all the same, one step later.
@@ -66,10 +66,9 @@ func declaredRequiredness() map[declarationKey]declaration {
 		reasonDiscussionNoteBody = "PUT .../discussions/:discussion_id/notes/:note_id takes exactly one of " +
 			"body and resolved (lib/api/discussions.rb); client-go's update options for this route carry " +
 			"body and no resolved, so body is the one this action sends"
-		reasonLabelPath = "client-go's label update and delete put any non-nil label argument in the path and " +
-			"take the body route only for nil; this handler always passes label_id, so it sends " +
-			"PUT /groups/:id/labels/:name alone, on which GitLab requires the label, and label_id " +
-			"already takes a name as well as an ID"
+		reasonLabelSelector = "the route under /projects/:id/labels/:name requires the label in its path; " +
+			"labels.labelSelector fills that segment from label_id when the caller gives it and from name otherwise, " +
+			"and the handler refuses a call with neither, as the anyOf of the schema says"
 		reasonSnippetFileName = "lib/api/helpers/snippets_helpers.rb requires file_name only in a given :content " +
 			"block; the record writes it as an unconditional requirement, and a snippet created " +
 			"from files needs none"
@@ -118,7 +117,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 			"POST /users/:user_id/impersonation_tokens declares scopes optional beside granular_scopes, which client-go does not " +
 				"carry, and PersonalAccessToken validates the presence of scopes, so a token created without them is refused",
 		},
-		{action: "group.group_label_update", field: "label_id"}: {DirectionGitLabOptional, categorySDKPositional, reasonLabelPath},
 
 		// A null client-go writes in place of a key left out.
 		{action: "pipeline.schedule_edit_variable", field: "value"}: {
@@ -151,6 +149,78 @@ func declaredRequiredness() map[declarationKey]declaration {
 		},
 		{action: "repository.list_submodules", field: "ref"}:     {DirectionGitLabRequires, categoryHandlerDefault, reasonSubmoduleRef},
 		{action: "repository.read_submodule_file", field: "ref"}: {DirectionGitLabRequires, categoryHandlerDefault, reasonSubmoduleRef},
+		{action: "project.label_update", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
+		{action: "project.label_delete", field: "name"}:          {DirectionGitLabRequires, categoryHandlerDefault, reasonLabelSelector},
+	}
+}
+
+// workhorseBody is what GitLab reads out of the body of a request Workhorse
+// turned into one file param: each param, with whether GitLab refuses a
+// request without it, and where lib/api says so.
+type workhorseBody struct {
+	Params map[string]bool
+	Source string
+}
+
+// answers reports whether a record route still leaves its body to one
+// WorkhorseFile param: a required param of that type, and none of the params
+// the declaration says the body carries, which a record that declared them
+// again would answer itself. A param the declaration does not name, beside the
+// file, leaves the answer as it is, since the record answers for that one.
+func (b workhorseBody) answers(route *apilive.Route) bool {
+	for name := range b.Params {
+		if _, declared := route.Params[name]; declared {
+			return false
+		}
+	}
+	for _, param := range route.Params {
+		if param.Type == apilive.WorkhorseFile && param.Required {
+			return true
+		}
+	}
+	return false
+}
+
+// declaredWorkhorseBodies holds, by route as the request record names it, the
+// body of each route this server sends whose endpoint reads its params out of
+// the file Workhorse writes the whole body to. Workhorse does that before Rails
+// sees the request, and the endpoint parses the file and validates the params
+// it holds by hand
+// (file_params_from_body_upload, lib/api/helpers/commits_body_uploader_helper.rb:20
+// at v19.5.0-ee), so the record, which reads Grape's declarations, holds none
+// of them: without this table every field these inputs publish beside the
+// path was unplaced, and a schema could drop `,required` from a commit
+// message GitLab refuses to commit without. The params of a body are placed
+// as if the record declared them. The table names its routes because the
+// record cannot tell one of them from a real upload: PUT /user/avatar declares
+// one required WorkhorseFile param and nothing else as well, and its client
+// sends a multipart form whose file is all the endpoint reads, and a generic
+// package's body is the file itself. A declaration for a route no action
+// sends, or whose record route declares a param of its body again or stops
+// requiring the file, answers nothing.
+func declaredWorkhorseBodies() map[string]workhorseBody {
+	const filesSource = "lib/api/files.rb:167-210 at v19.5.0-ee (validate_file_params! and filter_file_params!): " +
+		"branch and commit_message are refused blank and content absent, and start_branch, author_email, " +
+		"author_name, encoding, last_commit_id and execute_filemode are read when given"
+	files := map[string]bool{
+		"branch": true, "commit_message": true, "content": true,
+		"start_branch": false, "author_email": false, "author_name": false,
+		"encoding": false, "last_commit_id": false, "execute_filemode": false,
+	}
+	return map[string]workhorseBody{
+		"POST /projects/:id/repository/commits": {
+			Params: map[string]bool{
+				"branch": true, "commit_message": true, "actions": true,
+				"start_branch": false, "start_sha": false, "start_project": false,
+				"author_email": false, "author_name": false, "stats": false, "force": false, "allow_empty": false,
+			},
+			Source: "lib/api/commits.rb:91-190 at v19.5.0-ee (validate_commits_attrs!, validate_actions_allow_empty! and " +
+				"filter_commits_attrs!): branch and commit_message are refused blank and actions absent or empty unless " +
+				"allow_empty is true, which client-go's options cannot send, and start_branch, start_sha, start_project, " +
+				"author_email, author_name, stats and force are read when given",
+		},
+		"POST /projects/:id/repository/files/:file_path": {Params: files, Source: filesSource},
+		"PUT /projects/:id/repository/files/:file_path":  {Params: files, Source: filesSource},
 	}
 }
 
@@ -168,9 +238,9 @@ type aliasKey struct {
 	param  string
 }
 
-// pathAlias names the field an action fills a GitLab parameter from, where the
+// paramAlias names the field an action fills a GitLab parameter from, where the
 // placement rules ([placements]) would find another.
-type pathAlias struct {
+type paramAlias struct {
 	// Field is the input field that fills the parameter.
 	Field string
 	// Reason says why the rules cannot find it.
@@ -178,56 +248,70 @@ type pathAlias struct {
 }
 
 // declaredAliases holds every GitLab parameter an action fills from a field
-// the placement rules do not find it under. The usual case is a path
-// parameter whose GitLab name is also the name of a separate option the input
-// publishes: GitLab writes the protected branch of
-// /protected_branches/:name as `name`, and the input fills it from `branch`
-// because its own `name` is the rename client-go's options carry. Without
-// the alias the join holds the rename to the path parameter's requiredness.
-func declaredAliases() map[aliasKey]pathAlias {
-	const renameBesidePath = "GitLab's path parameter :name is the object the update addresses; the input " +
-		"names it %s because its own name field carries client-go's option of that name"
-	return map[aliasKey]pathAlias{
-		{action: "branch.update_protected", param: "name"}: {
+// the placement rules do not find it under: a param of the body or the query
+// that GitLab names otherwise than the input does. A path parameter needs
+// none, since the request record names the field each call fills it from
+// (the request's placeholders), and an alias for one is read only where the
+// record names none. Without the alias the join holds the param's
+// requiredness to a field of its name, or to no field at all. The body
+// group_id of /groups/:id/share and /groups/:id/transfer is the case the
+// placeholders alone cannot answer: the input's group_id fills the :id beside
+// it, so the placement passes over a param of that name, and the field that
+// does fill it is named here. A path parameter is here only when the call
+// fills it from a value GitLab answered, which the record cannot name a field
+// for.
+func declaredAliases() map[aliasKey]paramAlias {
+	const groupShared = "the body param group_id of POST /groups/:id/share is the group shared with, which the input names %s, " +
+		"its group_id being the :id of the path"
+	aliased := map[aliasKey]paramAlias{
+		{action: "project.milestone_promote", param: "milestone_id"}: {
+			Field: "milestone_iid",
+			Reason: "the :milestone_id of POST /projects/:id/milestones/:milestone_id/promote is the ID in the answer of a " +
+				"lookup of milestone_iid, a value GitLab answered, so the record names no field for it",
+		},
+		{action: "branch.create", param: "branch"}: {
 			Field:  "branch_name",
-			Reason: fmt.Sprintf(renameBesidePath, "branch_name"),
+			Reason: "the body param branch of POST /projects/:id/repository/branches is the new branch, which the input names branch_name",
 		},
-		{action: "group.protected_branch_update", param: "name"}: {
-			Field:  "branch",
-			Reason: fmt.Sprintf(renameBesidePath, "branch"),
+		{action: "tag.protect", param: "name"}: {
+			Field:  "tag_name",
+			Reason: "the body param name of POST /projects/:id/protected_tags is the tag or wildcard to protect, which the input names tag_name",
 		},
-		{action: "environment.protected_update", param: "name"}: {
-			Field:  "environment",
-			Reason: fmt.Sprintf(renameBesidePath, "environment"),
+		{action: "group.group_member_share", param: "group_id"}: {
+			Field:  "share_group_id",
+			Reason: fmt.Sprintf(groupShared, "share_group_id"),
 		},
-		{action: "group.protected_env_update", param: "name"}: {
-			Field:  "environment",
-			Reason: fmt.Sprintf(renameBesidePath, "environment"),
+		{action: "group.share_with_group", param: "group_id"}: {
+			Field:  "shared_group_id",
+			Reason: fmt.Sprintf(groupShared, "shared_group_id"),
 		},
-		{action: "feature_flags.feature_flag_update", param: "feature_flag_name"}: {
-			Field:  "name",
-			Reason: "GitLab names the flag the path addresses feature_flag_name and its new name name; the input calls them name and new_name",
+		{action: "group.transfer", param: "group_id"}: {
+			Field: "parent_id",
+			Reason: "the body param group_id of POST /groups/:id/transfer is the new parent, which the input names parent_id, " +
+				"its group_id being the :id of the path",
+		},
+		{action: "branch.protect", param: "name"}: {
+			Field: "branch_name",
+			Reason: "the body param name of POST /projects/:id/protected_branches is the branch or wildcard to protect, " +
+				"which the input names branch_name",
 		},
 		{action: "feature_flags.feature_flag_update", param: "name"}: {
 			Field:  "new_name",
 			Reason: "the new name GitLab calls name is the input's new_name, its name being the flag the path addresses",
 		},
-		{action: "group.service_account_pat_list", param: "user_id"}: {
-			Field:  "service_account_id",
-			Reason: "GitLab's path parameter :user_id is the service account, which the input names service_account_id",
-		},
-		{action: "project.service_account_pat_list", param: "user_id"}: {
-			Field:  "service_account_id",
-			Reason: "GitLab's path parameter :user_id is the service account, which the input names service_account_id",
-		},
-		{action: "template.project_template_list", param: "type"}: {
-			Field:  "template_type",
-			Reason: "GitLab's path parameter :type is the template family, which the input names template_type",
-		},
-		{action: "merge_request.dependency_delete", param: "block_id"}: {
-			Field: "blocking_merge_request_id",
-			Reason: "GitLab's path parameter :block_id is the dependency to remove, which the input names " +
-				"blocking_merge_request_id after client-go's argument",
-		},
 	}
+	for _, scope := range []string{"code", "commits", "issues", "merge_requests", "milestones", "notes", "projects", "snippets", "users", "wiki"} {
+		aliased[aliasKey{action: "search." + scope, param: "search"}] = paramAlias{
+			Field:  "query",
+			Reason: "the query param search of every search route is what the input names query, its scope being the action itself",
+		}
+	}
+	for _, action := range []string{"list", "get", "set", "delete"} {
+		aliased[aliasKey{action: "admin.custom_attr_" + action, param: "id"}] = paramAlias{
+			Field: "resource_id",
+			Reason: "the :id of a custom attribute route is resource_id, or the ID in the answer of a lookup of it, and the lookup " +
+				"is handed resource_type as well, which says which read to send, so the record names no one field for it",
+		}
+	}
+	return aliased
 }

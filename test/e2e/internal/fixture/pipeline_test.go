@@ -21,6 +21,7 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -566,6 +567,70 @@ func TestPipelineJobID_Detached_FindsTheJobEachCallerWants(t *testing.T) {
 	}
 	if got := ManualPipelineJobID(e, Project{ID: 2}, 77); got != 88 {
 		t.Errorf("ManualPipelineJobID() = %d, want the manual job, 88", got)
+	}
+}
+
+// pipelineConfigurations is every pipeline configuration a builder of this
+// package commits, by the name it is declared under.
+var pipelineConfigurations = map[string]string{
+	"CIYAML":             CIYAML,
+	"ManualJobCIYAML":    ManualJobCIYAML,
+	"FailingCIYAML":      FailingCIYAML,
+	"worldCIYAML":        worldCIYAML,
+	"sastReportPipeline": sastReportPipeline,
+}
+
+// pipelineKeywords are the top-level keys of a configuration that are not
+// jobs, so carry no script.
+var pipelineKeywords = []string{"stages", "variables", "workflow", "default", "include"}
+
+// TestPipelineConfigurations_EveryJobScript_IsAListOfStrings parses every
+// configuration the builders commit the way GitLab reads it, as YAML, and
+// holds each job's script to what GitLab accepts: a list whose every entry is
+// a string. A shell line written as a plain YAML scalar with a colon and a
+// space inside it reads as a mapping, quoted words or not, and GitLab refuses
+// the pipeline with "script config should be a string or a nested array of
+// strings up to 10 levels deep"; FailingCIYAML carried one until 2026-11-01,
+// and every failed job world of the model evaluation stopped on it.
+func TestPipelineConfigurations_EveryJobScript_IsAListOfStrings(t *testing.T) {
+	for name, configuration := range pipelineConfigurations {
+		t.Run(name, func(t *testing.T) {
+			var parsed map[string]any
+			if err := yaml.Unmarshal([]byte(configuration), &parsed); err != nil {
+				t.Fatalf("the configuration does not parse as YAML: %v", err)
+			}
+			jobs := 0
+			for key, value := range parsed {
+				if slices.Contains(pipelineKeywords, key) {
+					continue
+				}
+				jobs++
+				checkJobScript(t, key, value)
+			}
+			if jobs == 0 {
+				t.Errorf("the configuration declares no job")
+			}
+		})
+	}
+}
+
+// checkJobScript holds one job's script to a list of strings.
+func checkJobScript(t *testing.T, job string, value any) {
+	t.Helper()
+	definition, isMap := value.(map[string]any)
+	if !isMap {
+		t.Errorf("job %s is a %T, not a mapping", job, value)
+		return
+	}
+	script, isList := definition["script"].([]any)
+	if !isList || len(script) == 0 {
+		t.Errorf("job %s has script %#v, want a list of shell lines", job, definition["script"])
+		return
+	}
+	for index, line := range script {
+		if _, isString := line.(string); !isString {
+			t.Errorf("job %s: script line %d reads as a %T, %#v, which GitLab refuses; quote the whole line", job, index+1, line, line)
+		}
 	}
 }
 

@@ -73,6 +73,14 @@ type Use struct {
 	SDKMethods []string
 	// Directives are the directives it went through.
 	Directives []string
+	// Fills names, by the position of a path segment, the field of the
+	// action's input every call that sends the request fills that segment
+	// from, as the input's JSON spells it. A segment a call fills from
+	// anything else, or two calls from two fields, is left out, and so is
+	// every segment of a request one of whose calls could not be read for
+	// it: a raw path the fold cannot read, a declared request, a method handed
+	// on as a value.
+	Fills map[int]string
 	// Declaration is the category of the declaration that supplied it.
 	Declaration string
 	// Qualified is set when a mandatory or alternatives directive, or a
@@ -118,6 +126,10 @@ type deriver struct {
 	// sends are the declarations of functions that send outside client-go,
 	// by the function's name.
 	sends map[string]*declared
+	// marking is set while a raw request's path is folded a second time, to
+	// read which input field each of its placeholders is filled from
+	// ([deriver.rawFills]).
+	marking bool
 }
 
 // Derive derives every catalog action's requests.
@@ -219,6 +231,9 @@ func (d *deriver) action(act actionrequests.Action, sites map[string][]actionreq
 	}
 	d.sendsNothing(&out, declarations)
 	out.Paths = paths
+	for i := range out.Uses {
+		out.Uses[i].Fills = walk.fills[i].placeholders()
+	}
 	finish(&out)
 	return out
 }

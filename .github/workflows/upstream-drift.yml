@@ -1,0 +1,450 @@
+# What moves under the 1:1 audit without a commit of this repository's own:
+# the newest client-go, GitLab's API documentation at master, and the issues
+# the audit's tracked rows rest on (issue 1688).
+#
+# Every gate of cmd/audit_1to1 judges the tree against what it pins: the
+# client-go go.mod requires, the doc/api oracle read at the live record's
+# release, and the issue each tracked row names. None of those moves on a
+# pull request, so CI never sees them move, and the first time anyone learned
+# what a client-go release changed was the pull request that bumped it. This
+# asks four questions once a week, of what upstream holds that day:
+#
+#  1. sdk: the SDK parity gate (make audit-1to1-sdk) with client-go moved to
+#     its newest release, after building against it the server and every
+#     package under internal/, which is all the binary links of this module,
+#     and compiling every test. It is red from the first release after the
+#     pin until the bump answers what that release changed, and its summary
+#     is that bump's work list: the counters whose totals differ from the pin,
+#     and every finding the newest report holds, none of which the pin holds
+#     once it has passed the gate.
+#  2. citations: every doc/api page an adjudication table cites still reads at
+#     master (make audit-1to1-validate-docs). A page GitLab renamed or removed
+#     leaves the decision that cites it resting on nothing.
+#  3. doc-endpoints: every REST endpoint the request inventory records, held
+#     to doc/api at master instead of at the pinned release. A recorded
+#     endpoint master no longer documents is one the next release may drop,
+#     and a declaration master now answers is one the re-pin will retire. The
+#     summary lists every spelling master and the pin disagree on.
+#  4. issues: every issue a tracked row names is still open
+#     (make audit-1to1-issues). A domain issue closed while its routes are
+#     still unsent would otherwise go on answering them.
+#
+# It only reports. No job needs it, no release waits on it and nothing is
+# published from it. A finding fails the job that found it, which is how the
+# report reaches anyone: a failed scheduled run is the notice GitHub sends,
+# and every job leaves what it read in its summary either way.
+#
+# Every job holds contents: read and reads no secret but the job's own token,
+# which the issues job uses to read issues, so the rules make
+# check-supply-chain holds a credentialed job to do not reach any of them.
+# go get in the sdk job resolves client-go at run time on purpose, since the
+# newest release is the question, and only in that job's checkout.
+name: Upstream drift
+
+on:
+  schedule:
+    # Tuesdays at 06:37 UTC: off the Monday runs (E2E, image scan, race),
+    # Wednesday's fuzzing and Thursday's schema re-probe and Scorecard, and
+    # hours before Tuesday's CodeQL, so a red run here arrives on its own.
+    # The minute is off the hour because GitHub delays runs that pile up on
+    # round times.
+    - cron: "37 6 * * 2"
+  # No pull_request trigger: the sdk job is red from the first client-go
+  # release after the pin, and a red check on every change to this file would
+  # say nothing new. GitHub offers a workflow for dispatch once its file is on
+  # main, which is where its first run comes from.
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: upstream-drift-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sdk:
+    name: "🧭 SDK parity at the newest client-go"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      # The gate at the pin first, which CI already holds green, so the
+      # summary can say what the newest release moves rather than print
+      # counters a reader has to compare by hand.
+      - name: Hold the tree to the pinned client-go
+        id: pinned
+        run: go run ./cmd/audit_1to1/ -scope=sdk -gaps-only -output "${RUNNER_TEMP}/pinned.json"
+
+      - name: Move client-go to its newest release
+        id: bump
+        run: |
+          set -euo pipefail
+          module=gitlab.com/gitlab-org/api/client-go/v3
+          pinned="$(go list -m -f '{{.Version}}' "${module}")"
+          go get "${module}@latest"
+          newest="$(go list -m -f '{{.Version}}' "${module}")"
+          echo "pinned=${pinned}" >> "${GITHUB_OUTPUT}"
+          echo "newest=${newest}" >> "${GITHUB_OUTPUT}"
+
+      # Built in steps of their own, so a release that renames something a
+      # handler calls fails as a build rather than as a finding. Both mean
+      # the bump has work to do, and they are different work. The server is
+      # built whole, with every package under internal/, and every test is
+      # compiled, because neither the audit nor the gate would see them
+      # break: the audit links only what it imports, which reaches
+      # internal/prompts and internal/resources through cmd/internal/mcpsurface
+      # but not cmd/server or the seven packages only the server links,
+      # internal/completions among them, which imports client-go; the gate
+      # loads the tool packages and internal/toolutil alone; and neither
+      # reads a test file. So a release that breaks one of those packages, or
+      # a test, would be reported as asking nothing of this tree. Each of the
+      # three runs whatever the other two answer, and the gate whenever the
+      # audit builds, since what each finds is work the bump has either way.
+      - name: Build the server against it
+        id: server
+        run: go build ./cmd/server/... ./internal/...
+
+      # go vet with one analyzer type-checks every package with its tests,
+      # internal and external, and links and runs nothing, so it is the
+      # cheapest compile of them all. The build tags are the Makefile's
+      # GO_ANALYSIS_TAGS, every tag a suite's files sit behind, read from it
+      # rather than copied here.
+      - name: Compile the tests against it
+        id: tests
+        if: ${{ !cancelled() && steps.bump.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          tags="$(make -s --no-print-directory --eval "print-analysis-tags: ; @echo \$(GO_ANALYSIS_TAGS)" print-analysis-tags)"
+          test -n "${tags}"
+          go vet -tags "${tags}" -atomic ./...
+
+      - name: Build the audit against it
+        id: build
+        if: ${{ !cancelled() && steps.bump.outcome == 'success' }}
+        run: go build -o "${RUNNER_TEMP}/audit_1to1" ./cmd/audit_1to1/
+
+      - name: Hold the tree to the newest client-go
+        id: gate
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: '"${RUNNER_TEMP}/audit_1to1" -scope=sdk -gaps-only -output "${RUNNER_TEMP}/newest.json"'
+
+      - name: Summarize
+        if: always()
+        env:
+          PINNED: ${{ steps.bump.outputs.pinned }}
+          NEWEST: ${{ steps.bump.outputs.newest }}
+          AT_PIN: ${{ steps.pinned.outcome }}
+          BUMP: ${{ steps.bump.outcome }}
+          SERVER: ${{ steps.server.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          GATE: ${{ steps.gate.outcome }}
+        run: |
+          {
+            echo "## SDK parity at the newest client-go"
+            echo
+            echo "| Step | Outcome |"
+            echo "| --- | --- |"
+            echo "| Gate at the pin, \`${PINNED:-unknown}\` | ${AT_PIN:-skipped} |"
+            echo "| Move to the newest release | ${BUMP:-skipped} |"
+            echo "| Build the server and \`internal/...\` at \`${NEWEST:-unknown}\` | ${SERVER:-skipped} |"
+            echo "| Compile the tests at \`${NEWEST:-unknown}\` | ${TESTS:-skipped} |"
+            echo "| Build the audit at \`${NEWEST:-unknown}\` | ${BUILD:-skipped} |"
+            echo "| Gate at \`${NEWEST:-unknown}\` | ${GATE:-skipped} |"
+            echo
+            if [ "${AT_PIN}" != "success" ]; then
+              echo "**The gate is red at the pin**, which CI holds green on every push, so this run says"
+              echo "nothing about the newest release. Read the CI run of the same commit first."
+            elif [ "${BUMP}" != "success" ]; then
+              echo "**client-go's newest release could not be resolved into this tree**: the proxy did not"
+              echo "answer, or the release asks for a Go or a dependency go get would not move to. The log"
+              echo "of that step says which."
+            elif [ "${SERVER}" != "success" ]; then
+              echo "**The server does not build against \`${NEWEST}\`.** \`cmd/server\` or a package under"
+              echo "\`internal/\` calls something the release renamed or removed, which the bump has to"
+              echo "rewrite before it can ship; the log of the server build names the package and the call."
+              echo "The tests, the audit's own build and the gate are in the table above all the same."
+            elif [ "${BUILD}" != "success" ]; then
+              echo "**The audit does not build against \`${NEWEST}\`**, although the server does. The bump"
+              echo "has a call in \`cmd/audit_1to1\` to rewrite before the gate can say anything; the log of"
+              echo "the audit build names it."
+            elif [ "${TESTS}" != "success" ]; then
+              echo "**The tests do not compile against \`${NEWEST}\`**, although the server and the audit do."
+              echo "A test uses something the release renamed, removed or retyped, which the bump has to"
+              echo "rewrite; the log of that step names the file and the line."
+            elif [ "${GATE}" = "success" ]; then
+              echo "\`${NEWEST}\` asks nothing of this tree that \`${PINNED}\` did not: the server, every"
+              echo "package under \`internal/\` and every test compile against it, and the gate finds"
+              echo "nothing there."
+            else
+              echo "**\`${NEWEST}\` moves what the gate holds.**"
+            fi
+            # Both reports exist only once the gate has passed at the pin,
+            # since every step after it is skipped otherwise, so the pin's
+            # counters of findings are all 0 and its lists empty here: a
+            # finding at the newest release moves its counter, and the newest
+            # report's lists are the whole difference.
+            if [ -f "${RUNNER_TEMP}/pinned.json" ] && [ -f "${RUNNER_TEMP}/newest.json" ]; then
+              rows="$(jq -r --slurpfile newest "${RUNNER_TEMP}/newest.json" \
+                '.summary as $pin | $newest[0].summary as $new
+                 | ($pin + $new | keys_unsorted)[]
+                 | select($pin[.] != $new[.])
+                 | "| `\(.)` | \($pin[.] // 0) | \($new[.] // 0) |"' \
+                "${RUNNER_TEMP}/pinned.json")"
+              if [ -n "${rows}" ]; then
+                echo
+                if [ "${GATE}" = "success" ]; then
+                  echo "The counters below are the ones whose totals differ from the pin, and none of them"
+                  echo "is a finding, since the gate passes at \`${NEWEST}\`."
+                else
+                  echo "The counters below are the ones whose totals differ from the pin, which passed the"
+                  echo "gate, so every counter that holds a finding is among them: they say how many and"
+                  echo "where, and the findings listed after them name each one. The report artifact carries"
+                  echo "every finding whole."
+                fi
+                echo
+                echo "| Counter | At the pin | At the newest |"
+                echo "| --- | ---: | ---: |"
+                echo "${rows}"
+              fi
+              # Every finding by the list it is in and what it says, since
+              # -gaps-only keeps nothing else in the lists: the counters say
+              # how many, this names which.
+              jq -r 'paths(type == "array") as $p
+                | select(all($p[]; type == "string"))
+                | ($p | join(".")) as $list
+                | getpath($p)[]
+                | "\($list) \(tojson)"' "${RUNNER_TEMP}/newest.json" | sort -u > "${RUNNER_TEMP}/findings.txt"
+              if [ -s "${RUNNER_TEMP}/findings.txt" ]; then
+                count="$(wc -l < "${RUNNER_TEMP}/findings.txt")"
+                echo
+                echo "<details><summary>${count} findings at \`${NEWEST}\`</summary>"
+                echo
+                echo '```text'
+                head -n 300 "${RUNNER_TEMP}/findings.txt" | cut -c1-400
+                if [ "${count}" -gt 300 ]; then
+                  echo "... and $((count - 300)) more, in the report artifact"
+                fi
+                echo '```'
+                echo
+                echo "</details>"
+              fi
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: upstream-drift-sdk
+          path: |
+            ${{ runner.temp }}/pinned.json
+            ${{ runner.temp }}/newest.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  citations:
+    name: "📚 Cited doc/api pages at master"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      - name: Read every page an adjudication cites
+        id: validate
+        run: go run ./cmd/audit_1to1/ -validate-docs -output "${RUNNER_TEMP}/citations.json"
+
+      - name: Summarize
+        if: always()
+        env:
+          VALIDATE: ${{ steps.validate.outcome }}
+        run: |
+          {
+            echo "## Cited doc/api pages at master"
+            echo
+            if [ ! -f "${RUNNER_TEMP}/citations.json" ]; then
+              echo "**No report was written** (${VALIDATE:-skipped}): the run stopped before it read a page."
+            else
+              jq -r '"\(.ok) of the \(.checked) cited pages read at master."' "${RUNNER_TEMP}/citations.json"
+              if [ "${VALIDATE}" != "success" ]; then
+                echo
+                echo "**A cited page did not read.** A 404 or a 410 means GitLab renamed or removed it, and"
+                echo "each decision that cites it has to cite where the text went or be decided again; any"
+                echo "other reason below is the network's, and a dispatch asks again."
+                echo
+                echo "| Page | Why |"
+                echo "| --- | --- |"
+                jq -r '.stale[] | "| `doc/api/\(.area).md` | \(.error | gsub("[|]"; "\\|")) |"' "${RUNNER_TEMP}/citations.json"
+              fi
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  doc-endpoints:
+    name: "📖 Recorded endpoints against doc/api at master"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      # The same sweep make gen-api-doc-endpoints runs, at master instead of
+      # the pinned tag: about 250 pages through the repository files API,
+      # and nothing written when one of them cannot be read.
+      - name: Read doc/api at master
+        id: read
+        run: go run ./cmd/audit_1to1/ -write-doc-endpoints -doc-ref master -output "${RUNNER_TEMP}/master.json"
+
+      # The comparison refuses an oracle read at another release than the
+      # live record's, which is right for the committed file and is the one
+      # thing this step asks it not to do: the listing is master's, and the
+      # pinned tag is written into it only so that the check reads it. The
+      # committed oracle is kept aside for the summary.
+      - name: Hold every recorded endpoint to master
+        id: check
+        run: |
+          set -euo pipefail
+          oracle=docs/development/gitlab-api-doc-endpoints.json
+          cp "${oracle}" "${RUNNER_TEMP}/pinned.json"
+          pinned="$(jq -r '.source.ref' "${oracle}")"
+          jq --arg ref "${pinned}" '.source.ref = $ref' "${RUNNER_TEMP}/master.json" > "${oracle}"
+          go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -gaps-only -output "${RUNNER_TEMP}/paths.json"
+
+      - name: Summarize
+        if: always()
+        env:
+          READ: ${{ steps.read.outcome }}
+          CHECK: ${{ steps.check.outcome }}
+        run: |
+          {
+            echo "## Recorded endpoints against doc/api at master"
+            echo
+            if [ ! -f "${RUNNER_TEMP}/master.json" ]; then
+              echo "**doc/api at master could not be read** (${READ:-skipped}), so nothing was compared."
+              echo "The sweep writes nothing when a page cannot be read; the log of the read step names it."
+              exit 0
+            fi
+            listing() { jq -r '.endpoints[] | "\(.method) \(.path)"' "$1" | sort -u; }
+            listing "${RUNNER_TEMP}/pinned.json" > "${RUNNER_TEMP}/pinned.txt"
+            listing "${RUNNER_TEMP}/master.json" > "${RUNNER_TEMP}/master.txt"
+            comm -13 "${RUNNER_TEMP}/pinned.txt" "${RUNNER_TEMP}/master.txt" > "${RUNNER_TEMP}/added.txt"
+            comm -23 "${RUNNER_TEMP}/pinned.txt" "${RUNNER_TEMP}/master.txt" > "${RUNNER_TEMP}/removed.txt"
+            echo "| Listing | Endpoints |"
+            echo "| --- | ---: |"
+            echo "| Pinned, \`$(jq -r '.source.ref' "${RUNNER_TEMP}/pinned.json")\` | $(wc -l < "${RUNNER_TEMP}/pinned.txt") |"
+            echo "| \`master\` | $(wc -l < "${RUNNER_TEMP}/master.txt") |"
+            echo "| Spelled at master only | $(wc -l < "${RUNNER_TEMP}/added.txt") |"
+            echo "| Spelled at the pin only | $(wc -l < "${RUNNER_TEMP}/removed.txt") |"
+            echo
+            if [ "${CHECK}" = "success" ]; then
+              echo "Every endpoint the request inventory records reads at master as it reads at the pin."
+            elif [ -f "${RUNNER_TEMP}/paths.json" ]; then
+              echo "**Master disagrees with what the recorded requests rest on.** An endpoint below is one"
+              echo "this server sends that master does not document, and a declaration below is one master"
+              echo "now answers, which the re-pin will retire."
+              echo
+              jq -r '.endpoints.undocumented[]? | select((.category // "") == "") | "- \(.method) \(.path) (\(.packages | join(", ")))"' "${RUNNER_TEMP}/paths.json"
+              jq -r '.endpoints.unused_declarations[]? | "- declared undocumented, documented at master: \(.)"' "${RUNNER_TEMP}/paths.json"
+            else
+              echo "**The check stopped before it wrote a report** (${CHECK:-skipped}); its log says why."
+            fi
+            for side in added removed; do
+              if [ -s "${RUNNER_TEMP}/${side}.txt" ]; then
+                echo
+                if [ "${side}" = added ]; then
+                  echo "<details><summary>Spelled at master only</summary>"
+                else
+                  echo "<details><summary>Spelled at the pin only</summary>"
+                fi
+                echo
+                echo '```text'
+                cat "${RUNNER_TEMP}/${side}.txt"
+                echo '```'
+                echo
+                echo "</details>"
+              fi
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload the listings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: upstream-drift-doc-endpoints
+          path: |
+            ${{ runner.temp }}/master.json
+            ${{ runner.temp }}/paths.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  issues:
+    name: "🎫 Issues the tracked rows name"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      # The job's token, so the thirty-odd questions do not draw on the 60 an
+      # hour GitHub answers an address that sends none.
+      - name: Ask GitHub about each issue a tracked row names
+        id: ask
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go run ./cmd/audit_1to1/ -check-issues -output "${RUNNER_TEMP}/issues.json"
+
+      - name: Summarize
+        if: always()
+        env:
+          ASK: ${{ steps.ask.outcome }}
+        run: |
+          {
+            echo "## Issues the tracked rows name"
+            echo
+            if [ ! -f "${RUNNER_TEMP}/issues.json" ]; then
+              echo "**No report was written** (${ASK:-skipped}): the run stopped before it asked GitHub."
+              exit 0
+            fi
+            jq -r '.summary | "\(.rows) rows name \(.issues) issues: \(.open) open, \(.closed) closed, \(.pull_requests) pull requests, \(.missing) missing and \(.unjudged) GitHub could not be asked about."' "${RUNNER_TEMP}/issues.json"
+            if [ "${ASK}" != "success" ]; then
+              echo
+              echo "**A tracked row rests on an issue that does not say the work is planned**, or on one"
+              echo "GitHub could not be asked about. Each row below has to name an open issue or be"
+              echo "decided again."
+              echo
+              echo "| Issue | State | Rows | Named by |"
+              echo "| --- | --- | ---: | --- |"
+              jq -r '.issues[] | select(.state != "open") | "| #\(.number) | \(.state)\(if .detail then ": " + (.detail | gsub("[|]"; "\\|")) else "" end) | \(.rows) | \((.named_by // []) | join("; ")) |"' "${RUNNER_TEMP}/issues.json"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

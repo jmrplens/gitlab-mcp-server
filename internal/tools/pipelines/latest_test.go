@@ -954,6 +954,21 @@ func TestFormatLatestMarkdown_Fallback_ShowsTheHeadAndTheNote(t *testing.T) {
 	}
 }
 
+// TestFormatLatestMarkdown_NoteField_IsEscaped verifies that the note is
+// escaped as any field is: the server writes one of two sentences there,
+// which render unchanged, and a value the output type is filled with
+// otherwise, a tag and an address GFM links, renders as the text it is.
+func TestFormatLatestMarkdown_NoteField_IsEscaped(t *testing.T) {
+	md := FormatLatestMarkdown(LatestOutput{
+		ID:           99,
+		Status:       "success",
+		FallbackNote: `<a href="http://attacker.invalid">x</a> x](http://attacker.invalid/y)`,
+	})
+	if want := "\n" + `&lt;a href="http\://attacker.invalid">x&lt;/a> x](http\://attacker.invalid/y)` + "\n"; !strings.Contains(md, want) {
+		t.Errorf("FormatLatestMarkdown() = %q, want the note escaped as %q", md, want)
+	}
+}
+
 // TestFormatLatestMarkdown_Fallback_KeepsTheRefOutOfTheNote verifies a ref
 // carrying Markdown and HTML metacharacters, which git check-ref-format
 // permits in a branch name anyone who may push can create. The card escapes

@@ -214,7 +214,11 @@ func FormatAdminActionMarkdownString(o AdminActionOutput) string {
 	card.Int("ID", o.UserID)
 	card.Field("Action", o.Action)
 	card.Bool("Success", o.Success)
-	card.Note(o.Note)
+	// The note is this server's sentence, and a field of the output all the
+	// same, so it is escaped as any value is: the sentence renders unchanged,
+	// and a value the type is filled with otherwise cannot reach the page as
+	// a tag or a link.
+	card.Note(toolutil.EscapeMdTableCell(o.Note))
 	card.End()
 	return b.String()
 }

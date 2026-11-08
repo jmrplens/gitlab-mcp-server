@@ -428,7 +428,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	b.WriteString("\n## How to Submit Review Comments\n")
 	b.WriteString("Use the batch review workflow to avoid sending one notification per comment:\n")
 	b.WriteString("1. For each finding, call `" + actionDraftNoteCreate + "` and include the `position` object for inline comments on specific diff lines.\n")
-	b.WriteString("   Position fields: base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line (not both).\n")
+	b.WriteString("   Position fields: base_sha, start_sha, head_sha, old_path and new_path, and the line by its kind:\n")
 	b.WriteString("   - Modified/added line -> set `new_line` only (line number in the new file).\n")
 	b.WriteString("   - Removed line -> set `old_line` only (line number in the old file).\n")
 	b.WriteString("   - Unchanged context line -> set both `old_line` and `new_line`.\n")
@@ -907,7 +907,9 @@ func writeLatestPipelineLines(b *strings.Builder, pipeline pipelines.LatestOutpu
 	if pipeline.HeadSHA != "" {
 		fmt.Fprintf(b, "%s**Head SHA**: %s\n", prefix, mdInline(shortSHA(pipeline.HeadSHA)))
 	}
-	fmt.Fprintf(b, "%s**URL**: %s\n", prefix, mdInline(pipeline.WebURL))
+	// The pipeline's page is a link the prompt writes, as a card's URL row is:
+	// the inline escaper keeps an address in text from becoming one.
+	fmt.Fprintf(b, "%s**URL**: %s\n", prefix, toolutil.MdAutolink(pipeline.WebURL))
 	if pipeline.FallbackNote != "" {
 		// The note is one of the two internal/tools/pipelines writes: the
 		// server's own prose, which names no value, so it is written as it is.

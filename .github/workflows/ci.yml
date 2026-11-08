@@ -79,10 +79,13 @@ env:
   FRESHNESS: ${{ github.event_name == 'pull_request' && ((github.event.pull_request.stack != null && github.event.pull_request.stack.position != github.event.pull_request.stack.size) || (github.event.pull_request.stack == null && github.event.pull_request.base.ref != 'main')) && 'deferred' || 'checked' }}
 
 jobs:
-  # The unit suite with coverage, and nothing else: it is the longest single
-  # command in the pipeline at close to seven minutes, so anything that shares
-  # a job with it waits on it for no reason, and the only consumer of its
-  # output is the SonarCloud scan below.
+  # The unit suite with coverage, and only the two short gates that belong
+  # with it: the suite is the longest single command in the pipeline at close
+  # to seven minutes, so anything else that shares a job with it waits on it
+  # for no reason. The request inventory check reads the recording the suite
+  # leaves, and the e2e support packages' coverage is here because it is the
+  # gate that reads coverage (issue 1461), at about a minute. The coverage
+  # profile's only consumer is the SonarCloud scan below.
   coverage:
     name: "🧪 Coverage"
     runs-on: ubuntu-latest
@@ -127,6 +130,22 @@ jobs:
       - name: Check the recorded request inventory
         if: env.FRESHNESS == 'checked'
         run: go run ./cmd/gen_request_inventory/ -check
+      # The e2e suite's two support packages, test/e2e/internal/fixture and
+      # test/e2e/modeleval, are held to the whole-package rule against their
+      # offline tests and the complete runs together (issue 1461), because
+      # most of their code only runs against a GitLab. No GitLab runs here,
+      # so the runs' half is the committed record
+      # docs/development/e2e-support-coverage.json: the target runs the
+      # offline half on this tree, credits the record's reach to every
+      # declaration whose text is still what the runs ran, puts the table on
+      # the job's summary, and fails a package with more statements reached
+      # by neither half than the record allows. FRESHNESS deferred, below a
+      # stack's top, turns an excess a record older than the tree explains
+      # into a note, since the top records a complete run of its own tree.
+      # It runs after the inventory check, so a failure here never skips that
+      # check and hides its verdict.
+      - name: Coverage of the e2e support packages against the recorded runs
+        run: make -s check-e2e-support-coverage E2E_SUPPORT_FRESHNESS="$FRESHNESS" E2E_SUPPORT_SUMMARY="$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -139,10 +158,15 @@ jobs:
   # would generate now. They used to sit in front of the coverage run in one
   # job, which meant a stale README table delayed the coverage result by two
   # minutes and a failing one hid it entirely. None of them needs the suite.
+  #
+  # The timeout is a bound, not an expectation: the job took 13 of the 15 it
+  # had on main on 2026-11-03, before the SDK, enum, baseline and discovery
+  # gates of the 1:1 audit joined it, and it is not on the critical path,
+  # which the platform matrix holds at well over half an hour.
   generated:
     name: "🔎 Generated artifacts"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -247,7 +271,7 @@ jobs:
       # read, held to what GitLab requires on every way an action runs. It
       # reads the request record the derivation commits, so it is deferred
       # with R-GRANT.
-      - name: Check every required parameter against the live record (R-INPUT)
+      - name: Check every required parameter against the live record (R-REQUIRED)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-required
       # Every param a route this server reaches declares, held to whether a
@@ -264,6 +288,30 @@ jobs:
       - name: Check that every live route is reached or answered (R-ROUTE)
         if: env.FRESHNESS == 'checked'
         run: make audit-1to1-routes
+      # Every client-go service, raw GraphQL operation and enum value held
+      # to a decision, with the option structs a call sends, the workarounds
+      # waiting on client-go, the captured keys and the identifiers client-go
+      # narrows, at the client-go go.mod pins. It reads the tree and the
+      # module cache, never a committed record, so it is never deferred.
+      # upstream-drift.yml asks it of the newest client-go every week.
+      - name: Check SDK parity at the pinned client-go
+        run: make audit-1to1-sdk
+      - name: Check the enum values every action offers (R-ENUM)
+        run: make audit-1to1-enums
+      # What the scopes report without gating, held to the committed
+      # docs/development/audit-1to1-baseline.json: a finding the file does
+      # not hold and a key no finding answers both fail, so a change shows
+      # what it adds to the report-only streams. Three of the scopes read the
+      # request record the derivation commits, so it is deferred with R-GRANT.
+      - name: Check the report-only 1:1 findings against the baseline
+        if: env.FRESHNESS == 'checked'
+        run: make check-audit-1to1-baseline
+      # The discovery metadata of every action (META-001): a generic Usage,
+      # a variant that does not tell itself from its siblings, and the flags
+      # a cluster with a non-CRUD variant raises to an error. It reads the
+      # catalog the tree builds, so it is never deferred.
+      - name: Check the discovery metadata of every action
+        run: make audit-discovery-check
       # The Orbit twin of the record above: what GitLab.com's Orbit routes
       # answered the requests the handlers build, as a key tree. No
       # self-managed GitLab serves Orbit, so no boot could answer it, and the
@@ -317,9 +365,11 @@ jobs:
         if: env.FRESHNESS == 'checked'
         run: make check-e2e-coverage-page
       # R-PATH, the dimension that reads the request rather than the surface.
-      # It reads the committed inventory the coverage job regenerates, so it
+      # It reads the committed inventory the coverage job regenerates and the
+      # committed documentation oracle (make gen-api-doc-endpoints), so it
       # needs no suite run and no network, and it fails on a package the suite
-      # never drives as loudly as on a document GitLab would refuse.
+      # never drives as loudly as on a document GitLab would refuse or an
+      # endpoint GitLab does not document.
       - name: Check the request every action issues
         run: make audit-1to1-paths
       - name: Check the one-click install buttons
@@ -607,8 +657,7 @@ jobs:
       # tests under every e2e tag, about two minutes on five cores from an
       # empty build cache and seconds from a warm one, which is why it sits in
       # this job rather than beside the other test-convention gates in the
-      # generated one, whose runs already take eight to ten of its fifteen
-      # minutes.
+      # generated one, whose runs already take thirteen minutes and more.
       - name: Check no test uses a closed httptest server's address
         run: make check-closed-servers
 

@@ -42,10 +42,15 @@ func FormatMarkdownString(s Output) string {
 	c.Field("MCP Server Version", s.MCPServerVersion)
 	c.Field("Author", s.Author)
 	c.Field("Department", s.Department)
-	c.Field("Repository", s.Repository)
-	// net/url permits '<' in a host and leaves it there, and under
+	// The two addresses are links the card writes, since the cell escaper
+	// keeps an address in text from becoming one: the server's own repository
+	// and the instance it talks to are pages a reader opens. Each is written
+	// once, as the autolink <url>, and an address an autolink cannot hold
+	// keeps the long form with both halves escaped, which matters for the
+	// instance: net/url permits '<' in a host and leaves it there, and under
 	// --allow-any-gitlab-url the host is a value the caller supplied.
-	c.Field("GitLab URL", s.GitLabURL)
+	c.Link("Repository", s.Repository, s.Repository)
+	c.Link("GitLab URL", s.GitLabURL, s.GitLabURL)
 	// The revision is a row of its own: joined to the version as
 	// "%s (revision: %s)" it printed an empty parenthesis whenever GitLab sent
 	// a version and no revision.

@@ -298,11 +298,16 @@ func systemCell(result outcome) string {
 	return codeSpan(result.System) + " (" + result.rec.platform + ")"
 }
 
-// coveredCell is gobco's figure, or why there is none. It is a chain of ifs
-// rather than a tagless switch because the coverage profile gremlins reads
-// gives a case expression no block of its own, so every mutant of one is
-// reported as not covered however many tests reach it.
+// coveredCell is gobco's figure, or why there is none. A total of zero is a
+// package with nothing to measure, since a figure gobco printed with one is
+// refused. It is a chain of ifs rather than a tagless switch because the
+// coverage profile gremlins reads gives a case expression no block of its
+// own, so every mutant of one is reported as not covered however many tests
+// reach it.
 func coveredCell(result outcome) string {
+	if result.measured != nil && result.measured.total == 0 {
+		return "nothing to measure (0 of 0)"
+	}
 	if result.measured != nil {
 		return fmt.Sprintf("%d of %d", result.measured.covered, result.measured.total)
 	}

@@ -52,6 +52,9 @@ type routeUse struct {
 	// whatever its options hold: the form field an upload that always
 	// uploads sends its file under, which the inventory does not record.
 	always map[string]bool
+	// bodies are the params Workhorse fills from the whole body of a request
+	// of the route (see [markWorkhorseBodies]).
+	bodies map[string]bool
 	types  map[string]bool
 	// unread is set when one of the requests carries options the walk could
 	// not read.
@@ -91,7 +94,7 @@ func collectUses(record actionrequests.Record, routes map[string]*apilive.Route,
 				if use == nil {
 					use = &routeUse{
 						route: routes[name], actions: map[string]bool{}, sends: map[string]bool{},
-						always: map[string]bool{}, types: map[string]bool{},
+						always: map[string]bool{}, bodies: map[string]bool{}, types: map[string]bool{},
 					}
 					uses[name] = use
 				}
@@ -169,6 +172,9 @@ func (s sources) read(use *routeUse, action actionrequests.RecordAction, request
 				problems = append(problems, UnreadRequest{Site: key, Reason: reasonUnknownMethod})
 				continue
 			}
+			if !slices.Contains(method.Constructors, sdkroutes.ConstructorUpload) {
+				markWorkhorseBodies(use)
+			}
 			for _, name := range method.Options {
 				s.walk(use, name, sdkoptions.Encoders(method.Constructors, verb))
 			}
@@ -210,7 +216,11 @@ func (s sources) readRaw(use *routeUse, action actionrequests.RecordAction, raw 
 		use.sends[raw.UploadField] = true
 		use.always[raw.UploadField] = true
 	}
-	encoders := sdkoptions.Encoders([]string{constructorOf(raw.Constructor)}, verb)
+	constructor := constructorOf(raw.Constructor)
+	if constructor == sdkroutes.ConstructorNewRequest {
+		markWorkhorseBodies(use)
+	}
+	encoders := sdkoptions.Encoders([]string{constructor}, verb)
 	if len(raw.Callers) == 0 {
 		return s.readOptions(use, raw, raw.Options, encoders)
 	}
@@ -267,6 +277,28 @@ func (s sources) walk(use *routeUse, name string, encoders []string) {
 		sdkoptions.Walk(s.sdk.Types, name, encoder, func(found sdkoptions.Param) {
 			use.sends[sdkoptions.Canonical(found.Param)] = true
 		})
+	}
+}
+
+// markWorkhorseBodies marks every param of a route Workhorse may fill from
+// the whole body of a request built with no multipart form: a required
+// WorkhorseFile param, which is judged one when no option struct of the route
+// models it either ([paramJudge.leaf]). A request client-go builds with
+// NewRequest carries its options as JSON, or a body the method sets itself (a
+// generic package's bytes), so a file GitLab requires that no option names
+// reaches it only as the file Workhorse writes the body to on the routes it
+// accelerates (repository commits and files, generic packages, Terraform
+// state). The endpoint of a repository commit or file then reads its params
+// out of that file, which is why the record declares none of them there, and
+// R-REQUIRED judges them from its own table. A method that can upload a form,
+// as client-go's CreateGroup does when an avatar is given, and a raw request
+// built with UploadRequest are left to the form fields they carry, so an
+// upload that sends no field of the name is still a finding.
+func markWorkhorseBodies(use *routeUse) {
+	for name, param := range use.route.Params {
+		if param.Type == apilive.WorkhorseFile && param.Required {
+			use.bodies[name] = true
+		}
 	}
 }
 

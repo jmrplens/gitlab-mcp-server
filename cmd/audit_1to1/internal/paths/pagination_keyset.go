@@ -200,6 +200,11 @@ type sentRoute struct {
 	// can reach. A GraphQL document and a request the derivation could not
 	// read carry no route.
 	routes []string
+	// onSomeCalls holds the routes among them no way of running the action
+	// needs, which is what a read of one object by name looks like beside the
+	// list the action publishes. A route sent at two sites is one of them only
+	// when neither site needs it, whichever the record lists first.
+	onSomeCalls map[string]bool
 	// packages are the Go packages of its handlers and of every site that
 	// builds one of its requests, by name, which is how the inventory's
 	// package is matched to it.
@@ -212,17 +217,26 @@ func sentRoutes(record actionrequests.Record) map[string]sentRoute {
 	sent := make(map[string]sentRoute, len(record.Actions))
 	for _, action := range record.Actions {
 		var routes []string
+		onSomeCalls, needed := map[string]bool{}, map[string]bool{}
 		packages := symbolPackages(action.Handlers)
 		for _, request := range action.Requests {
 			if request.Kind != actionrequests.KindREST {
 				continue
 			}
 			routes = append(routes, request.Route)
+			if request.Class == actionrequests.ClassOptional {
+				onSomeCalls[request.Route] = true
+			} else {
+				needed[request.Route] = true
+			}
 			packages = append(packages, symbolPackages(request.Sites)...)
+		}
+		for route := range needed {
+			delete(onSomeCalls, route)
 		}
 		slices.Sort(routes)
 		slices.Sort(packages)
-		sent[action.ID] = sentRoute{routes: slices.Compact(routes), packages: slices.Compact(packages)}
+		sent[action.ID] = sentRoute{routes: slices.Compact(routes), onSomeCalls: onSomeCalls, packages: slices.Compact(packages)}
 	}
 	return sent
 }
@@ -366,13 +380,19 @@ func (c *KeysetPagination) judge(action requestinventory.Action, in keysetInputs
 //
 // Only a read whose output is a collection envelope is asked: an action
 // sending a keyset route to find one object by name, or to check that it is
-// there, reads no list a caller could page through.
+// there, reads no list a caller could page through. That goes for a list too
+// when no way of running it needs the route: admin.custom_attr_list reads
+// GET /users to find the one user a username names, and the list it publishes
+// is the attributes of that user.
 func (c *KeysetPagination) judgeNotOffered(action requestinventory.Action, pkg string, routes []string, in keysetInputs) {
 	if !action.ReadOnly || !toolutil.CollectionShapeOf(action.Route.OutputType).IsCollection() {
 		return
 	}
 	slices.Sort(routes)
 	for _, route := range routes {
+		if in.sent[action.ID].onSomeCalls[route] {
+			continue
+		}
 		finding := KeysetFinding{
 			Action: action.ID, Package: pkg, Problem: keysetNotOffered, Routes: []string{route}, Cursors: in.cursors[route],
 		}

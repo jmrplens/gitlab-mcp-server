@@ -944,7 +944,7 @@ func TestFormatMarkdown_SingularDetailFields(t *testing.T) {
 		"- **Entity Type**: Group\n" +
 		"- **Entity ID**: 0\n" +
 		"- **Author ID**: 3\n" +
-		"- **Author Email**: admin@example.com\n" +
+		"- **Author Email**: admin\\@example.com\n" +
 		"- **Author Class**: User\n" +
 		"- **Target ID**: 99\n" +
 		"- **Failed Login**: STANDARD\n" +

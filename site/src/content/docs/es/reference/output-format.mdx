@@ -59,10 +59,16 @@ Donde GitLab envió una URL web, la celda o la fila enlaza a ella: el IID de una
 | [!243](https://gitlab.example.com/group/project/-/merge_requests/243) | Fix login bug | 🟢 opened | @alice | group/project | feature/fix-login -> main |
 ```
 
-Una dirección que se muestra a sí misma, como la fila `URL` de una ficha, se escribe una vez, como un autoenlace, y no dos veces como `[url](url)`. Sigue siendo un enlace, y un cliente lo muestra como tal:
+Una dirección que enlaza el servidor, como la fila `URL` de la ficha de un issue, se escribe una vez, como un autoenlace, y no dos veces como `[url](url)`. Sigue siendo un enlace, y un cliente lo muestra como tal:
 
 ```markdown
 - **URL**: <https://gitlab.example.com/group/project/-/issues/42>
+```
+
+Una dirección que es un valor y no un enlace que escribe el servidor, como el destino de un system hook, no es un enlace, salvo en los renderizadores que, [según la página de seguridad](/gitlab-mcp-server/es/operations/security/#contenido-escrito-por-otras-personas), la siguen enlazando. Va como texto con los dos puntos escapados, y un cliente muestra la misma dirección:
+
+```markdown
+- **URL**: https\://example.com/hook
 ```
 
 Las dos mitades de un enlace se escapan, así que un título no puede cerrar el enlace ni abrir uno propio, y una dirección que no es `http` ni `https` se muestra como código en lugar de enlazarse. Una dirección con un carácter que un autoenlace no admite (un espacio, un tabulador, un salto de línea, `<`, `>` o una barra vertical) se escribe en la forma larga, con las dos mitades escapadas. Una lista cuya tabla lleva enlaces abre sus próximos pasos con una línea más, escrita para el modelo:

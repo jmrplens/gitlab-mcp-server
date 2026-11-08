@@ -50,14 +50,26 @@
 // after another, with the output streamed to the log and kept, for each
 // package, in a directory of the records named after it, beside the record of
 // what ran where and how it ended. A package the script could not measure
-// fails the job once its other packages are measured.
+// fails the job once its other packages are measured. Before a package is
+// handed to the script, its conditions are counted in the mode the script
+// will run in, by the rule of the gobco release the script pins, in the
+// non-test files the go command builds of it: a package with none is not
+// handed to the script, whose gobco would report 0/0 for it, the figure the
+// script refuses because a package gobco did not instrument reports it too,
+// and is recorded as measured with nothing to measure, 0 of 0, the line that
+// says so in place of the script's output (issue 1667). A package whose
+// conditions cannot be counted is handed to the script as any other, and so
+// is every package when the job's GOBCO_MODE or GOBCO_GATE is one the script
+// refuses, so that the script says why it will not measure them.
 //
 // summarize reads the records the jobs left, joins them to the plan, and
 // writes the job summary: one row per package and runner with the figure
 // gobco printed, the total of each runner over the packages it measured, and
 // one row per condition gobco names as not evaluated both ways, with its file
-// and line. Every figure is the one the script printed on that runner. Nothing
-// is inferred from another platform, and nothing is computed that the script
+// and line. Every figure is the one the script printed on that runner, but
+// the nothing to measure (0 of 0) of a package measure did not hand to the
+// script, which stands for the line measure wrote in its place. Nothing is
+// inferred from another platform, and nothing is computed that the script
 // did not count but the totals, which add up its counts and round their
 // share down.
 //

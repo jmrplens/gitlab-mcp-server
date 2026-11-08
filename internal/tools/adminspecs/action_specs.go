@@ -228,10 +228,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("application_delete", ownerApplications, toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
 		adminApplicationStatisticsGetSpec(client),
 		adminMetadataGetSpec(client),
-		adminReadSpec("custom_attr_list", ownerCustomAttributes, toolutil.RouteAction(client, customattributes.List), "gitlab_list_custom_attributes"),
-		adminReadSpec("custom_attr_get", ownerCustomAttributes, toolutil.RouteAction(client, customattributes.Get), "gitlab_get_custom_attribute"),
-		adminUpdateCreateIndividualSpec("custom_attr_set", ownerCustomAttributes, toolutil.RouteAction(client, customattributes.Set), "gitlab_set_custom_attribute"),
-		adminDeleteSpec("custom_attr_delete", ownerCustomAttributes, toolutil.DestructiveAction(client, customattributes.DeleteOutput), "gitlab_delete_custom_attribute"),
+		adminReadSpec("custom_attr_list", ownerCustomAttributes, customattributes.AnswerUnresolved(toolutil.RouteAction(client, customattributes.List)), "gitlab_list_custom_attributes"),
+		adminReadSpec("custom_attr_get", ownerCustomAttributes, customattributes.AnswerUnresolved(toolutil.RouteAction(client, customattributes.Get)), "gitlab_get_custom_attribute"),
+		adminUpdateCreateIndividualSpec("custom_attr_set", ownerCustomAttributes, customattributes.AnswerUnresolved(toolutil.RouteAction(client, customattributes.Set)), "gitlab_set_custom_attribute"),
+		adminDeleteSpec("custom_attr_delete", ownerCustomAttributes, customattributes.AnswerUnresolved(toolutil.DestructiveAction(client, customattributes.DeleteOutput)), "gitlab_delete_custom_attribute"),
 		adminCreateSpec("bulk_import_start", ownerBulkImports, toolutil.RouteAction(client, bulkimports.StartMigration), "gitlab_start_bulk_import"),
 		adminReadSpec("bulk_import_list", ownerBulkImports, toolutil.RouteAction(client, bulkimports.List), "gitlab_list_bulk_imports"),
 		adminReadSpec("bulk_import_get", ownerBulkImports, toolutil.RouteAction(client, bulkimports.Get), "gitlab_get_bulk_import"),
@@ -600,6 +600,12 @@ var (
 		ValueSource:    "Numeric application ID from admin.application_list output.",
 		ExampleBinding: "params.id:12",
 	}
+	guidanceCustomAttrResourceID = toolutil.ParameterGuidance{
+		SemanticRole:     "target_resource",
+		ValueSource:      "The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user.",
+		ExampleBinding:   `params.resource_id:"group/project"`,
+		CommonConfusions: []string{"resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first."},
+	}
 	guidancePlanName = toolutil.ParameterGuidance{
 		SemanticRole:   "plan_name",
 		ValueSource:    "Plan name whose limits are read or changed, for example default, free or premium.",
@@ -901,7 +907,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		},
 	},
 	"gitlab_mark_migration": {
-		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.",
+		usage:       "Mark a pending database migration as successfully executed (admin only), so db:migrate skips it. Provide the migration version and, for a database other than main, its name. Use only for a failing migration judged safe to skip.",
 		aliases:     []string{"mark migration", "mark database migration done", "force migration complete"},
 		related:     []string{actionSettingsGet, actionMetadataGet},
 		description: "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
@@ -961,24 +967,28 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"list custom attributes", "show custom attributes", "custom metadata list"},
 		related:     []string{actionCustomAttrGet, actionCustomAttrSet, actionCustomAttrDel},
 		description: "List custom attributes for a resource. Returns: an array of key/value custom attributes. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
+		guidance:    map[string]toolutil.ParameterGuidance{"resource_id": guidanceCustomAttrResourceID},
 	},
 	"gitlab_get_custom_attribute": {
 		usage:       "Get one custom attribute by key for a user, group, or project (admin only).",
 		aliases:     []string{"get custom attribute", "show custom attribute", "read custom metadata"},
 		related:     []string{actionCustomAttrList, actionCustomAttrSet, actionCustomAttrDel},
 		description: "Get a custom attribute by key. Returns: the attribute with key and value. See also: gitlab_list_custom_attributes, gitlab_set_custom_attribute.",
+		guidance:    map[string]toolutil.ParameterGuidance{"resource_id": guidanceCustomAttrResourceID},
 	},
 	"gitlab_set_custom_attribute": {
 		usage:       "Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.",
 		aliases:     []string{"set custom attribute", "create custom attribute", "update custom metadata"},
 		related:     []string{actionCustomAttrList, actionCustomAttrGet, actionCustomAttrDel},
 		description: "Set a custom attribute. Returns: the stored attribute with key and value. See also: gitlab_get_custom_attribute, gitlab_delete_custom_attribute.",
+		guidance:    map[string]toolutil.ParameterGuidance{"resource_id": guidanceCustomAttrResourceID},
 	},
 	"gitlab_delete_custom_attribute": {
 		usage:       "Delete a custom attribute by key from a user, group, or project (admin only).",
 		aliases:     []string{"delete custom attribute", "remove custom attribute", "clear custom metadata"},
 		related:     []string{actionCustomAttrList, actionCustomAttrGet, actionCustomAttrSet},
 		description: "Delete a custom attribute. Returns: a success status. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
+		guidance:    map[string]toolutil.ParameterGuidance{"resource_id": guidanceCustomAttrResourceID},
 	},
 	"gitlab_start_bulk_import": {
 		usage:       "Start a group/project migration by direct transfer from another GitLab instance (admin/maintainer). Provide the source instance URL, access token, and entities to import.",

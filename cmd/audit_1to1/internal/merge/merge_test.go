@@ -28,42 +28,39 @@ func writeTemp(t *testing.T, dir, name, content string) string {
 }
 
 // emptyEnumReport is the enum stream of a clean tree, for the cases that are
-// about the other three streams.
+// about the other two streams.
 const emptyEnumReport = `{"packages":[]}`
 
-// The four report documents the counter and key-name cases share. One package
+// The three report documents the counter and key-name cases share. One package
 // is named by every stream, and no two numbers the merge copies across agree,
 // so a value that lands under the wrong name is visible rather than hidden
-// behind a sibling that happens to read the same.
+// behind a sibling that happens to read the same. The struct and enum
+// summaries are the streams' own counts of the tree, which the backlog's
+// summary repeats.
 const (
-	countedStructReport = `{"stale_declarations":[
+	countedStructReport = `{"summary":{"packages":3,"missing_input_fields":11,"missing_output_fields":12,"extra_output_fields":13,"type_mismatches":16},
+	"stale_declarations":[
 	  {"table":"docAddedFields","key":"x.Output.a"},{"table":"docAddedFields","key":"x.Output.b"},
 	  {"table":"docAddedFields","key":"x.Output.c"},{"table":"docAddedFields","key":"x.Output.d"},
 	  {"table":"docAddedFields","key":"x.Output.e"},{"table":"docAddedFields","key":"x.Output.f"},
 	  {"table":"curatedRefSubsets","key":"x.RefOutput"}
 	],"packages":[{"package":"x","missing_input_count":11,"missing_output_count":12,"extra_output_count":13,"gaps":[{"kind":"input"}]}]}`
 	countedActionReport = `{"services":[{"service":"Svc","packages":["x"],"api_methods":31,"covered_methods":22,"missing_methods":["A","B","C","D","E","F"]}]}`
-	countedMetaReport   = `{"packages":[{"package":"x","findings":[
-	  {"action":"x.a","tool":"gitlab_x_a","usage":"Use to reach a.","flags":["generic_usage","generic_usage"]},
-	  {"action":"x.b","flags":["aliases_only_toolname","aliases_only_toolname","aliases_only_toolname"]},
-	  {"action":"x.c","flags":["empty_related","empty_related","empty_related","empty_related"]},
-	  {"action":"x.d","flags":["weak_individual_description","weak_individual_description","weak_individual_description","weak_individual_description","weak_individual_description"]}
-	]}]}`
-	countedEnumReport = `{"packages":[{"package":"x","missing_values":14,"extra_values":15,"findings":[{"field":"state"}]}]}`
+	countedEnumReport   = `{"summary":{"missing_values":14,"extra_values":15},"packages":[{"package":"x","missing_values":14,"extra_values":15,"findings":[{"field":"state"}]}]}`
 )
 
 // loadBacklog is a test helper that runs BuildBacklogFromPaths and decodes the
 // result for typed inspection. Tests assert on the decoded backlog struct.
 // The enum stream is the clean one unless a case writes its own.
-func loadBacklog(t *testing.T, structPath, actionPath, metadataPath string) backlog {
+func loadBacklog(t *testing.T, structPath, actionPath string) backlog {
 	t.Helper()
-	return loadBacklogWithEnums(t, structPath, actionPath, metadataPath, writeTemp(t, filepath.Dir(structPath), "enums.json", emptyEnumReport))
+	return loadBacklogWithEnums(t, structPath, actionPath, writeTemp(t, filepath.Dir(structPath), "enums.json", emptyEnumReport))
 }
 
 // loadBacklogWithEnums is loadBacklog with an explicit enum report path.
-func loadBacklogWithEnums(t *testing.T, structPath, actionPath, metadataPath, enumPath string) backlog {
+func loadBacklogWithEnums(t *testing.T, structPath, actionPath, enumPath string) backlog {
 	t.Helper()
-	content, err := BuildBacklogFromPaths(structPath, actionPath, metadataPath, enumPath)
+	content, err := BuildBacklogFromPaths(structPath, actionPath, enumPath)
 	if err != nil {
 		t.Fatalf("BuildBacklogFromPaths: %v", err)
 	}
@@ -74,12 +71,14 @@ func loadBacklogWithEnums(t *testing.T, structPath, actionPath, metadataPath, en
 	return bl
 }
 
-// TestBuildBacklog_MergesThreeStreams verifies the merge attributes each gap
-// stream to the right package, attributes a shared service to every referencing
-// package, and tallies the summary.
-func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
+// TestBuildBacklog_MergesTheStreams verifies the merge attributes each gap
+// stream to the right package, attributes a shared service to every
+// referencing package while counting each of its missing methods once, and
+// tallies the summary.
+func TestBuildBacklog_MergesTheStreams(t *testing.T) {
 	dir := t.TempDir()
 	structPath := writeTemp(t, dir, "struct.json", `{
+	  "summary": {"packages": 4, "missing_input_fields": 20, "missing_output_fields": 4},
 	  "packages": [
 	    {"package": "branches", "missing_input_count": 20, "missing_output_count": 4, "gaps": [{"kind":"input","mcp_type":"ProtectInput","sdk_type":"v2.ProtectRepositoryBranchesOptions","missing_fields":[{"tag":"name","sdk_type":"*string"}]}]}
 	  ]
@@ -90,18 +89,11 @@ func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
 	    {"service": "CleanServiceInterface", "packages": ["clean"], "api_methods": 4, "covered_methods": 4, "missing_methods": []}
 	  ]
 	}`)
-	metadataPath := writeTemp(t, dir, "metadata.json", `{
-	  "packages": [
-	    {"package": "branches", "actions": 10, "findings": [
-	      {"action":"branch.list","tool":"gitlab_branch_list","usage":"Use to execute branches domain action.","flags":["generic_usage","empty_related"]}
-	    ]}
-	  ]
-	}`)
 
-	bl := loadBacklog(t, structPath, actionPath, metadataPath)
+	bl := loadBacklog(t, structPath, actionPath)
 
-	// branches gets struct + metadata; mrdiscussions + issuediscussions get the
-	// shared service; clean (no missing methods) is absent.
+	// branches gets its struct section; mrdiscussions + issuediscussions get
+	// the shared service; clean (no missing methods) is absent.
 	pkgs := indexPackages(bl)
 	branches, ok := pkgs["branches"]
 	if !ok {
@@ -109,9 +101,6 @@ func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
 	}
 	if branches.Struct == nil || branches.Struct.MissingInput != 20 {
 		t.Errorf("branches struct gaps not merged: %+v", branches.Struct)
-	}
-	if branches.Metadata == nil || branches.Metadata.GenericUsage != 1 || branches.Metadata.EmptyRelated != 1 {
-		t.Errorf("branches metadata not merged: %+v", branches.Metadata)
 	}
 	for _, name := range []string{"mrdiscussions", "issuediscussions"} {
 		t.Run(name, func(t *testing.T) {
@@ -125,15 +114,91 @@ func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
 		t.Error("clean service has no missing methods and must not appear")
 	}
 
-	if bl.Summary.StructMissingInput != 20 || bl.Summary.StructMissingOutput != 4 {
-		t.Errorf("struct summary = %d/%d, want 20/4", bl.Summary.StructMissingInput, bl.Summary.StructMissingOutput)
+	want := backlogSummary{Packages: 4, PackagesWithGaps: 3, StructMissingInput: 20, StructMissingOutput: 4, ActionMissingMethods: 2}
+	if bl.Summary != want {
+		t.Errorf("summary = %+v, want %+v: the shared service's two methods count once each, not once per package", bl.Summary, want)
 	}
-	// Shared service attributed to two packages → counted twice in the summary.
-	if bl.Summary.ActionMissingMethods != 4 {
-		t.Errorf("action summary = %d, want 4 (2 methods × 2 packages)", bl.Summary.ActionMissingMethods)
+}
+
+// TestMergeBacklog_SharedService_CountsEachMethodOnce is the planted case of
+// the count the measurement of 2026-10-31 found wrong: a service three packages
+// call, with one method none of them does. Each package lists the gap, and
+// the summary counts one missing method, where it used to count three.
+func TestMergeBacklog_SharedService_CountsEachMethodOnce(t *testing.T) {
+	var actionRep actionReport
+	if err := json.Unmarshal([]byte(`{"services":[
+	  {"service":"GroupsServiceInterface","packages":["groups","groupmembers","groupldap"],"api_methods":9,"covered_methods":8,"missing_methods":["DownloadAvatar"]}
+	]}`), &actionRep); err != nil {
+		t.Fatalf("decode the action report: %v", err)
 	}
-	if bl.Summary.MetaGenericUsage != 1 || bl.Summary.MetaEmptyRelated != 1 {
-		t.Errorf("meta summary = %d/%d, want 1/1", bl.Summary.MetaGenericUsage, bl.Summary.MetaEmptyRelated)
+
+	bl := mergeBacklog(structReport{}, actionRep, enumReport{})
+
+	if len(bl.Packages) != 3 {
+		t.Fatalf("packages = %+v, want the three that call the service", bl.Packages)
+	}
+	for _, pkg := range bl.Packages {
+		if len(pkg.Actions) != 1 || !reflect.DeepEqual(pkg.Actions[0].MissingMethods, []string{"DownloadAvatar"}) {
+			t.Errorf("%s actions = %+v, want the shared gap", pkg.Package, pkg.Actions)
+		}
+	}
+	if bl.Summary.ActionMissingMethods != 1 || bl.Summary.PackagesWithGaps != 3 {
+		t.Errorf("summary = %+v, want 1 missing method over 3 packages with gaps", bl.Summary)
+	}
+}
+
+// TestMergeBacklog_Summary_IsTheStreamsCountNotTheListed holds the summary to
+// the stream that owns each count rather than to packages[]: a struct report
+// whose list is shorter than its summary, the way -gaps-only leaves it,
+// publishes the summary's packages, missing and extra fields and type
+// mismatches, and an enum report the summary of its own.
+func TestMergeBacklog_Summary_IsTheStreamsCountNotTheListed(t *testing.T) {
+	var structRep structReport
+	if err := json.Unmarshal([]byte(`{"summary":{"packages":153,"missing_input_fields":5,"missing_output_fields":7,"extra_output_fields":9,"type_mismatches":610},
+	  "packages":[{"package":"x","missing_input_count":1}]}`), &structRep); err != nil {
+		t.Fatalf("decode the struct report: %v", err)
+	}
+	var enumRep enumReport
+	if err := json.Unmarshal([]byte(`{"summary":{"missing_values":4,"extra_values":6},"packages":[]}`), &enumRep); err != nil {
+		t.Fatalf("decode the enum report: %v", err)
+	}
+
+	bl := mergeBacklog(structRep, actionReport{}, enumRep)
+
+	want := backlogSummary{
+		Packages: 153, PackagesWithGaps: 1, StructMissingInput: 5, StructMissingOutput: 7,
+		StructExtraOutput: 9, StructTypeMismatches: 610, EnumMissingValues: 4, EnumExtraValues: 6,
+	}
+	if bl.Summary != want {
+		t.Errorf("summary = %+v, want %+v", bl.Summary, want)
+	}
+}
+
+// TestBacklogPackage_HasFindings_CountsAPackageWithAFindingOfAnyStream holds
+// packages_with_gaps to each finding alone: a missing input, a missing output
+// and an extra output field, a missing method and a value gap each make a
+// package one with gaps, and a clean struct census entry or no section at
+// all does not.
+func TestBacklogPackage_HasFindings_CountsAPackageWithAFindingOfAnyStream(t *testing.T) {
+	cases := []struct {
+		name string
+		pkg  backlogPackage
+		want bool
+	}{
+		{name: "no_section", pkg: backlogPackage{Package: "x"}, want: false},
+		{name: "clean_struct_census", pkg: backlogPackage{Package: "x", Struct: &structGaps{}}, want: false},
+		{name: "missing_input", pkg: backlogPackage{Package: "x", Struct: &structGaps{MissingInput: 1}}, want: true},
+		{name: "missing_output", pkg: backlogPackage{Package: "x", Struct: &structGaps{MissingOutput: 1}}, want: true},
+		{name: "extra_output", pkg: backlogPackage{Package: "x", Struct: &structGaps{ExtraOutput: 1}}, want: true},
+		{name: "missing_method", pkg: backlogPackage{Package: "x", Actions: []actionGap{{Service: "Svc"}}}, want: true},
+		{name: "value_gap", pkg: backlogPackage{Package: "x", Enums: &enumGaps{MissingValues: 1}}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.pkg.hasFindings(); got != tc.want {
+				t.Errorf("hasFindings(%+v) = %v, want %v", tc.pkg, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -146,9 +211,8 @@ func TestBuildBacklog_PackagesSortedAndStructGapsPreserved(t *testing.T) {
 	  {"package":"alpha","missing_input_count":0,"missing_output_count":2,"gaps":[{"kind":"output"}]}
 	]}`)
 	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
-	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
 
-	bl := loadBacklog(t, structPath, actionPath, metadataPath)
+	bl := loadBacklog(t, structPath, actionPath)
 	if len(bl.Packages) != 2 || bl.Packages[0].Package != "alpha" || bl.Packages[1].Package != "zeta" {
 		t.Fatalf("packages not sorted: %+v", bl.Packages)
 	}
@@ -165,13 +229,12 @@ func TestBuildBacklog_PackagesSortedAndStructGapsPreserved(t *testing.T) {
 // from the struct auditor into the per-package struct section and the summary.
 func TestBuildBacklog_SurfacesExtraOutput(t *testing.T) {
 	dir := t.TempDir()
-	structPath := writeTemp(t, dir, "struct.json", `{"packages":[
+	structPath := writeTemp(t, dir, "struct.json", `{"summary":{"extra_output_fields":2},"packages":[
 	  {"package":"issues","missing_input_count":0,"missing_output_count":0,"extra_output_count":2,"gaps":[{"kind":"output","mcp_type":"Output","sdk_type":"v2.Issue","extra_fields":[{"tag":"author_username","mcp_type":"string"},{"tag":"milestone_title","mcp_type":"string"}]}]}
 	]}`)
 	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
-	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
 
-	bl := loadBacklog(t, structPath, actionPath, metadataPath)
+	bl := loadBacklog(t, structPath, actionPath)
 	pkgs := indexPackages(bl)
 	issues, ok := pkgs["issues"]
 	if !ok || issues.Struct == nil {
@@ -180,8 +243,8 @@ func TestBuildBacklog_SurfacesExtraOutput(t *testing.T) {
 	if issues.Struct.ExtraOutput != 2 {
 		t.Errorf("issues extra_output = %d, want 2", issues.Struct.ExtraOutput)
 	}
-	if bl.Summary.StructExtraOutput != 2 {
-		t.Errorf("summary struct_extra_output = %d, want 2", bl.Summary.StructExtraOutput)
+	if bl.Summary.StructExtraOutput != 2 || bl.Summary.PackagesWithGaps != 1 {
+		t.Errorf("summary struct_extra_output/packages_with_gaps = %d/%d, want 2/1", bl.Summary.StructExtraOutput, bl.Summary.PackagesWithGaps)
 	}
 	// Extra-field tags must survive the json.RawMessage passthrough.
 	var gaps []map[string]any
@@ -194,22 +257,21 @@ func TestBuildBacklog_SurfacesExtraOutput(t *testing.T) {
 }
 
 // TestBuildBacklog_EnumStream_AttachesValueGapsAndSkipsCleanPackages
-// verifies the fourth stream: a package with a value gap gets an enums
+// verifies the third stream: a package with a value gap gets an enums
 // section carrying the counts and the findings verbatim, a package the enum
 // report lists with no gap (a full report of a clean package) is left out,
-// and the summary sums the two counters.
+// and the summary repeats the stream's two counters.
 func TestBuildBacklog_EnumStream_AttachesValueGapsAndSkipsCleanPackages(t *testing.T) {
 	dir := t.TempDir()
 	structPath := writeTemp(t, dir, "struct.json", `{"packages":[]}`)
 	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
-	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
-	enumPath := writeTemp(t, dir, "enums.json", `{"packages":[
+	enumPath := writeTemp(t, dir, "enums.json", `{"summary":{"missing_values":6,"extra_values":3},"packages":[
 	  {"package":"todos","fields":1,"missing_values":0,"extra_values":3,"findings":[{"action":"user.todo_list","kind":"input","field":"action","sdk_enum":"TodoAction","extra_values":["unmergeable"]}]},
 	  {"package":"branches","fields":2,"missing_values":6,"extra_values":0,"findings":[{"action":"branch.protect","kind":"input","field":"push_access_level","sdk_enum":"AccessLevelValue","missing_values":["5","10"]}]},
 	  {"package":"clean","fields":4,"missing_values":0,"extra_values":0,"findings":[]}
 	]}`)
 
-	bl := loadBacklogWithEnums(t, structPath, actionPath, metadataPath, enumPath)
+	bl := loadBacklogWithEnums(t, structPath, actionPath, enumPath)
 	pkgs := indexPackages(bl)
 	if len(bl.Packages) != 2 || bl.Packages[0].Package != "branches" || bl.Packages[1].Package != "todos" {
 		t.Fatalf("packages = %+v, want branches and todos only, sorted", bl.Packages)
@@ -228,8 +290,8 @@ func TestBuildBacklog_EnumStream_AttachesValueGapsAndSkipsCleanPackages(t *testi
 	if todos := pkgs["todos"]; todos.Enums == nil || todos.Enums.ExtraValues != 3 {
 		t.Errorf("todos enums = %+v, want 3 extra", todos.Enums)
 	}
-	if bl.Summary.EnumMissingValues != 6 || bl.Summary.EnumExtraValues != 3 || bl.Summary.Packages != 2 {
-		t.Errorf("summary = %+v, want 6 missing / 3 extra over 2 packages", bl.Summary)
+	if bl.Summary.EnumMissingValues != 6 || bl.Summary.EnumExtraValues != 3 || bl.Summary.PackagesWithGaps != 2 {
+		t.Errorf("summary = %+v, want 6 missing / 3 extra over 2 packages with gaps", bl.Summary)
 	}
 	if !strings.Contains(bl.Note, "enum stream") {
 		t.Errorf("note = %q, want it to say what the enum stream is", bl.Note)
@@ -263,20 +325,18 @@ func TestReadJSON_MissingFile(t *testing.T) {
 // audit_1to1's all-scope mode reuse the merge pipeline without divergence.
 func TestBuildBacklogFromBytes_MatchesFromPaths(t *testing.T) {
 	dir := t.TempDir()
-	structJSON := `{"packages":[{"package":"x","missing_input_count":3,"missing_output_count":1,"gaps":[{"kind":"input"}]}]}`
+	structJSON := `{"summary":{"packages":1,"missing_input_fields":3,"missing_output_fields":1},"packages":[{"package":"x","missing_input_count":3,"missing_output_count":1,"gaps":[{"kind":"input"}]}]}`
 	actionJSON := `{"services":[{"service":"Svc","packages":["x"],"api_methods":10,"covered_methods":8,"missing_methods":["A","B"]}]}`
-	metadataJSON := `{"packages":[{"package":"x","findings":[{"action":"x.list","flags":["generic_usage"]}]}]}`
-	enumJSON := `{"packages":[{"package":"x","missing_values":1,"extra_values":0,"findings":[{"action":"x.list","field":"state","missing_values":["locked"]}]}]}`
+	enumJSON := `{"summary":{"missing_values":1},"packages":[{"package":"x","missing_values":1,"extra_values":0,"findings":[{"action":"x.list","field":"state","missing_values":["locked"]}]}]}`
 	structPath := writeTemp(t, dir, "struct.json", structJSON)
 	actionPath := writeTemp(t, dir, "action.json", actionJSON)
-	metadataPath := writeTemp(t, dir, "metadata.json", metadataJSON)
 	enumPath := writeTemp(t, dir, "enums.json", enumJSON)
 
-	fromPaths, err := BuildBacklogFromPaths(structPath, actionPath, metadataPath, enumPath)
+	fromPaths, err := BuildBacklogFromPaths(structPath, actionPath, enumPath)
 	if err != nil {
 		t.Fatalf("BuildBacklogFromPaths: %v", err)
 	}
-	fromBytes, err := BuildBacklogFromBytes([]byte(structJSON), []byte(actionJSON), []byte(metadataJSON), []byte(enumJSON))
+	fromBytes, err := BuildBacklogFromBytes([]byte(structJSON), []byte(actionJSON), []byte(enumJSON))
 	if err != nil {
 		t.Fatalf("BuildBacklogFromBytes: %v", err)
 	}
@@ -291,8 +351,7 @@ func TestBuildBacklogFromBytes_MatchesFromPaths(t *testing.T) {
 //
 // Two counters holding the same number cannot say which of them was filled.
 // The action stream's api_methods and covered_methods were read by no
-// assertion at all, and the four metadata flags were each tallied exactly
-// once everywhere, so any pair of them could have traded places and every
+// assertion at all, so any pair of them could have traded places and every
 // test would have read the same.
 func TestMergeBacklog_EveryCounter_LandsUnderTheFieldItNames(t *testing.T) {
 	decode := func(document string, target any) {
@@ -305,12 +364,10 @@ func TestMergeBacklog_EveryCounter_LandsUnderTheFieldItNames(t *testing.T) {
 	decode(countedStructReport, &structRep)
 	var actionRep actionReport
 	decode(countedActionReport, &actionRep)
-	var metaRep metadataReport
-	decode(countedMetaReport, &metaRep)
 	var enumRep enumReport
 	decode(countedEnumReport, &enumRep)
 
-	bl := mergeBacklog(structRep, actionRep, metaRep, enumRep)
+	bl := mergeBacklog(structRep, actionRep, enumRep)
 
 	if len(bl.Packages) != 1 {
 		t.Fatalf("packages = %+v, want the one package every stream names", bl.Packages)
@@ -323,18 +380,12 @@ func TestMergeBacklog_EveryCounter_LandsUnderTheFieldItNames(t *testing.T) {
 	if len(pkg.Actions) != 1 || !reflect.DeepEqual(pkg.Actions[0], wantAction) {
 		t.Errorf("action gaps = %+v, want [%+v]", pkg.Actions, wantAction)
 	}
-	if pkg.Metadata == nil || pkg.Metadata.GenericUsage != 2 || pkg.Metadata.AliasesOnlyToolname != 3 ||
-		pkg.Metadata.EmptyRelated != 4 || pkg.Metadata.WeakIndividualDescription != 5 {
-		t.Errorf("metadata counters = %+v, want 2/3/4/5 in flag order", pkg.Metadata)
-	}
 	if pkg.Enums == nil || pkg.Enums.MissingValues != 14 || pkg.Enums.ExtraValues != 15 {
 		t.Errorf("enum gaps = %+v, want 14 missing / 15 extra", pkg.Enums)
 	}
 	wantSummary := backlogSummary{
-		Packages: 1, StructMissingInput: 11, StructMissingOutput: 12, StructExtraOutput: 13,
-		StructStaleDeclarations: 7,
-		ActionMissingMethods:    6, MetaGenericUsage: 2, MetaAliasesOnlyToolname: 3,
-		MetaEmptyRelated: 4, MetaWeakIndividualDescription: 5,
+		Packages: 3, PackagesWithGaps: 1, StructMissingInput: 11, StructMissingOutput: 12, StructExtraOutput: 13,
+		StructTypeMismatches: 16, StructStaleDeclarations: 7, ActionMissingMethods: 6,
 		EnumMissingValues: 14, EnumExtraValues: 15,
 	}
 	if bl.Summary != wantSummary {
@@ -355,7 +406,7 @@ func TestMergeBacklog_EveryCounter_LandsUnderTheFieldItNames(t *testing.T) {
 // with itself while the committed artifact says the opposite. Reading the
 // document as a map is what names the key rather than the Go field.
 func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T) {
-	content, err := BuildBacklogFromBytes([]byte(countedStructReport), []byte(countedActionReport), []byte(countedMetaReport), []byte(countedEnumReport))
+	content, err := BuildBacklogFromBytes([]byte(countedStructReport), []byte(countedActionReport), []byte(countedEnumReport))
 	if err != nil {
 		t.Fatalf("BuildBacklogFromBytes: %v", err)
 	}
@@ -370,18 +421,16 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 		want any
 	}{
 		{name: "schema_version", path: []any{"schema_version"}, want: float64(1)},
-		{name: "summary.packages", path: []any{"summary", "packages"}, want: float64(1)},
+		{name: "summary.packages", path: []any{"summary", "packages"}, want: float64(3)},
+		{name: "summary.packages_with_gaps", path: []any{"summary", "packages_with_gaps"}, want: float64(1)},
 		{name: "summary.struct_missing_input", path: []any{"summary", "struct_missing_input"}, want: float64(11)},
 		{name: "summary.struct_missing_output", path: []any{"summary", "struct_missing_output"}, want: float64(12)},
 		{name: "summary.struct_extra_output", path: []any{"summary", "struct_extra_output"}, want: float64(13)},
+		{name: "summary.struct_type_mismatches", path: []any{"summary", "struct_type_mismatches"}, want: float64(16)},
 		{name: "summary.struct_stale_declarations", path: []any{"summary", "struct_stale_declarations"}, want: float64(7)},
 		{name: "struct_stale_declarations.key", path: []any{"struct_stale_declarations", 6, "key"}, want: "x.RefOutput"},
 		{name: "struct_stale_declarations.table", path: []any{"struct_stale_declarations", 6, "table"}, want: "curatedRefSubsets"},
 		{name: "summary.action_missing_methods", path: []any{"summary", "action_missing_methods"}, want: float64(6)},
-		{name: "summary.meta_generic_usage", path: []any{"summary", "meta_generic_usage"}, want: float64(2)},
-		{name: "summary.meta_aliases_only_toolname", path: []any{"summary", "meta_aliases_only_toolname"}, want: float64(3)},
-		{name: "summary.meta_empty_related", path: []any{"summary", "meta_empty_related"}, want: float64(4)},
-		{name: "summary.meta_weak_individual_description", path: []any{"summary", "meta_weak_individual_description"}, want: float64(5)},
 		{name: "summary.enum_missing_values", path: []any{"summary", "enum_missing_values"}, want: float64(14)},
 		{name: "summary.enum_extra_values", path: []any{"summary", "enum_extra_values"}, want: float64(15)},
 		{name: "package", path: []any{"packages", 0, "package"}, want: "x"},
@@ -393,14 +442,6 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 		{name: "actions.api_methods", path: []any{"packages", 0, "actions", 0, "api_methods"}, want: float64(31)},
 		{name: "actions.covered_methods", path: []any{"packages", 0, "actions", 0, "covered_methods"}, want: float64(22)},
 		{name: "actions.missing_methods", path: []any{"packages", 0, "actions", 0, "missing_methods", 5}, want: "F"},
-		{name: "metadata.generic_usage", path: []any{"packages", 0, "metadata", "generic_usage"}, want: float64(2)},
-		{name: "metadata.aliases_only_toolname", path: []any{"packages", 0, "metadata", "aliases_only_toolname"}, want: float64(3)},
-		{name: "metadata.empty_related", path: []any{"packages", 0, "metadata", "empty_related"}, want: float64(4)},
-		{name: "metadata.weak_individual_description", path: []any{"packages", 0, "metadata", "weak_individual_description"}, want: float64(5)},
-		{name: "metadata.findings.action", path: []any{"packages", 0, "metadata", "findings", 0, "action"}, want: "x.a"},
-		{name: "metadata.findings.tool", path: []any{"packages", 0, "metadata", "findings", 0, "tool"}, want: "gitlab_x_a"},
-		{name: "metadata.findings.usage", path: []any{"packages", 0, "metadata", "findings", 0, "usage"}, want: "Use to reach a."},
-		{name: "metadata.findings.flags", path: []any{"packages", 0, "metadata", "findings", 0, "flags", 0}, want: "generic_usage"},
 		{name: "enums.missing_values", path: []any{"packages", 0, "enums", "missing_values"}, want: float64(14)},
 		{name: "enums.extra_values", path: []any{"packages", 0, "enums", "extra_values"}, want: float64(15)},
 		{name: "enums.findings", path: []any{"packages", 0, "enums", "findings", 0, "field"}, want: "state"},
@@ -412,6 +453,9 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 			}
 		})
 	}
+	if _, published := jsonAt(t, document, "packages", 0).(map[string]any)["metadata"]; published {
+		t.Error("a package carries a metadata section, which the retired R-META stream wrote")
+	}
 }
 
 // TestBuildBacklogFromBytes_NoStaleDeclaration_PublishesTheCountAlone verifies
@@ -420,7 +464,7 @@ func TestBuildBacklogFromBytes_PublishedKeys_CarryTheValueEachNames(t *testing.T
 // until there is something to find.
 func TestBuildBacklogFromBytes_NoStaleDeclaration_PublishesTheCountAlone(t *testing.T) {
 	structReport := `{"packages":[{"package":"x","missing_input_count":1,"missing_output_count":0,"extra_output_count":0}]}`
-	content, err := BuildBacklogFromBytes([]byte(structReport), []byte(`{"services":[]}`), []byte(`{"packages":[]}`), []byte(emptyEnumReport))
+	content, err := BuildBacklogFromBytes([]byte(structReport), []byte(`{"services":[]}`), []byte(emptyEnumReport))
 	if err != nil {
 		t.Fatalf("BuildBacklogFromBytes: %v", err)
 	}
@@ -464,14 +508,15 @@ func jsonAt(t *testing.T, node any, path ...any) any {
 
 // TestMergeBacklog_CleanPackage_KeepsOnlyItsStructSection verifies which
 // streams report a package that has nothing to report: the struct stream
-// carries one whatever its counts, and the other three leave it out.
+// carries one whatever its counts, and the other two leave it out.
 //
 // The asymmetry is deliberate: the struct report is a full census when
-// -gaps-only is off, while the action, metadata and enum streams each skip an
-// entry with no finding. It is the one property of the four merge
-// functions that no branch flip can reach: adding a skip to the struct stream,
-// or dropping one from any of the others, is a change of behavior every other
-// case here is blind to, since they all drive gapped packages.
+// -gaps-only is off, while the action and enum streams each skip an entry
+// with no finding. It is the one property of the three merge functions that
+// no branch flip can reach: adding a skip to the struct stream, or dropping
+// one from either of the others, is a change of behavior every other case
+// here is blind to, since they all drive gapped packages. The census entry is
+// no package with gaps.
 func TestMergeBacklog_CleanPackage_KeepsOnlyItsStructSection(t *testing.T) {
 	decode := func(document string, target any) {
 		t.Helper()
@@ -480,15 +525,13 @@ func TestMergeBacklog_CleanPackage_KeepsOnlyItsStructSection(t *testing.T) {
 		}
 	}
 	var structRep structReport
-	decode(`{"packages":[{"package":"x","missing_input_count":0,"missing_output_count":0,"extra_output_count":0}]}`, &structRep)
+	decode(`{"summary":{"packages":1},"packages":[{"package":"x","missing_input_count":0,"missing_output_count":0,"extra_output_count":0}]}`, &structRep)
 	var actionRep actionReport
 	decode(`{"services":[{"service":"Svc","packages":["x"],"api_methods":7,"covered_methods":7,"missing_methods":[]}]}`, &actionRep)
-	var metaRep metadataReport
-	decode(`{"packages":[{"package":"x","findings":[]}]}`, &metaRep)
 	var enumRep enumReport
 	decode(`{"packages":[{"package":"x","missing_values":0,"extra_values":0,"findings":[]}]}`, &enumRep)
 
-	bl := mergeBacklog(structRep, actionRep, metaRep, enumRep)
+	bl := mergeBacklog(structRep, actionRep, enumRep)
 
 	if len(bl.Packages) != 1 || bl.Packages[0].Package != "x" {
 		t.Fatalf("packages = %+v, want the one package the struct stream lists", bl.Packages)
@@ -497,8 +540,8 @@ func TestMergeBacklog_CleanPackage_KeepsOnlyItsStructSection(t *testing.T) {
 	if pkg.Struct == nil || !reflect.DeepEqual(*pkg.Struct, structGaps{}) {
 		t.Errorf("struct section = %+v, want a zeroed one rather than none", pkg.Struct)
 	}
-	if len(pkg.Actions) != 0 || pkg.Metadata != nil || pkg.Enums != nil {
-		t.Errorf("actions/metadata/enums = %+v/%+v/%+v, want all three to leave a clean package out", pkg.Actions, pkg.Metadata, pkg.Enums)
+	if len(pkg.Actions) != 0 || pkg.Enums != nil {
+		t.Errorf("actions/enums = %+v/%+v, want both to leave a clean package out", pkg.Actions, pkg.Enums)
 	}
 	if want := (backlogSummary{Packages: 1}); bl.Summary != want {
 		t.Errorf("summary = %+v, want %+v", bl.Summary, want)
@@ -523,7 +566,7 @@ func TestMergeBacklog_InputAlreadyInOrder_IsLeftInIt(t *testing.T) {
 		t.Fatalf("decode the action report: %v", err)
 	}
 
-	bl := mergeBacklog(structReport{}, actionRep, metadataReport{}, enumReport{})
+	bl := mergeBacklog(structReport{}, actionRep, enumReport{})
 
 	names := make([]string, 0, len(bl.Packages))
 	for _, pkg := range bl.Packages {
@@ -552,10 +595,9 @@ func indexPackages(bl backlog) map[string]backlogPackage {
 func TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile(t *testing.T) {
 	dir := t.TempDir()
 	good := map[string]string{
-		"struct":   writeTemp(t, dir, "struct.json", `{"packages":[]}`),
-		"action":   writeTemp(t, dir, "action.json", `{"services":[]}`),
-		"metadata": writeTemp(t, dir, "metadata.json", `{"packages":[]}`),
-		"enums":    writeTemp(t, dir, "enums.json", emptyEnumReport),
+		"struct": writeTemp(t, dir, "struct.json", `{"packages":[]}`),
+		"action": writeTemp(t, dir, "action.json", `{"services":[]}`),
+		"enums":  writeTemp(t, dir, "enums.json", emptyEnumReport),
 	}
 	malformed := writeTemp(t, dir, "malformed.json", `{"packages": [`)
 	missing := filepath.Join(dir, "missing.json")
@@ -568,7 +610,6 @@ func TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile(t *testing.T) {
 	}{
 		{name: "missing_struct_report", paths: map[string]string{"struct": missing}, wantPath: missing, wantErr: "read "},
 		{name: "missing_action_report", paths: map[string]string{"action": missing}, wantPath: missing, wantErr: "read "},
-		{name: "missing_metadata_report", paths: map[string]string{"metadata": missing}, wantPath: missing, wantErr: "read "},
 		{name: "missing_enum_report", paths: map[string]string{"enums": missing}, wantPath: missing, wantErr: "read "},
 		{name: "malformed_struct_report", paths: map[string]string{"struct": malformed}, wantPath: malformed, wantErr: "parse "},
 	}
@@ -576,7 +617,7 @@ func TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			paths := maps.Clone(good)
 			maps.Copy(paths, tc.paths)
-			_, err := BuildBacklogFromPaths(paths["struct"], paths["action"], paths["metadata"], paths["enums"])
+			_, err := BuildBacklogFromPaths(paths["struct"], paths["action"], paths["enums"])
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr+tc.wantPath) {
 				t.Fatalf("BuildBacklogFromPaths error = %v, want it to contain %q", err, tc.wantErr+tc.wantPath)
 			}
@@ -588,20 +629,19 @@ func TestBuildBacklogFromPaths_BadInputs_NameTheFailingFile(t *testing.T) {
 // in-memory report is parsed in turn and a malformed one fails the merge
 // naming its stream.
 func TestBuildBacklogFromBytes_BadInputs_NameTheFailingStream(t *testing.T) {
-	structJSON, actionJSON, metadataJSON := `{"packages":[]}`, `{"services":[]}`, `{"packages":[]}`
+	structJSON, actionJSON := `{"packages":[]}`, `{"services":[]}`
 	cases := []struct {
 		name    string
-		inputs  [4]string
+		inputs  [3]string
 		wantErr string
 	}{
-		{name: "struct", inputs: [4]string{"{", actionJSON, metadataJSON, emptyEnumReport}, wantErr: "parse struct report"},
-		{name: "action", inputs: [4]string{structJSON, "[]", metadataJSON, emptyEnumReport}, wantErr: "parse action report"},
-		{name: "metadata", inputs: [4]string{structJSON, actionJSON, "nope", emptyEnumReport}, wantErr: "parse metadata report"},
-		{name: "enums", inputs: [4]string{structJSON, actionJSON, metadataJSON, "{"}, wantErr: "parse enum report"},
+		{name: "struct", inputs: [3]string{"{", actionJSON, emptyEnumReport}, wantErr: "parse struct report"},
+		{name: "action", inputs: [3]string{structJSON, "[]", emptyEnumReport}, wantErr: "parse action report"},
+		{name: "enums", inputs: [3]string{structJSON, actionJSON, "{"}, wantErr: "parse enum report"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := BuildBacklogFromBytes([]byte(tc.inputs[0]), []byte(tc.inputs[1]), []byte(tc.inputs[2]), []byte(tc.inputs[3]))
+			_, err := BuildBacklogFromBytes([]byte(tc.inputs[0]), []byte(tc.inputs[1]), []byte(tc.inputs[2]))
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("BuildBacklogFromBytes error = %v, want it to contain %q", err, tc.wantErr)
 			}
@@ -609,11 +649,10 @@ func TestBuildBacklogFromBytes_BadInputs_NameTheFailingStream(t *testing.T) {
 	}
 }
 
-// TestMergeBacklog_Streams_CountEveryFlagAndSortServices verifies the pure
-// merge: every metadata flag is tallied under its counter, a metadata
-// package without findings is left out, a package referenced by two gapped
-// services lists them sorted by service, and the summary sums it all.
-func TestMergeBacklog_Streams_CountEveryFlagAndSortServices(t *testing.T) {
+// TestMergeBacklog_Services_SortedAndCountedOnce verifies the pure merge of
+// the action stream: a package referenced by two gapped services lists them
+// sorted by service, and the summary counts the three methods they miss.
+func TestMergeBacklog_Services_SortedAndCountedOnce(t *testing.T) {
 	var actionRep actionReport
 	if err := json.Unmarshal([]byte(`{"services":[
 	  {"service":"ZetaServiceInterface","packages":["issues"],"api_methods":3,"covered_methods":2,"missing_methods":["Z"]},
@@ -621,42 +660,20 @@ func TestMergeBacklog_Streams_CountEveryFlagAndSortServices(t *testing.T) {
 	]}`), &actionRep); err != nil {
 		t.Fatal(err)
 	}
-	var metaRep metadataReport
-	if err := json.Unmarshal([]byte(`{"packages":[
-	  {"package":"issues","findings":[
-	    {"action":"issue.list","flags":["generic_usage","aliases_only_toolname"]},
-	    {"action":"issue.get","flags":["empty_related","weak_individual_description","unknown"]}
-	  ]},
-	  {"package":"clean","findings":[]}
-	]}`), &metaRep); err != nil {
-		t.Fatal(err)
-	}
 
-	bl := mergeBacklog(structReport{}, actionRep, metaRep, enumReport{})
+	bl := mergeBacklog(structReport{}, actionRep, enumReport{})
 	if len(bl.Packages) != 1 || bl.Packages[0].Package != "issues" {
-		t.Fatalf("packages = %+v, want only issues (clean has no findings)", bl.Packages)
+		t.Fatalf("packages = %+v, want only issues", bl.Packages)
 	}
 	issues := bl.Packages[0]
 	if len(issues.Actions) != 2 || issues.Actions[0].Service != "AlphaServiceInterface" || issues.Actions[1].Service != "ZetaServiceInterface" {
 		t.Errorf("issues actions = %+v, want the two services sorted by name", issues.Actions)
 	}
-	wantMeta := &metadataGaps{GenericUsage: 1, AliasesOnlyToolname: 1, EmptyRelated: 1, WeakIndividualDescription: 1, Findings: metaRep.Packages[0].Findings}
-	if issues.Metadata == nil || !reflectEqualMeta(issues.Metadata, wantMeta) {
-		t.Errorf("issues metadata = %+v, want %+v", issues.Metadata, wantMeta)
-	}
-	wantSummary := backlogSummary{Packages: 1, ActionMissingMethods: 3, MetaGenericUsage: 1, MetaAliasesOnlyToolname: 1, MetaEmptyRelated: 1, MetaWeakIndividualDescription: 1}
+	wantSummary := backlogSummary{PackagesWithGaps: 1, ActionMissingMethods: 3}
 	if bl.Summary != wantSummary {
 		t.Errorf("summary = %+v, want %+v", bl.Summary, wantSummary)
 	}
 	if bl.SchemaVersion != 1 || !strings.HasPrefix(bl.Note, "Merged 1:1 audit backlog.") {
 		t.Errorf("backlog header = version %d, note %q", bl.SchemaVersion, bl.Note)
 	}
-}
-
-// reflectEqualMeta compares two metadata sections by their JSON form, since
-// the findings carry omitempty fields that make a direct comparison brittle.
-func reflectEqualMeta(a, b *metadataGaps) bool {
-	ja, errA := json.Marshal(a)
-	jb, errB := json.Marshal(b)
-	return errA == nil && errB == nil && bytes.Equal(ja, jb)
 }

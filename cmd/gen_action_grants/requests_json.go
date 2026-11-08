@@ -32,7 +32,7 @@ func renderRequests(actions []join.Action, groupScopes map[string][]string) []by
 			}
 			switch request.Kind {
 			case derive.KindREST:
-				item.Route, item.Derived = request.Name, request.Route
+				item.Route, item.Derived, item.Placeholders = request.Name, request.Route, request.Placeholders
 			case derive.KindGraphQL:
 				item.Operation, item.RootFields, item.Positions = request.Name, request.RootFields, request.Positions
 			default:

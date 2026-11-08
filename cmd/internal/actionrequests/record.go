@@ -82,6 +82,14 @@ type RecordRequest struct {
 	// Derived the derivation's spelling where a declaration placed it.
 	Route   string `json:"route,omitempty"`
 	Derived string `json:"derived,omitempty"`
+	// Placeholders maps a placeholder of a REST request's route, as the live
+	// record names it ("key_id"), to the field of the action's input every
+	// call that sends the request fills it from, as the input's JSON spells
+	// it ("deploy_key_id"). A placeholder filled from anything else, or from
+	// two fields, is left out, and so is every placeholder of a request one
+	// of whose calls the derivation could not read for it. R-REQUIRED places
+	// a placeholder through it before trying its name.
+	Placeholders map[string]string `json:"placeholders,omitempty"`
 	// Operation, RootFields and Positions describe a GraphQL request.
 	Operation  string   `json:"operation,omitempty"`
 	RootFields []string `json:"root_fields,omitempty"`

@@ -1226,9 +1226,40 @@ end
 # record calls its pending list.
 PENDING_LIST_FILE = "config/authz/graphql/authorization_todo.txt"
 
+# PENDING_RULE_MODULE holds the rule the pending list is generated with, and
+# PENDING_RULE_FILE is where the image keeps it. lib is one of GitLab's
+# autoload paths and lib/tasks is not ignored, so the autoloader answers the
+# constant; the file is required only for an image where it does not.
+PENDING_RULE_MODULE = "Tasks::Gitlab::Permissions::Graphql::SchemaDirectives"
+PENDING_RULE_FILE = "lib/tasks/gitlab/permissions/graphql/schema_directives.rb"
+
+# pending_rule answers the image's own rule, so the set computed below is the
+# one GitLab's task computes at that revision rather than a copy of it that
+# drifts. The rule changed in 19.6 (gitlab-org/gitlab!260959): its
+# graphql_object_type? tells the types GraphQL Ruby generates apart by class,
+# with generated_type?, where 19.5 and earlier left out every name ending in
+# Payload, Connection or Edge, a hand-written DependencyPathEdge or
+# PushEventPayload among them. It is nil for an image that ships no such rule,
+# or whose graphql_object_type? does not take the name and the type this walk
+# passes.
+def pending_rule
+  rule = PENDING_RULE_MODULE.safe_constantize
+  if rule.nil?
+    path = Rails.root.join(PENDING_RULE_FILE)
+    require path.to_s if File.exist?(path)
+    rule = PENDING_RULE_MODULE.safe_constantize
+  end
+  return nil unless rule.is_a?(Module)
+  return nil unless (rule.instance_method(:graphql_object_type?).arity == 2 rescue false)
+
+  Object.new.extend(rule)
+end
+
 # pending_rule_type? is the type half of the rule that generates the pending
-# list (lib/tasks/gitlab/permissions/graphql/schema_directives.rb).
-def pending_rule_type?(name, type)
+# list: the image's own, from pending_rule, and without one the rule by name
+# every release before 19.6 wrote.
+def pending_rule_type?(rule, name, type)
+  return rule.send(:graphql_object_type?, name, type) if rule
   return false if name.start_with?("__")
   return false if %w[Mutation Query Subscription].include?(name)
 
@@ -1278,13 +1309,14 @@ def graphql_named_types
   types = {}
   abstract = {}
   rule_types = []
+  rule = pending_rule
   GitlabSchema.types.sort.each do |name, type|
     next if name.start_with?("__")
 
     kind = type.kind
     if kind.object?
       types[name] = type_of(type)
-      rule_types << name if pending_rule_type?(name, type) && type.directives.none? { |d| d.is_a?(GRANULAR_SCOPE) }
+      rule_types << name if pending_rule_type?(rule, name, type) && type.directives.none? { |d| d.is_a?(GRANULAR_SCOPE) }
     elsif kind.union? || kind.interface?
       abstract[name] = abstract_of(type)
     end

@@ -367,7 +367,7 @@ func TestFormatUpdateMarkdown_Content(t *testing.T) {
 		"- **Full SHA**: `abc123def456`\n" +
 		"- **Title**: Update lib\n" +
 		"- **Author**: Alice\n" +
-		"- **Author Email**: alice@example.com\n" +
+		"- **Author Email**: alice\\@example.com\n" +
 		"- **Committed**: 20 Mar 2026 15:45 UTC\n" +
 		"- **Message**: Bump lib to v2\n" +
 		submoduleUpdateHints

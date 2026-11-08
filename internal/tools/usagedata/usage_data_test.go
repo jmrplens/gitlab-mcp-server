@@ -972,7 +972,7 @@ func TestFormatQueriesMarkdown_HostileIdentity_StaysInsideItsRows(t *testing.T) 
 
 	want := "## Service Ping Queries\n\n" +
 		"- **Version**: 16.8.0&#124;x\n" +
-		"- **Edition**: &lt;a href=\"http://attacker.invalid\">x&lt;/a>\n" +
+		"- **Edition**: &lt;a href=\"http\\://attacker.invalid\">x&lt;/a>\n" +
 		"- **Recorded At**: 15 Jan 2026 10:00 UTC\n" +
 		queriesHints
 

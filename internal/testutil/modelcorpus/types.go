@@ -156,14 +156,18 @@ type Arg struct {
 }
 
 // Truth is where an argument's right value comes from. It is a closed sum of
-// four, so a scorer can be exhaustive and the corpus gate can reject a case
+// five, so a scorer can be exhaustive and the corpus gate can reject a case
 // that binds a name no recipe produces.
 //
-// Exactly one is set. A value expressed in the prompt as a verb rather than as
-// a value ("pause the runner", "resolve the discussion") is deliberately not
-// one of them: it is checked by the recipe's own verification against GitLab
-// after the run, because a Literal the prompt never spells is a value the
-// model was never given, and the corpus gate refuses one.
+// Exactly one is set. A value the prompt expresses as a verb rather than as a
+// value ("pause the runner", "resolve the discussion") is Implied: it is never
+// compared, because a Literal the prompt never spells is a value the model was
+// never given and the corpus gate refuses one, and it is checked by the
+// recipe's own verification against GitLab after the run. It is declared at
+// all so that the fake provider, which replays the key, sends what the verb
+// asks for: an argument the action requires and the key left out is one a
+// perfect replay could not send, and the server refused the call before it
+// reached GitLab.
 type Truth struct {
 	// Fact names a recipe fact. Every spelling the recipe accepts for it
 	// matches, which is what lets an argument that takes a project's
@@ -178,6 +182,11 @@ type Truth struct {
 	// body derived from the request. It is reported as authored and never
 	// compared.
 	Authored bool
+	// Implied is the value a verb in the prompt asks for, spelled as the
+	// fake provider sends it: "true" or "false" for a boolean, read with the
+	// type a fact of the same spelling would carry. It is reported as implied
+	// and never compared.
+	Implied string
 }
 
 // Ref names a field of an earlier step's result.
@@ -261,4 +270,10 @@ func literal(value string) Truth {
 // and never compared.
 func authored() Truth {
 	return Truth{Authored: true}
+}
+
+// implied binds an argument to the value a verb of the prompt asks for, which
+// the fake provider replays and nothing compares.
+func implied(value string) Truth {
+	return Truth{Implied: value}
 }

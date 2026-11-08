@@ -1701,6 +1701,56 @@ func TestBuildPackageReports_CleanAction_IsCountedAndNeverAFinding(t *testing.T)
 	})
 }
 
+// TestReportCheck_APlantedGenericUsage_FailsTheGate is the planted defect
+// behind make audit-discovery-check, step 40 of make analyze: one action whose
+// Usage is the placeholder the catalog used to carry fails the error threshold
+// -check applies, and the same action with a Usage that says what it does
+// passes. The flag on a spec and the threshold on a count were each held by a
+// test of their own; this one holds the path between them, from
+// buildPackageReports through summarize to check, which is the path the gate
+// takes over the real catalog.
+func TestReportCheck_APlantedGenericUsage_FailsTheGate(t *testing.T) {
+	spec := toolutil.ActionSpec{
+		Name:           "widget_get",
+		OwnerPackage:   "widgets",
+		Aliases:        []string{"fetch widget", "show widget", "read widget"},
+		RelatedActions: []string{"widget.list"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_get"},
+	}
+	projected := map[string]string{
+		"gitlab_widget_get": "Reads one widget. Returns: widget. See also: gitlab_widget_list.",
+	}
+	tests := []struct {
+		name    string
+		usage   string
+		wantErr string
+	}{
+		{name: "the placeholder usage fails the gate", usage: "Use to execute widgets domain action.", wantErr: "discovery completeness: 1 error-severity finding(s) present"},
+		{name: "an empty usage fails the gate", usage: "  ", wantErr: "discovery completeness: 1 error-severity finding(s) present"},
+		{name: "a usage that says what the action does passes", usage: "Reads one widget by id."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			planted := spec
+			planted.Usage = tt.usage
+			groups := []tools.ActionSpecGroup{{ToolName: "gitlab_widget", OwnerPackage: "widgets", Actions: []toolutil.ActionSpec{planted}}}
+
+			packages := buildPackageReports(groups, collectAllClusters(groups), projected, 3, true)
+			err := report{Summary: summarize(packages)}.check(severityError)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("check() over %+v = %v, want the gate to pass", packages, err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("check() over %+v = %v, want %q", packages, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestBuildPackageReports_ClusteredAction_CarriesItsSiblings verifies the join
 // between a spec and the cluster it belongs to: the finding names the whole
 // membership, and the variant that says nothing about its sibling is raised to

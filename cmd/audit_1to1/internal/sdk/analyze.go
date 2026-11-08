@@ -49,13 +49,15 @@ type report struct {
 	// Identifiers holds every integer a handler hands a client-go parameter
 	// of type any, by name or through a method value, to what the live API
 	// record says the placeholder it fills takes, lists every method value
-	// the walk does not follow, and every integer parameter of client-go
-	// that narrows a placeholder taking a name or a path.
+	// the walk does not follow, and holds every integer parameter of client-go
+	// that narrows a placeholder taking a name or a path to the action that
+	// reads a name into it.
 	Identifiers identifiersReport `json:"identifiers"`
-	// StaleDeclarations joins the seven tables' stale entries: a service
-	// declaration, a GraphQL decision, an enum exemption, an option struct
-	// declaration, an upstream wait, a capture declaration or an identifier
-	// declaration that no longer describes the code.
+	// StaleDeclarations joins the eight tables' stale entries: a service
+	// declaration, a GraphQL decision or a method it replaces, an enum
+	// exemption, an option struct declaration, an upstream wait, a capture
+	// declaration, an identifier declaration or a narrowing declaration that
+	// no longer describes the code.
 	StaleDeclarations []string `json:"stale_declarations,omitempty"`
 }
 
@@ -107,6 +109,11 @@ type reportSummary struct {
 	IdentifiersUntraced     int `json:"identifiers_untraced"`
 	IdentifiersUnfollowed   int `json:"identifiers_unfollowed"`
 	SDKNarrowed             int `json:"sdk_narrowed"`
+	SDKNarrowedResolved     int `json:"sdk_narrowed_resolved"`
+	SDKNarrowedUndeclared   int `json:"sdk_narrowed_undeclared"`
+	SDKNarrowedUnresolved   int `json:"sdk_narrowed_unresolved"`
+	SDKNarrowedNotFromInput int `json:"sdk_narrowed_not_from_input"`
+	SDKNarrowedUncalled     int `json:"sdk_narrowed_uncalled"`
 	StaleDeclarations       int `json:"stale_declarations"`
 }
 
@@ -138,7 +145,8 @@ func (s reportSummary) capturesClean() bool {
 // identifiersClean reports whether the identifiers hold no finding.
 func (s reportSummary) identifiersClean() bool {
 	return s.IdentifiersNarrowed == 0 && s.IdentifiersUndescribed == 0 && s.IdentifiersUnplaced == 0 &&
-		s.IdentifiersUntraced == 0 && s.IdentifiersUnfollowed == 0
+		s.IdentifiersUntraced == 0 && s.IdentifiersUnfollowed == 0 &&
+		s.SDKNarrowedUndeclared == 0 && s.SDKNarrowedUnresolved == 0
 }
 
 // Seams for the failures the real tree cannot produce: the JSON encoder never
@@ -191,7 +199,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
-	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), serviceIndex(services), graphqlServiceAliases, graphqlDecisions)
+	byName := serviceIndex(services)
+	operations := buildGraphQLOperations(collectGraphQLSites(pkgs, graphQL), byName, graphqlServiceAliases, graphqlDecisions)
 
 	// The enum rule loads the same packages (memoized per root) and reads
 	// the catalog compiled into this binary; with gapsOnly it already keeps
@@ -215,9 +224,10 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	// The identifiers are held to the live API record, a pinned oracle a
 	// re-pin moves and a stack never regenerates, so reading it does not
 	// defer the scope.
-	identifiers, identifiersStale := analyzeIdentifiers(root, pkgs, usage, identifierDeclarations)
+	identifiers, identifiersStale := analyzeIdentifiers(root, pkgs, usage, identifierDeclarations, committedNarrowingTable())
 
-	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale, identifiersStale)
+	stale := mergeStale(staleServiceDeclarations(services, serviceDeclarations), declaredTwice, staleGraphQLDecisions(operations, graphqlDecisions),
+		staleGraphQLReplaces(graphqlDecisions, byName, graphqlServiceAliases, usage), enumRep.StaleExemptions, optionStale, waitsStale, capturesStale, identifiersStale)
 	summary := summarize(services, operations, enumRep.Summary, stale)
 	summarizeOptionStructs(&summary, options)
 	summarizeUpstreamWaits(&summary, upstream)

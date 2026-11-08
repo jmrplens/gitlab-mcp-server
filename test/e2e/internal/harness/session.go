@@ -655,6 +655,14 @@ func (s *Session) Serves(id ActionID) bool {
 	return ok
 }
 
+// excludedByName reports whether the operator's exclusions named this action,
+// by its group, its tool or its canonical ID, which is the one narrowing a
+// session declines without saying why (AUT-004).
+func (s *Session) excludedByName(id ActionID) bool {
+	_, ok := s.conn.served.excluded[id]
+	return ok
+}
+
 // Actions returns every action this session's listing shows, sorted. It is
 // what a test compares a listing the server published against, and what a
 // sweep walks. Every one of them is served; for every credential but a
@@ -961,6 +969,7 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	}
 	conn.served.actions = expectation.actions
 	conn.served.callable = expectation.callable
+	conn.served.excluded = expectation.excluded
 	return conn, nil
 }
 

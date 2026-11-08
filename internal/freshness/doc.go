@@ -22,12 +22,14 @@
 // each of which reads a committed artifact and compares it:
 //
 //   - internal/tools
+//   - cmd/audit_1to1
 //   - cmd/audit_1to1/internal/grants
 //   - cmd/audit_1to1/internal/params
 //   - cmd/audit_1to1/internal/required
 //   - cmd/audit_1to1/internal/routes
 //   - cmd/audit_metrics
 //   - cmd/audit_tokens
+//   - cmd/gen_action_grants
 //   - cmd/gen_lhm_manifest
 //   - cmd/gen_llms
 //   - cmd/gen_model_corpus

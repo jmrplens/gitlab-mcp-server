@@ -1,9 +1,10 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// Package required is the requiredness rule of R-INPUT: every parameter an
-// action's input schema requires, held to what GitLab requires of the
-// parameter it is sent as (issue 1100).
+// Package required is R-REQUIRED: every parameter an action's input schema
+// requires, held to what GitLab requires of the parameter it is sent as
+// (issue 1100). R-INPUT is the other question about an input, whether it
+// carries every field of the client-go struct it fills.
 //
 // All three surfaces now read one answer to whether a call may leave a
 // parameter out, the `,required` marker of the field's jsonschema tag, which
@@ -15,21 +16,37 @@
 //   - the input schema of every action of the two Ultimate catalogs
 //     (self-managed and GitLab.com), through actionids.Catalogs;
 //   - docs/development/action-requests.json, the REST routes each action
-//     sends and the ways it runs, through actionrequests.ReadRecord;
+//     sends, the ways it runs and the field of the input each call fills a
+//     route's placeholders from, through actionrequests.ReadRecord;
 //   - docs/development/gitlab-api-live.json, each route's params and whether
-//     GitLab requires them, as a booted GitLab 19.4.1 declared them.
+//     GitLab requires them, as a booted GitLab declared them.
 //
 // # How a field is judged
 //
-// A field is found among a route's params by name, since the inputs here
-// spell a parameter as GitLab does, except for a path placeholder: GitLab
-// writes the project of /projects/:id as `id` and every input writes it as
-// `project_id`, so a bare `:id` is the collection in front of it in the
-// singular, and a polymorphic `:noteable_id` is the identifier of the object
-// the collection holds (place.go). A placeholder every spelling of the path
-// carries is required whatever the record says, because the record leaves a
-// path param it never redeclares unrequired. Where those rules would find the
-// wrong field, an alias names the right one (declarations.go).
+// A path placeholder is found through the field the request record says the
+// calls fill it from, which the derivation reads off each call: GitLab's
+// `:key_id` is the input's `deploy_key_id`. A parameter the record names no
+// field for is found by name, since the inputs here spell a parameter as
+// GitLab does, except for a path placeholder: GitLab writes the project of
+// /projects/:id as `id` and every input writes it as `project_id`, so a bare
+// `:id` is the collection in front of it in the singular, and a polymorphic
+// `:noteable_id` is the identifier of the object the collection holds
+// (place.go). A placeholder every spelling of the path carries is required
+// whatever the record says, because the record leaves a path param it never
+// redeclares unrequired. A param found by name under a field that fills a
+// placeholder is not that field, since one field fills one parameter: the body
+// `group_id` of /groups/:id/share is the group shared with, not the input's
+// `group_id`. Where those rules would find no field or the wrong one, an alias
+// names the right one (declarations.go).
+//
+// Workhorse rewrites the whole body of some requests into one required
+// WorkhorseFile param, and where the endpoint parses that file and validates
+// what it holds by hand the record declares none of what it holds.
+// declaredWorkhorseBodies says what GitLab reads out of the body of each such
+// route, citing lib/api, and those params are placed as if the record declared
+// them. A declaration for a route no action sends, or whose record route
+// declares a param of its body again or stops requiring the file, answers
+// nothing.
 //
 // GitLab requires a field when every way the action runs sends a request that
 // requires it; a way that does not is a call GitLab serves without it. A field
@@ -44,9 +61,9 @@
 // accepts and GitLab refuses) and a field the schema requires and GitLab
 // leaves optional (a call GitLab would serve that the surface refuses before
 // sending it), unless a declaration answers it with a category and a reason;
-// and a declaration or alias that answers nothing, so the table cannot outlive
-// what it answers. It reads the committed request record, so in CI it runs
-// beside R-GRANT under the FRESHNESS deferral.
+// and a declaration, alias or Workhorse body that answers nothing, so the
+// tables cannot outlive what they answer. It reads the committed request
+// record, so in CI it runs beside R-GRANT under the FRESHNESS deferral.
 //
 // # What it cannot see
 //
@@ -67,6 +84,8 @@
 // optional param, so this scope cannot hold them to GitLab either. A
 // requirement GitLab states in a `given` block is written by the record as
 // unconditional, which is what the conditional declarations answer. And a
-// field an input names differently from GitLab without an alias is unplaced
-// rather than judged.
+// field of the body or the query an input names differently from GitLab
+// without an alias is unplaced rather than judged, as is a path placeholder
+// a call fills from a value GitLab answered or a helper produced, with no alias
+// and no field of its name.
 package required

@@ -17,6 +17,13 @@ on:
       - main
     tags:
       - "**"
+  # A Release run can end red after it has published: no job waits on its
+  # winget job, which fails on its own when the fork sync or the submission
+  # to microsoft/winget-pkgs does (issue 1665). Both jobs below therefore run
+  # after a Release run that failed as well as after one that succeeded, so
+  # a published release reaches GitLab at once rather than at the next
+  # scheduled run, up to six hours later. After a run that failed before it
+  # published, the sync finds nothing new, as the schedule would.
   workflow_run:
     workflows:
       - Release
@@ -49,7 +56,9 @@ jobs:
     # push to main or the six-hourly scheduled run, which mirrors every ref.
     if: >-
       github.actor != 'dependabot[bot]' &&
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+      (github.event_name != 'workflow_run' ||
+        github.event.workflow_run.conclusion == 'success' ||
+        github.event.workflow_run.conclusion == 'failure')
     steps:
       - name: Configure GitLab SSH key
         env:
@@ -129,7 +138,9 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       startsWith(github.ref, 'refs/tags/') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_run' &&
+        (github.event.workflow_run.conclusion == 'success' ||
+          github.event.workflow_run.conclusion == 'failure'))
     env:
       GH_TOKEN: ${{ github.token }}
       GITLAB_API_TOKEN: ${{ secrets.GITLAB_API_TOKEN }}

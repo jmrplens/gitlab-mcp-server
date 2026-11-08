@@ -141,6 +141,46 @@ func TestReviewMRPrompt_Success(t *testing.T) {
 	}
 }
 
+// TestReviewMR_PositionLines_FollowTheLineRule verifies that the review_mr
+// prompt gives a draft note position's line by its kind, and asks an
+// unchanged line for both of its numbers. GitLab finds a text position's line
+// only where old_line and new_line both match the diff line
+// (Gitlab::Diff::File#line_for_position), so an unchanged line given one of
+// them gets no line code and the write is refused. The prompt's list of
+// position fields used to ask for either line and not both, which
+// contradicted its own bullet for an unchanged line.
+func TestReviewMR_PositionLines_FollowTheLineRule(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathMR5:
+			respondJSON(w, http.StatusOK, `{"id":55,"iid":5,"title":"Add feature X","source_branch":"feature-x","target_branch":"main","author":{"username":"alice"}}`)
+		case pathMR5Diffs:
+			respondJSON(w, http.StatusOK, `[{"old_path":"handler.go","new_path":"handler.go","diff":"@@ -10,3 +10,5 @@\n func handle() {\n+  log.Println(\"new\")\n }","new_file":false,"renamed_file":false,"deleted_file":false}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "review_mr",
+		Arguments: map[string]string{"project_id": "42", "merge_request_iid": "5"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if want := "Unchanged context line -> set both `old_line` and `new_line`"; !strings.Contains(text, want) {
+		t.Errorf("review_mr prompt does not say %q:\n%s", want, text)
+	}
+	for _, stale := range []string{"(not both)", "EITHER new_line OR old_line"} {
+		t.Run(stale, func(t *testing.T) {
+			if strings.Contains(text, stale) {
+				t.Errorf("review_mr prompt still says %q, which gives an unchanged line one of the two numbers it needs:\n%s", stale, text)
+			}
+		})
+	}
+}
+
 // TestReviewMR_NamesActionsByCanonicalID verifies that the review_mr prompt
 // names the actions it tells a model to call by their canonical catalog IDs,
 // and that each of those IDs is one the catalog builds.
@@ -506,7 +546,7 @@ func TestLatestPipelinePrompts_GitLabsOwnAnswer_CarryNoFallback(t *testing.T) {
 			if strings.Contains(text, "Head SHA") || strings.Contains(text, "**Note**") {
 				t.Errorf("prompt text names a fallback for GitLab's own answer:\n%s", text)
 			}
-			if !strings.Contains(text, "**URL**: https://gitlab.example.com/pipelines/100\n\n") {
+			if !strings.Contains(text, "**URL**: <https://gitlab.example.com/pipelines/100>\n\n") {
 				t.Errorf("prompt text does not close the pipeline block after its URL:\n%s", text)
 			}
 		})

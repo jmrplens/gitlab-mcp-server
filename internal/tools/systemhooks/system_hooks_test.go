@@ -46,6 +46,10 @@ const fmtUnexpErr = "unexpected error: %v"
 // testHookURL identifies the test hook URL constant used by this package.
 const testHookURL = "https://example.com/hook"
 
+// testHookURLText is testHookURL as a card or a row writes it: text, with the
+// colon escaped so a GFM renderer does not link the address a hook posts to.
+const testHookURLText = `https\://example.com/hook`
+
 // errExpectedErrZeroID identifies the err expected err zero ID constant used by this package.
 const errExpectedErrZeroID = "expected error for zero ID, got nil"
 

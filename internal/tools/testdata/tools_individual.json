@@ -3411,11 +3411,8 @@
       "additionalProperties": false,
       "properties": {
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_group_id": {
           "description": "ID of the group to add to the allowlist",
@@ -4453,11 +4450,8 @@
       "additionalProperties": false,
       "properties": {
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_project_id": {
           "description": "ID of the project to add to the allowlist",
@@ -15269,23 +15263,23 @@
               ]
             },
             "new_line": {
-              "description": "Line number after change",
+              "description": "Line number after change. Send it alone for an added line, and with old_line for an unchanged one",
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after change",
+              "description": "File path after change, from the file's entry in repository.commit_diff, or from repository.tree for a file outside the diff. Send it with old_path",
               "type": "string"
             },
             "old_line": {
-              "description": "Line number before change",
+              "description": "Line number before change. Send it alone for a removed line, and with new_line for an unchanged one",
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before change",
+              "description": "File path before change, from the file's entry in repository.commit_diff, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: text for a line comment, image for an image coordinate comment, or file for a whole-file comment",
+              "description": "Position type: text for a line comment, which needs a line (new_line for an added line, old_line for a removed one, both for an unchanged one), or file for a whole-file comment, which needs both old_path and new_path and no line. GitLab also declares image, which needs width, height, x and y, and this action cannot send them",
               "enum": [
                 "text",
                 "image",
@@ -21636,8 +21630,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -42789,8 +42786,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -45333,8 +45333,11 @@
       "additionalProperties": false,
       "properties": {
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "id": {
           "description": "Numeric ID of the storage move",
@@ -49038,8 +49041,11 @@
           "type": "integer"
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -112719,8 +112725,11 @@
       "additionalProperties": false,
       "properties": {
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",
@@ -141206,7 +141215,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type=image.",
+              "description": "Image height in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
                 "integer"
@@ -141287,7 +141296,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type=file and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -141295,11 +141304,11 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type=file.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type=file and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: text for a line comment (default), image for an image coordinate comment, or file for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
               "enum": [
                 "text",
                 "image",
@@ -141312,32 +141321,31 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type=image.",
+              "description": "Image width in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
                 "integer"
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on the image. Required for position_type=image.",
+              "description": "X coordinate of the comment on the image, in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on the image. Required for position_type=image.",
+              "description": "Y coordinate of the comment on the image, in whole pixels. Required for position_type=image.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
@@ -143653,7 +143661,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Diff position for inline comments on specific lines. Omit for general MR comments.",
+          "description": "Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments.",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
@@ -143664,7 +143672,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image height in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -143737,7 +143745,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -143745,11 +143753,16 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -143757,32 +143770,31 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image width in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "X coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "Y coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
@@ -144581,7 +144593,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_update",
-    "description": "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
+    "description": "Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -144590,7 +144602,7 @@
           "type": "integer"
         },
         "note": {
-          "description": "Updated note body text (Markdown)",
+          "description": "Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both",
           "type": "string"
         },
         "note_id": {
@@ -144599,7 +144611,7 @@
         },
         "position": {
           "additionalProperties": false,
-          "description": "Updated diff position for inline comments",
+          "description": "Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both",
           "properties": {
             "base_sha": {
               "description": "Base commit SHA (merge-base)",
@@ -144610,7 +144622,7 @@
               "type": "string"
             },
             "height": {
-              "description": "Image height in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image height in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
@@ -144683,7 +144695,7 @@
               "type": "integer"
             },
             "new_path": {
-              "description": "File path after the change",
+              "description": "File path after the change, from the file's entry in mr_review.changes_get, or from repository.tree for a file outside the diff. Send it with old_path. Left out, GitLab takes the file from old_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "old_line": {
@@ -144691,11 +144703,16 @@
               "type": "integer"
             },
             "old_path": {
-              "description": "File path before the change (for modified/deleted files). Required for position_type 'file'.",
+              "description": "File path before the change, from the file's entry in mr_review.changes_get, which repeats new_path for a file that was not renamed, or from repository.tree for a file outside the diff. Send it with new_path. Required for position_type 'file' and for a text position on a renamed file.",
               "type": "string"
             },
             "position_type": {
-              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y, and a file position both old_path and new_path. Neither takes a line.",
+              "description": "Position type: 'text' for a line comment (default), 'image' for an image coordinate comment, or 'file' for a whole-file comment. An image position needs width, height, x and y in whole pixels, and a file position both old_path and new_path. Neither takes a line.",
+              "enum": [
+                "text",
+                "image",
+                "file"
+              ],
               "type": "string"
             },
             "start_sha": {
@@ -144703,32 +144720,31 @@
               "type": "string"
             },
             "width": {
-              "description": "Image width in pixels. Required for position_type 'image', and only for it.",
+              "description": "Image width in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
                 "integer"
               ]
             },
             "x": {
-              "description": "X coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "X coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             },
             "y": {
-              "description": "Y coordinate of the comment on an image diff. Required for position_type 'image', and only for it.",
+              "description": "Y coordinate of the comment on an image diff, in whole pixels. Required for position_type 'image', and only for it.",
               "type": [
                 "null",
-                "number"
+                "integer"
               ]
             }
           },
           "required": [
             "base_sha",
             "start_sha",
-            "head_sha",
-            "new_path"
+            "head_sha"
           ],
           "type": [
             "null",
@@ -194779,7 +194795,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_configure",
-    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces each diverged branch the mirror pulls with the source's version and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194792,7 +194808,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "enabled": {
@@ -194807,7 +194823,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
           "type": [
             "null",
             "boolean"
@@ -202812,6 +202828,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "container_expiration_policy_attributes": {
           "additionalProperties": false,
           "description": "Container registry cleanup policy attributes",
@@ -203079,7 +203099,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Overwrite diverged branches when mirroring",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
           "type": [
             "null",
             "boolean"
@@ -213108,11 +213128,8 @@
           "type": "boolean"
         },
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_group_id": {
           "description": "ID of the group to remove from the allowlist",
@@ -213169,11 +213186,8 @@
           "type": "boolean"
         },
         "project_id": {
-          "description": "Project ID or URL-encoded path",
-          "type": [
-            "string",
-            "integer"
-          ]
+          "description": "Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first",
+          "type": "integer"
         },
         "target_project_id": {
           "description": "ID of the project to remove from the allowlist",
@@ -216223,8 +216237,11 @@
       "additionalProperties": false,
       "properties": {
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "order_by": {
           "description": "Column to order results by (e.g. id).",
@@ -216410,8 +216427,11 @@
           "type": "integer"
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "sort": {
           "description": "Sort direction: asc or desc.",
@@ -222027,8 +222047,11 @@
           ]
         },
         "group_id": {
-          "description": "Numeric ID of the group",
-          "type": "integer"
+          "description": "Group ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -222204,8 +222227,11 @@
           ]
         },
         "project_id": {
-          "description": "Numeric ID of the project",
-          "type": "integer"
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -225650,8 +225676,11 @@
           "type": "string"
         },
         "resource_id": {
-          "description": "ID of the resource",
-          "type": "integer"
+          "description": "ID of the resource, the URL-encoded path of a group or a project, or the username of a user",
+          "type": [
+            "string",
+            "integer"
+          ]
         },
         "resource_type": {
           "description": "Resource type: user, group, or project",

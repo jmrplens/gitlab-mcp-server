@@ -6,8 +6,23 @@ package groupstoragemoves
 import (
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// unresolvedOutput is what an action answers when the path in group_id names
+// nothing GitLab could find.
+type unresolvedOutput struct {
+	Path string `json:"path"`
+}
+
+// formatUnresolved renders the not-found result of a path nothing answers to.
+func formatUnresolved(out unresolvedOutput) *mcp.CallToolResult {
+	return toolutil.NotFoundResult("Group", out.Path,
+		"Use group.list to find the group's full path",
+		"Pass the group's numeric ID as group_id if the group has moved")
+}
 
 // FormatOutputMarkdown renders one group storage move as the shared card.
 //
@@ -54,4 +69,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)      // Output
 	toolutil.RegisterMarkdown(FormatListMarkdown)        // ListOutput
 	toolutil.RegisterMarkdown(FormatScheduleAllMarkdown) // ScheduleAllOutput
+	toolutil.RegisterMarkdownResult(formatUnresolved)    // unresolvedOutput
 }

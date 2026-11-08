@@ -213,6 +213,7 @@ func trimAPIPrefix(path string) string {
 func TestShapeCheck_JoinsOurSpellingToGitLabs(t *testing.T) {
 	root := recordIn(t, map[string]response{
 		"GET /api/v4/projects/{id}/issues/{issue_iid}": {Response: []string{"iid", "state", "title"}},
+		"GET /api/v4/projects/{id}/files/*file_path":   {Response: []string{"path"}},
 		"GET /api/v4/version":                          {Response: []string{"revision", "version"}},
 	})
 
@@ -243,6 +244,16 @@ func TestShapeCheck_JoinsOurSpellingToGitLabs(t *testing.T) {
 			row:     requestinventory.Row{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/:project_id/nowhere"},
 			quality: "unmatched",
 		},
+		{
+			name:    "a splat holds what we recorded",
+			row:     requestinventory.Row{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/:project_id/files/a/b.txt"},
+			quality: "across",
+		},
+		{
+			name:    "two fixture values on a route with no splat",
+			row:     requestinventory.Row{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/myproject/issues/first"},
+			quality: "unmatched",
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -251,7 +262,7 @@ func TestShapeCheck_JoinsOurSpellingToGitLabs(t *testing.T) {
 			if !check.Ran {
 				t.Fatal("shapeCheck() did not run against a record it should have read")
 			}
-			got := map[string]int{"exact": check.Join.Exact, "loose": check.Join.Loose, "unmatched": check.Join.Unmatched}
+			got := map[string]int{"exact": check.Join.Exact, "loose": check.Join.Loose, "across": check.Join.Across, "unmatched": check.Join.Unmatched}
 			if got[testCase.quality] != 1 {
 				t.Errorf("join = %+v, want one %s match", check.Join, testCase.quality)
 			}
@@ -435,6 +446,44 @@ func TestShapeCheck_TheJoinCountsWhatItRead(t *testing.T) {
 	want := []string{"myproject=2", "apple=1", "zebra=1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("untemplated = %v, want %v: most frequent first, then alphabetical", got, want)
+	}
+}
+
+// TestOperationIndex_Lookup_FindsWhatASegmentHoldsSeveralOf verifies the last
+// way of finding a row answers with that route's own operation: a splat holding
+// one segment and several, through the spelling of an optional group either
+// way, and a placeholder apilive declares to take a slash, which an undeclared
+// one on another route does not.
+func TestOperationIndex_Lookup_FindsWhatASegmentHoldsSeveralOf(t *testing.T) {
+	index, _ := fixtureRecord(map[string]response{
+		"GET /api/v4/projects/{id}/jobs/{job_id}/artifacts/*artifact_path":                               {Response: []string{"artifact"}},
+		"GET /api/v4/projects/{id}/jobs/artifacts/{ref_name}/download":                                   {Response: []string{"download"}},
+		"GET /api/v4/projects/{id}/other/{ref_name}/download":                                            {Response: []string{"other"}},
+		"GET /api/v4/projects/{id}/packages/generic/{package_name}/*package_version/(*path/){file_name}": {Response: []string{"package"}},
+	})
+	cases := []struct {
+		name, path, want string
+	}{
+		{name: "a_splat_of_one", path: "/projects/:project_id/jobs/:job_id/artifacts/a.txt", want: "artifact"},
+		{name: "a_splat_of_several", path: "/projects/:project_id/jobs/:job_id/artifacts/build/output/report.txt", want: "artifact"},
+		{name: "optional_left_out", path: "/projects/:project_id/packages/generic/pkg/1.0.0/tool.bin", want: "package"},
+		{name: "optional_taken", path: "/projects/:project_id/packages/generic/pkg/1.0.0/dist/linux/tool.bin", want: "package"},
+		{name: "a_declared_placeholder", path: "/projects/:project_id/jobs/artifacts/feature/my-branch/download", want: "download"},
+		{name: "an_undeclared_placeholder", path: "/projects/:project_id/other/feature/my-branch/download"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			found, quality, literal := index.lookup("GET", testCase.path)
+			if testCase.want == "" {
+				if quality != matchNone {
+					t.Errorf("lookup(%q) = %+v, %d; want nothing found", testCase.path, found, quality)
+				}
+				return
+			}
+			if quality != matchAcross || literal != "" || !slices.Equal(found.Response, []string{testCase.want}) {
+				t.Errorf("lookup(%q) = response %v, quality %d, literal %q; want %q through matchAcross", testCase.path, found.Response, quality, literal, testCase.want)
+			}
+		})
 	}
 }
 

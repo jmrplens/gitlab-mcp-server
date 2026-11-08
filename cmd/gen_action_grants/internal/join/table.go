@@ -113,6 +113,10 @@ type Request struct {
 	Operation int
 	// Route is the declaration that placed a route the record lacks.
 	Route string
+	// Placeholders maps each placeholder of a REST request's route, named as
+	// the record names it, to the field of the input the derivation read
+	// every call filling it from ([derive.Use.Fills]).
+	Placeholders map[string]string
 	// Classic is the classic scope the request needs, and ClassicDeclaration
 	// the category of what departed from GitLab's general rule to decide it.
 	Classic            finegrained.ClassicScope
@@ -371,6 +375,7 @@ func (j *joiner) restRequest(request *Request, actionID string) {
 		request.Route = derived
 	}
 	request.Name = apilive.RouteName(route)
+	request.Placeholders = named(request.Fills, apilive.Placeholders(route, request.Path))
 	key := "rest " + request.Name
 	if index, seen := j.opIndex[key]; seen {
 		request.Operation = index
@@ -387,6 +392,24 @@ func (j *joiner) restRequest(request *Request, actionID string) {
 		j.opClassicDecl[index] = decided
 	}
 	request.Operation = index
+}
+
+// named turns the input fields a request's path segments are filled from
+// into the fields its placeholders are, each placeholder by the name the
+// record gives the segment. A fill whose segment the record route spells no
+// placeholder at, which is a declared route the derived path does not meet,
+// names nothing.
+func named(fills, names map[int]string) map[string]string {
+	out := map[string]string{}
+	for segment, field := range fills {
+		if name, ok := names[segment]; ok {
+			out[name] = field
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // restClassic reads which classic scope a route needs, and the category of

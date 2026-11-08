@@ -913,6 +913,18 @@ var builderFatalCases = map[string]func(t *testing.T){
 		stub.answers(http.MethodPost, "/api/v4/projects/2/environments", fatalRefusal())
 		NewEnvironment(e, Project{ID: 2}, "env")
 	},
+	"protected environment": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/projects/2/protected_environments", fatalRefusal())
+		NewProtectedEnvironment(e, Project{ID: 2}, Environment{ID: 5, Name: "env-run"}, 0)
+	},
+	"group protected environment": func(t *testing.T) {
+		t.Helper()
+		stub, e := detachedStub(t)
+		stub.answers(http.MethodPost, "/api/v4/groups/2/protected_environments", fatalRefusal())
+		NewGroupProtectedEnvironment(e, Group{ID: 2})
+	},
 	"deployment": func(t *testing.T) {
 		t.Helper()
 		stub, e := detachedStub(t)
@@ -1074,6 +1086,8 @@ func TestBuilders_Refused_FailTheirTestNamingWhatTheyWereMaking(t *testing.T) {
 		{name: "group board", want: []string{"creating a board in group e2e-group: GitLab refused the board: Multiple boards are not available"}},
 		{name: "board list limit", want: []string{"limiting board list 5 to 4 by issue_weights: GitLab refused the limit: List not found"}},
 		{name: "environment", want: []string{`creating environment "env-`, `in project 2: `, "403"}},
+		{name: "protected environment", want: []string{`protecting environment "env-run" of project 2: `, "403"}},
+		{name: "group protected environment", want: []string{`protecting environment "staging" of group 2: `, "403"}},
 		{name: "deployment", want: []string{`creating a deployment of 01234567 into "env-run" in project 2: `, "403"}},
 		{name: "group label", want: []string{`creating group label "label-`, `in group 1: `, "403"}},
 		{name: "group milestone", want: []string{`creating group milestone "milestone-`, `in group 1: `, "403"}},

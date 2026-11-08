@@ -76,15 +76,22 @@ func NewProtectedEnvironment(e *harness.Env, project Project, environment Enviro
 	return protection
 }
 
-// NewGroupProtectedEnvironment protects an environment name at group scope
-// and registers its unprotection.
+// groupProtectedEnvironmentTier is the name a group protection is made for.
+// A group protects environments by deployment tier, and GitLab refuses any
+// other name with 400 "name does not have a valid value"; every world builds
+// a group of its own, so one tier is never protected twice in a group.
+const groupProtectedEnvironmentTier = "staging"
+
+// NewGroupProtectedEnvironment protects a deployment tier at group scope and
+// registers its unprotection.
 //
-// The name need not be an environment of any project: a group protection is a
-// rule about a name, which is why it takes one rather than an [Environment].
+// The tier need not be the tier of any environment of a project: a group
+// protection is a rule about every environment of that tier in the group's
+// projects, which is why it takes a name rather than an [Environment].
 func NewGroupProtectedEnvironment(e *harness.Env, group Group) ProtectedEnvironment {
 	e.T.Helper()
 
-	name := e.Name("groupenv")
+	name := groupProtectedEnvironmentTier
 	protection, err := retryTransient(e, "protect group environment "+name, createRetries, func() (ProtectedEnvironment, error) {
 		return protectGroupEnvironment(e.Ctx, e.Client(), group.ID, name)
 	})

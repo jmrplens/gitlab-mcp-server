@@ -503,7 +503,7 @@ func TestFormatAwardEmojiNotFound_HostileHints_ReachThePageAsText(t *testing.T) 
 	want := "## " + toolutil.EmojiQuestion + " Award Emoji Not Found\n\n" +
 		"The award emoji **award 5 on issue IID 1 in project my-project** does not exist or is not accessible with your current permissions.\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- &lt;a href=\"http://attacker.invalid\">List&lt;/a> the emoji\n" +
+		"- &lt;a href=\"http\\://attacker.invalid\">List&lt;/a> the emoji\n" +
 		"- Check the award ID\n"
 	if text.Text != want {
 		t.Errorf("not-found card mismatch:\ngot:\n%s\nwant:\n%s", text.Text, want)

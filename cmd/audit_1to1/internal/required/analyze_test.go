@@ -71,7 +71,7 @@ func TestJudgeAction_EachDirectionAndEachSilence(t *testing.T) {
 	action := actionrequests.RecordAction{
 		ID: "issue.link_create", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/links")}, Paths: [][]int{{0}},
 	}
-	verdict := judgeAction("issue.link_create", schema, action, fixtureRoutes(), nil)
+	verdict := judgeAction("issue.link_create", schema, action, fixtureRoutes(), rules{})
 	if !verdict.rest || verdict.judged != 3 {
 		t.Fatalf("verdict = rest %t, judged %d; want a REST action with three fields judged", verdict.rest, verdict.judged)
 	}
@@ -98,7 +98,7 @@ func TestJudgeAction_NoRESTRequest_IsNotJudged(t *testing.T) {
 	}
 	for name, action := range cases {
 		t.Run(name, func(t *testing.T) {
-			verdict := judgeAction("x.y", schemaOf(nil, "project_id"), action, fixtureRoutes(), nil)
+			verdict := judgeAction("x.y", schemaOf(nil, "project_id"), action, fixtureRoutes(), rules{})
 			if verdict.rest || verdict.judged != 0 || verdict.findings != nil || verdict.unplaced != nil {
 				t.Errorf("verdict = %+v, want nothing judged", verdict)
 			}
@@ -144,7 +144,7 @@ func TestJudgeAction_WaysDecideGitLabsAnswer(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			verdict := judgeAction("x.y", schemaOf(nil, "note"), testCase.action, fixtureRoutes(), nil)
+			verdict := judgeAction("x.y", schemaOf(nil, "note"), testCase.action, fixtureRoutes(), rules{})
 			if !reflect.DeepEqual(verdict.findings, testCase.wantFindings) {
 				t.Errorf("findings = %+v, want %+v", verdict.findings, testCase.wantFindings)
 			}
@@ -160,7 +160,7 @@ func TestJudgeAction_WaysDecideGitLabsAnswer(t *testing.T) {
 func TestJudgeAction_AFieldOnTwoRoutes_NamesBothOnce(t *testing.T) {
 	post := rest("POST /projects/:id/links")
 	action := actionrequests.RecordAction{Requests: []actionrequests.RecordRequest{post, rest("GET /projects/:id/links"), post}, Paths: [][]int{{0, 1, 2}}}
-	verdict := judgeAction("x.y", schemaOf(nil, "project_id"), action, fixtureRoutes(), nil)
+	verdict := judgeAction("x.y", schemaOf(nil, "project_id"), action, fixtureRoutes(), rules{})
 	want := []Finding{{Action: "x.y", Field: "project_id", Direction: DirectionGitLabRequires, Routes: []string{"GET /projects/:id/links", "POST /projects/:id/links"}}}
 	if !reflect.DeepEqual(verdict.findings, want) {
 		t.Errorf("findings = %+v, want %+v", verdict.findings, want)
@@ -196,12 +196,12 @@ func TestJudgeAll_DeclarationsAndAliasesAnswerOrGoStale(t *testing.T) {
 		{action: "issue.link_create", field: "target_iid"}: {Direction: DirectionGitLabOptional, Category: categoryConditional, Reason: "wrong way round"},
 		{action: "thing.update", field: "title"}:           {Direction: DirectionGitLabRequires, Category: categoryHandlerDefault, Reason: "nothing to answer"},
 	}
-	aliased := map[aliasKey]pathAlias{
+	aliased := map[aliasKey]paramAlias{
 		{action: "thing.update", param: "name"}:      {Field: "thing", Reason: "the input names it thing"},
 		{action: "thing.list", param: "search"}:      {Field: "query", Reason: "the schema has no such field"},
 		{action: "issue.link_create", param: "nope"}: {Field: "note", Reason: "no route declares it"},
 	}
-	report := judgeAll(schemas, record, fixtureRoutes(), declared, aliased)
+	report := judgeAll(schemas, record, fixtureRoutes(), tables{declared: declared, aliased: aliased})
 
 	wantFindings := []Finding{
 		{Action: "issue.link_create", Field: "note", Direction: DirectionGitLabRequires, Routes: []string{"POST /projects/:id/links"}},
@@ -243,13 +243,155 @@ func TestJudgeAll_DeclarationsAndAliasesAnswerOrGoStale(t *testing.T) {
 	}
 }
 
+// TestJudgeAction_ARenamedPlaceholder_IsHeldToGitLabsAnswer is the planted
+// defect of #1688 (P8, mutation M1): access.deploy_key_get's deploy_key_id
+// losing ,required. GitLab names the parameter key_id, so by names alone the
+// field was unplaced and the gate passed with it optional; through the field
+// the record says the call fills :key_id from, the field is judged, the
+// planted schema is a finding, and the correct one passes.
+func TestJudgeAction_ARenamedPlaceholder_IsHeldToGitLabsAnswer(t *testing.T) {
+	routes := routesByName([]apilive.Route{
+		*liveRoute("GET", "/projects/:id/deploy_keys/:key_id", map[string]apilive.Param{"id": {}, "key_id": {Required: true}}),
+	})
+	request := rest("GET /projects/:id/deploy_keys/:key_id")
+	planted := schemaOf([]string{"project_id"}, "project_id", "deploy_key_id")
+	correct := schemaOf([]string{"project_id", "deploy_key_id"}, "project_id", "deploy_key_id")
+	unfilled := actionrequests.RecordAction{Requests: []actionrequests.RecordRequest{request}, Paths: [][]int{{0}}}
+	before := judgeAction("access.deploy_key_get", planted, unfilled, routes, rules{})
+	if before.findings != nil || !slices.Equal(before.unplaced, []string{"deploy_key_id"}) {
+		t.Errorf("by names = findings %+v, unplaced %v; want the field unplaced and nothing found", before.findings, before.unplaced)
+	}
+	request.Placeholders = map[string]string{"id": "project_id", "key_id": "deploy_key_id"}
+	filled := actionrequests.RecordAction{Requests: []actionrequests.RecordRequest{request}, Paths: [][]int{{0}}}
+	after := judgeAction("access.deploy_key_get", planted, filled, routes, rules{})
+	want := []Finding{{
+		Action: "access.deploy_key_get", Field: "deploy_key_id", Direction: DirectionGitLabRequires,
+		Routes: []string{"GET /projects/:id/deploy_keys/:key_id"},
+	}}
+	if !reflect.DeepEqual(after.findings, want) || after.unplaced != nil {
+		t.Errorf("through the placeholders = findings %+v, unplaced %v; want %+v", after.findings, after.unplaced, want)
+	}
+	if fixed := judgeAction("access.deploy_key_get", correct, filled, routes, rules{}); fixed.findings != nil || fixed.judged != 2 {
+		t.Errorf("the correct schema = findings %+v, %d judged; want both fields judged and nothing found", fixed.findings, fixed.judged)
+	}
+}
+
+// TestJudgeAction_AWorkhorseBody_IsJudgedFromItsDeclaration is the planted
+// defect of #1688 (P13): repository.commit_create's commit_message losing
+// ,required. The record declares the file and the project alone on POST
+// /projects/:id/repository/commits, so the field was unplaced and the gate
+// passed; through the declared body it is judged, the planted schema is a
+// finding, and the correct one passes.
+func TestJudgeAction_AWorkhorseBody_IsJudgedFromItsDeclaration(t *testing.T) {
+	const route = "POST /projects/:id/repository/commits"
+	routes := routesByName([]apilive.Route{*liveRoute("POST", "/projects/:id/repository/commits", map[string]apilive.Param{
+		"id": {}, "file": {Required: true, Type: apilive.WorkhorseFile},
+	})})
+	action := actionrequests.RecordAction{Requests: []actionrequests.RecordRequest{rest(route)}, Paths: [][]int{{0}}}
+	planted := schemaOf([]string{"project_id", "branch"}, "project_id", "branch", "commit_message")
+	correct := schemaOf([]string{"project_id", "branch", "commit_message"}, "project_id", "branch", "commit_message")
+	if before := judgeAction("repository.commit_create", planted, action, routes, rules{}); before.findings != nil || len(before.unplaced) != 2 {
+		t.Errorf("with no declaration = findings %+v, unplaced %v; want both body fields unplaced", before.findings, before.unplaced)
+	}
+	declared := rules{
+		bodies:   map[string]workhorseBody{route: {Params: map[string]bool{"branch": true, "commit_message": true}}},
+		bodyUsed: map[string]bool{},
+	}
+	after := judgeAction("repository.commit_create", planted, action, routes, declared)
+	want := []Finding{{Action: "repository.commit_create", Field: "commit_message", Direction: DirectionGitLabRequires, Routes: []string{route}}}
+	if !reflect.DeepEqual(after.findings, want) || !declared.bodyUsed[route] {
+		t.Errorf("with the declaration = findings %+v, used %v; want %+v and the declaration used", after.findings, declared.bodyUsed, want)
+	}
+	if fixed := judgeAction("repository.commit_create", correct, action, routes, declared); fixed.findings != nil || fixed.judged != 3 {
+		t.Errorf("the correct schema = findings %+v, %d judged; want every field judged and nothing found", fixed.findings, fixed.judged)
+	}
+}
+
+// TestRulesBody_ReadsADeclarationOnlyWhileTheRecordStillNeedsIt verifies the
+// body a declaration names is read for its route while the record requires a
+// WorkhorseFile param and declares no param of the body, whatever else it
+// declares beside the file, is not read once the record declares a param of it
+// itself or stops requiring a file, and that a route no declaration names reads
+// nothing and is not counted as sent.
+func TestRulesBody_ReadsADeclarationOnlyWhileTheRecordStillNeedsIt(t *testing.T) {
+	const name = "POST /projects/:id/repository/commits"
+	file := apilive.Param{Required: true, Type: apilive.WorkhorseFile}
+	cases := []struct {
+		name     string
+		params   map[string]apilive.Param
+		wantBody bool
+	}{
+		{name: "the file alone", params: map[string]apilive.Param{"id": {}, "file": file}, wantBody: true},
+		{name: "the file beside a param the body does not hold", params: map[string]apilive.Param{"id": {}, "file": file, "dry_run": {}}, wantBody: true},
+		{name: "a body param declared again", params: map[string]apilive.Param{"id": {}, "file": file, "branch": {Required: true}}},
+		{name: "the file optional", params: map[string]apilive.Param{"id": {}, "file": {Type: apilive.WorkhorseFile}}},
+		{name: "a file of another type", params: map[string]apilive.Param{"id": {}, "file": {Required: true, Type: "File"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			with := rules{bodies: map[string]workhorseBody{name: {Params: map[string]bool{"branch": true}}}, bodyUsed: map[string]bool{}}
+			got := with.body(name, liveRoute("POST", "/projects/:id/repository/commits", tc.params))
+			if (got != nil) != tc.wantBody {
+				t.Errorf("body = %v, want read %t", got, tc.wantBody)
+			}
+			answered, sent := with.bodyUsed[name]
+			if !sent || answered != tc.wantBody {
+				t.Errorf("used = %t, sent %t; want sent and used %t", answered, sent, tc.wantBody)
+			}
+		})
+	}
+	with := rules{bodies: map[string]workhorseBody{}, bodyUsed: map[string]bool{}}
+	if got := with.body("GET /topics", liveRoute("GET", "/topics", nil)); got != nil || len(with.bodyUsed) != 0 {
+		t.Errorf("a route no declaration names = %v, used %v; want nothing", got, with.bodyUsed)
+	}
+}
+
+// TestStaleBodies_NamesEachWayADeclarationAnswersNothing verifies a body
+// declaration for a route no judged action sends, and one whose route is sent
+// but no longer answers it, are each stale with the reason, and one a request
+// read is not.
+func TestStaleBodies_NamesEachWayADeclarationAnswersNothing(t *testing.T) {
+	bodies := map[string]workhorseBody{"POST /a": {}, "POST /b": {}, "POST /c": {}}
+	got := staleBodies(bodies, map[string]bool{"POST /b": false, "POST /c": true})
+	slices.Sort(got)
+	want := []string{
+		"POST /a: no action this scope judges sends the route, so its Workhorse body answers nothing",
+		"POST /b: the record declares a param of the route's body again, or no longer requires a WorkhorseFile param",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("staleBodies = %q\nwant %q", got, want)
+	}
+}
+
+// TestJudgeAll_AWorkhorseBodyNoActionSends_IsStale verifies the whole report
+// fails on a body declaration no action's request reads, sorted among the
+// other stale entries, and keeps one a request did read.
+func TestJudgeAll_AWorkhorseBodyNoActionSends_IsStale(t *testing.T) {
+	routes := routesByName([]apilive.Route{*liveRoute("POST", "/projects/:id/repository/commits", map[string]apilive.Param{
+		"id": {}, "file": {Required: true, Type: apilive.WorkhorseFile},
+	})})
+	record := actionrequests.Record{Actions: []actionrequests.RecordAction{{
+		ID: "repository.commit_create", Requests: []actionrequests.RecordRequest{rest("POST /projects/:id/repository/commits")}, Paths: [][]int{{0}},
+	}}}
+	schemas := map[string]map[string]any{"repository.commit_create": schemaOf([]string{"project_id", "branch"}, "project_id", "branch")}
+	bodies := map[string]workhorseBody{
+		"POST /projects/:id/repository/commits":          {Params: map[string]bool{"branch": true}},
+		"POST /projects/:id/repository/files/:file_path": {Params: map[string]bool{"branch": true}},
+	}
+	report := judgeAll(schemas, record, routes, tables{bodies: bodies})
+	want := []string{"POST /projects/:id/repository/files/:file_path: no action this scope judges sends the route, so its Workhorse body answers nothing"}
+	if !slices.Equal(report.Stale, want) || report.Summary.Stale != 1 || report.Summary.Findings != 0 || report.Summary.FieldsJudged != 2 {
+		t.Errorf("report = stale %q, summary %+v; want the unsent declaration stale and both fields judged", report.Stale, report.Summary)
+	}
+}
+
 // TestAliasesByAction_TwoAliasesOfOneAction_ShareOneMap verifies the declared
 // aliases are indexed under one map per action, so a second alias of an action
 // joins the first rather than replacing it. The tree declares two aliases for
 // feature_flags.feature_flag_update, but only the run over the tree reaches
 // them, and a stacked layer defers that run.
 func TestAliasesByAction_TwoAliasesOfOneAction_ShareOneMap(t *testing.T) {
-	aliased := map[aliasKey]pathAlias{
+	aliased := map[aliasKey]paramAlias{
 		{action: "thing.update", param: "name"}: {Field: "thing"},
 		{action: "thing.update", param: "ref"}:  {Field: "branch"},
 		{action: "thing.list", param: "search"}: {Field: "query"},
@@ -351,12 +493,14 @@ func useFixtures(t *testing.T) {
 		catalogs     func() ([]*actioncatalog.Catalog, error)
 		readLive     func(string) (apilive.Document, error)
 		declarations func() map[declarationKey]declaration
-		aliases      func() map[aliasKey]pathAlias
-	}{readRecord, catalogs, readLive, declarations, aliases}
+		aliases      func() map[aliasKey]paramAlias
+		bodies       func() map[string]workhorseBody
+	}{readRecord, catalogs, readLive, declarations, aliases, bodies}
 	t.Cleanup(func() {
 		readRecord, catalogs, readLive = originals.readRecord, originals.catalogs, originals.readLive
-		declarations, aliases = originals.declarations, originals.aliases
+		declarations, aliases, bodies = originals.declarations, originals.aliases, originals.bodies
 	})
+	bodies = func() map[string]workhorseBody { return nil }
 	readRecord = func(string) (actionrequests.Record, error) {
 		return actionrequests.Record{Actions: []actionrequests.RecordAction{
 			{ID: "thing.update", Requests: []actionrequests.RecordRequest{rest("PUT /projects/:id/things/:name")}, Paths: [][]int{{0}}},
@@ -376,8 +520,8 @@ func useFixtures(t *testing.T) {
 			Direction: DirectionGitLabRequires, Category: categoryHandlerDefault, Reason: "the fixture's",
 		}}
 	}
-	aliases = func() map[aliasKey]pathAlias {
-		return map[aliasKey]pathAlias{{action: "thing.update", param: "name"}: {Field: "thing", Reason: "the fixture's"}}
+	aliases = func() map[aliasKey]paramAlias {
+		return map[aliasKey]paramAlias{{action: "thing.update", param: "name"}: {Field: "thing", Reason: "the fixture's"}}
 	}
 }
 

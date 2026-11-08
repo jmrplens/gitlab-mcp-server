@@ -818,7 +818,7 @@ Action guidance:
 - custom_attr_get: Get one custom attribute by key for a user, group, or project (admin only).
 - custom_attr_list: List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.
 - custom_attr_set: Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.
-- db_migration_mark: Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.
+- db_migration_mark: Mark a pending database migration as successfully executed (admin only), so db:migrate skips it. Provide the migration version and, for a database other than main, its name. Use only for a failing migration judged safe to skip.
 - dependency_proxy_delete: Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.
 - error_tracking_create: Create an error-tracking client key for a project's integrated error tracking. Provide project_id.
 - error_tracking_delete: Delete an error-tracking client key from a project by project_id and key id.
@@ -905,6 +905,10 @@ Parameter guidance:
 - cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- custom_attr_delete.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_get.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_list.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
+- custom_attr_set.resource_id: target_resource. Source: The numeric ID of the resource, or its name: the full path of a group or a project, or the username of a user. Avoid: resource_type says what the value names, so a project's path needs resource_type project. A name is read into its ID with one more request first.
 - db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.
 - dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -916,7 +920,7 @@ Parameter guidance:
 - feature_delete.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
 - feature_set.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
 - feature_set.value: feature_flag_value. Source: Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.
-- import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- import_cancel_github.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - license_add.license: license_payload. Source: The encoded license text the administrator was issued, sent whole.
 - license_delete.id: license_id. Source: License numeric ID from admin.license_get or admin.license_add output.
 - plan_limits_change.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.
@@ -936,7 +940,7 @@ Parameter guidance:
 - topic_update.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.
 - usage_data_track_event.event: usage_event_name. Source: The single internal event name to record.
 - usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- usage_data_track_event.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - usage_data_track_events.events: usage_event_batch. Source: Array of event objects to record in one request.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
@@ -1076,7 +1080,7 @@ Parameter constraints (beyond schema):
 - bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.
 - import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.
 - usage_data_track_event.namespace_id and .project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.
-- db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.
+- db_migration_mark.database is the database the migration belongs to, main unless given. Marking records a migration as executed, so db:migrate never runs it: mark only one that failed and was judged safe to skip. No action here shows whether a migration is pending or applied, while gitlab-rake db:migrate:status on the instance does.
 - terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.
 - topic_create.name must be globally unique (slug). Title is the display name shown in the UI.
 - List actions: page defaults to 1, per_page defaults to 20 (GitLab cap is 100).
@@ -5384,13 +5388,13 @@ Parameter guidance:
 - play.project_id: scope_project. Source: Project ID or full namespace path that owns the job. Avoid: Use project_id for project scope. pipeline_id and job_id are not substitutes for project_id.
 - retry.job_id: job_identifier. Source: Numeric CI job ID from pipeline/job list output or user-provided context. Avoid: job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id.
 - retry.project_id: scope_project. Source: Project ID or full namespace path that owns the job. Avoid: Use project_id for project scope. pipeline_id and job_id are not substitutes for project_id.
-- token_scope_add_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- token_scope_add_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_add_group.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
+- token_scope_add_project.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - token_scope_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_list_groups.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_list_inbound.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_patch.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- token_scope_remove_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_remove_group.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - token_scope_remove_project.project_id: scope_owner_project. Source: Owning project whose CI job token allowlist is being changed. Avoid: Do not use the project being removed as project_id.
 - token_scope_remove_project.target_project_id: target_project. Source: Project being removed from or added to the allowlist. Avoid: Do not put the allowlist owner project here.
 - trace.job_id: job_identifier. Source: Numeric CI job ID from pipeline/job list output or user-provided context. Avoid: job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id.
@@ -6347,20 +6351,20 @@ Action guidance:
 - changes_get: Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns one page of structured per-file diffs with old/new paths and line metadata for inline review. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips.
 - diff_version_get: Get a single merge request diff version with its commits and file diffs. Use the version_id from diff_versions_list. Set unidiff to return diffs in unified-diff format.
 - diff_versions_list: List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves. Pass a version_id to diff_version_get to retrieve the actual diff.
-- discussion_create: Open a new discussion thread on a merge request. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners.
+- discussion_create: Open a new discussion thread on a merge request. Provide a position to attach an inline comment to a line of the diff, a point of an image or a whole file, or omit it for a general MR discussion. Supports anchoring to a commit_id and backdating via created_at for admins/owners.
 - discussion_get: Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after mr_review.discussion_list when the target thread is already known.
 - discussion_list: List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and offset pagination.
 - discussion_note_delete: Permanently delete a note from a merge request discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - discussion_note_update: Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body. Only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id.
 - discussion_reply: Reply to an existing merge request discussion thread by adding a note. Use this after mr_review.discussion_list or mr_review.discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - discussion_resolve: Resolve or unresolve a merge request discussion thread. Set resolved=true to mark the thread resolved or resolved=false to reopen it. Only resolvable (thread) discussions can be toggled.
-- draft_note_create: Create a pending draft review note on a merge request. Omit position for a general comment. Include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.
+- draft_note_create: Create a pending draft review note on a merge request. Omit position for a general comment. A position takes base_sha/start_sha/head_sha from the MR diff refs and the file's old_path and new_path from mr_review.changes_get, or both from repository.tree for a file outside the diff. A text position (the default) also needs a line of the diff: new_line for an added line, old_line for a removed one, both for an unchanged one. An image position needs width, height, x and y in whole pixels. A file position needs both old_path and new_path. The note stays author-private until published.
 - draft_note_delete: Discard a pending draft note so it is never published. Destructive and irreversible. Only the draft's author can delete it.
 - draft_note_get: Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.
 - draft_note_list: List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.
 - draft_note_publish: Publish one pending draft note, turning it into a regular merge request note visible to everyone. Cannot be undone. Only the draft's author can publish it.
 - draft_note_publish_all: Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Optionally post a summary note with it (note, internal) and record the caller's reviewer state (reviewer_state: requested_changes or reviewed, which is not an approval). Cannot be undone. Review with mr_review.draft_note_list first.
-- draft_note_update: Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.
+- draft_note_update: Edit the body, the inline position or both of a pending draft note before it is published. Give note, position or both. The one left out is kept as the draft has it. Only the draft's author can update it.
 - note_create: Add a general comment (note) to a merge request. Use when the task asks to comment on, reply to, or annotate an existing MR. Set internal=true for a confidential note visible only to project members.
 - note_delete: Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation.
 - note_get: Get one merge request note by params.note_id. Use when the task references a specific comment or note ID on an MR.
@@ -6380,7 +6384,7 @@ Parameter guidance:
 - diff_versions_list.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - discussion_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
-- discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from mr_review.changes_get. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line.
+- discussion_create.position: diff_position. Source: Diff anchor. base_sha, start_sha and head_sha are the diff_refs of merge_request.get, and the file's old_path and new_path and the line come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha. Omit for a general discussion. Avoid: Every position needs start_sha and head_sha from the MR diff refs and the file's path. Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position. By position_type: text (the default) also needs a line of the MR diff (new_line for an added line, old_line for a removed one, both for an unchanged one), image needs width, height, x and y in whole pixels and no line, and file needs both old_path and new_path and no line. Omit position entirely for a thread that is not tied to the diff.
 - discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_get.discussion_id: discussion_id. Source: Discussion thread id from a prior mr_review.discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
 - discussion_get.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, usually from the URL or prior MR list output. Avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
@@ -6406,7 +6410,7 @@ Parameter guidance:
 - discussion_resolve.resolved: resolve_flag. Source: Boolean: true resolves the thread, false reopens it. Avoid: resolved is a boolean toggle, not a note body. Only resolvable thread discussions can be resolved.
 - draft_note_create.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_create.note: comment_body. Source: The Markdown review comment the user wants to draft.
-- draft_note_create.position: diff_position. Source: Inline diff location for a code comment. Mirror the MR diff SHAs and the target file path and line. Avoid: Omit position entirely for a general MR comment. Only set it to anchor the note to a changed line.
+- draft_note_create.position: diff_position. Source: Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha. Avoid: Omit position entirely for a general MR comment. A position missing start_sha, head_sha, a file path or a field its position_type needs is refused before any request, since GitLab would save the draft and publish it as a general comment with the position dropped., Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position.
 - draft_note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - draft_note_delete.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_delete.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
@@ -6426,6 +6430,7 @@ Parameter guidance:
 - draft_note_update.merge_request_iid: merge_request_iid. Source: Merge request number visible in the project, from the URL or a prior MR list. Avoid: Use the project-scoped merge_request_iid, not the global merge_request_id.
 - draft_note_update.note: comment_body. Source: The revised Markdown body for the draft note.
 - draft_note_update.note_id: draft_note_id. Source: Draft note ID from a prior mr_review.draft_note_list response. Avoid: Draft notes are author-private until published. List them first to obtain a valid note_id.
+- draft_note_update.position: diff_position. Source: Inline diff location for a review comment. base_sha, start_sha and head_sha are the diff_refs of merge_request.get. The file's old_path and new_path, and a line for a text position, come from mr_review.changes_get. An image or file position may name a file outside the diff, whose path repository.tree lists at head_sha. Avoid: A position given replaces the draft's whole position, so it carries every field one needs: base_sha, start_sha and head_sha, the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image), or both old_path and new_path (file). One missing a field is refused before any request. Omit position to keep the draft's current one., Send old_path and new_path, both from the file's entry in mr_review.changes_get, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. A file position needs both, and so does a text position on a file the diff renames, since GitLab finds a renamed file's lines only by both. A text or image position on a file that was not renamed is taken with one, although GitLab documents both for a text position.
 - draft_note_update.project_id: scope_project. Source: Project ID or full namespace path that owns the merge request. Avoid: Use the merge request's parent project here, not a group path or global ID.
 - note_create.body. Source: The comment text the user wants to post. Markdown is supported. Avoid: body is the comment content, not an MR description update. Updating the MR body is merge_request.update.
 - note_create.internal. Source: Set true only when the user asks for a private/internal note. Avoid: internal notes are visible to project members only. Do not set for public replies.
@@ -6459,9 +6464,9 @@ Returns:
 - changes_get: {changes: [{old_path, new_path, diff, ...}], truncated_files, pagination: {has_more, next_page, ...}}. While has_more is true, pass next_page as page for offset pagination. Use per_page: 100 to reduce round trips. If truncated, use diff_versions_list + diff_version_get, or raw_diffs for the full unified diff payload.
 - raw_diffs: {raw_diff: string}. Full unified diff for the MR head. Ideal when changes_get returns truncated_files.
 - *_delete / *_publish: {success: bool, message: string}.
-Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha + new_path/old_path + new_line/old_line).
+Errors: 404 not found (hint: check note_id/discussion_id and merge_request_iid), 403 forbidden (hint: requires Reporter+ to comment), 400 invalid params (hint: position requires base_sha + start_sha + head_sha and the file's path (send old_path + new_path), and by position_type: text its line (new_line for an added line, old_line for a removed one, both for an unchanged one) and both paths on a renamed file, image width + height + x + y, file old_path + new_path).
 
-Param conventions: * = required. All actions need project_id*, merge_request_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, new_path, old_path, new_line (added/modified), old_line (removed), both lines for unchanged context}.
+Param conventions: * = required. All actions need project_id*, merge_request_iid*. List actions accept page, per_page. position object: {base_sha, start_sha, head_sha, old_path, new_path, position_type (text by default, image or file), new_line (added line), old_line (removed line), both lines for an unchanged line, width, height, x, y in whole pixels for an image}.
 
 Notes (general comments):
 - note_list: order_by (created_at/updated_at), sort
@@ -7622,7 +7627,7 @@ Action guidance:
 - transfer: Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target. GitLab 19.4 and later move the project in the background (19.4 checks there that the name and path are free in the target namespace, which 19.5 and later check with the request too), so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the project where it still is: read it back with project.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs.
 - unarchive: Unarchive a previously archived project to restore write access. Send project_id. Requires Owner role.
 - unstar: Remove the authenticated user's star from a project. Send project_id. Idempotent if not currently starred.
-- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change.
+- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. An update that sets mirror_overwrites_diverged_branches true, enables a mirror that has it, points such a mirror at another import_url, or lets it pull branches it skipped by changing only_mirror_protected_branches or mirror_branch_regex discards this project's own commits on each diverged branch the mirror pulls, so it needs confirm=true (or an approved elicitation prompt), as project.pull_mirror_configure does: pass it only after the user approves discarding those commits, knowing the source and which branches the mirror pulls. Setting the flag while turning the mirror off needs it too: GitLab keeps a flag stored on a mirror that is off, by this call or by another client, and hides it until the mirror is turned back on, so that later call is not asked.
 - upload: Use to upload a file into a project's Markdown attachments store and obtain a Markdown-embeddable reference.
 - upload_avatar: Upload an avatar image for a project. Send project_id and the image content/path. Replaces any existing avatar.
 - upload_delete: Use to permanently remove a project Markdown upload identified by its numeric upload ID.
@@ -7655,7 +7660,7 @@ Parameter guidance:
 - create_fork_relation.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete_fork_relation.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- delete_shared_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- delete_shared_group.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
 - delete_shared_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - download_avatar.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - export_download.project_id: scope_project. Source: Project ID or URL-encoded full path of the project being exported or imported. Avoid: Use the source project for export status/download. For import_status use the newly created target project, not the archive.
@@ -7778,7 +7783,7 @@ Parameter guidance:
 - service_account_pat_rotate.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - service_account_pat_rotate.token_id: access_token. Source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create. Avoid: Do not use service_account_id as token_id. token_id identifies the personal access token itself.
 - service_account_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
-- share_with_group.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- share_with_group.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
 - share_with_group.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - star.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - start_housekeeping.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -9306,7 +9311,7 @@ Action guidance:
 - commit_create: Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough.
 - commit_diff: Get the file diffs for a single commit with offset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes.
 - commit_discussion_add_note: Reply to an existing commit discussion thread by adding a note. Use this after repository.commit_discussion_list or repository.commit_discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
-- commit_discussion_create: Open a new discussion thread on a commit. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners.
+- commit_discussion_create: Open a new discussion thread on a commit. Provide a position to attach an inline comment to a line of the commit's diff or a whole file, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners.
 - commit_discussion_delete_note: Permanently delete a note from a commit discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id.
 - commit_discussion_get: Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after repository.commit_discussion_list when the target thread is already known.
 - commit_discussion_list: List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and offset pagination.
@@ -9366,7 +9371,7 @@ Parameter guidance:
 - commit_discussion_add_note.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_create.body: comment_body. Source: Markdown text for the first note of the new thread.
 - commit_discussion_create.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
-- commit_discussion_create.position: diff_position. Source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from repository.commit_diff. Omit for a general discussion. Avoid: Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line.
+- commit_discussion_create.position: diff_position. Source: Diff anchor. base_sha and start_sha are both the commit's first parent and head_sha is the commit itself, from parent_ids and id in repository.commit_get, and the file's old_path and new_path and the line come from repository.commit_diff. A file position may name a file outside the diff, whose path repository.tree lists at head_sha. Omit for a general discussion. Avoid: Every position needs start_sha and head_sha and the file's path. Send old_path and new_path, both from the file's entry in repository.commit_diff, which repeats the path for a file that was not renamed. A file outside the diff has no entry there, so the path repository.tree lists at head_sha goes in both. GitLab takes one for a text position on a file that was not renamed, but finds a renamed file's lines only by both. GitLab refuses SHAs other than the commit's first parent and the commit itself, and a commit with no parent takes the all-zero SHA for base_sha and start_sha. By position_type: text also needs a line of the commit diff (new_line for an added line, old_line for a removed one, both for an unchanged one), and file needs both old_path and new_path and no line. An image position cannot be sent by this action, which carries no image coordinates. Omit position entirely for a thread that is not tied to the diff.
 - commit_discussion_create.project_id: scope_project. Source: Project ID or full namespace path that owns the commit.
 - commit_discussion_delete_note.commit_sha: commit_sha. Source: Commit SHA where the discussion lives, from a prior repository.commit_get or branch/tag response.
 - commit_discussion_delete_note.discussion_id: discussion_id. Source: Discussion thread id from a prior repository.commit_discussion_list response. Avoid: The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions.
@@ -10854,12 +10859,12 @@ Action guidance:
 Parameter guidance:
 - get_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
 - get_project_for_project.id: target_resource. Source: Numeric ID of the repository storage move, taken from a retrieve_all/retrieve_project listing. Avoid: This is the storage move record ID, not the project ID.
-- get_project_for_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
-- retrieve_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- get_project_for_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
+- retrieve_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 - schedule_all_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
 - schedule_all_project.source_storage_name: config_value. Source: Name of the Gitaly storage shard to drain. Every project on this shard is scheduled to move. Avoid: This is the shard to move projects away from, not the destination.
 - schedule_project.destination_storage_name: config_value. Source: Name of a Gitaly storage shard already configured on the instance to move the repository to. Avoid: Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight.
-- schedule_project.project_id: scope_project. Source: Numeric project ID whose repository storage move(s) you want to inspect or schedule. Avoid: This endpoint takes the numeric project ID only, not a namespace path or the storage move ID.
+- schedule_project.project_id: scope_project. Source: Numeric ID or full path of the project whose repository storage move(s) you want to inspect or schedule. Avoid: This is the project, not the storage move ID. A path is read into its ID with one more request first, and a project hidden or pending deletion is found by its numeric ID alone.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden, each with actionable hints.
@@ -11438,8 +11443,8 @@ Parameter guidance:
 - create.username: username. Source: GitLab username slug for the new account. Avoid: Use username without spaces. It is different from display name.
 - create_impersonation_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - create_personal_access_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
-- create_runner.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- create_runner.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- create_runner.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
+- create_runner.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - deactivate.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - delete.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - delete_email_for_user.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
@@ -11469,8 +11474,8 @@ Parameter guidance:
 - reject.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - revoke_impersonation_token.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - ssh_keys_for_user.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
-- todo_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- todo_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- todo_list.group_id: scope_group. Source: Numeric group ID. This action does not take a URL-encoded path, so read the ID with group.get first.
+- todo_list.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - unban.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 - unblock.user_id: scope_user. Source: Numeric user ID (the global GitLab user ID, not a username).
 
@@ -13058,7 +13063,7 @@ Action guidance:
 - tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
 Parameter guidance:
 - graph_status.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- graph_status.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- graph_status.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 - query.query: graph_query. Source: GQL text, one MATCH ... RETURN statement, naming the entities, properties and relationship types orbit.schema lists. orbit.dsl describes the language as GitLab.com publishes it. Avoid: Every query bounds at least one node by its id or a literal property, inline as {id: 278964} or {full_path: 'gitlab-org/gitlab'}, or in a WHERE comparison. LIMIT bounds nothing, so MATCH (p:Project) RETURN p LIMIT 5 is refused., A relationship type follows a colon, -[:IN_PROJECT]->, and several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->. Written without the colon, -[IN_PROJECT]-> declares a variable and is refused., WHERE combines predicates on one node's properties with AND and NOT. OR, XOR, RETURN DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN. count(DISTINCT x) counts distinct values., Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n., A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, one type or several joined by |, since a wildcard -[*1..3]-> is refused there. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC., A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused., A query written as a JSON object is the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1. Send a GQL statement.
 
 GitLab orbit actions.
@@ -13191,7 +13196,7 @@ Action guidance:
 - update: Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color. Template-provided attributes are not editable.
 Parameter guidance:
 - create.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
-- project_update.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- project_update.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
 
 Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
 Returns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.
@@ -13846,7 +13851,7 @@ Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -13909,7 +13914,7 @@ Add a project to a project's CI/CD job token inbound allowlist. Returns: the new
 
 **Parameters:**
 
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to add to the allowlist
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -15253,7 +15258,7 @@ Delete a custom attribute. Returns: a success status. See also: gitlab_get_custo
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Attribute key to delete
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -17060,7 +17065,7 @@ Get a custom attribute by key. Returns: the attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17312,7 +17317,7 @@ Get a single repository storage move for a specific group. Returns: the storage 
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `id` (integer) (required): Numeric ID of the storage move
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -17634,7 +17639,7 @@ Get a single repository storage move for a specific project by project_id and mo
 **Parameters:**
 
 - `id` (integer) (required): Numeric ID of the storage move
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -21180,7 +21185,7 @@ List custom attributes for a resource. Returns: an array of key/value custom att
 
 **Parameters:**
 
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -22823,7 +22828,7 @@ Create a pending draft note on a merge request. Returns: the created draft note 
 - `in_reply_to_discussion_id` (string): Discussion ID to reply to
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string) (required): Note body text (Markdown)
-- `position` (object): Diff position for inline comments on specific lines. Omit for general MR comments.
+- `position` (object): Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `resolve_discussion` (boolean): Resolve the discussion when published
 
@@ -22897,14 +22902,14 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_draft_note_update
 
-Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
+Update a pending draft note's body, position or both, keeping the one left out. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.
 
 **Parameters:**
 
 - `merge_request_iid` (integer) (required): Merge request internal ID
-- `note` (string): Updated note body text (Markdown)
+- `note` (string): Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both
 - `note_id` (integer) (required): Draft note ID
-- `position` (object): Updated diff position for inline comments
+- `position` (object): Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -25714,16 +25719,16 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_pull_mirror_configure
 
-Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
+Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces each diverged branch the mirror pulls with the source's version and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
 
 **Parameters:**
 
 - `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
-- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `enabled` (boolean): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
-- `mirror_overwrites_diverged_branches` (boolean): Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true
+- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -26080,6 +26085,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `ci_restrict_pipeline_cancellation_role` (string): Role required to cancel pipelines/jobs (developer, maintainer, no_one)
 - `ci_separated_caches` (boolean): Use separate caches for protected branches
 - `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -26116,7 +26122,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
 - `mirror_branch_regex` (string): Only mirror branches matching this regex
-- `mirror_overwrites_diverged_branches` (boolean): Overwrite diverged branches when mirroring
+- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `mirror_user_id` (integer): User ID used to run mirror updates (admin only)
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
@@ -26799,7 +26805,7 @@ Remove a group from a project's CI/CD job token allowlist. Returns: a success co
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_group_id` (integer) (required): ID of the group to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -26811,7 +26817,7 @@ Remove a project from a project's CI/CD job token inbound allowlist. Returns: a 
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `project_id` (string or integer) (required): Project ID or URL-encoded path
+- `project_id` (integer) (required): Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first
 - `target_project_id` (integer) (required): ID of the project to remove from the allowlist
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -27070,7 +27076,7 @@ List repository storage moves for a single group. Returns: the group's storage m
 
 **Parameters:**
 
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
@@ -27087,7 +27093,7 @@ List repository storage moves for a single project. Returns: each move's id, sta
 - `order_by` (string): Column to order results by (e.g. id).
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sort` (string): Sort direction: asc or desc.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -27676,7 +27682,7 @@ Schedule a repository storage move for a single group. Returns: the scheduled st
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `group_id` (integer) (required): Numeric ID of the group
+- `group_id` (string or integer) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -27701,7 +27707,7 @@ Schedule a repository storage move for a single project to another Gitaly storag
 **Parameters:**
 
 - `destination_storage_name` (string): Name of the destination storage shard
-- `project_id` (integer) (required): Numeric ID of the project
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -27886,7 +27892,7 @@ Set a custom attribute. Returns: the stored attribute with key and value. See al
 **Parameters:**
 
 - `key` (string) (required): Attribute key
-- `resource_id` (integer) (required): ID of the resource
+- `resource_id` (string or integer) (required): ID of the resource, the URL-encoded path of a group or a project, or the username of a user
 - `resource_type` (string) (required): Resource type: user, group, or project
 - `value` (string) (required): Attribute value
 
