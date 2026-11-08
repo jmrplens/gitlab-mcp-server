@@ -2527,7 +2527,10 @@ jobs:
             try {
               $result = $body | ConvertFrom-Json
               $found = @($result.items | Where-Object {
-                $words = -split $_.title
+                # A title can write the version as "3.5.0." or "(3.5.0)": punctuation around a
+                # word is dropped, and a word still has to equal the identifier or the version.
+                $title = $_.title
+                $words = @(-split $title | ForEach-Object { $_.Trim('.,;:!?()[]{}"''') })
                 $words -contains $env:WINGET_IDENTIFIER -and $words -contains $env:VERSION -and
                   $words[0] -ne 'Remove' -and
                   ($_.state -eq 'open' -or $_.pull_request.merged_at)
