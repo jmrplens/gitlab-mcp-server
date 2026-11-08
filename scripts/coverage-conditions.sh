@@ -125,13 +125,16 @@
 #                                 printed, counted and passed, since a run on
 #                                 that platform measures its file
 #
-# The second is what the Windows and macOS legs of CI run with linux/amd64,
-# the platform the gate is otherwise applied on, by the GOBCO_GATE=all run a
-# touched package passes before it is committed (no CI step runs gobco on
-# Linux): there the files only they build are held to the gate, and a
-# condition of a shared file that a test skipped on that platform leaves
-# one-way does not fail a leg for something the Linux run measures both ways.
-# Any other value is refused before gobco runs.
+# The first is also what the Windows and macOS legs of CI run on cmd/server and
+# internal/toolutil (no CI step runs gobco on Linux, where a touched package
+# passes it before it is committed): a condition either package leaves one-way
+# on that platform fails the leg, in a file only that platform builds or in
+# one Linux builds too. Until issue 1212 the legs ran the second, with
+# linux/amd64, which held only the files they alone build, because tests
+# those platforms skipped left a few conditions of shared files one-way there
+# while the Linux run measured them both ways; each of those is now driven on
+# every platform. The second remains for a measurement that wants only a
+# platform's own files. Any other value is refused before gobco runs.
 #
 # A run the gate fails exits 3, and no other path does. Every other failure
 # means nothing was measured and exits 1 or 2, never 3: 2 for a gate or a mode

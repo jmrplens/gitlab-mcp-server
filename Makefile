@@ -950,9 +950,10 @@ modeleval-probe:
 # TAGS names build tags for a package behind one (TAGS=e2e), passed to go list
 # and to gobco's go test alike, and a report that measured no condition (0/0)
 # is refused. GOBCO_GATE=all turns the report into the gate a touched package
-# is held to (it fails on any condition not evaluated both ways), and
-# GOBCO_GATE=beyond:linux/amd64 into the one the Windows and macOS legs of CI
-# run, which holds only the files linux/amd64 does not build. The script
+# is held to (it fails on any condition not evaluated both ways), the one the
+# Windows and macOS legs of CI hold cmd/server and internal/toolutil to, and
+# GOBCO_GATE=beyond:linux/amd64 into one that holds only the files
+# linux/amd64 does not build. The script
 # exits 3 when the gate fails a run, which no other failure of it uses, so the
 # on-demand measurement (.github/workflows/conditions.yml), which runs the
 # script itself, can tell a held figure from no figure; make reports any

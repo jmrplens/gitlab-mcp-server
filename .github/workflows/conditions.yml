@@ -2,11 +2,13 @@
 #
 # The condition gate is gobco, run through scripts/coverage-conditions.sh, the
 # recipe behind `make coverage-conditions`. It is held on Linux before a
-# commit, and the Windows and macOS legs of ci.yml hold only the files those
-# systems alone build. Neither answers what a whole package scores on Windows
-# or macOS, and until this workflow that figure could only be taken by hand on
-# a machine of that system: the internal/toolutil figures quoted in #1206 came
-# from a Windows virtual machine, and nobody could take them on macOS at all.
+# commit, and the Windows and macOS legs of ci.yml hold every condition of
+# cmd/server and internal/toolutil there (until issue 1212 they held only the
+# files those systems alone build). Neither answers what any other package
+# scores on Windows or macOS, and until this workflow that figure could only
+# be taken by hand on a machine of that system: the internal/toolutil figures
+# quoted in #1206 came from a Windows virtual machine, and nobody could take
+# them on macOS at all.
 #
 # This runs the same script, through bash as ci.yml runs it, on each runner a
 # dispatch names, so every figure is the one the gate would compute there:
