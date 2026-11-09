@@ -671,8 +671,8 @@ que fallan las dos cosas: un salto delante del servidor que quita la cabecera, y
 un `gzip` cuyo `gzip_types` incluye `text/event-stream`. La compresión con el
 búfer activado retiene el stream hasta que el compresor tiene bastante que
 escribir, lo que en un `subscriptions/listen` tranquilo no llega nunca; sin
-búfer, nginx vacía el compresor en cada lectura y cada evento sigue llegando
-según se escribe.
+búfer, nginx vacía el compresor en cada lectura, así que ningún evento espera
+a que el servidor escriba otro.
 
 </TabItem>
 <TabItem label="Caddy">
@@ -772,9 +772,10 @@ servicio.
 
 El bloque no pone ninguna opción de vaciado, y el stream no la necesita:
 `mod_proxy_http` pasa al cliente lo que ha leído cada vez que su siguiente
-lectura del servidor tendría que esperar, que es tras cada evento que escribe
-un stream, así que httpd 2.4 entrega cada evento en cuanto se escribe.
-`flushpackets=on` no cambiaría eso: la
+lectura del servidor tendría que esperar, así que httpd 2.4 nunca retiene un
+evento mientras espera a que el servidor escriba otro. Los eventos que el
+servidor escribe seguidos, más deprisa de lo que httpd los lee, pueden llegar
+juntos al cliente. `flushpackets=on` no cambiaría ninguna de las dos cosas: la
 [referencia de `ProxyPass`](https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass)
 dice que solo tiene efecto en `mod_proxy_ajp` y `mod_proxy_fcgi`, y
 `mod_proxy_http` nunca la lee. `timeout=3600` es el timeout de lectura de esta

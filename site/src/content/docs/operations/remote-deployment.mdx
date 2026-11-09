@@ -649,7 +649,7 @@ case where both fail: a hop in front of the server that drops the header, and a
 `gzip` whose `gzip_types` lists `text/event-stream`. Compression with buffering
 on holds the stream until the compressor has enough to write, which for a
 quiet `subscriptions/listen` is never; with buffering off nginx flushes the
-compressor on every read and each event still arrives as it is written.
+compressor on every read, so no event waits for the server to write another.
 
 </TabItem>
 <TabItem label="Caddy">
@@ -748,9 +748,10 @@ same service.
 
 The block sets no flush option, and the stream needs none: `mod_proxy_http`
 passes what it has read on to the client whenever its next read from the
-server would wait, which is after every event a stream writes, so httpd 2.4
-delivers each event as it is written. `flushpackets=on` would not change that:
-the [`ProxyPass` reference](https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass)
+server would wait, so httpd 2.4 never holds an event while it waits for the
+server to write another. Events the server writes back to back, faster than
+httpd reads them, can reach the client together. `flushpackets=on` would
+change neither: the [`ProxyPass` reference](https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass)
 says it is in effect only for `mod_proxy_ajp` and `mod_proxy_fcgi`, and
 `mod_proxy_http` never reads it. `timeout=3600` is this route's read timeout,
 separate from the server-wide `Timeout`.

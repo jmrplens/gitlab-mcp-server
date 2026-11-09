@@ -1129,7 +1129,7 @@ func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
 		if !strings.Contains(rendered, "rm -rf dist/e2e-cover/cloudflare-tunnel\n") {
 			t.Errorf("the target does not clear its leaf before the run:\n%s", rendered)
 		}
-		if !strings.Contains(rendered, "E2E_COVER_DIR="+leaf+" ") {
+		if !strings.Contains(rendered, `E2E_COVER_DIR="`+leaf+`" `) {
 			t.Errorf("the run is not handed E2E_COVER_DIR=%s:\n%s", leaf, rendered)
 		}
 	})
@@ -1141,6 +1141,70 @@ func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
 	})
 }
 
+// TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths
+// renders make test-e2e-cloudflare-tunnel in a checkout whose path holds a
+// space and runs it against the stand-ins, holding the run to being handed
+// the server binary and, under COVER=1, the coverage leaf, each as one path.
+//
+// The recipe joined both onto $(CURDIR) unquoted, so the shell split them at
+// the space and ran the rest of the path as a command: the run ended with
+// status 127 before gotestsum started. A checkout under a Windows home folder
+// with a space in its name, reached from WSL, is such a path.
+func TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths(t *testing.T) {
+	t.Parallel()
+	target := newTunnelTarget(t)
+	// The Makefile includes nothing, and these are the files it reads while
+	// make parses it.
+	checkout := filepath.Join(t.TempDir(), "checkout with space")
+	if err := os.MkdirAll(checkout, 0o750); err != nil {
+		t.Fatalf("creating the checkout: %v", err)
+	}
+	var copyErr error
+	for _, name := range []string{"Makefile", "VERSION", "go.mod"} {
+		body, err := os.ReadFile(filepath.Join(target.root, name)) //#nosec G304 -- a file of this repository, named here
+		if err == nil {
+			err = os.WriteFile(filepath.Join(checkout, name), body, 0o600) //#nosec G703 -- a t.TempDir and a name from the list above
+		}
+		copyErr = errors.Join(copyErr, err)
+	}
+	if copyErr != nil {
+		t.Fatalf("copying the Makefile and what it reads into %s: %v", checkout, copyErr)
+	}
+	target.root = checkout
+	binary := filepath.Join(checkout, "dist", "e2e", "gitlab-mcp-server")
+
+	tests := []struct {
+		name string
+		args []string
+		// want is what the stand-in gotestsum was handed: the server binary
+		// on one line and the coverage leaf on the next.
+		want string
+	}{
+		{name: "without COVER", want: binary + "\n\n"},
+		{name: "with COVER=1", args: []string{"COVER=1"}, want: binary + "\n" + filepath.Join(checkout, "dist", "e2e-cover", "cloudflare-tunnel") + "\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recipe := target.render(t, tt.args...)
+			state := t.TempDir()
+			// Released before it starts, so the stand-in ends at once.
+			release(t, state, "cf-space")
+			run := target.start(t, recipe, state, "cf-space", 0)
+			if status := run.wait(t); status != 0 {
+				t.Fatalf("the run ended with status %d, want 0:\n%s", status, run.stderr.String())
+			}
+			handed, err := os.ReadFile(filepath.Join(state, "cf-space")) //#nosec G304 -- the mark the stand-in wrote in this test's own directory
+			if err != nil {
+				t.Fatalf("the stand-in gotestsum left no mark: %v", err)
+			}
+			if string(handed) != tt.want {
+				t.Errorf("the run was handed %q, want %q", handed, tt.want)
+			}
+		})
+	}
+}
+
 // tunnelTarget is what rendering and running the test-e2e-cloudflare-tunnel
 // recipe needs: make, the repository the Makefile sits in, and a directory
 // holding the stand-in gotestsum and docker.
@@ -1149,10 +1213,11 @@ type tunnelTarget struct {
 }
 
 // The stand-ins the recipe runs. The gotestsum one writes the log line the
-// case prints to the file --jsonfile names, marks its container as existing
-// and waits for its release; the docker one answers an inspect from those
-// marks and records each removal under the run that made it. Each reads the
-// run it belongs to from FAKE_*.
+// case prints to the file --jsonfile names, marks its container as existing,
+// writing into the mark the server binary and the coverage leaf the run was
+// handed, and waits for its release; the docker one answers an inspect from
+// those marks and records each removal under the run that made it. Each reads
+// the run it belongs to from FAKE_*.
 const (
 	stubGotestsum = `#!/bin/sh
 log=
@@ -1161,7 +1226,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 printf '{"Action":"output","Output":"%s keeps a public trycloudflare.com address open until it is removed; if this run is interrupted: docker rm -f %s\\n"}\n' "$FAKE_NAME" "$FAKE_NAME" > "$log"
-: > "$FAKE_STATE/$FAKE_NAME"
+printf '%s\n%s\n' "$E2E_SERVER_BINARY" "${E2E_COVER_DIR-}" > "$FAKE_STATE/$FAKE_NAME"
 while [ ! -e "$FAKE_STATE/release-$FAKE_NAME" ]; do sleep 0.05; done
 exit "$FAKE_STATUS"
 `
@@ -1232,10 +1297,10 @@ func (tt tunnelTarget) renderAll(t *testing.T, args ...string) string {
 }
 
 // render returns the target's own recipe line, the one that runs the case,
-// as make -n prints it.
-func (tt tunnelTarget) render(t *testing.T) string {
+// as make -n prints it with args.
+func (tt tunnelTarget) render(t *testing.T, args ...string) string {
 	t.Helper()
-	rendered := tt.renderAll(t)
+	rendered := tt.renderAll(t, args...)
 	start := strings.Index(rendered, "exec bash -o pipefail -c '")
 	end := strings.LastIndex(rendered, `exit "$status"'`)
 	if start < 0 || end < start {

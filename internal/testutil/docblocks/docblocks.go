@@ -86,7 +86,7 @@ func Parse(src []byte) ([]Block, error) {
 		if fence[0] == '`' && strings.Contains(rest, "`") {
 			continue
 		}
-		block, err := fenceInfo(strings.TrimSpace(rest), i+1)
+		block, err := fenceInfo(strings.Trim(rest, " \t"), i+1)
 		if err != nil {
 			return nil, err
 		}
@@ -146,13 +146,16 @@ func closes(line, fence string) bool {
 //
 // The language ends at the first space or tab, as micromark, which renders
 // the site, ends an info string's first word, so a tab after the language
-// does not fold the options into it and a nonbreaking space does.
-// check-i18n-code.mjs splits the same way and refuses a fence holding any
-// other white space, so a key such a fence hides fails the site check before
-// a test asks for it.
+// does not fold the options into it and a nonbreaking space does. Only
+// spaces and tabs are trimmed from the info string's ends too: micromark
+// keeps any other white space there, in the language or in the last option,
+// so a nonbreaking space that ends a fence stays in its last word, and an
+// e2e= value it ends is refused as no key. check-i18n-code.mjs splits and
+// trims the same way and refuses a fence holding any other white space, so a
+// key such a fence hides fails the site check before a test asks for it.
 func fenceInfo(info string, line int) (Block, error) {
 	options := strings.TrimLeftFunc(info, func(r rune) bool { return r != ' ' && r != '\t' })
-	block := Block{Lang: info[:len(info)-len(options)], Info: strings.TrimSpace(options), Line: line}
+	block := Block{Lang: info[:len(info)-len(options)], Info: strings.TrimLeft(options, " \t"), Line: line}
 	for _, option := range splitOptions(block.Info) {
 		value, ok := strings.CutPrefix(option, keyOption)
 		if !ok {
@@ -162,7 +165,7 @@ func fenceInfo(info string, line int) (Block, error) {
 			return Block{}, fmt.Errorf("the fence at line %d names %q and %q: %w", line, block.Key, value, ErrBadKey)
 		}
 		if !keyPattern.MatchString(value) {
-			return Block{}, fmt.Errorf("the fence at line %d has %s%s, and a key is lowercase words joined by hyphens: %w", line, keyOption, value, ErrBadKey)
+			return Block{}, fmt.Errorf("the fence at line %d has %s%q, and a key is lowercase words joined by hyphens: %w", line, keyOption, value, ErrBadKey)
 		}
 		block.Key = value
 	}

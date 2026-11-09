@@ -135,7 +135,7 @@ E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
 # not set, no coverage data emitted" on its stderr the moment it starts, which
 # would head every child's log for the whole run.
 e2e_cover_build = $(if $(COVER),-cover)
-e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_ROOT)/$(1))
+e2e_cover_env = $(if $(COVER),E2E_COVER_DIR="$(CURDIR)/$(E2E_COVER_ROOT)/$(1)")
 
 # The support packages of the e2e suite, test/e2e/internal/fixture and
 # test/e2e/modeleval, are measured where their code runs (issue 1461): most of
@@ -404,7 +404,7 @@ test-e2e-harness: ensure-gotestsum
 test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/stdio))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,stdio) \
 	  $(GOTESTSUM) \
 	  --format testdox \
@@ -415,7 +415,7 @@ test-e2e-stdio: ensure-gotestsum e2e-server-binary
 test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL= \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL= \
 	  $(call e2e_cover_env,http) \
 	  $(GOTESTSUM) \
 	  --format testdox \
@@ -485,7 +485,7 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	  trap "stop TERM 143" TERM; \
 	  trap "stop HUP 129" HUP; \
 	  set -m; \
-	  E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
+	  E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
 	  $(call e2e_cover_env,cloudflare-tunnel) \
 	  $(GOTESTSUM) \
 	  --format standard-verbose \
@@ -505,7 +505,7 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 test-e2e-collector: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/collector))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,collector) \
 	  $(GOTESTSUM) \
 	  --format testdox \
@@ -588,9 +588,9 @@ e2e-server-binary:
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, then the throttle probe alone on the same stack, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
 	$(e2e_complete_run_env) \
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ce" \
 	$(call e2e_cover_env,ce) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
@@ -599,9 +599,9 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 ## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code (+ Bitbucket fixture), run the common and ee packages of the rebuilt suite, tear down.
 test-e2e-ee: ensure-gotestsum e2e-server-binary
 	$(e2e_complete_run_env) \
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ee" \
 	$(call e2e_cover_env,ee) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM=$(GOTESTSUM) \
@@ -620,9 +620,9 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
 	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/self-hosted))
-	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,self-hosted) \
-	  GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
+	  GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted" $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
@@ -880,11 +880,11 @@ MODELEVAL_DIR=dist/modeleval
 modeleval-ce: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(MODELEVAL_DIR)/ce)
 	$(call MKDIR_P,$(MODELEVAL_DIR)/ce)
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
 	E2E_REPORT_NAME=modeleval-ce \
-	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls \
+	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls" \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/modeleval/
 
@@ -892,11 +892,11 @@ modeleval-ce: ensure-gotestsum e2e-server-binary
 modeleval-ee: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(MODELEVAL_DIR)/ee)
 	$(call MKDIR_P,$(MODELEVAL_DIR)/ee)
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
 	E2E_REPORT_NAME=modeleval-ee \
-	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls \
+	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls" \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/modeleval/
 
@@ -2954,7 +2954,7 @@ check-graphql-documents-live:
 record-request-inventory:
 	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
 	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
-	@GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS) || { \
+	@GITLAB_MCP_TEST_INVENTORY_DIR="$(CURDIR)/$(REQUEST_INVENTORY_SHARDS)" go test -count=1 $(PKGS) || { \
 		$(call RM_RF,$(REQUEST_INVENTORY_SHARDS)); \
 		echo ''; \
 		echo 'NOT RECORDED: the unit suite failed, so no request was written down.'; \
