@@ -1050,7 +1050,9 @@ func TestQuickTunnelServer_PortTaken_StopsTheTunnelAndMovesToAnotherPort(t *test
 // cloudflared container, killing that tunnel mid-case, and left its own
 // container, and its public address, running. Two runs beside each other are
 // a state the case is built for, since it names its container after a port
-// no other run holds.
+// no other run holds. The log sits in a reports directory whose path holds a
+// space (renderAll), where the recipe, which assigned the log's path
+// unquoted, kept no log at all and so removed no container.
 //
 // The recipe is rendered with make -n rather than read as text, so what runs
 // is the command make would run. Linux only: the target needs POSIX job
@@ -1292,12 +1294,19 @@ func newTunnelTarget(t *testing.T) tunnelTarget {
 
 // renderAll returns everything make -n prints for the target, the
 // prerequisites' commands included, with the stand-in gotestsum and a
-// reports directory of the test's own.
+// reports directory of the test's own, whose path holds a space as an
+// override can give it. The recipe assigned the run's log path under that
+// directory unquoted, so a run wrote no log and, once it failed, removed
+// nothing its case had named.
 func (tt tunnelTarget) renderAll(t *testing.T, args ...string) string {
 	t.Helper()
+	reports := filepath.Join(t.TempDir(), "reports with space")
+	if err := os.MkdirAll(reports, 0o750); err != nil {
+		t.Fatalf("creating the reports directory: %v", err)
+	}
 	return renderMake(t, tt.makeBin, tt.root, append([]string{
 		"test-e2e-cloudflare-tunnel",
-		"GOTESTSUM=" + filepath.Join(tt.stubs, "gotestsum"), "E2E_REPORT_DIR=" + t.TempDir(),
+		"GOTESTSUM=" + filepath.Join(tt.stubs, "gotestsum"), "E2E_REPORT_DIR=" + reports,
 	}, args...)...)
 }
 
