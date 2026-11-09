@@ -2095,7 +2095,7 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `group.issues`
 
-> List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist), [`group.get`](#groupget), [`search.issues`](/gitlab-mcp-server/reference/tools/search/#searchissues).
+> List issues across a group. Returns: matching issues from the group's projects that are not archived, with pagination metadata. See also: [`issue.list`](/gitlab-mcp-server/reference/tools/issue/#issuelist), [`group.get`](#groupget), [`search.issues`](/gitlab-mcp-server/reference/tools/search/#searchissues).
 
 - **Meta-tool**: `gitlab_group`, action `issues`
 - **Individual tool**: `gitlab_issue_list_group`

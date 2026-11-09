@@ -6502,13 +6502,15 @@ const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not
 // listing's answer to GitLab.com's refusal of scope=all to the scopes and the
 // lists that answer there (issue 1779). The usage recommended scope=all for a
 // cross-project overview, so on GitLab.com that advice led to a 400 whose only
-// remedy was GitLab's own sentence.
+// remedy was GitLab's own sentence. The hint also says that the group list,
+// like this one, leaves out the issues of archived projects, so a model does
+// not read its answer as every issue the caller can see in the group.
 //
 // The hint is keyed on the sentence and not on the status, since GitLab answers
 // 400 for any parameter it cannot read: a 400 that says something else carries
 // no hint, and neither does any other status.
 func TestListAll_ScopeAllRefused_NamesWhatGitLabComAccepts(t *testing.T) {
-	remedies := []string{"GitLab.com refuses scope=all", "scope=created_by_me", "scope=assigned_to_me", "issue.list_group", "issue.list,"}
+	remedies := []string{"GitLab.com refuses scope=all", "scope=created_by_me", "scope=assigned_to_me", "issue.list_group", "issue.list,", "issues of archived projects"}
 	for _, tt := range []struct {
 		name     string
 		status   int

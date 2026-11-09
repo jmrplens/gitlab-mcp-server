@@ -842,7 +842,9 @@ func parseDueDate(s string) (*gl.ISOTime, error) {
 	return toolutil.ParseDateField("due_date", s)
 }
 
-// ListGroup retrieves a paginated list of issues across all projects in a group.
+// ListGroup retrieves a paginated list of issues across the projects of a
+// group that are not archived: GitLab defaults non_archived to true on this
+// route, and client-go does not model it.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListGroupOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListGroupOutput{}, err
@@ -916,7 +918,7 @@ type ListAllInput struct {
 	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
 	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
 	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
-	Scope               string               `json:"scope,omitempty"                jsonschema:"Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)"`
+	Scope               string               `json:"scope,omitempty"                jsonschema:"Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see in a project that is not archived, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)"`
 	Search              string               `json:"search,omitempty"               jsonschema:"Search in title and description"`
 	NotSearch           string               `json:"not_search,omitempty"           jsonschema:"Exclude issues matching this search text"`
 	In                  string               `json:"in,omitempty"                   jsonschema:"Fields the search query applies to (title, description, or title,description)"`
@@ -963,9 +965,11 @@ const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
 
 // hintScopeAllRefused is the remedy for that refusal. GitLab Self-Managed and
 // Dedicated accept scope=all here, so the action keeps offering it, and the
-// project and group lists answer with every issue the caller can see in them
-// whatever the instance.
-const hintScopeAllRefused = "GitLab.com refuses scope=all on the global issue list, which GitLab Self-Managed and Dedicated accept: pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return every issue the caller can see in it"
+// project and group lists answer with the issues the caller can see in them
+// whatever the instance. The group list, like this one, defaults non_archived
+// to true, which client-go does not model, so it leaves out the issues of
+// archived projects, and only the project list returns them.
+const hintScopeAllRefused = "GitLab.com refuses scope=all on the global issue list, which GitLab Self-Managed and Dedicated accept: pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return the issues the caller can see in it. The group list leaves out the issues of archived projects, as this one does, and the project list returns them"
 
 // refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
 // refusal of scope=all on the global issue list (issue 1779).
@@ -976,7 +980,9 @@ func refusesGlobalScopeAll(err error) bool {
 // ListAll retrieves a page of GitLab's global issue list. The scope is passed
 // through as the caller wrote it, so an omitted one gets GitLab's default,
 // created_by_me: the issues the caller created, not every issue it can see,
-// which takes scope=all, and which GitLab.com refuses on this list.
+// which takes scope=all, and which GitLab.com refuses on this list. Whatever
+// the scope, GitLab leaves out the issues of archived projects, since
+// non_archived defaults to true and client-go does not model it.
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListAllOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListAllOutput{}, err

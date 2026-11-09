@@ -2794,7 +2794,7 @@ Action guidance:
 - group_upload_delete_by_secret: Use to permanently remove a group Markdown upload identified by its secret and filename.
 - group_upload_list: Use to enumerate files uploaded into a group's Markdown attachments store.
 - invited_groups: List the groups invited to this group. Use when the user asks which groups were invited (directly or by inheritance) to collaborate on a group.
-- issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
+- issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project. GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list.
 - list: List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups.
 - members: List the direct and inherited members of a group. Use query, user_ids, show_seat_info, and pagination when the user asks who belongs to a group or at what access level.
 - projects: List the projects that belong to a group. Use include_subgroups, archived, visibility, topic, and ordering when the user asks which projects live under a group.
@@ -4519,8 +4519,8 @@ Action guidance:
 - link_get: Get one issue link by its issue_link_id. Use issue.link_list first to find the issue_link_id, then this for the link's source/target issue details.
 - link_list: List every issue linked to a source issue (relates_to, blocks, is_blocked_by). Use after locating the source issue with issue.get or issue.list to inspect its relationships, then issue.link_get for one link's details.
 - list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
-- list_all: List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which GitLab Self-Managed and Dedicated accept. GitLab.com refuses scope=all on this list with 400, so there pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return every issue the caller can see in it.
-- list_group: List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.
+- list_all: List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see in a project that is not archived, which GitLab Self-Managed and Dedicated accept. Whatever the scope, GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list. GitLab.com refuses scope=all on this list with 400, so there pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return the issues the caller can see in it, the group list leaving out its archived projects' issues as well.
+- list_group: List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project. GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list.
 - move: Move an issue to a different project, preserving its discussion and metadata.
 - mrs_closing: List merge requests that will close this issue when merged (those referencing it with a closing keyword).
 - mrs_related: List merge requests related to this issue (those mentioning it), a broader set than the closing MRs.
@@ -20189,7 +20189,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_all
 
-List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all, which GitLab.com refuses on this list (there pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
+List issues across projects that are not archived: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every one the caller can see with scope=all, which GitLab.com refuses on this list (there pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). An archived project's issues are listed by project. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
 
 **Parameters:**
 
@@ -20220,7 +20220,7 @@ List issues across projects: only the ones the caller created when scope is omit
 - `order_by` (string): Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `scope` (string): Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)
+- `scope` (string): Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see in a project that is not archived, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `state` (string): Filter by state (opened, closed, all)
@@ -20232,7 +20232,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_group
 
-List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.
+List issues across a group. Returns: matching issues from the group's projects that are not archived, with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.
 
 **Parameters:**
 

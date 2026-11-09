@@ -93097,7 +93097,7 @@
   },
   {
     "name": "gitlab_issue_list_all",
-    "description": "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all, which GitLab.com refuses on this list (there pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
+    "description": "List issues across projects that are not archived: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every one the caller can see with scope=all, which GitLab.com refuses on this list (there pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). An archived project's issues are listed by project. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93301,7 +93301,7 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)",
+          "description": "Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see in a project that is not archived, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)",
           "enum": [
             "created_by_me",
             "assigned_to_me",
@@ -94122,7 +94122,7 @@
   },
   {
     "name": "gitlab_issue_list_group",
-    "description": "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.",
+    "description": "List issues across a group. Returns: matching issues from the group's projects that are not archived, with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

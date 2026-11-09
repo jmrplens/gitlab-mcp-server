@@ -335,6 +335,11 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // So each text also says that GitLab.com refuses it and what answers there: the
 // two scopes it accepts, or a group's or a project's list, which the usage
 // names by their canonical IDs.
+//
+// Whatever the scope, GET /issues leaves out the issues of archived projects,
+// since non_archived defaults to true and client-go does not model it, so each
+// text bounds scope=all to the projects that are not archived and none of them
+// reads as a complete list of what the caller can see.
 func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 	spec := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))["gitlab_issue_list_all"]
 	scopeDescription, _ := servedProperty(t, spec, "scope")["description"].(string)
@@ -343,9 +348,9 @@ func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 		text      string
 		fragments []string
 	}{
-		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses scope=all", "scope=assigned_to_me", actionIssueListGroup + " or " + actionIssueList + ","}},
-		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses", "scope=assigned_to_me", "a group's or a project's issues"}},
-		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com refuses", "a group's or a project's issues"}},
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses scope=all", "scope=assigned_to_me", actionIssueListGroup + " or " + actionIssueList + ",", "not archived", "issues of archived projects"}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses", "scope=assigned_to_me", "a group's or a project's issues", "not archived", "archived project's issues"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com refuses", "a group's or a project's issues", "not archived"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, fragment := range tt.fragments {
@@ -354,6 +359,35 @@ func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestActionSpecs_ListGroup_SaysArchivedProjectsAreLeftOut holds both
+// projections of the group issue list to the default of the route they call:
+// GET /groups/:id/issues defaults non_archived to true and client-go does not
+// model it, so the list leaves out the issues of the group's archived projects,
+// and each usage says so and names the project list that returns them.
+func TestActionSpecs_ListGroup_SaysArchivedProjectsAreLeftOut(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specs := map[string]toolutil.ActionSpec{}
+	for _, spec := range append(ActionSpecs(client), GroupActionSpecs(client)...) {
+		specs[spec.Name] = spec
+	}
+	for _, name := range []string{specListGroup, specGroupIssues} {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := specs[name]
+			if !ok {
+				t.Fatalf("no spec named %q", name)
+			}
+			for _, fragment := range []string{"issues of archived projects", actionIssueList + "."} {
+				if !strings.Contains(spec.Usage, fragment) {
+					t.Errorf("usage = %q, want it to carry %q", spec.Usage, fragment)
+				}
+			}
+		})
+	}
+	if description := specs[specGroupIssues].IndividualTool.Description; !strings.Contains(description, "not archived") {
+		t.Errorf("individual description = %q, want it to say archived projects are left out", description)
 	}
 }
 
