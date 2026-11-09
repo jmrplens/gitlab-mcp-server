@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -675,11 +676,23 @@ func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T
 // there, byte for byte as the issue 1779 report recorded it.
 const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not supported on this endpoint. Use `created_by_me` or `assigned_to_me`, or query a specific group or project.\"}"
 
+// routePostGraphQL is the route GitLab serves its GraphQL API on.
+const routePostGraphQL = "POST /api/graphql"
+
 // myIssuesAgainst drives my_issues with args against a GitLab whose global
-// issue list is answered by issues, the caller resolving to user 1 and the
-// username "alice" to user 42, and returns the prompt's result and error.
-func myIssuesAgainst(t *testing.T, args map[string]string, issues http.HandlerFunc) (*mcp.GetPromptResult, error) {
+// issue list is answered by issues and whose GraphQL API by graphQL, the
+// caller resolving to user 1 and the username "alice" to user 42, and returns
+// the prompt's result and error. A nil graphQL fails the test on any GraphQL
+// request, since my_issues reads GraphQL only when GitLab.com refuses the REST
+// list.
+func myIssuesAgainst(t *testing.T, args map[string]string, issues, graphQL http.HandlerFunc) (*mcp.GetPromptResult, error) {
 	t.Helper()
+	if graphQL == nil {
+		graphQL = func(w http.ResponseWriter, _ *http.Request) {
+			t.Errorf("my_issues sent a GraphQL request, want the REST issue list's answer alone")
+			testutil.RespondGraphQLError(w, http.StatusOK, "unexpected request")
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, basicUserJSON)
@@ -688,8 +701,83 @@ func myIssuesAgainst(t *testing.T, args map[string]string, issues http.HandlerFu
 		respondJSON(w, http.StatusOK, aliceLookupJSON)
 	})
 	mux.HandleFunc(routeGetIssues, issues)
+	mux.HandleFunc(routePostGraphQL, graphQL)
 	return handleMyIssues(t.Context(), testutil.NewTestClient(t, mux), testPromptRequest(args))
 }
+
+// refuseScopeAll answers the global issue list the way GitLab.com does since
+// it refuses scope=all there (issue 1779).
+func refuseScopeAll(w http.ResponseWriter, _ *http.Request) {
+	respondJSON(w, http.StatusBadRequest, scopeAllRefusedJSON)
+}
+
+// answerGraphQL returns a GraphQL handler that writes body, the whole JSON
+// envelope, as GitLab's answer.
+func answerGraphQL(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, body)
+	}
+}
+
+// promptText returns the text of the one message result carries.
+func promptText(t *testing.T, result *mcp.GetPromptResult) string {
+	t.Helper()
+	if len(result.Messages) != 1 {
+		t.Fatalf("the prompt answered %d messages, want 1", len(result.Messages))
+	}
+	return result.Messages[0].Content.(*mcp.TextContent).Text
+}
+
+// wantAssignedIssuesQuery is the document my_issues sends where GitLab.com
+// refuses scope=all, spelled out rather than read from [assignedIssuesQuery]
+// so that a change to the document fails the comparison instead of moving
+// with it. The issue types are what keeps the read to the issues GET /issues
+// lists: every base type but epic, key_result and objective, where the root
+// resolver, sent no types, would list objectives and key results as well.
+const wantAssignedIssuesQuery = `query AssignedIssues($assignees: [String!], $state: IssuableState, $first: Int) {
+  issues(assigneeUsernames: $assignees, state: $state, types: [ISSUE, INCIDENT, TEST_CASE, REQUIREMENT, TASK, TICKET], first: $first) {
+    nodes {
+      iid
+      title
+      reference(full: true)
+      createdAt
+      dueDate
+      milestone {
+        title
+      }
+      labels {
+        nodes {
+          title
+        }
+      }
+    }
+  }
+}`
+
+// assertAssignedIssuesRequest reports, with t.Errorf since it runs on the mock
+// server's goroutine, a GraphQL request that is not [wantAssignedIssuesQuery]
+// sent for the username "alice" in wantState, one page of 100.
+func assertAssignedIssuesRequest(t *testing.T, r *http.Request, wantState string) {
+	t.Helper()
+	var body struct {
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decoding the GraphQL request: %v", err)
+	}
+	if body.Query != wantAssignedIssuesQuery {
+		t.Errorf("query = %q, want %q", body.Query, wantAssignedIssuesQuery)
+	}
+	want := map[string]any{"assignees": []any{"alice"}, "state": wantState, "first": float64(100)}
+	if !reflect.DeepEqual(body.Variables, want) {
+		t.Errorf("variables = %v, want %v", body.Variables, want)
+	}
+}
+
+// assignedIssueJSON is an issue node as GitLab answers [assignedIssuesQuery]
+// with: the iid as a String, a label it could not resolve answered null.
+const assignedIssueJSON = `{"iid":"12","title":"Fix the parser","reference":"group/api#12","createdAt":"2026-01-02T10:00:00Z","dueDate":null,"milestone":{"title":"19.6"},"labels":{"nodes":[{"title":"bug"},null]}}`
 
 // TestMyIssues_Scope_NamesTheCallerOrEverybody verifies the request my_issues
 // sends for each user it can be about.
@@ -720,7 +808,7 @@ func TestMyIssues_Scope_NamesTheCallerOrEverybody(t *testing.T) {
 				testutil.AssertQueryParam(t, r, "state", "opened")
 				testutil.AssertQueryParam(t, r, "per_page", "100")
 				respondJSON(w, http.StatusOK, `[]`)
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf(fmtUnexpectedErr, err)
 			}
@@ -731,33 +819,197 @@ func TestMyIssues_Scope_NamesTheCallerOrEverybody(t *testing.T) {
 	}
 }
 
-// TestMyIssues_ScopeAllRefused_SaysWhoseIssuesCanBeListed verifies what
-// my_issues answers when GitLab.com refuses the scope=all its read about
-// another user sends (issue 1779).
+// TestMyIssues_ScopeAllRefused_ReadsTheGraphQLIssueList verifies that
+// my_issues still lists another user's issues across every project on
+// GitLab.com, which refuses the scope=all its REST read sends (issue 1779).
 //
-// No request lists another user's issues across every project there, so the
-// prompt cannot answer with them, and an answer built from what the caller
-// created or was assigned would be a different list under the same heading.
-// The error says why, and names the two reads that do answer: the prompt
-// without a username, and a group's or a project's issue list. Any other
-// refusal, a 400 of GitLab's that says something else included, keeps the
-// plain error, since the advice is about a refusal it did not give.
-func TestMyIssues_ScopeAllRefused_SaysWhoseIssuesCanBeListed(t *testing.T) {
-	advice := []string{"GitLab.com", "refuses scope=all on the global issue list", "without a username", "alice", "issue.list_group or issue.list"}
+// GraphQL's root issue list is not behind that refusal, and the issue
+// dashboard of GitLab.com reads it, so the prompt reads it in its place, once,
+// with the user's username, the state asked for and the same page of 100. The
+// answer has to read as the REST one does: grouped under the project its
+// reference names, the milestone, the labels (one GitLab answered null left
+// out), the due date and the overdue and no-milestone counts, and with no
+// note of a partial answer when GitLab answered the list whole.
+func TestMyIssues_ScopeAllRefused_ReadsTheGraphQLIssueList(t *testing.T) {
+	due := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
+	created := time.Now().Add(-10 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	answer := `{"data":{"issues":{"nodes":[` +
+		`{"iid":"12","title":"Fix the parser","reference":"group/api#12","createdAt":"` + created + `","dueDate":"` + due + `","milestone":{"title":"19.6"},"labels":{"nodes":[{"title":"bug"},null,{"title":"backend"}]}},` +
+		`{"iid":"7","title":"Write the guide","reference":"group/docs#7","createdAt":"` + created + `","dueDate":null,"milestone":null,"labels":null}` +
+		`]}}}`
+	for _, tt := range []struct {
+		name      string
+		args      map[string]string
+		wantState string
+	}{
+		{name: "the default state", args: map[string]string{argUsername: "alice"}, wantState: "opened"},
+		{name: "a state named", args: map[string]string{argUsername: "alice", argState: "closed"}, wantState: "closed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var reads atomic.Int64
+			result, err := myIssuesAgainst(t, tt.args, refuseScopeAll, func(w http.ResponseWriter, r *http.Request) {
+				reads.Add(1)
+				assertAssignedIssuesRequest(t, r, tt.wantState)
+				respondJSON(w, http.StatusOK, answer)
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if got := reads.Load(); got != 1 {
+				t.Errorf("the GraphQL issue list was read %d time(s), want 1", got)
+			}
+			text := promptText(t, result)
+			for _, want := range []string{
+				"# Issues Assigned to @alice (2 issues, state: " + tt.wantState + ")\n\n## Summary\n",
+				"| Overdue | 1 |",
+				"| No milestone | 1 |",
+				"## group/api (1 issues)",
+				"| #12 | Fix the parser | bug, backend | 19.6 | 1w | " + due + " |",
+				"## group/docs (1 issues)",
+				"| #7 | Write the guide | - | - | 1w | - |",
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("the prompt does not say %q:\n%s", want, text)
+				}
+			}
+		})
+	}
+}
+
+// TestMyIssues_GraphQLListAnsweredInPart_SaysSo verifies what my_issues
+// writes about the GraphQL list it reads on GitLab.com when GitLab answered it
+// in part (issue 1298).
+//
+// GitLab nulls an issue it could not resolve where it sits and explains the
+// null in errors[], keeping the rest of the list, so a list answered that way
+// lists fewer issues than the user has, and the prompt says so above its
+// summary, with GitLab's words escaped. A list answered whole, an empty one
+// included, carries no such note, and an empty one is a list of no issues
+// rather than a failure.
+func TestMyIssues_GraphQLListAnsweredInPart_SaysSo(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
-		status     int
 		body       string
-		wantAdvice bool
+		wantIssues string
+		wantNote   string
 	}{
-		{name: "GitLab.com's refusal", status: http.StatusBadRequest, body: scopeAllRefusedJSON, wantAdvice: true},
+		{
+			name:       "errors beside the list",
+			body:       `{"data":{"issues":{"nodes":[` + assignedIssueJSON + `,null]}},"errors":[{"message":"Timeout on labels | retry"}]}`,
+			wantIssues: "(1 issues, state: opened)",
+			wantNote:   "> GitLab answered this list in part (my_issues GraphQL errors: Timeout on labels &#124; retry), so an issue it could not resolve may be missing from it.\n\n## Summary\n",
+		},
+		{
+			name:       "an issue answered null with no error",
+			body:       `{"data":{"issues":{"nodes":[null,` + assignedIssueJSON + `]}}}`,
+			wantIssues: "(1 issues, state: opened)",
+			wantNote:   "> GitLab answered this list in part (my_issues: GitLab answered 1 of the page's items null with no error), so an issue it could not resolve may be missing from it.\n\n## Summary\n",
+		},
+		{
+			name:       "an empty list",
+			body:       `{"data":{"issues":{"nodes":[]}}}`,
+			wantIssues: "(0 issues, state: opened)",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := myIssuesAgainst(t, map[string]string{argUsername: "alice"}, refuseScopeAll, answerGraphQL(tt.body))
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			text := promptText(t, result)
+			if !strings.Contains(text, tt.wantIssues) {
+				t.Errorf("the prompt does not count %q:\n%s", tt.wantIssues, text)
+			}
+			if got := strings.Contains(text, "answered this list in part"); got != (tt.wantNote != "") {
+				t.Errorf("the prompt notes a partial answer = %v, want %v:\n%s", got, tt.wantNote != "", text)
+			}
+			if !strings.Contains(text, tt.wantNote) {
+				t.Errorf("the prompt does not say %q:\n%s", tt.wantNote, text)
+			}
+		})
+	}
+}
+
+// TestMyIssues_GraphQLListFails_ReportsBothReads verifies what my_issues
+// answers when the GraphQL list it reads on GitLab.com fails as well.
+//
+// The error says that GitLab.com refused the REST list and that the GraphQL
+// list read in its place failed, and then why: GitLab's refusal of the
+// request, its errors[] beside a list it answered null or whose every issue it
+// answered null, a list answered null with no error (read as empty, it would
+// say the user has no issues, which nobody knows), and an iid that is not the
+// number GitLab sends as a String.
+func TestMyIssues_GraphQLListFails_ReportsBothReads(t *testing.T) {
+	const both = "failed to list issues: GitLab.com refuses scope=all on the REST issue list, and the GraphQL issue list read in its place failed: "
+	for _, tt := range []struct {
+		name    string
+		graphQL http.HandlerFunc
+		wantErr string
+	}{
+		{
+			name: "GitLab refuses the request",
+			graphQL: func(w http.ResponseWriter, _ *http.Request) {
+				respondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+			},
+			wantErr: "500",
+		},
+		{
+			name:    "errors and no list",
+			graphQL: answerGraphQL(`{"data":{"issues":null},"errors":[{"message":"You must provide at least one filter argument for this query"}]}`),
+			wantErr: "my_issues GraphQL errors: You must provide at least one filter argument for this query",
+		},
+		{
+			name:    "a list answered null with no error",
+			graphQL: answerGraphQL(`{"data":{"issues":null}}`),
+			wantErr: "my_issues: GitLab answered the issue list null with no error",
+		},
+		{
+			name:    "every issue answered null, with errors",
+			graphQL: answerGraphQL(`{"data":{"issues":{"nodes":[null]}},"errors":[{"message":"Internal server error"}]}`),
+			wantErr: "my_issues GraphQL errors: Internal server error",
+		},
+		{
+			name:    "an iid that is not a number",
+			graphQL: answerGraphQL(`{"data":{"issues":{"nodes":[{"iid":"twelve","title":"t","reference":"g/p#1","createdAt":"2026-01-02T10:00:00Z","dueDate":null,"milestone":null,"labels":null}]}}}`),
+			wantErr: "iid",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := myIssuesAgainst(t, map[string]string{argUsername: "alice"}, refuseScopeAll, tt.graphQL)
+			if err == nil {
+				t.Fatalf("my_issues answered %v, want the failure reported", result)
+			}
+			msg := err.Error()
+			if !strings.HasPrefix(msg, both) {
+				t.Errorf("error = %q, want it to start %q", msg, both)
+			}
+			if !strings.Contains(strings.TrimPrefix(msg, both), tt.wantErr) {
+				t.Errorf("error = %q, want it to name %q", msg, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestMyIssues_OtherRefusals_KeepThePlainError verifies that my_issues reads
+// GraphQL only on GitLab.com's refusal of scope=all, which it recognizes by
+// GitLab's sentence under a 400.
+//
+// GitLab answers 400 for any parameter it cannot read, and the sentence under
+// another status is not that refusal either, so both keep the plain error of
+// the REST list and send nothing else.
+func TestMyIssues_OtherRefusals_KeepThePlainError(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status int
+		body   string
+	}{
 		{name: "another 400", status: http.StatusBadRequest, body: `{"message":"400 Bad request - scope does not have a valid value"}`},
 		{name: "the sentence under another status", status: http.StatusUnprocessableEntity, body: scopeAllRefusedJSON},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := myIssuesAgainst(t, map[string]string{argUsername: "alice"}, func(w http.ResponseWriter, _ *http.Request) {
 				respondJSON(w, tt.status, tt.body)
-			})
+			}, nil)
 			if err == nil {
 				t.Fatalf("my_issues answered %v, want the refusal reported", result)
 			}
@@ -765,12 +1017,25 @@ func TestMyIssues_ScopeAllRefused_SaysWhoseIssuesCanBeListed(t *testing.T) {
 			if !strings.HasPrefix(msg, "failed to list issues: ") {
 				t.Errorf("error = %q, want it to say the issue list failed", msg)
 			}
-			for _, fragment := range advice {
-				if got := strings.Contains(msg, fragment); got != tt.wantAdvice {
-					t.Errorf("error = %q, names %q = %v, want %v", msg, fragment, got, tt.wantAdvice)
-				}
+			if strings.Contains(msg, "GraphQL") {
+				t.Errorf("error = %q, names a GraphQL read that was never sent", msg)
 			}
 		})
+	}
+}
+
+// TestAssignedIssuesQuery_Complexity_IsUnderGitLabsLimit holds the GraphQL
+// read my_issues sends on GitLab.com under the complexity GitLab refuses a
+// query above. The figure is the estimate testutil computes from the pinned
+// schema; no GitLab has reported one for this document, so it is held under
+// the limit rather than pinned.
+func TestAssignedIssuesQuery_Complexity_IsUnderGitLabsLimit(t *testing.T) {
+	got, err := testutil.GitLabQueryComplexity(assignedIssuesQuery, map[string]any{"assignees": []any{"alice"}, "state": "opened", "first": maxListItems})
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity() error = %v", err)
+	}
+	if got > testutil.GitLabAuthenticatedMaxComplexity {
+		t.Errorf("assignedIssuesQuery costs %d, over the %d GitLab refuses a query above", got, testutil.GitLabAuthenticatedMaxComplexity)
 	}
 }
 

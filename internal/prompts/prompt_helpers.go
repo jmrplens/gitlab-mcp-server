@@ -112,8 +112,9 @@ const (
 // their calls carry no scope.
 //
 // GitLab.com refuses scope=all on the global issue list (issue 1779), so a read
-// of the caller's own issues there sends [scopeAssignedToMe] instead, which
-// names the same issues on every instance.
+// of the caller's own issues sends [scopeAssignedToMe] instead, which names the
+// same issues on every instance, and a read about another user that GitLab.com
+// refuses is answered from GraphQL's root issue list ([assignedIssuesQuery]).
 const scopeAll = "all"
 
 // scopeAssignedToMe is the scope the global issue list names the issues
