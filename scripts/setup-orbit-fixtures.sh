@@ -4,7 +4,8 @@
 
 # setup-orbit-fixtures.sh — create reproducible Orbit knowledge-graph
 # fixtures in any GitLab.com group. Idempotent: re-running it on an
-# already-provisioned namespace is a no-op.
+# already-provisioned namespace reconciles it: missing pieces are created,
+# each project is set to ORBIT_FIXTURES_VISIBILITY, and the rest left alone.
 #
 # Usage:
 #   GITLAB_COM_TOKEN=glpat-... \
@@ -22,8 +23,8 @@
 # Flags:
 #   --mirror-cli    additionally mirror gitlab-org/cli (the glab CLI) as
 #                   <namespace>/glab-mirror. The mirror brings real data:
-#                   real MRs, real CI, real code, real branches. Skipped
-#                   on re-runs.
+#                   real MRs, real CI, real code, real branches. An existing
+#                   mirror is reconciled, not pushed again.
 #   --skip-mirror   do not mirror gitlab-org/cli even if it does not
 #                   exist. Used by CI to avoid the ~10 min mirror step.
 #
@@ -76,6 +77,29 @@ NAMESPACE="${ORBIT_FIXTURES_NAMESPACE:-jmrp-oss/orbit-fixtures}"
 # OSI license: a project re-provisioned private there would break the rule.
 VISIBILITY="${ORBIT_FIXTURES_VISIBILITY:-public}"
 
+# refuse_non_public_under_jmrp_oss GROUP_PATH
+#   #1533: jmrp-oss allows exactly one private project, and these fixtures are
+#   public. A non-public visibility is refused there: the script now sets the
+#   visibility of projects it did not create, so a typo would flip both
+#   fixtures. GitLab resolves paths case-insensitively, so the guard compares
+#   lowercased, or JMRP-OSS/... would reach the same projects and skip it.
+refuse_non_public_under_jmrp_oss() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    jmrp-oss | jmrp-oss/*)
+      if [ "$VISIBILITY" != "public" ]; then
+        echo "error: ORBIT_FIXTURES_VISIBILITY=$VISIBILITY is not allowed under $1:" >&2
+        echo "       jmrp-oss allows one private project, and these fixtures must be public." >&2
+        exit 2
+      fi
+      ;;
+  esac
+}
+
+# Up front, on the namespace as written, so that a refusal sends nothing. The
+# group GitLab resolves it to is checked again below, before anything is
+# written, since a numeric group id names jmrp-oss without spelling it.
+refuse_non_public_under_jmrp_oss "$NAMESPACE"
+
 API="$GITLAB_URL/api/v4"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)"
@@ -86,14 +110,45 @@ H_JSON=(-H "Content-Type: application/json")
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 
-# api_post PATH JSON  →  echoes the response body
+# Every request has a deadline: a connection GitLab accepts but never answers
+# would otherwise block the run with no way to tell it apart from a slow one.
+CURL_TIMEOUTS=(--connect-timeout 10 --max-time 120)
+
+# api_post PATH JSON  ->  echoes the response body
 api_post() {
-  curl -sS -X POST "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
+  curl -sS "${CURL_TIMEOUTS[@]}" -X POST "${H_AUTH[@]}" "${H_JSON[@]}" "$API$1" -d "$2"
 }
 
-# api_get PATH  →  echoes the response body
+# api_get PATH  ->  echoes the response body
 api_get() {
-  curl -sS "${H_AUTH[@]}" "$API$1"
+  curl -sS "${CURL_TIMEOUTS[@]}" "${H_AUTH[@]}" "$API$1"
+}
+
+# api_request METHOD PATH [JSON]  ->  sets API_STATUS and API_BODY
+#   The helpers above run in a command substitution, so a status set there
+#   would be lost; this one runs in the caller's shell. curl exits 0 for an
+#   HTTP error response, and a write GitLab refused must not be reported as
+#   applied, so the status is checked before anything is printed as done.
+api_request() {
+  local method="$1" path="$2" body="${3:-}" response
+  if [ -n "$body" ]; then
+    response=$(curl -sS "${CURL_TIMEOUTS[@]}" -X "$method" "${H_AUTH[@]}" "${H_JSON[@]}" "$API$path" -d "$body" -w '\n%{http_code}')
+  else
+    response=$(curl -sS "${CURL_TIMEOUTS[@]}" -X "$method" "${H_AUTH[@]}" "$API$path" -w '\n%{http_code}')
+  fi
+  API_STATUS=${response##*$'\n'}
+  API_BODY=${response%$'\n'*}
+}
+
+# api_ok  ->  whether the last api_request was answered with a 2xx
+#   A string match: a curl that never ran or was killed (an argument over the
+#   kernel's limit, an OOM kill) leaves API_STATUS empty or not a number, and
+#   [ "" -lt 200 ] is an error, which an if reads as false.
+api_ok() {
+  case "$API_STATUS" in
+    2[0-9][0-9]) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # ensure_resource GET_PATH JSON
@@ -147,17 +202,161 @@ NAMESPACE_ENC=$(printf %s "$NAMESPACE" | python3 -c 'import sys,urllib.parse; pr
 # straight into python3: OpenSSF Scorecard's Pinned-Dependencies check reads
 # a download utility piped into an interpreter as a script fetched and run,
 # whatever the interpreter does with it, and the answer here is the group's
-# JSON, which no version, checksum or digest could pin.
-NAMESPACE_ID=$(api_get "/groups/$NAMESPACE_ENC" \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-echo "    namespace id: $NAMESPACE_ID"
+# JSON, which no version, checksum or digest could pin. The group's full_path
+# comes with its id, and an answer without either stops the run: the guard
+# below must never be skipped because the path was not there to read.
+NAMESPACE_GROUP=$(api_get "/groups/$NAMESPACE_ENC" \
+  | python3 -c 'import sys,json
+group = json.load(sys.stdin)
+full_path = group.get("full_path") if isinstance(group, dict) else None
+if not isinstance(full_path, str) or not full_path or not group.get("id"):
+    sys.exit("error: the namespace did not resolve to a group with an id and a full_path: " + json.dumps(group))
+print(group["id"])
+print(full_path)')
+NAMESPACE_ID=${NAMESPACE_GROUP%%$'\n'*}
+NAMESPACE_FULL_PATH=${NAMESPACE_GROUP#*$'\n'}
+echo "    namespace id: $NAMESPACE_ID ($NAMESPACE_FULL_PATH)"
+refuse_non_public_under_jmrp_oss "$NAMESPACE_FULL_PATH"
 
 # ─── Project creation (pushes local source tree via git) ───────────────
 
+# reconcile_existing_project ID FIXTURE_DIR
+#   Brings a fixture project that already exists into line (#1533): creates
+#   by API the fixture files the project lacks, then sets the visibility, since
+#   jmrp-oss requires an OSI license on every project and a run that stops
+#   halfway must not have made public a project still without one. A re-run
+#   used to leave an existing project untouched, so one provisioned before its
+#   LICENSE existed, a private one, and one whose first push failed all stayed
+#   broken while the run reported success.
+reconcile_existing_project() {
+  local project_id="$1"
+  local fixture_dir="$2"
+
+  # A read that failed must not become an empty visibility, which would look
+  # like a mismatch and PUT public: that would expose a private project whose
+  # state was simply unreadable. Stop instead.
+  api_request GET "/projects/$project_id"
+  if [ "$API_STATUS" != "200" ]; then
+    echo "    ✗ cannot read project $project_id (HTTP $API_STATUS); not reconciling" >&2
+    return 1
+  fi
+  local current_visibility
+  current_visibility=$(printf '%s' "$API_BODY" | python3 -c 'import sys,json
+try:
+    print(json.load(sys.stdin).get("visibility",""))
+except Exception: pass' 2>/dev/null)
+  case "$current_visibility" in
+    public | internal | private) ;;
+    *)
+      echo "    ✗ project $project_id has no readable visibility; not reconciling" >&2
+      return 1
+      ;;
+  esac
+  # A mirror has no fixture files to compare, and its tree is the upstream
+  # project's: thousands of entries read for nothing.
+  if [ -n "$fixture_dir" ]; then
+    add_missing_fixture_files "$project_id" "$fixture_dir" || return 1
+  fi
+  if [ "$current_visibility" != "$VISIBILITY" ]; then
+    # The body is built by json.dumps, as the commit's is below, so a configured
+    # value carrying JSON syntax stays one string and adds no field.
+    local visibility_body
+    visibility_body=$(VISIBILITY="$VISIBILITY" python3 -c 'import json, os; print(json.dumps({"visibility": os.environ["VISIBILITY"]}))')
+    api_request PUT "/projects/$project_id" "$visibility_body"
+    if ! api_ok; then
+      echo "    ✗ could not set visibility (HTTP $API_STATUS): $API_BODY" >&2
+      return 1
+    fi
+    echo "    → visibility $current_visibility → $VISIBILITY" >&2
+  fi
+}
+
+# add_missing_fixture_files ID FIXTURE_DIR
+#   Creates in one commit the files git tracks in the fixture that branch main
+#   of the project lacks.
+add_missing_fixture_files() {
+  local project_id="$1"
+  local fixture_dir="$2"
+
+  # The repository tree lists the paths the project already holds. Every page
+  # is read: one page of 100 is not the whole tree, and a fixture path past
+  # the first page would be created again on every run. A route that cannot be
+  # read stops reconciliation, never guessed at.
+  local page=1 pages="" body count payload
+  while :; do
+    api_request GET "/projects/$project_id/repository/tree?ref=main&recursive=true&per_page=100&page=$page"
+    if [ "$API_STATUS" != "200" ]; then
+      echo "    ✗ cannot list the project's files (HTTP $API_STATUS); not reconciling" >&2
+      return 1
+    fi
+    body="$API_BODY"
+    count=$(printf '%s' "$body" | python3 -c 'import sys,json
+try:
+    answer = json.load(sys.stdin)
+    print(len(answer) if isinstance(answer, list) else "ERR")
+except Exception:
+    print("ERR")')
+    if [ "$count" = "ERR" ]; then
+      echo "    ✗ the project's file list is unreadable; not reconciling" >&2
+      return 1
+    fi
+    [ "$count" -eq 0 ] && break
+    pages+="$body"$'\n'
+    [ "$count" -lt 100 ] && break
+    page=$((page + 1))
+  done
+  # The files git tracks, never whatever else the disk holds: these projects are
+  # public, and a local .env or __pycache__ must not reach them. Each file's
+  # bytes come from the commit, not the working tree, so an uncommitted edit
+  # cannot reach a public project either. The answer goes
+  # in on stdin, never in the environment, where a variable over the kernel's
+  # 128 KiB per-string limit stops python3 from starting. Any failure stops the
+  # run, so that no payload can only mean the comparison ran.
+  #
+  # One commit, and one request: .gitlab-ci.yml is among the fixture files, so a
+  # commit per file would start a pipeline per file, each on a partial tree, and
+  # a stop halfway would leave part of a fixture behind. A project holding
+  # GitLab's README alone is one whose first push failed, the push that removes
+  # that README, so there it is replaced. The LICENSE stays first in the list,
+  # though nothing lands before anything else in one commit.
+  payload=$(printf '%s' "$pages" | FIXTURE_DIR="$fixture_dir" python3 -c 'import base64,json,os,subprocess,sys
+present = set()
+for line in sys.stdin:
+    if line.strip():
+        present.update(e["path"] for e in json.loads(line) if e.get("type") != "tree")
+fixture_dir = os.environ["FIXTURE_DIR"]
+listed = subprocess.run(["git", "ls-files", "-z"], cwd=fixture_dir, check=True, stdout=subprocess.PIPE).stdout
+tracked = [rel for rel in listed.decode().split("\0") if rel]
+replaced = ["README.md"] if present == {"README.md"} else []
+actions = []
+for rel in sorted(tracked, key=lambda rel: (rel != "LICENSE", rel)):
+    if rel in replaced or rel not in present:
+        blob = subprocess.run(["git", "show", "HEAD:./" + rel], cwd=fixture_dir, check=True, stdout=subprocess.PIPE).stdout
+        content = base64.b64encode(blob).decode()
+        actions.append({"action": "update" if rel in replaced else "create", "file_path": rel, "encoding": "base64", "content": content})
+if actions:
+    print(json.dumps({"branch": "main", "commit_message": "Add the fixture files this project lacks", "actions": actions}))') || {
+    echo "    ✗ cannot compare the project's files with the fixture; not reconciling" >&2
+    return 1
+  }
+  if [ -z "$payload" ]; then
+    echo "    ✓ project files are in line" >&2
+    return 0
+  fi
+  api_request POST "/projects/$project_id/repository/commits" "$payload"
+  if ! api_ok; then
+    echo "    ✗ could not add the missing fixture files (HTTP $API_STATUS): $API_BODY" >&2
+    return 1
+  fi
+  printf '%s' "$payload" | python3 -c 'import json,sys
+for action in json.load(sys.stdin)["actions"]:
+    print("    → %s %s" % ("replaced" if action["action"] == "update" else "added", action["file_path"]), file=sys.stderr)'
+}
+
 # create_or_skip_project NAME PATH FIXTURE_DIR DESCRIPTION [MIRROR_FROM]
-#   - If the project does not exist, creates it.
-#   - If it exists, prints "project exists" to stderr and echoes the
-#     existing id to stdout (so callers can capture it with $()).
+#   - If the project exists, reconciles it (visibility and missing fixture
+#     files) and echoes the existing id to stdout (so callers can capture it
+#     with $()).
 #   - Otherwise, creates the project, clones it locally, copies the
 #     fixture content, commits, and pushes.
 create_or_skip_project() {
@@ -180,6 +379,9 @@ except Exception: pass' 2>/dev/null)
 
   if [ -n "$existing_id" ] && [ "$existing_id" -gt 0 ] 2>/dev/null; then
     echo "    ✓ project exists: $NAMESPACE/$path (id=$existing_id)" >&2
+    # Command substitutions run without errexit unless inherit_errexit is on,
+    # so a failed reconciliation has to be returned explicitly.
+    reconcile_existing_project "$existing_id" "$fixture_dir" || return 1
     echo "$existing_id"
     return 0
   fi
@@ -460,4 +662,5 @@ fi
 echo ""
 echo "The Orbit knowledge graph indexer will pick up the new content"
 echo "within a few minutes. Re-run this script at any time — it is"
-echo "idempotent and skips already-created resources."
+echo "idempotent: an existing project is brought into line, and any other"
+echo "existing resource is left as it is."

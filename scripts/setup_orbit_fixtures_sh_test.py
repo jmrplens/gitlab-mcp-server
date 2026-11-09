@@ -21,8 +21,8 @@ nothing.
 
 Each case runs the real script with a stand-in curl first on PATH. It logs
 every request as its method and path, answers each from a table of routes
-keyed by method and path (the query string is ignored), and answers anything
-else as GitLab answers a route it does not have. The stand-in is a shell
+keyed by method and path (of the query string only page= counts), and answers
+anything else as GitLab answers a route it does not have. The stand-in is a shell
 script rather than Python because the script under test already starts
 python3 several times per resource, and on a loaded host each start costs
 seconds.
@@ -32,6 +32,7 @@ Run with:
     python3 -m unittest discover -s scripts -p 'setup_orbit_fixtures_sh_test.py'
 """
 
+import base64
 import json
 import os
 import shutil
@@ -41,33 +42,54 @@ import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SCRIPT = os.path.join(ROOT, "scripts", "setup-orbit-fixtures.sh")
+# An absolute path: on Windows, CreateProcess searches System32 before PATH and
+# would pick the WSL launcher called bash.exe, which runs no distro here.
+BASH = shutil.which("bash") or "bash"
 API = "/api/v4"
 KG_ID = 10
 SEC_ID = 20
 
 # The routes live one file each under CURL_ROUTES, named by route_file.
-CURL = """#!/usr/bin/env bash
-method=GET url=
+CURL = r"""#!/usr/bin/env bash
+method=GET url= want_status=0 body= page= query=
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method=$2; shift 2 ;;
-    -H|-d) shift 2 ;;
+    -H) shift 2 ;;
+    -d) body=$2; shift 2 ;;
+    -w) want_status=1; shift 2 ;;
+    --connect-timeout|--max-time) shift 2 ;;
     http*) url=$1; shift ;;
     *) shift ;;
   esac
 done
 path=${url#*://}
 path=/${path#*/}
-path=${path%%\\?*}
-printf '%s %s\\n' "$method" "$path" >> "$CURL_LOG"
+case "$path" in
+  *\?*) query=${path#*\?}; path=${path%%\?*} ;;
+esac
+case "$query" in
+  *page=*) page=${query##*page=}; page=${page%%&*} ;;
+esac
+printf '%s %s\n' "$method" "$path" >> "$CURL_LOG"
+[ -n "$body" ] && printf '%s %s\t%s\n' "$method" "$path" "$body" >> "$CURL_BODY_LOG"
+[ -n "$query" ] && printf '%s %s\n' "$path" "$query" >> "$CURL_LOG.query"
 key="$method $path"
 key=${key// /_}
-key=${key//\\//!}
-if [ -f "$CURL_ROUTES/$key" ]; then
-  cat "$CURL_ROUTES/$key"
+key=${key//\//!}
+[ -f "$CURL_ROUTES/$key.dead" ] && exit 126
+status=404
+answer="$CURL_ROUTES/$key"
+[ -n "$page" ] && [ -f "$CURL_ROUTES/$key@$page" ] && answer="$CURL_ROUTES/$key@$page"
+if [ -f "$answer" ]; then
+  cat "$answer"
+  status=200
+  [ -f "$answer.status" ] && status=$(cat "$answer.status")
 else
   printf '%s' '{"message":"404 Not Found"}'
 fi
+[ "$want_status" = 1 ] && printf '\n%s' "$status"
+exit 0
 """
 
 
@@ -76,12 +98,20 @@ def route_file(key):
     return key.replace(" ", "_").replace("/", "!")
 
 
+def _fixture_files(project):
+    """The files git tracks in a project's fixture directory, relative and POSIX-slash."""
+    base = os.path.join(ROOT, "test", "fixtures", "orbit", project)
+    listed = subprocess.run(["git", "ls-files", "-z"], cwd=base, check=True, stdout=subprocess.PIPE).stdout
+    return sorted(rel for rel in listed.decode().split("\0") if rel)
+
+
 def existing_fixtures(namespace="plens1"):
     """The routes of a namespace whose two projects and seven labels exist and nothing else.
 
     GitLab finds a group or a project by its full path with every slash in it
     percent-encoded, a nested namespace's own slashes included, so those are
-    the only paths the routes answer.
+    the only paths the routes answer. Each project is public and holds every
+    fixture file, so a re-run finds it in line and writes nothing (#1533).
     """
     encoded = namespace.replace("/", "%2F")
     labels = [
@@ -91,9 +121,15 @@ def existing_fixtures(namespace="plens1"):
         )
     ]
     return {
-        "GET " + API + "/groups/" + encoded: {"id": 1},
+        "GET " + API + "/groups/" + encoded: {"id": 1, "full_path": namespace},
         "GET " + API + "/projects/" + encoded + "%2Fkg-fixtures": {"id": KG_ID},
         "GET " + API + "/projects/" + encoded + "%2Fsecurity-fixtures": {"id": SEC_ID},
+        "GET " + API + "/projects/%d" % KG_ID: {"id": KG_ID, "visibility": "public"},
+        "GET " + API + "/projects/%d" % SEC_ID: {"id": SEC_ID, "visibility": "public"},
+        "GET " + API + "/projects/%d/repository/tree" % KG_ID:
+            [{"path": p} for p in _fixture_files("kg-fixtures")],
+        "GET " + API + "/projects/%d/repository/tree" % SEC_ID:
+            [{"path": p} for p in _fixture_files("security-fixtures")],
         "GET " + API + "/projects/%d/labels" % KG_ID: labels,
         "GET " + API + "/projects/%d/milestones" % KG_ID: [],
         "GET " + API + "/projects/%d/issues" % KG_ID: [],
@@ -116,12 +152,18 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             f.write(CURL)
         os.chmod(curl, 0o755)
         self.log = os.path.join(self.tmp, "curl.log")
+        self.body_log = os.path.join(self.tmp, "curl-body.log")
         self.routes = os.path.join(self.tmp, "routes")
         self.env = dict(os.environ)
+        # Every existing project is reconciled against this, and the docs tell
+        # a contributor with a private group to export it: a case that needs a
+        # value sets its own, so the caller's must not reach the others.
+        self.env.pop("ORBIT_FIXTURES_VISIBILITY", None)
         self.env.update(
             {
                 "PATH": bindir + os.pathsep + os.environ["PATH"],
                 "CURL_LOG": self.log,
+                "CURL_BODY_LOG": self.body_log,
                 "CURL_ROUTES": self.routes,
                 "GITLAB_COM_TOKEN": "stand-in-token",
                 "ORBIT_FIXTURES_NAMESPACE": "plens1",
@@ -129,14 +171,44 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             }
         )
 
-    def run_script(self, routes):
+    def run_script(self, routes, flag="--skip-mirror"):
         os.mkdir(self.routes)
         for key, answer in routes.items():
+            status, body = answer if isinstance(answer, tuple) else (200, answer)
             with open(os.path.join(self.routes, route_file(key)), "w") as f:
-                json.dump(answer, f)
+                # A string goes out as it is, for a body that is not JSON.
+                if isinstance(body, str):
+                    f.write(body)
+                else:
+                    json.dump(body, f)
+            if status is None:
+                open(os.path.join(self.routes, route_file(key) + ".dead"), "w").close()
+            if status != 200:
+                with open(os.path.join(self.routes, route_file(key) + ".status"), "w") as f:
+                    f.write(str(status))
         return subprocess.run(
-            ["bash", SCRIPT, "--skip-mirror"], env=self.env, capture_output=True, text=True, timeout=600
+            [BASH, SCRIPT, flag], env=self.env, capture_output=True, text=True, timeout=600
         )
+
+    def committed_actions(self):
+        """The file actions of the commits the script created, in order."""
+        actions = []
+        for row in self.request_bodies("POST"):
+            if row["path"].endswith("/repository/commits"):
+                actions.extend(json.loads(row["body"])["actions"])
+        return actions
+
+    def request_bodies(self, method):
+        """(path, body) for every request the script sent with method and a body."""
+        if not os.path.exists(self.body_log):
+            return []
+        rows = []
+        with open(self.body_log) as f:
+            for line in f:
+                head, _, body = line.rstrip(chr(10)).partition(chr(9))
+                if head.startswith(method + " "):
+                    rows.append({"path": head.split(" ", 1)[1], "body": body})
+        return rows
 
     def requests(self, method):
         """The paths of every request the script sent with method, in order."""
@@ -194,7 +266,7 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("project exists: jmrp-oss/orbit-fixtures/kg-fixtures (id=%d)" % KG_ID, result.stderr)
 
     def test_help_prints_the_whole_usage_comment(self):
-        result = subprocess.run(["bash", SCRIPT, "--help"], env=self.env, capture_output=True, text=True, timeout=60)
+        result = subprocess.run([BASH, SCRIPT, "--help"], env=self.env, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         lines = result.stdout.splitlines()
         self.assertTrue(lines[0].startswith("# setup-orbit-fixtures.sh "), lines[:3])
@@ -203,6 +275,369 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertNotIn("Copyright", result.stdout)
         self.assertNotIn("SPDX-License-Identifier", result.stdout)
         self.assertEqual(self.requests("GET"), [])
+
+
+    def test_an_existing_project_without_the_license_gets_it_first(self):
+        routes = existing_fixtures()
+        files = [{"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = files
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([a["file_path"] for a in self.committed_actions()], ["LICENSE"])
+        self.assertIn("added LICENSE", result.stderr)
+
+    def test_a_failed_first_push_is_repaired_in_one_commit(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [{"path": "README.md"}]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        commits = [json.loads(r["body"]) for r in self.request_bodies("POST") if r["path"].endswith("/repository/commits")]
+        self.assertEqual(len(commits), 1, "a commit per file would start a pipeline per file")
+        self.assertEqual(commits[0]["branch"], "main")
+        actions = commits[0]["actions"]
+        self.assertEqual(sorted(a["file_path"] for a in actions), _fixture_files("kg-fixtures"))
+        self.assertEqual(actions[0]["file_path"], "LICENSE")
+        kinds = {a["file_path"]: a["action"] for a in actions}
+        self.assertEqual(kinds.pop("README.md"), "update")
+        self.assertEqual(set(kinds.values()), {"create"})
+        # The committed bytes, as the script sends them: an uncommitted edit
+        # under the fixture is the usual state while working on it.
+        base = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures")
+        for action in actions:
+            self.assertEqual(action["encoding"], "base64")
+            committed = subprocess.run(
+                ["git", "show", "HEAD:./" + action["file_path"]], cwd=base, check=True, stdout=subprocess.PIPE,
+            ).stdout
+            self.assertEqual(base64.b64decode(action["content"]), committed, action["file_path"])
+        self.assertIn("replaced README.md", result.stderr)
+
+    def test_a_readme_beside_other_files_is_left_alone(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([a["file_path"] for a in self.committed_actions()], ["LICENSE"])
+
+    def test_a_file_git_does_not_track_is_not_created(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        # Not ".env": a developer's own would be overwritten and then deleted.
+        planted = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures", ".env.setup-orbit-fixtures-test")
+        with open(planted, "w") as f:
+            f.write("SECRET=stand-in\n")
+        self.addCleanup(os.remove, planted)
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([a["file_path"] for a in self.committed_actions()], ["LICENSE"])
+
+    def test_a_file_list_git_cannot_give_stops_reconciliation(self):
+        # Names no repository, so git answers as it does outside a checkout.
+        self.env["GIT_DIR"] = os.path.join(self.tmp, "no-such-repository")
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ]
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot compare", result.stderr)
+        self.assertNotIn("project files are in line", result.stderr)
+
+    def test_a_tracked_file_missing_from_the_disk_is_not_created_empty(self):
+        # An index of this test's own, so that git lists a file the disk does not hold.
+        index = os.path.join(self.tmp, "index")
+        subprocess.run(
+            ["git", "update-index", "--add", "--cacheinfo",
+             "100644,e69de29bb2d1d6434b8b29ae775ad8c2e48c5391,test/fixtures/orbit/kg-fixtures/no-such-file"],
+            cwd=ROOT, env=dict(os.environ, GIT_INDEX_FILE=index), check=True,
+        )
+        self.env["GIT_INDEX_FILE"] = index
+        routes = existing_fixtures()
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot compare", result.stderr)
+        self.assertEqual(self.committed_actions(), [])
+
+    def test_an_uncommitted_edit_is_not_what_gets_published(self):
+        # The commit's bytes go out, never the working tree's: an edit nobody
+        # has committed must not reach a public project through a rerun.
+        base = os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures")
+        pyproject = os.path.join(base, "pyproject.toml")
+        with open(pyproject, "rb") as f:
+            original = f.read()
+
+        def restore():
+            with open(pyproject, "wb") as f:
+                f.write(original)
+
+        # Restore the bytes that were here before, not the committed ones: a
+        # contributor's own uncommitted edit must survive the suite.
+        self.addCleanup(restore)
+        with open(pyproject, "ab") as f:
+            f.write(b"\n# an edit that exists in no commit\n")
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [{"path": "README.md"}]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        actions = {a["file_path"]: a for a in self.committed_actions()}
+        committed = subprocess.run(
+            ["git", "show", "HEAD:./pyproject.toml"], cwd=base, check=True, stdout=subprocess.PIPE,
+        ).stdout
+        self.assertEqual(base64.b64decode(actions["pyproject.toml"]["content"]), committed)
+
+    def test_a_tree_answered_with_no_list_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = {"message": "not a list"}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("file list is unreadable", result.stderr)
+        self.assertEqual(self.requests("POST"), [])
+
+    def test_a_tree_answered_with_no_json_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = "<html>not json</html>"
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("file list is unreadable", result.stderr)
+        self.assertEqual(self.requests("POST"), [])
+
+    def test_an_existing_mirror_takes_the_visibility_and_no_file_claim(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/plens1%2Fglab-mirror"] = {"id": 30}
+        routes["GET " + API + "/projects/30"] = {"id": 30, "visibility": "private"}
+        routes["PUT " + API + "/projects/30"] = {"id": 30, "visibility": "public"}
+        result = self.run_script(routes, "--mirror-cli")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [API + "/projects/30"])
+        read = [r["path"] for r in self.requests("GET")]
+        self.assertNotIn(API + "/projects/30/repository/tree", read)
+        # Said of kg-fixtures and security-fixtures, never of the mirror.
+        self.assertEqual(result.stderr.count("project files are in line"), 2, result.stderr)
+
+    def test_a_write_curl_wrote_no_status_for_stops_reconciliation(self):
+        # A status of None makes the stand-in exit as a curl that never started
+        # does, with an argument over the kernel's limit: no output at all.
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = (None, {})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("added LICENSE", result.stderr)
+
+    def test_a_visibility_update_curl_wrote_no_status_for_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = (None, {})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("visibility private → public", result.stderr)
+
+    def test_the_tree_is_read_from_the_branch_written_to(self):
+        result = self.run_script(existing_fixtures())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(self.log + ".query") as f:
+            trees = [line for line in f if "/repository/tree " in line]
+        self.assertTrue(trees)
+        # Without recursive=true GitLab lists the top level alone, and every
+        # nested fixture file would read as missing; per_page=100 is the page
+        # size the loop counts a full page by.
+        for line in trees:
+            query = line.split(" ", 1)[1].strip().split("&")
+            self.assertIn("ref=main", query)
+            self.assertIn("recursive=true", query)
+            self.assertIn("per_page=100", query)
+
+    def test_a_directory_does_not_stand_in_for_a_file(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ] + [{"path": "LICENSE", "type": "tree"}]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([a["file_path"] for a in self.committed_actions()], ["LICENSE"])
+
+    def test_a_refused_file_creation_leaves_a_private_project_private(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "public"}
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"
+        ]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = (400, {"message": "bad request"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn("visibility private → public", result.stderr)
+
+    def test_an_existing_private_project_is_made_public(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "public"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        updated = [r["path"] for r in self.requests("PUT")]
+        self.assertEqual(updated, [API + "/projects/%d" % KG_ID])
+        self.assertIn("visibility private → public", result.stderr)
+        payload = json.loads(self.request_bodies("PUT")[-1]["body"])
+        self.assertEqual(payload, {"visibility": "public"})
+
+    def test_reads_every_tree_page(self):
+        routes = existing_fixtures()
+        all_files = [{"path": p} for p in _fixture_files("kg-fixtures")]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": "filler/%d" % i} for i in range(100)
+        ]
+        routes["GET " + API + "/projects/%d/repository/tree@2" % KG_ID] = all_files
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.committed_actions(), [], "files on the second page must count as present")
+
+    def test_the_license_is_created_before_another_missing_file(self):
+        routes = existing_fixtures()
+        files = _fixture_files("kg-fixtures")
+        others = [p for p in files if p != "LICENSE"]
+        missing = ["LICENSE", others[0]]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = [
+            {"path": p} for p in files if p not in missing
+        ]
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = {"id": "c0"}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([a["file_path"] for a in self.committed_actions()], missing)
+
+    def test_unreadable_project_details_stop_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = (500, {"message": "boom"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot read project", result.stderr)
+        self.assertEqual(self.requests("PUT"), [], "no visibility may be written from an unreadable project")
+
+    def test_a_project_without_a_visibility_is_not_made_public(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no readable visibility", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_a_refused_visibility_update_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "private"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = (403, {"message": "forbidden"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not set visibility", result.stderr)
+        self.assertNotIn("visibility private → public", result.stderr)
+
+    def test_an_unreadable_tree_stops_reconciliation(self):
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = (500, {"message": "boom"})
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot list the project's files", result.stderr)
+        self.assertEqual(self.committed_actions(), [])
+
+    def test_a_refused_file_creation_stops_reconciliation(self):
+        routes = existing_fixtures()
+        files = [{"path": p} for p in _fixture_files("kg-fixtures") if p != "LICENSE"]
+        routes["GET " + API + "/projects/%d/repository/tree" % KG_ID] = files
+        routes["POST " + API + "/projects/%d/repository/commits" % KG_ID] = (
+            400,
+            {"message": "bad request"},
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not add the missing fixture files", result.stderr)
+        self.assertNotIn("added LICENSE", result.stderr)
+
+    def test_a_private_visibility_is_refused_under_jmrp_oss(self):
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "jmrp-oss/orbit-fixtures"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss/orbit-fixtures"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
+        self.assertFalse(os.path.exists(self.log), "the refusal must come before any API call")
+
+    def test_a_private_visibility_is_refused_under_an_uppercase_jmrp_oss(self):
+        # GitLab resolves group and project paths case-insensitively, so a
+        # differently cased namespace reaches the same projects and must not
+        # slip past the public-only guard.
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "JMRP-OSS/Orbit-Fixtures"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss/orbit-fixtures"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed", result.stderr)
+        self.assertFalse(os.path.exists(self.log), "the refusal must come before any API call")
+
+    def test_a_private_visibility_is_refused_under_the_jmrp_oss_root(self):
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "jmrp-oss"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        result = self.run_script(existing_fixtures("jmrp-oss"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ORBIT_FIXTURES_VISIBILITY=private is not allowed under jmrp-oss:", result.stderr)
+        self.assertFalse(os.path.exists(self.log), "the refusal must come before any API call")
+
+    def test_a_private_visibility_is_refused_for_a_group_id_under_jmrp_oss(self):
+        # GET /groups/:id takes a numeric id as well as a path, so the guard on
+        # the namespace as written cannot see jmrp-oss in it; the group GitLab
+        # resolves is checked again before anything is written.
+        self.env["ORBIT_FIXTURES_NAMESPACE"] = "134059988"
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = "private"
+        routes = existing_fixtures("134059988")
+        routes["GET " + API + "/groups/134059988"] = {"id": 134059988, "full_path": "jmrp-oss/orbit-fixtures"}
+        routes["POST " + API + "/projects"] = {"id": 99}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn(
+            "ORBIT_FIXTURES_VISIBILITY=private is not allowed under jmrp-oss/orbit-fixtures:", result.stderr
+        )
+        self.assertEqual([r["path"] for r in self.requests("GET")], [API + "/groups/134059988"])
+        for method in ("POST", "PUT", "DELETE"):
+            self.assertEqual(self.requests(method), [], "the refusal must come before any %s call" % method)
+
+    def test_a_group_answer_without_its_full_path_stops_the_run(self):
+        # The resolved guard reads full_path; an answer that lacks it must stop
+        # the run rather than let the guard pass on nothing.
+        routes = existing_fixtures()
+        routes["GET " + API + "/groups/plens1"] = {"id": 1}
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("did not resolve to a group with an id and a full_path", result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("GET")], [API + "/groups/plens1"])
+        for method in ("POST", "PUT", "DELETE"):
+            self.assertEqual(self.requests(method), [])
+
+    def test_the_visibility_is_json_encoded_in_the_update_body(self):
+        # A configured visibility carrying JSON syntax must stay one string in
+        # the PUT body and add no field of its own.
+        visibility = 'private", "issues_access_level": "disabled'
+        self.env["ORBIT_FIXTURES_VISIBILITY"] = visibility
+        routes = existing_fixtures()
+        routes["GET " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": "public"}
+        routes["PUT " + API + "/projects/%d" % KG_ID] = {"id": KG_ID, "visibility": visibility}
+        routes["PUT " + API + "/projects/%d" % SEC_ID] = {"id": SEC_ID, "visibility": visibility}
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        updated = [r["path"] for r in self.requests("PUT")]
+        self.assertEqual(
+            updated,
+            [API + "/projects/%d" % KG_ID, API + "/projects/%d" % SEC_ID],
+        )
+        for row in self.request_bodies("PUT"):
+            self.assertEqual(json.loads(row["body"]), {"visibility": visibility})
 
 
 if __name__ == "__main__":

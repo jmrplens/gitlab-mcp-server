@@ -619,7 +619,8 @@ e2e-clean-orphans:
 ## live tests, and re-records what GitLab.com answers the six Orbit actions
 ## (gen-orbit-record), which fails every run while the recorded key tree
 ## differs from the one committed at HEAD. Idempotent: the setup script
-## skips already-existing resources, so re-running is safe.
+## reconciles an existing project (its visibility and the fixture files it
+## lacks) and leaves other existing resources alone, so re-running is safe.
 ##
 ## Overridable variables (command line or .env):
 ##   ORBIT_FIXTURES_NAMESPACE      default: jmrp-oss/orbit-fixtures
@@ -664,7 +665,8 @@ orbit-ensure-token:
 
 ## orbit-setup-fixtures: idempotently provision the fixture projects.
 ## Passes the resolved namespace and optional --mirror-cli through to
-## the script. Pre-existing resources are detected and skipped.
+## the script. An existing project is reconciled (its visibility and the
+## fixture files it lacks) and other existing resources are left alone.
 ## ORBIT_FIXTURES_VISIBILITY is read from the make command line, then the
 ## environment, then .env: the recipe sources .env after make has handed
 ## the shell its value, so make's value is passed on explicitly, and an
