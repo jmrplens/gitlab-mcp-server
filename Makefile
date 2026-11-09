@@ -256,17 +256,21 @@ COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-# OS detection for portable commands
+# OS detection for portable commands. Each helper takes one path and quotes
+# it, so a directory an override names with a space is one argument: with the
+# path unquoted, a coverage root of "dist/e2e cover" made RM_RF remove
+# dist/e2e and the staged server binary in it. A recipe that writes into such
+# a directory quotes the path as well.
 ifeq ($(OS),Windows_NT)
   BINARY_EXT=.exe
-  MKDIR_P=if not exist $(subst /,\,$1) mkdir $(subst /,\,$1)
-  RM_RF=if exist $(subst /,\,$1) rmdir /s /q $(subst /,\,$1)
-  RM_F=if exist $(subst /,\,$1) del /q $(subst /,\,$1)
+  MKDIR_P=if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
+  RM_RF=if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
+  RM_F=if exist "$(subst /,\,$1)" del /q "$(subst /,\,$1)"
 else
   BINARY_EXT=
-  MKDIR_P=mkdir -p $1
-  RM_RF=rm -rf $1
-  RM_F=rm -f $1
+  MKDIR_P=mkdir -p "$1"
+  RM_RF=rm -rf "$1"
+  RM_F=rm -f "$1"
 endif
 
 # Analysis output directory
@@ -350,6 +354,9 @@ test-e2e: test-e2e-gitlab
 # go install writes to (GOBIN, falling back to GOPATH/bin). Recursive (=) on
 # purpose: the fallback must be re-evaluated after ensure-gotestsum runs,
 # because a prerequisite shell cannot extend the PATH of later recipes.
+# Every recipe that runs it or hands it on quotes it, as it does PKGSITE and
+# MCP_PUBLISHER, since the environment decides each path and a GOBIN, a GOPATH,
+# a PATH directory or a HOME can hold a space.
 GOTESTSUM_INSTALL_DIR = $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)
 GOTESTSUM = $(or $(shell command -v gotestsum 2>/dev/null),$(GOTESTSUM_INSTALL_DIR)/gotestsum)
 
@@ -367,7 +374,7 @@ ensure-gotestsum:
 # real binary against a stub GitLab.
 test-e2e-harness: ensure-gotestsum
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	bash -o pipefail -c '"$(GOTESTSUM)" \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-harness-junit.xml \
 	  -- -tags e2e -count=1 -timeout 600s ./test/e2e/internal/...'
@@ -406,7 +413,7 @@ test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/stdio))
 	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,stdio) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
 	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
@@ -417,7 +424,7 @@ test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))
 	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL= \
 	  $(call e2e_cover_env,http) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
@@ -487,7 +494,7 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	  set -m; \
 	  E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
 	  $(call e2e_cover_env,cloudflare-tunnel) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format standard-verbose \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-junit.xml \
 	  --jsonfile "$$log" \
@@ -507,7 +514,7 @@ test-e2e-collector: ensure-gotestsum e2e-server-binary
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/collector))
 	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,collector) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-collector-junit.xml \
 	  -- -tags collectore2e -count=1 -timeout 900s ./test/e2e/collector/'
@@ -593,7 +600,7 @@ test-e2e-ce: ensure-gotestsum e2e-server-binary
 	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ce" \
 	$(call e2e_cover_env,ce) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
 ## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code (+ Bitbucket fixture), run the common and ee packages of the rebuilt suite, tear down.
@@ -604,7 +611,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ee" \
 	$(call e2e_cover_env,ee) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 ## test-e2e-docker-enterprise: the licensed Docker run under its older name; an alias of test-e2e-ee.
@@ -622,7 +629,7 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/self-hosted))
 	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,self-hosted) \
-	  GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted" $(GOTESTSUM) \
+	  GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted" "$(GOTESTSUM)" \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
@@ -885,7 +892,7 @@ modeleval-ce: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_NAME=modeleval-ce \
 	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce" \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls" \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/modeleval/
 
 ## modeleval-ee: the same against an ephemeral licensed GitLab EE, which is what the licensed cases need.
@@ -897,7 +904,7 @@ modeleval-ee: ensure-gotestsum e2e-server-binary
 	E2E_REPORT_NAME=modeleval-ee \
 	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee" \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls" \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/modeleval/
 
 ## modeleval-probe: ask each configured provider whether it accepts the request this repository builds (PAID; needs MODELEVAL_PROBE=yes).
@@ -1426,35 +1433,35 @@ analyze-fix:
 analyze-report:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
 	@echo "Generating analysis report to $(ANALYSIS_DIR)/report.txt ..."
-	@echo "# Static Analysis Report - gitlab-mcp-server" > $(ANALYSIS_DIR)/report.txt
-	@echo "# Tools: golangci-lint, govulncheck, markdownlint" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go analysis packages: $(GO_ANALYSIS_PKGS)" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go analysis build tags: $(GO_ANALYSIS_TAGS)" >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 1. golangci-lint config verify" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint config verify >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 2. golangci-lint fmt" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint fmt --diff >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 3. golangci-lint run" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 4. govulncheck" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 5. markdownlint" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules" >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
+	@echo "# Static Analysis Report - gitlab-mcp-server" > "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Tools: golangci-lint, govulncheck, markdownlint" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Go analysis packages: $(GO_ANALYSIS_PKGS)" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Go analysis build tags: $(GO_ANALYSIS_TAGS)" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 1. golangci-lint config verify" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint config verify >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 2. golangci-lint fmt" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint fmt --diff >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 3. golangci-lint run" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 4. govulncheck" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 5. markdownlint" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules" >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
 	@echo "Report saved to $(ANALYSIS_DIR)/report.txt"
 
 # ─── Tool Installation ───────────────────────────────────────────────────────
@@ -1651,7 +1658,7 @@ check-install-buttons:
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json: ensure-mcp-publisher
 	@grep -q 'MCP_PUBLISHER_VERSION: "$(MCP_PUBLISHER_VERSION)"' .github/workflows/release.yml || { echo "MCP_PUBLISHER_VERSION $(MCP_PUBLISHER_VERSION) in the Makefile is not the version .github/workflows/release.yml publishes with; keep the two in lockstep"; exit 1; }
-	$(MCP_PUBLISHER) validate server.json
+	"$(MCP_PUBLISHER)" validate server.json
 
 ## mcp-publisher-version: print the pinned MCP Registry publisher version; CI keys its cache on it.
 mcp-publisher-version:
@@ -1659,7 +1666,7 @@ mcp-publisher-version:
 
 ## ensure-mcp-publisher: install the pinned MCP Registry publisher into its version-named directory when it is not there yet.
 ensure-mcp-publisher:
-	@test -x $(MCP_PUBLISHER) || GOBIN=$(MCP_PUBLISHER_DIR) go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
+	@test -x "$(MCP_PUBLISHER)" || GOBIN="$(MCP_PUBLISHER_DIR)" go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
 
 ## check-server-json-packages: verify every package server.json declares is
 ## really published and really installable (cmd/release_packages). Downloads the
@@ -2427,11 +2434,11 @@ e2e-go-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	bash -o pipefail -c 'set -eu; \
 	  dirs=""; \
-	  for meta in $$(find $(E2E_COVER_ROOT) -name "covmeta.*" -type f 2>/dev/null | sort); do \
+	  while IFS= read -r meta; do \
 	    dir=$$(dirname "$$meta"); \
 	    case ",$$dirs," in *",$$dir,"*) continue;; esac; \
 	    dirs="$${dirs:+$$dirs,}$$dir"; \
-	  done; \
+	  done < <(find "$(E2E_COVER_ROOT)" -name "covmeta.*" -type f 2>/dev/null | sort); \
 	  if [ -z "$$dirs" ]; then \
 	    echo "no coverage data under $(E2E_COVER_ROOT): run an e2e target with COVER=1, which builds the server with -cover and gives every child a GOCOVERDIR" >&2; \
 	    exit 1; \
@@ -3080,7 +3087,7 @@ check-plan-untracked:
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
-	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
+	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output="$(ANALYSIS_DIR)/godoc.md"
 	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
 
 ## audit-godocs-check: the audit check-godocs gates, with Test, Benchmark, Fuzz
@@ -3113,7 +3120,7 @@ fix-godocs:
 docs-local-go:
 	@if [ ! -x "$(PKGSITE)" ]; then echo "pkgsite not found. Install with: go install golang.org/x/pkgsite/cmd/pkgsite@latest"; exit 1; fi
 	@echo "Serving local Go documentation at http://127.0.0.1:6060"
-	$(PKGSITE) -http=127.0.0.1:6060
+	"$(PKGSITE)" -http=127.0.0.1:6060
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Formatting is delegated to golangci-lint formatters configured in .golangci.yml.

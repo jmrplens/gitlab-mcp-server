@@ -35,7 +35,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1119,6 +1118,11 @@ func TestCloudflareTunnelTarget_OverlappingRuns_EachRemovesOnlyItsOwnContainer(t
 // The target built the instrumented binary and handed it no leaf, so every
 // server it started wrote nothing and printed "GOCOVERDIR not set" first,
 // and make e2e-go-coverage left the run out without a word.
+//
+// The leaf is cleared by the Makefile's RM_RF, which took its path unquoted:
+// under a coverage root such as "dist/e2e cover" it removed dist/e2e, the
+// staged server binary in it, and a "cover/cloudflare-tunnel" nobody named,
+// and left the leaf's stale counters in place.
 func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
 	t.Parallel()
 	target := newTunnelTarget(t)
@@ -1126,11 +1130,31 @@ func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
 	t.Run("with COVER=1", func(t *testing.T) {
 		t.Parallel()
 		rendered := target.renderAll(t, "COVER=1")
-		if !strings.Contains(rendered, "rm -rf dist/e2e-cover/cloudflare-tunnel\n") {
+		if !strings.Contains(rendered, "rm -rf \"dist/e2e-cover/cloudflare-tunnel\"\n") {
 			t.Errorf("the target does not clear its leaf before the run:\n%s", rendered)
 		}
 		if !strings.Contains(rendered, `E2E_COVER_DIR="`+leaf+`" `) {
 			t.Errorf("the run is not handed E2E_COVER_DIR=%s:\n%s", leaf, rendered)
+		}
+	})
+	t.Run("with a coverage root holding a space", func(t *testing.T) {
+		t.Parallel()
+		rendered := target.renderAll(t, "COVER=1", "E2E_COVER_ROOT=dist/e2e cover")
+		if want := filepath.Join(target.root, "dist", "e2e cover", "cloudflare-tunnel"); !strings.Contains(rendered, `E2E_COVER_DIR="`+want+`" `) {
+			t.Errorf("the run is not handed E2E_COVER_DIR=%s:\n%s", want, rendered)
+		}
+		// The removal runs in a tree of the test's own, beside the staged
+		// server binary it has to leave in place.
+		tree := t.TempDir()
+		binary := filepath.Join(tree, "dist", "e2e", "gitlab-mcp-server")
+		stale := filepath.Join(tree, "dist", "e2e cover", "cloudflare-tunnel", "covmeta.stale")
+		touch(t, binary, stale)
+		runTheRemoval(t, rendered, tree)
+		if _, err := os.Stat(binary); err != nil {
+			t.Errorf("clearing the leaf removed the staged server binary: %v", err)
+		}
+		if _, err := os.Stat(filepath.Dir(stale)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("clearing the leaf left it and its stale counters in place (%v)", err)
 		}
 	})
 	t.Run("without it", func(t *testing.T) {
@@ -1149,27 +1173,15 @@ func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
 // The recipe joined both onto $(CURDIR) unquoted, so the shell split them at
 // the space and ran the rest of the path as a command: the run ended with
 // status 127 before gotestsum started. A checkout under a Windows home folder
-// with a space in its name, reached from WSL, is such a path.
+// with a space in its name, reached from WSL, is such a path. The stand-in
+// gotestsum sits under such a folder too (newTunnelTarget), as a GOBIN or a
+// GOPATH under that home folder would put it, and the recipe ran it unquoted
+// as well, which ended this run, and every other one the tests here start,
+// with status 127 the same way.
 func TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths(t *testing.T) {
 	t.Parallel()
 	target := newTunnelTarget(t)
-	// The Makefile includes nothing, and these are the files it reads while
-	// make parses it.
-	checkout := filepath.Join(t.TempDir(), "checkout with space")
-	if err := os.MkdirAll(checkout, 0o750); err != nil {
-		t.Fatalf("creating the checkout: %v", err)
-	}
-	var copyErr error
-	for _, name := range []string{"Makefile", "VERSION", "go.mod"} {
-		body, err := os.ReadFile(filepath.Join(target.root, name)) //#nosec G304 -- a file of this repository, named here
-		if err == nil {
-			err = os.WriteFile(filepath.Join(checkout, name), body, 0o600) //#nosec G703 -- a t.TempDir and a name from the list above
-		}
-		copyErr = errors.Join(copyErr, err)
-	}
-	if copyErr != nil {
-		t.Fatalf("copying the Makefile and what it reads into %s: %v", checkout, copyErr)
-	}
+	checkout := checkoutWithASpace(t)
 	target.root = checkout
 	binary := filepath.Join(checkout, "dist", "e2e", "gitlab-mcp-server")
 
@@ -1202,6 +1214,28 @@ func TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths(t *
 				t.Errorf("the run was handed %q, want %q", handed, tt.want)
 			}
 		})
+	}
+}
+
+// runTheRemoval runs, with sh in dir, the one rm -rf line make -n printed in
+// rendered, failing the test when it printed none or more than one, or when
+// the line fails.
+func runTheRemoval(t *testing.T, rendered, dir string) {
+	t.Helper()
+	var removals []string
+	for line := range strings.Lines(rendered) {
+		if strings.HasPrefix(line, "rm -rf ") {
+			removals = append(removals, line)
+		}
+	}
+	if len(removals) != 1 {
+		t.Fatalf("make -n printed %d removals, want the leaf's alone:\n%s", len(removals), rendered)
+	}
+	//#nosec G204 -- a line make rendered from this repository's own Makefile
+	removal := exec.CommandContext(t.Context(), "sh", "-c", removals[0])
+	removal.Dir = dir
+	if out, err := removal.CombinedOutput(); err != nil {
+		t.Fatalf("%s: %v: %s", strings.TrimSpace(removals[0]), err, out)
 	}
 }
 
@@ -1240,29 +1274,18 @@ esac
 )
 
 // newTunnelTarget finds make, sh and bash, skipping the test where one is
-// missing or the platform is not Linux, and writes the stand-ins.
+// missing or the platform is not Linux, and writes the stand-ins under a
+// folder whose path holds a space, as a GOBIN, a GOPATH or a PATH directory
+// can, so every recipe rendered here hands the shell such a gotestsum path.
 func newTunnelTarget(t *testing.T) tunnelTarget {
 	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skipf("the target's recipe is held on Linux, where CI's e2e-http job runs it; this is %s", runtime.GOOS)
+	target := tunnelTarget{
+		makeBin: makeOnLinux(t),
+		root:    repoRoot(),
+		stubs:   filepath.Join(t.TempDir(), "bin with space"),
 	}
-	var target tunnelTarget
-	var err error
-	if target.makeBin, err = exec.LookPath("make"); err != nil {
-		t.Skipf("make is not installed here, so the recipe cannot be rendered: %v", err)
-	}
-	for _, tool := range []string{"sh", "bash"} {
-		if _, err = exec.LookPath(tool); err != nil {
-			t.Skipf("%s is not installed here, so the rendered recipe cannot be run: %v", tool, err)
-		}
-	}
-	target.root = repoRoot()
-	target.stubs = t.TempDir()
 	for name, body := range map[string]string{"gotestsum": stubGotestsum, "docker": stubDocker} {
-		//#nosec G306 -- a stand-in the rendered recipe must execute
-		if err = os.WriteFile(filepath.Join(target.stubs, name), []byte(body), 0o700); err != nil {
-			t.Fatalf("writing the stand-in %s: %v", name, err)
-		}
+		writeStandIn(t, filepath.Join(target.stubs, name), body)
 	}
 	return target
 }
@@ -1272,28 +1295,10 @@ func newTunnelTarget(t *testing.T) tunnelTarget {
 // reports directory of the test's own.
 func (tt tunnelTarget) renderAll(t *testing.T, args ...string) string {
 	t.Helper()
-	args = append([]string{
-		"-n", "-s", "--no-print-directory", "test-e2e-cloudflare-tunnel",
+	return renderMake(t, tt.makeBin, tt.root, append([]string{
+		"test-e2e-cloudflare-tunnel",
 		"GOTESTSUM=" + filepath.Join(tt.stubs, "gotestsum"), "E2E_REPORT_DIR=" + t.TempDir(),
-	}, args...)
-	//#nosec G204 -- make from the PATH, with this file's own arguments
-	render := exec.CommandContext(t.Context(), tt.makeBin, args...)
-	render.Dir = tt.root
-	// Without CI, which the target refuses at parse time, and without what
-	// an enclosing make or a COVER=1 run would hand this one.
-	render.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains([]string{"CI", "COVER", "E2E_COVER_ROOT", "MAKEFLAGS", "MFLAGS", "MAKELEVEL"}, name)
-	})
-	out, err := render.Output()
-	if err != nil {
-		var stderr []byte
-		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-			stderr = exit.Stderr
-		}
-		t.Fatalf("make %s: %v: %s", strings.Join(args, " "), err, stderr)
-	}
-	return string(out)
+	}, args...)...)
 }
 
 // render returns the target's own recipe line, the one that runs the case,
