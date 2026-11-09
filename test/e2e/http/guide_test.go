@@ -33,6 +33,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
@@ -439,10 +440,11 @@ const (
 )
 
 // throughProxy returns a handle that reaches a server the way a client
-// reaching the guide's deployment does: the request goes to the proxy
-// listening on port, from address, naming publicHost in Host and, over TLS,
-// in the server name, with the certificate checked against the case's root.
-func throughProxy(t *testing.T, scheme string, port int, roots *x509.CertPool, from clientAddress, logs func() string) *server {
+// reaching the guide's deployment as scheme://host does: the request goes to
+// the proxy listening on port, from address, naming host in Host and, over
+// TLS, in the server name, with the certificate checked against the case's
+// root.
+func throughProxy(t *testing.T, scheme, host string, port int, roots *x509.CertPool, from clientAddress, logs func() string) *server {
 	t.Helper()
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
@@ -462,7 +464,7 @@ func throughProxy(t *testing.T, scheme string, port int, roots *x509.CertPool, f
 	}
 	client := &http.Client{Timeout: 30 * time.Second, Transport: transport}
 	t.Cleanup(client.CloseIdleConnections)
-	return &server{baseURL: scheme + "://" + publicHost, logs: logs, client: client}
+	return &server{baseURL: scheme + "://" + host, logs: logs, client: client}
 }
 
 // serverCSP is the Content-Security-Policy the server sets on every response
@@ -716,6 +718,16 @@ type documentedProxy struct {
 	// ready is the path polled until the proxy forwards it; /health when
 	// empty, for a route that does not reach the server's root.
 	ready string
+	// host is the name the block serves; publicHost when empty.
+	host string
+}
+
+// hostName is the name a client asks the proxy for.
+func (p documentedProxy) hostName() string {
+	if p.host == "" {
+		return publicHost
+	}
+	return p.host
 }
 
 // scheme is how a client reaches the proxy.
@@ -761,7 +773,7 @@ func (p documentedProxy) behind(t *testing.T, flags ...string) proxied {
 // address.
 func (r proxied) from(t *testing.T, address clientAddress) *server {
 	t.Helper()
-	return throughProxy(t, r.proxy.scheme(), r.port, r.proxy.roots, address, r.logs)
+	return throughProxy(t, r.proxy.scheme(), r.proxy.hostName(), r.port, r.proxy.roots, address, r.logs)
 }
 
 // The credentials the instance a request selects accepts, one per header:
@@ -1014,19 +1026,31 @@ func assertCredentialHeadersReachTheServer(t *testing.T, paired *server, accepti
 // behind the same proxy is not.
 func assertTheRealClientIsCharged(t *testing.T, paired proxied, accepting *tokenGitLab) {
 	t.Helper()
+	assertFailuresChargeTheClient(t, paired, map[string]string{"GITLAB-URL": accepting.url}, 8)
+}
+
+// assertFailuresChargeTheClient sends failures from one client, each with
+// another value in the header the server is told to read, until the server
+// blocks it, within attempts, and then checks that a second client behind the
+// same proxy is not blocked. extra is sent with every request.
+func assertFailuresChargeTheClient(t *testing.T, paired proxied, extra map[string]string, attempts int) {
+	t.Helper()
 	header := paired.proxy.clientHeader
+	headers := func(token string) map[string]string {
+		h := map[string]string{"PRIVATE-TOKEN": token}
+		maps.Copy(h, extra)
+		return h
+	}
 	t.Run("the real client is charged in the failure limiter", func(t *testing.T) {
 		charged := paired.from(t, clientCharged)
 		var blocked bool
-		for i := range 8 {
-			got := charged.do(t, mcpPOST(map[string]string{
-				"PRIVATE-TOKEN": fmt.Sprintf("glpat-wrong-%d", i),
-				"GITLAB-URL":    accepting.url,
-				// What a client writes in the header it is charged by:
-				// the proxy replaces it or appends the address it heard
-				// from, and the server reads that one.
-				header: fmt.Sprintf("198.51.100.%d", i+1),
-			}))
+		for i := range attempts {
+			h := headers(fmt.Sprintf("glpat-wrong-%d", i))
+			// What a client writes in the header it is charged by: the
+			// proxy replaces it or appends the address it heard from, and
+			// the server reads that one.
+			h[header] = fmt.Sprintf("198.51.100.%d", i+1)
+			got := charged.do(t, mcpPOST(h))
 			if got.status == http.StatusTooManyRequests {
 				blocked = true
 				break
@@ -1036,11 +1060,11 @@ func assertTheRealClientIsCharged(t *testing.T, paired proxied, accepting *token
 			}
 		}
 		if !blocked {
-			t.Fatalf("eight failures through the proxy were never blocked with a limit of three: each was charged to the address the client wrote in %s rather than to the one the proxy heard from", header)
+			t.Fatalf("%d failures through the proxy were never blocked: each was charged to the address the client wrote in %s rather than to the one the proxy heard from", attempts, header)
 		}
 
 		bystander := paired.from(t, clientBystander)
-		if got := bystander.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-wrong-bystander", "GITLAB-URL": accepting.url})); got.status != http.StatusUnauthorized {
+		if got := bystander.do(t, mcpPOST(headers("glpat-wrong-bystander"))); got.status != http.StatusUnauthorized {
 			t.Errorf("another client behind the same proxy = %d, want its own 401: the block was charged to the proxy, which every client shares", got.status)
 		}
 	})

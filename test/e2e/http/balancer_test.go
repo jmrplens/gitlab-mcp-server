@@ -131,7 +131,7 @@ func startBalancer(t *testing.T, kind, image string, roots *x509.CertPool, mount
 		port := freePort(t)
 		name := fmt.Sprintf("gitlab-mcp-httpe2e-lb-%s-%d", kind, port)
 		startContainer(t, name, image, mounts(port))
-		b := balancer{container: name, through: throughProxy(t, scheme, port, roots, clientForHeaders, nil)}
+		b := balancer{container: name, through: throughProxy(t, scheme, publicHost, port, roots, clientForHeaders, nil)}
 		err := awaitForwarding(t, b.through, "/health", name)
 		if err == nil {
 			return b

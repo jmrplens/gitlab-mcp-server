@@ -813,6 +813,67 @@ para ese nombre, aterrizan exactamente en la misma colisión que un
 </TabItem>
 </Tabs>
 
+### En una LAN, en HTTP en claro
+
+Todos los bloques de arriba sirven un nombre público con un certificado. Un
+proxy que sirve una LAN en HTTP en claro, al que las máquinas de la misma red
+llegan como `http://mcp.lan`, es el mismo proxy sin el certificado, y necesita
+un cambio del lado del servidor: `--public-url` admite un origen `https`, o
+`http` solo en loopback, así que un nombre de LAN en claro no se puede declarar
+con él. El host se admite entonces confiando en el salto. El proxy y el
+servidor comparten máquina, el servidor escucha en loopback y
+`--trusted-proxies=127.0.0.1` responde por la conexión que abre el proxy, desde
+la que se sirve cualquier host reenviado:
+
+```nginx e2e=nginx-lan
+upstream gitlab_mcp {
+    server 127.0.0.1:8080;
+    keepalive 16;
+}
+
+server {
+    # La dirección de LAN de esta máquina, en HTTP en claro.
+    listen 192.168.1.10:80;
+    server_name mcp.lan;
+
+    location / {
+        proxy_pass http://gitlab_mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Host       $host;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header Connection "";
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+}
+```
+
+```bash e2e=nginx-lan-server
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --gitlab-url=https://gitlab.example.com \
+  --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1
+```
+
+El emparejamiento que admite el host es también el que carga los fallos de cada
+cliente de la LAN a ese cliente en el limitador de fallos, y no al proxy, como
+en la pestaña de nginx de arriba. Lo que el salto en claro pierde es el cifrado
+de todo lo que pasa por él: el token de cada petición cruza la LAN legible para
+cualquier cosa que esté en su camino, así que esta forma es para una red en la
+que se confía tanto como en los tokens. El modo OAuth no está disponible en
+ella, porque el identificador de recurso que reciben los clientes OAuth es el
+origen de `--public-url`, y ese tiene que ser `https`.
+
+Con el proxy en otra máquina, el que queda fuera de loopback en HTTP en claro
+es el propio listener del servidor. El arranque avisa entonces, con su
+dirección; `--allow-plaintext-http` declara deliberado ese salto en claro, y
+`--allow-plaintext-http=false` (o `GITLAB_MCP_ALLOW_PLAINTEXT_HTTP=false`) se
+niega a arrancarlo. `--trusted-proxies` nombra entonces la dirección de LAN del
+proxy en lugar de `127.0.0.1`
+([HTTP en claro en una dirección que otras máquinas alcanzan](/gitlab-mcp-server/es/operations/http-server/#http-en-claro-en-una-dirección-que-otras-máquinas-alcanzan)).
+
 ## TLS entre el proxy y el servidor
 
 Cuando el proxy comparte máquina, elimina el salto en lugar de cifrarlo:
