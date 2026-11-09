@@ -633,15 +633,19 @@ func assertGlobalListScope(t *testing.T, handle promptHandlerFunc, args map[stri
 }
 
 // TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll verifies that
-// every global merge request and issue list a cross-project prompt reads asks
-// GitLab for everybody's items, for the caller and for another user alike.
+// every global merge request list a cross-project prompt reads asks GitLab for
+// everybody's items, for the caller and for another user alike, and so does
+// the global issue list read about another user.
 //
 // Each of these lists is filtered by the user the prompt is about: the merge
 // requests they author, are assigned or review, the issues assigned to them.
 // Without scope=all GitLab applies that filter to the caller's own merge
 // requests and issues only, so the pending reviews were the ones the caller
 // had opened and was reviewing, almost always none, and every list about
-// another user was that user's work intersected with the caller's.
+// another user was that user's work intersected with the caller's. The
+// caller's own issues are read with scope=assigned_to_me instead, which
+// GitLab.com accepts where it refuses scope=all on the issue list, and which
+// TestMyIssues_Scope_NamesTheCallerOrEverybody holds.
 func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T) {
 	alice := map[string]string{argUsername: "alice"}
 	tests := []struct {
@@ -655,7 +659,6 @@ func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T
 		{name: "my_open_mrs for another user", handle: handleMyOpenMRs, args: alice, route: routeGetMergeRequests, wantCalls: 2},
 		{name: "my_pending_reviews for the caller", handle: handleMyPendingReviews, route: routeGetMergeRequests, wantCalls: 1},
 		{name: "my_pending_reviews for another user", handle: handleMyPendingReviews, args: alice, route: routeGetMergeRequests, wantCalls: 1},
-		{name: "my_issues for the caller", handle: handleMyIssues, route: routeGetIssues, wantCalls: 1},
 		{name: "my_issues for another user", handle: handleMyIssues, args: alice, route: routeGetIssues, wantCalls: 1},
 		{name: "my_activity_summary for the caller", handle: handleMyActivitySummary, route: routeGetMergeRequests, wantCalls: 2},
 		{name: "my_activity_summary for another user", handle: handleMyActivitySummary, args: alice, route: routeGetMergeRequests, wantCalls: 2},
@@ -663,6 +666,110 @@ func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertGlobalListScope(t, tt.handle, tt.args, tt.route, tt.wantCalls)
+		})
+	}
+}
+
+// scopeAllRefusedJSON is the body GitLab.com answers GET /issues?scope=all
+// with since the feature flag restrict_global_issues_scope_all was enabled
+// there, byte for byte as the issue 1779 report recorded it.
+const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not supported on this endpoint. Use `created_by_me` or `assigned_to_me`, or query a specific group or project.\"}"
+
+// myIssuesAgainst drives my_issues with args against a GitLab whose global
+// issue list is answered by issues, the caller resolving to user 1 and the
+// username "alice" to user 42, and returns the prompt's result and error.
+func myIssuesAgainst(t *testing.T, args map[string]string, issues http.HandlerFunc) (*mcp.GetPromptResult, error) {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, aliceLookupJSON)
+	})
+	mux.HandleFunc(routeGetIssues, issues)
+	return handleMyIssues(t.Context(), testutil.NewTestClient(t, mux), testPromptRequest(args))
+}
+
+// TestMyIssues_Scope_NamesTheCallerOrEverybody verifies the request my_issues
+// sends for each user it can be about.
+//
+// GitLab.com refuses scope=all on the global issue list (issue 1779), which the
+// prompt sent for the caller as well, so the default form of the prompt, which
+// names no user, failed there on every call. The caller's issues are what
+// scope=assigned_to_me names on every instance, with no assignee filter beside
+// it. Another user's are named by the assignee filter, which needs scope=all,
+// since GitLab otherwise applies it to the caller's own issues only (issue
+// 1164).
+func TestMyIssues_Scope_NamesTheCallerOrEverybody(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		args         map[string]string
+		wantScope    string
+		wantAssignee string
+	}{
+		{name: "the caller", wantScope: "assigned_to_me"},
+		{name: "another user", args: map[string]string{argUsername: "alice"}, wantScope: "all", wantAssignee: "42"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int64
+			_, err := myIssuesAgainst(t, tt.args, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				testutil.AssertQueryParam(t, r, "scope", tt.wantScope)
+				testutil.AssertQueryParam(t, r, "assignee_id", tt.wantAssignee)
+				testutil.AssertQueryParam(t, r, "state", "opened")
+				testutil.AssertQueryParam(t, r, "per_page", "100")
+				respondJSON(w, http.StatusOK, `[]`)
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if got := calls.Load(); got != 1 {
+				t.Errorf("the global issue list was requested %d time(s), want 1", got)
+			}
+		})
+	}
+}
+
+// TestMyIssues_ScopeAllRefused_SaysWhoseIssuesCanBeListed verifies what
+// my_issues answers when GitLab.com refuses the scope=all its read about
+// another user sends (issue 1779).
+//
+// No request lists another user's issues across every project there, so the
+// prompt cannot answer with them, and an answer built from what the caller
+// created or was assigned would be a different list under the same heading.
+// The error says why, and names the two reads that do answer: the prompt
+// without a username, and a group's or a project's issue list. Any other
+// refusal, a 400 of GitLab's that says something else included, keeps the
+// plain error, since the advice is about a refusal it did not give.
+func TestMyIssues_ScopeAllRefused_SaysWhoseIssuesCanBeListed(t *testing.T) {
+	advice := []string{"GitLab.com", "refuses scope=all on the global issue list", "without a username", "alice", "issue.list_group or issue.list"}
+	for _, tt := range []struct {
+		name       string
+		status     int
+		body       string
+		wantAdvice bool
+	}{
+		{name: "GitLab.com's refusal", status: http.StatusBadRequest, body: scopeAllRefusedJSON, wantAdvice: true},
+		{name: "another 400", status: http.StatusBadRequest, body: `{"message":"400 Bad request - scope does not have a valid value"}`},
+		{name: "the sentence under another status", status: http.StatusUnprocessableEntity, body: scopeAllRefusedJSON},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := myIssuesAgainst(t, map[string]string{argUsername: "alice"}, func(w http.ResponseWriter, _ *http.Request) {
+				respondJSON(w, tt.status, tt.body)
+			})
+			if err == nil {
+				t.Fatalf("my_issues answered %v, want the refusal reported", result)
+			}
+			msg := err.Error()
+			if !strings.HasPrefix(msg, "failed to list issues: ") {
+				t.Errorf("error = %q, want it to say the issue list failed", msg)
+			}
+			for _, fragment := range advice {
+				if got := strings.Contains(msg, fragment); got != tt.wantAdvice {
+					t.Errorf("error = %q, names %q = %v, want %v", msg, fragment, got, tt.wantAdvice)
+				}
+			}
 		})
 	}
 }

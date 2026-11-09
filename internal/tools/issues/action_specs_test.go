@@ -329,6 +329,12 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // across every accessible project, which is what scope=all does (issue 1172).
 // Each text is served on its own by some surface, so each has to say both
 // halves: what an omitted scope returns, and the value that lists everything.
+//
+// GitLab.com refuses that value on this route, and the usage recommended it
+// for a cross-project overview, which led a model there to a 400 (issue 1779).
+// So each text also says that GitLab.com refuses it and what answers there: the
+// two scopes it accepts, or a group's or a project's list, which the usage
+// names by their canonical IDs.
 func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 	spec := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))["gitlab_issue_list_all"]
 	scopeDescription, _ := servedProperty(t, spec, "scope")["description"].(string)
@@ -337,9 +343,9 @@ func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 		text      string
 		fragments []string
 	}{
-		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all"}},
-		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all"}},
-		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue"}},
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses scope=all", "scope=assigned_to_me", actionIssueListGroup + " or " + actionIssueList + ","}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses", "scope=assigned_to_me", "a group's or a project's issues"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com refuses", "a group's or a project's issues"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, fragment := range tt.fragments {

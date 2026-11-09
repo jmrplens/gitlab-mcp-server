@@ -916,7 +916,7 @@ type ListAllInput struct {
 	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
 	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
 	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
-	Scope               string               `json:"scope,omitempty"                jsonschema:"Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)"`
+	Scope               string               `json:"scope,omitempty"                jsonschema:"Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com refuses on this list, so there list a group's or a project's issues instead)"`
 	Search              string               `json:"search,omitempty"               jsonschema:"Search in title and description"`
 	NotSearch           string               `json:"not_search,omitempty"           jsonschema:"Exclude issues matching this search text"`
 	In                  string               `json:"in,omitempty"                   jsonschema:"Fields the search query applies to (title, description, or title,description)"`
@@ -953,10 +953,30 @@ type ListAllInput struct {
 // telling a reader to pass a project_id the action does not take.
 type ListAllOutput ListOutput
 
+// scopeAllRefusal is the sentence GitLab.com refuses scope=all on the global
+// issue list with: reject_global_scope_all! in lib/api/issues.rb, behind the
+// gitlab_com_derisk feature flag restrict_global_issues_scope_all (19.6),
+// answers a 400 whose message is "400 Bad request - ", this sentence and the
+// scopes and lists to use instead. The status alone does not say it, since
+// GitLab answers 400 for any parameter it cannot read.
+const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
+
+// hintScopeAllRefused is the remedy for that refusal. GitLab Self-Managed and
+// Dedicated accept scope=all here, so the action keeps offering it, and the
+// project and group lists answer with every issue the caller can see in them
+// whatever the instance.
+const hintScopeAllRefused = "GitLab.com refuses scope=all on the global issue list, which GitLab Self-Managed and Dedicated accept: pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return every issue the caller can see in it"
+
+// refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
+// refusal of scope=all on the global issue list (issue 1779).
+func refusesGlobalScopeAll(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, scopeAllRefusal)
+}
+
 // ListAll retrieves a page of GitLab's global issue list. The scope is passed
 // through as the caller wrote it, so an omitted one gets GitLab's default,
 // created_by_me: the issues the caller created, not every issue it can see,
-// which takes scope=all.
+// which takes scope=all, and which GitLab.com refuses on this list.
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListAllOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListAllOutput{}, err
@@ -1006,6 +1026,9 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
 	if err != nil {
+		if refusesGlobalScopeAll(err) {
+			return ListAllOutput{}, toolutil.WrapErrWithHint("issueListAll", err, hintScopeAllRefused)
+		}
 		// No scope is a remedy for this 401. GET /issues demands a user only
 		// when scope is not all, and the API guard refuses a token it cannot
 		// use whatever the scope, so the one cause left is the token.

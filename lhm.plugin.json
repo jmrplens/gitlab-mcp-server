@@ -388,7 +388,7 @@
     {
       "name": "my_issues",
       "title": "My Issues",
-      "description": "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project.",
+      "description": "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project. On GitLab.com it lists your own issues only, not another user's.",
       "arguments": [
         {
           "name": "username",

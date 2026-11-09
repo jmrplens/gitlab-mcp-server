@@ -268,12 +268,14 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	// GET /issues answers with scope=created_by_me when no scope is sent, so
 	// the usage and the description say what an omitted scope returns and
 	// which value lists everything (issue 1172). They used to call the result
-	// every issue visible to the caller.
+	// every issue visible to the caller. GitLab.com refuses that value on this
+	// route, which GitLab Self-Managed and Dedicated do not, so each text says
+	// where it is refused and what lists issues there instead (issue 1779).
 	case "gitlab_issue_list_all":
-		options.Usage = "List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which is what a cross-project issue overview needs."
+		options.Usage = "List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which GitLab Self-Managed and Dedicated accept. GitLab.com refuses scope=all on this list with 400, so there pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return every issue the caller can see in it."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
 		options.RelatedActions = []string{actionIssueList, actionIssueListGroup, actionSearchIssues}
-		options.IndividualTool.Description = "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+		options.IndividualTool.Description = "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all, which GitLab.com refuses on this list (there pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
 	case toolIssueListGroup:
 		decorateIssueMeta(&options, individualTool)

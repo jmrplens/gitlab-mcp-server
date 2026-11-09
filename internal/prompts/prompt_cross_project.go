@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -178,7 +179,7 @@ func registerMyIssuesPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
 		Name:        "my_issues",
 		Title:       toolutil.TitleFromName("my_issues"),
-		Description: "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project.",
+		Description: "Show up to 100 issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your issue backlog without specifying a project. On GitLab.com it lists your own issues only, not another user's.",
 		Icons:       toolutil.IconIssue,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
@@ -192,23 +193,16 @@ func registerMyIssuesPrompt(server promptAdder, client *gitlabclient.Client) {
 // handleMyIssues lists all issues assigned to the user across all projects.
 func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	args := req.Params.Arguments
-	username, userID, _, err := resolveUser(ctx, client, args[argUsername])
+	username, userID, isSelf, err := resolveUser(ctx, client, args[argUsername])
 	if err != nil {
 		return nil, err
 	}
 
 	state := getArgOr(args, argState, "opened")
 
-	issues, _, err := client.GL().Issues.ListIssues(
-		&gl.ListIssuesOptions{
-			AssigneeID: gl.AssigneeID(userID),
-			State:      new(state),
-			Scope:      new(scopeAll),
-			PerPage:    maxListItems,
-		}, gl.WithContext(ctx),
-	)
+	issues, err := listIssuesAssignedTo(ctx, client, username, userID, isSelf, state)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list issues: %w", err)
+		return nil, err
 	}
 
 	grouped := groupIssuesByProject(issues)
@@ -244,6 +238,49 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	writeClosingRule(&b, "Please summarize the issue backlog, highlight overdue items, and suggest priorities based on due dates and labels.")
 
 	return promptResult(b.String()), nil
+}
+
+// scopeAllRefusal is the sentence GitLab.com refuses scope=all on the global
+// issue list with: reject_global_scope_all! in lib/api/issues.rb, behind the
+// gitlab_com_derisk feature flag restrict_global_issues_scope_all (19.6),
+// answers a 400 whose message is "400 Bad request - ", this sentence and the
+// scopes and lists to use instead. The status alone does not say it, since
+// GitLab answers 400 for any parameter it cannot read.
+const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
+
+// refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
+// refusal of scope=all on the global issue list (issue 1779).
+func refusesGlobalScopeAll(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, scopeAllRefusal)
+}
+
+// listIssuesAssignedTo reads up to [maxListItems] issues in state assigned to
+// the user, across every project the caller can see.
+//
+// The caller's own issues are what scope=assigned_to_me names, which every
+// GitLab accepts, GitLab.com included. Another user's are named by the
+// assignee filter alone, so the scope has to name everybody's issues (issue
+// 1164), and GitLab.com refuses scope=all on this list (issue 1779). No other
+// request lists another user's issues across every project there, so that
+// refusal is reported as such, with the reads that do answer the question.
+func listIssuesAssignedTo(ctx context.Context, client *gitlabclient.Client, username string, userID int64, isSelf bool, state string) ([]*gl.Issue, error) {
+	opts := &gl.ListIssuesOptions{
+		State:   new(state),
+		Scope:   new(scopeAssignedToMe),
+		PerPage: maxListItems,
+	}
+	if !isSelf {
+		opts.AssigneeID = gl.AssigneeID(userID)
+		opts.Scope = new(scopeAll)
+	}
+	issues, _, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
+	if err != nil {
+		if refusesGlobalScopeAll(err) {
+			return nil, fmt.Errorf("failed to list issues: GitLab.com lists the issues assigned to a user across every project only for the caller, since it refuses scope=all on the global issue list: run my_issues without a username for your own, or list the issues assigned to %s in one group or project with issue.list_group or issue.list and assignee_username: %w", username, err)
+		}
+		return nil, fmt.Errorf("failed to list issues: %w", err)
+	}
+	return issues, nil
 }
 
 // registerMyActivitySummaryPrompt registers the my_activity_summary prompt.
