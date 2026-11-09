@@ -968,10 +968,11 @@ const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
 
 // hintScopeAllRefused is the remedy for that refusal, shown only once
 // GitLab.com has refused. GitLab Self-Managed and Dedicated accept scope=all
-// here, so the action keeps offering it, and the project and group lists answer with the issues the caller can see in them
-// whatever the instance. The group list, like this one, defaults non_archived
-// to true, which client-go does not model, so it leaves out the issues of
-// archived projects, and only the project list returns them.
+// here, so the action keeps offering it, and the project and group lists
+// answer with the issues the caller can see in them whatever the instance.
+// The group list, like this one, defaults non_archived to true, which
+// client-go does not model, so it leaves out the issues of archived projects,
+// and only the project list returns them.
 const hintScopeAllRefused = "GitLab.com refused scope=all on the global issue list, a restriction it is rolling out per user and GitLab Self-Managed and Dedicated do not apply: pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return the issues the caller can see in it. The group list leaves out the issues of archived projects, as this one does, and the project list returns them"
 
 // refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
