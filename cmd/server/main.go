@@ -114,8 +114,10 @@ const (
 	// It is the documentation site rather than the repository: a client
 	// rendering serverInfo shows this to an end user, for whom the guides are
 	// more useful than a source tree. It matches the homepage/documentation
-	// fields in mcpb/manifest.json and .plugin/plugin.json.
-	projectWebsite = "https://docs.jmrp.io/gitlab-mcp-server"
+	// fields in mcpb/manifest.json and .plugin/plugin.json, and the websiteUrl
+	// of server.json. It ends with a slash because the site answers the bare
+	// address with a 301 to this one, so a path is appended without one.
+	projectWebsite = "https://docs.jmrp.io/gitlab-mcp-server/"
 
 	// projectDescription is the server's self-description at handshake, shown
 	// wherever a client or registry renders the MCP Implementation. It is kept

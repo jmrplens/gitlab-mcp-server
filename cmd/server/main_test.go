@@ -2325,8 +2325,10 @@ func TestProjectMetadata_Constants(t *testing.T) {
 	if projectRepository == "" {
 		t.Error("projectRepository should not be empty")
 	}
-	if projectWebsite == "" {
-		t.Error("projectWebsite should not be empty")
+	// The site answers its bare root with a 301 to the address with a
+	// trailing slash, so the advertised website is that final address.
+	if !strings.HasSuffix(projectWebsite, "/") {
+		t.Errorf("projectWebsite = %q, want the site root with its trailing slash", projectWebsite)
 	}
 }
 

@@ -182,7 +182,7 @@ function writePlatformPackage(plat, version, binariesDir, outDir, checksums) {
       { type: "ko-fi", url: "https://ko-fi.com/jmrplens" },
     ],
     author: "José M. Requena Plens",
-    homepage: "https://docs.jmrp.io/gitlab-mcp-server",
+    homepage: "https://docs.jmrp.io/gitlab-mcp-server/",
     repository: mainRepository,
     os: [plat.os],
     cpu: [plat.cpu],

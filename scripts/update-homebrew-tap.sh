@@ -105,7 +105,7 @@ ${FILE_HEADER}
 # https://github.com/jmrplens/gitlab-mcp-server — do not edit by hand.
 class GitlabMcpServer < Formula
   desc "GitLab MCP server: REST v4 + GraphQL as tools for AI assistants"
-  homepage "https://docs.jmrp.io/gitlab-mcp-server"
+  homepage "https://docs.jmrp.io/gitlab-mcp-server/"
   version "${VERSION}"
   license "MIT"
 
