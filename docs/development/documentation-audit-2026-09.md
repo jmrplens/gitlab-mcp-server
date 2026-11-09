@@ -278,7 +278,9 @@ Let's Encrypt paths. The shape table at
 `docs/guides/remote-deployment.md:20-26` names a LAN deployment but shows no
 configuration for one. A plain-HTTP nginx front, which is what a LAN deployment
 behind a proxy that terminates nothing actually looks like, was executed here
-and works once the `Host` problem is solved.
+and works once the `Host` problem is solved. Issue 1112 added that block to
+the guide, with the server command beside it, and `test/e2e/http` serves both
+from the page (`proxy_lan_test.go`).
 
 ---
 
@@ -548,6 +550,11 @@ than the MCP endpoint alone, so a host nobody declared is still refused. The
 missing case is `TestProxy_ForwardedPublicHostIsServed` and its refusal twin,
 which forward the `Host` themselves rather than through nginx, since a proxy
 reached at `127.0.0.1` forwards a loopback host and cannot express this one.
+Issue 1112 closed that gap through real proxies: every TLS proxy block of the
+guide but the Cloudflare Tunnel's is served from the page with a client that
+names `mcp.example.com`, so the forwarded host crosses nginx, Caddy, Traefik
+and Apache, and a server that declares no host refuses it behind each of them
+(`guide_test.go`).
 
 ### D2: the tool-search flag ignores the environment that configures stdio
 

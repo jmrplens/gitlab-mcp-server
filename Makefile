@@ -107,10 +107,10 @@ E2E_CALLS_DIR=dist/e2e-calls
 # children a GOCOVERDIR under here, one directory per target, cleared where the
 # calls directory is cleared: in run-docker-e2e.sh for the two Docker targets,
 # since CI invokes that script rather than the target, and in the recipe for
-# the self-hosted one and for the three transport modules. `make
-# e2e-go-coverage` merges what the run left, so a GitLab run and a transport
-# run fold into one figure. dist/ is gitignored, so `make clean` removes all of
-# it.
+# the self-hosted one, for the three transport modules and for the HTTP
+# module's Cloudflare Tunnel target. `make e2e-go-coverage` merges what the run
+# left, so a GitLab run and a transport run fold into one figure. dist/ is
+# gitignored, so `make clean` removes all of it.
 #
 # Two names for two things, the way E2E_CALLS_DIR and the exported
 # GITLAB_MCP_TEST_E2E_CALLS_DIR are two names: E2E_COVER_ROOT is the parent
@@ -135,7 +135,7 @@ E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
 # not set, no coverage data emitted" on its stderr the moment it starts, which
 # would head every child's log for the whole run.
 e2e_cover_build = $(if $(COVER),-cover)
-e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_ROOT)/$(1))
+e2e_cover_env = $(if $(COVER),E2E_COVER_DIR="$(CURDIR)/$(E2E_COVER_ROOT)/$(1)")
 
 # The support packages of the e2e suite, test/e2e/internal/fixture and
 # test/e2e/modeleval, are measured where their code runs (issue 1461): most of
@@ -174,7 +174,7 @@ E2E_SUPPORT_PROFILE = $(E2E_REPORT_DIR)/e2e-support-coverage.out
 # E2E_SWEEP_PREFIX exported in the shell, or given on the command line, it
 # would delete what it matches on the instance GITLAB_URL names and add what
 # that reaches to the offline half, which CI's never reaches.
-e2e_support_offline = MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES)
+e2e_support_offline = MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile="$(E2E_SUPPORT_OFFLINE_PROFILE)" $(E2E_SUPPORT_PACKAGES)
 # The committed record of what the complete runs reached in the two packages,
 # which is the half CI cannot take: make e2e-support-coverage-record writes it
 # after a complete run, and check-e2e-support-coverage, which the coverage job
@@ -256,17 +256,30 @@ COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-# OS detection for portable commands
+# OS detection for portable commands. Each helper takes one path and quotes
+# it, so a directory an override names with a space is one argument: with the
+# path unquoted, a coverage root of "dist/e2e cover" made RM_RF remove
+# dist/e2e and the staged server binary in it. Every recipe that hands a tool
+# a path in such a directory, or a file an override names, quotes it as well:
+# a mkdir that makes the whole directory turns an unquoted path from a loud
+# failure into a quiet one, as audit-e2e-coverage showed when its -o, given a
+# report directory of "my reports", wrote the report to a file named my and
+# exited 0. Such a path never goes through make's own path functions, which
+# split it at every blank and read its glob characters as a pattern; a helper
+# that carried each space through $(abspath) as a | turned every | the path
+# already held into a space as well. A recipe asks the shell instead: cd and
+# pwd for the absolute path a validate target mounts, test -e for the calls
+# directory audit-1to1-grants-report reads.
 ifeq ($(OS),Windows_NT)
   BINARY_EXT=.exe
-  MKDIR_P=if not exist $(subst /,\,$1) mkdir $(subst /,\,$1)
-  RM_RF=if exist $(subst /,\,$1) rmdir /s /q $(subst /,\,$1)
-  RM_F=if exist $(subst /,\,$1) del /q $(subst /,\,$1)
+  MKDIR_P=if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
+  RM_RF=if exist "$(subst /,\,$1)" rmdir /s /q "$(subst /,\,$1)"
+  RM_F=if exist "$(subst /,\,$1)" del /q "$(subst /,\,$1)"
 else
   BINARY_EXT=
-  MKDIR_P=mkdir -p $1
-  RM_RF=rm -rf $1
-  RM_F=rm -f $1
+  MKDIR_P=mkdir -p "$1"
+  RM_RF=rm -rf "$1"
+  RM_F=rm -f "$1"
 endif
 
 # Analysis output directory
@@ -350,6 +363,9 @@ test-e2e: test-e2e-gitlab
 # go install writes to (GOBIN, falling back to GOPATH/bin). Recursive (=) on
 # purpose: the fallback must be re-evaluated after ensure-gotestsum runs,
 # because a prerequisite shell cannot extend the PATH of later recipes.
+# Every recipe that runs it or hands it on quotes it, as it does PKGSITE and
+# MCP_PUBLISHER, since the environment decides each path and a GOBIN, a GOPATH,
+# a PATH directory or a HOME can hold a space.
 GOTESTSUM_INSTALL_DIR = $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)
 GOTESTSUM = $(or $(shell command -v gotestsum 2>/dev/null),$(GOTESTSUM_INSTALL_DIR)/gotestsum)
 
@@ -367,9 +383,9 @@ ensure-gotestsum:
 # real binary against a stub GitLab.
 test-e2e-harness: ensure-gotestsum
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	bash -o pipefail -c '"$(GOTESTSUM)" \
 	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-harness-junit.xml \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-harness-junit.xml" \
 	  -- -tags e2e -count=1 -timeout 600s ./test/e2e/internal/...'
 
 # The three transport modules below stage the server the way the rebuilt
@@ -404,22 +420,22 @@ test-e2e-harness: ensure-gotestsum
 test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/stdio))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,stdio) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-stdio-junit.xml" \
 	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
 
-## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; nginx layer skips without Docker).
+## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; the documented proxies and balancers skip without Docker, and fail without it under E2E_HTTP_DOCKER=required, as ci.yml's e2e-http job sets).
 test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL= \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL= \
 	  $(call e2e_cover_env,http) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-http-junit.xml" \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
 
 ## test-e2e-cloudflare-tunnel: run the HTTP module's Cloudflare Tunnel cases, a real quick tunnel through Cloudflare's edge included (Docker and Internet needed; opens a public trycloudflare.com address while it runs; refuses to run on CI).
@@ -446,10 +462,15 @@ test-e2e-http: ensure-gotestsum e2e-server-binary
 # went away (ssh without a terminal) does not end it at its first message, and
 # a closed terminal under which make itself leads the session (ssh -t host
 # make ...), whose HUP make does not pass on, ends the run at its next line of
-# output, which gotestsum cannot write. The names are read from the run's own JSON log, deleted
-# before the run starts, so a name an earlier run printed is never taken for
-# one of this run's. test-e2e-http clears the quick tunnel's switch, so this
-# is the only target that opens the tunnel.
+# output, which gotestsum cannot write. The names are read from the run's own
+# JSON log, named after the recipe shell's process ID so that two runs in one
+# checkout never share it (a second run used to delete the first one's log and
+# write its own in its place, and the first then removed the second's
+# container and left its own), and deleted before the run starts, so a name
+# an earlier run with that ID printed is never taken for one of this run's.
+# test-e2e-http clears the quick tunnel's switch, so this is the only target
+# that opens the tunnel. COVER=1 hands the run a leaf of its own, as every
+# other run target does.
 ifneq ($(filter test-e2e-cloudflare-tunnel,$(MAKECMDGOALS)),)
 ifneq ($(CI),)
 $(error test-e2e-cloudflare-tunnel never runs on CI (CI=$(CI)): its quick tunnel opens a public trycloudflare.com address to a server on this machine, see test/e2e/README.md)
@@ -457,7 +478,8 @@ endif
 endif
 test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	exec bash -o pipefail -c 'log=$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-log.json; pid=; \
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/cloudflare-tunnel))
+	exec bash -o pipefail -c 'log="$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-log-$$$$.json"; pid=; \
 	  rm -f "$$log"; \
 	  remove_named() { \
 	    trap "" PIPE; \
@@ -479,10 +501,11 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	  trap "stop TERM 143" TERM; \
 	  trap "stop HUP 129" HUP; \
 	  set -m; \
-	  E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
-	  $(GOTESTSUM) \
+	  E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
+	  $(call e2e_cover_env,cloudflare-tunnel) \
+	  "$(GOTESTSUM)" \
 	  --format standard-verbose \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-junit.xml \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-junit.xml" \
 	  --jsonfile "$$log" \
 	  -- -tags httpe2e -count=1 -v -timeout 20m -run TestProxyGuide_Cloudflare ./test/e2e/http/ & \
 	  pid=$$!; set +m; \
@@ -498,11 +521,11 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 test-e2e-collector: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/collector))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,collector) \
-	  $(GOTESTSUM) \
+	  "$(GOTESTSUM)" \
 	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-collector-junit.xml \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-collector-junit.xml" \
 	  -- -tags collectore2e -count=1 -timeout 900s ./test/e2e/collector/'
 
 ## test-e2e-docker: the ephemeral GitLab CE run under its older name; an alias of test-e2e-ce.
@@ -576,28 +599,28 @@ e2e_complete_run_env = E2E_GATE_SKIPS="$${E2E_GATE_SKIPS:-true}"
 # uninstrumented build left by an earlier run can never be reused.
 e2e-server-binary:
 	$(call MKDIR_P,dist/e2e)
-	go build $(e2e_cover_build) -o $(E2E_SERVER_BINARY) $(CMD_PATH)
+	go build $(e2e_cover_build) -o "$(E2E_SERVER_BINARY)" $(CMD_PATH)
 
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, then the throttle probe alone on the same stack, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
 	$(e2e_complete_run_env) \
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ce" \
 	$(call e2e_cover_env,ce) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
 ## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code (+ Bitbucket fixture), run the common and ee packages of the rebuilt suite, tear down.
 test-e2e-ee: ensure-gotestsum e2e-server-binary
 	$(e2e_complete_run_env) \
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/ee" \
 	$(call e2e_cover_env,ee) \
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
-	GOTESTSUM=$(GOTESTSUM) \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 ## test-e2e-docker-enterprise: the licensed Docker run under its older name; an alias of test-e2e-ee.
@@ -613,12 +636,12 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
 	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
 	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/self-hosted))
-	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
 	  $(call e2e_cover_env,self-hosted) \
-	  GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
+	  GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted" "$(GOTESTSUM)" \
 	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
-	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
+	  --junitfile "$(E2E_REPORT_DIR)/e2e-gitlab-junit.xml" \
+	  --jsonfile "$(E2E_REPORT_DIR)/e2e-gitlab-log.json" \
 	  -- -tags e2e -p 1 -count=1 -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/...'
 
 ## e2e-clean-orphans: delete what earlier runs left on a GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project and group the token owns, every personal snippet of its user and, with an administrator's token, every user, whose name carries the ID of a run that started more than E2E_SWEEP_MIN_AGE (default 2h) ago; E2E_SWEEP_PREFIX=<prefix> sweeps by name prefix instead, whatever run and however recent.
@@ -873,24 +896,24 @@ MODELEVAL_DIR=dist/modeleval
 modeleval-ce: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(MODELEVAL_DIR)/ce)
 	$(call MKDIR_P,$(MODELEVAL_DIR)/ce)
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
 	E2E_REPORT_NAME=modeleval-ce \
-	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls \
-	GOTESTSUM=$(GOTESTSUM) \
+	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls" \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/modeleval/
 
 ## modeleval-ee: the same against an ephemeral licensed GitLab EE, which is what the licensed cases need.
 modeleval-ee: ensure-gotestsum e2e-server-binary
 	$(call RM_RF,$(MODELEVAL_DIR)/ee)
 	$(call MKDIR_P,$(MODELEVAL_DIR)/ee)
-	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
-	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
 	E2E_REPORT_NAME=modeleval-ee \
-	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee \
-	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls \
-	GOTESTSUM=$(GOTESTSUM) \
+	GITLAB_MCP_TEST_MODELEVAL_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee" \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR="$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls" \
+	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/modeleval/
 
 ## modeleval-probe: ask each configured provider whether it accepts the request this repository builds (PAID; needs MODELEVAL_PROBE=yes).
@@ -1419,35 +1442,35 @@ analyze-fix:
 analyze-report:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
 	@echo "Generating analysis report to $(ANALYSIS_DIR)/report.txt ..."
-	@echo "# Static Analysis Report - gitlab-mcp-server" > $(ANALYSIS_DIR)/report.txt
-	@echo "# Tools: golangci-lint, govulncheck, markdownlint" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go analysis packages: $(GO_ANALYSIS_PKGS)" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go analysis build tags: $(GO_ANALYSIS_TAGS)" >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 1. golangci-lint config verify" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint config verify >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 2. golangci-lint fmt" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint fmt --diff >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 3. golangci-lint run" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 4. govulncheck" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 5. markdownlint" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules" >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
+	@echo "# Static Analysis Report - gitlab-mcp-server" > "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Tools: golangci-lint, govulncheck, markdownlint" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Go analysis packages: $(GO_ANALYSIS_PKGS)" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "# Go analysis build tags: $(GO_ANALYSIS_TAGS)" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 1. golangci-lint config verify" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint config verify >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 2. golangci-lint fmt" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint fmt --diff >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 3. golangci-lint run" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 4. govulncheck" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo "## 5. markdownlint" >> "$(ANALYSIS_DIR)/report.txt"
+	@echo '```text' >> "$(ANALYSIS_DIR)/report.txt"
+	-npx markdownlint-cli2 "**/*.{md,mdx}" "#plan" "#node_modules" >> "$(ANALYSIS_DIR)/report.txt" 2>&1
+	@echo '```' >> "$(ANALYSIS_DIR)/report.txt"
 	@echo "Report saved to $(ANALYSIS_DIR)/report.txt"
 
 # ─── Tool Installation ───────────────────────────────────────────────────────
@@ -1547,7 +1570,7 @@ gen-model-results:
 ## by row.
 model-results-record:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
-	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -render
+	go run ./cmd/gen_model_results/ -shards "$(MODELEVAL_SHARDS)" -render
 
 ## model-results-refold: re-score a run already published, from the shards it
 ## left behind (usage: make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce).
@@ -1558,7 +1581,7 @@ model-results-record:
 ## kept cannot be re-scored.
 model-results-refold:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
-	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -refold -render
+	go run ./cmd/gen_model_results/ -shards "$(MODELEVAL_SHARDS)" -refold -render
 
 ## model-results-dry-run: rehearse the whole publishing path into dist/, without
 ## touching the committed record or the pages (usage: make model-results-dry-run
@@ -1570,7 +1593,7 @@ model-results-refold:
 ## refused here exactly as a real fold would refuse it.
 model-results-dry-run:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
-	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -dry-run -render
+	go run ./cmd/gen_model_results/ -shards "$(MODELEVAL_SHARDS)" -dry-run -render
 
 ## check-model-results: the offline gate over the committed results record and
 ## the blocks drawn from it. No GitLab, no network and no provider; a tree with
@@ -1611,9 +1634,9 @@ brand-check:
 ## WebP for the README, the OG card, and the marketplace icons.
 brand-rasters: brand
 	tmp=$$(mktemp) && \
-	{ rsvg-convert -w 1280 -h 400 .github/brand/banner.svg -o $$tmp && \
-	  cwebp -quiet -lossless $$tmp -o .github/brand/banner.webp; }; \
-	status=$$?; rm -f $$tmp; exit $$status
+	{ rsvg-convert -w 1280 -h 400 .github/brand/banner.svg -o "$$tmp" && \
+	  cwebp -quiet -lossless "$$tmp" -o .github/brand/banner.webp; }; \
+	status=$$?; rm -f "$$tmp"; exit $$status
 	rsvg-convert -w 1200 -h 630 .github/brand/og.svg -o site/public/og-image.png
 	rsvg-convert -w 2560 -h 1280 .github/brand/social.svg -o .github/brand/social.png
 	rsvg-convert -w 512 -h 512 site/public/favicon.svg -o mcpb/icon.png
@@ -1644,7 +1667,7 @@ check-install-buttons:
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json: ensure-mcp-publisher
 	@grep -q 'MCP_PUBLISHER_VERSION: "$(MCP_PUBLISHER_VERSION)"' .github/workflows/release.yml || { echo "MCP_PUBLISHER_VERSION $(MCP_PUBLISHER_VERSION) in the Makefile is not the version .github/workflows/release.yml publishes with; keep the two in lockstep"; exit 1; }
-	$(MCP_PUBLISHER) validate server.json
+	"$(MCP_PUBLISHER)" validate server.json
 
 ## mcp-publisher-version: print the pinned MCP Registry publisher version; CI keys its cache on it.
 mcp-publisher-version:
@@ -1652,7 +1675,7 @@ mcp-publisher-version:
 
 ## ensure-mcp-publisher: install the pinned MCP Registry publisher into its version-named directory when it is not there yet.
 ensure-mcp-publisher:
-	@test -x $(MCP_PUBLISHER) || GOBIN=$(MCP_PUBLISHER_DIR) go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
+	@test -x "$(MCP_PUBLISHER)" || GOBIN="$(MCP_PUBLISHER_DIR)" go install github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION)
 
 ## check-server-json-packages: verify every package server.json declares is
 ## really published and really installable (cmd/release_packages). Downloads the
@@ -1747,7 +1770,7 @@ sync-npm-version:
 validate-npm:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-npm-local)"; exit 1; }
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	@VER=$$(tr -d '[:space:]' < VERSION); 	docker run --rm 		-v "$(CURDIR):/work" -v "$(abspath $(NPM_BINARIES)):/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
+	@VER=$$(tr -d '[:space:]' < VERSION); BINARIES=$$(CDPATH= cd -- "$(NPM_BINARIES)" && pwd) || exit 1; 	docker run --rm 		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
 
 ## validate-npm-local: same validation without Docker, for the ephemeral CI
 ## runner (already disposable). Builds packages from NPM_BINARIES, then validates.
@@ -1785,8 +1808,9 @@ validate-pypi:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-pypi-local)"; exit 1; }
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
+	BINARIES=$$(CDPATH= cd -- "$(PYPI_BINARIES)" && pwd) || exit 1; \
 	docker run --rm \
-		-v "$(CURDIR):/work" -v "$(abspath $(PYPI_BINARIES)):/binaries:ro" \
+		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-w /work python:3.14-slim sh -euc ' \
 			python3 scripts/build_pypi.py --binaries /binaries --version '"$$VER"' && \
 			python3 scripts/validate_pypi.py --wheels pypi/dist --version '"$$VER"
@@ -1840,8 +1864,9 @@ validate-nuget:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
+	BINARIES=$$(CDPATH= cd -- "$(NUGET_BINARIES)" && pwd) || exit 1; \
 	docker run --rm \
-		-v "$(CURDIR):/work" -v "$(abspath $(NUGET_BINARIES)):/binaries:ro" \
+		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-e DOTNET_NOLOGO=1 -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
 		-w /work $(NUGET_SDK_IMAGE) sh -euc ' \
 			apt-get -qq update && apt-get -qq install -y --no-install-recommends python3 >/dev/null && \
@@ -2164,7 +2189,7 @@ gen-api-doc-endpoints:
 ## a batch queue that overflowed drops client spans without saying so. A directory it
 ## cannot read fails the run, since the run asked for an answer it cannot give.
 audit-1to1-paths-e2e:
-	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls $(E2E_CALLS_DIR) -output plan/1to1-paths-e2e.json
+	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls "$(E2E_CALLS_DIR)" -output plan/1to1-paths-e2e.json
 	@echo "R-PATH report with per-action observation written to plan/1to1-paths-e2e.json"
 
 ## audit-1to1-grants: gate the fine-grained permission of each action (R-GRANT) on the
@@ -2190,7 +2215,8 @@ audit-1to1-grants:
 ## not.
 audit-1to1-grants-report:
 	@mkdir -p plan
-	go run ./cmd/audit_1to1/ -scope=grants $(if $(wildcard $(E2E_CALLS_DIR)),-e2e-calls $(E2E_CALLS_DIR)) -output plan/1to1-grants.json
+	if test -e "$(E2E_CALLS_DIR)"; then set -- -e2e-calls "$(E2E_CALLS_DIR)"; fi; \
+	go run ./cmd/audit_1to1/ -scope=grants "$$@" -output plan/1to1-grants.json
 	@echo "R-GRANT report written to plan/1to1-grants.json"
 
 ## audit-1to1-required: gate the parameters every input schema requires (R-REQUIRED,
@@ -2338,7 +2364,7 @@ audit-dynamic-aliases:
 ## so a gap here is an action no test dispatched rather than an action no
 ## source file mentions.
 audit-e2e-gaps:
-	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report
+	go run ./cmd/audit_e2e_coverage/ -calls "$(E2E_CALLS_DIR)" -report
 
 ## audit-e2e-coverage: report what the e2e suite covered, from the calls it
 ## recorded rather than from mentions in its source: one runtime per directory
@@ -2347,7 +2373,7 @@ audit-e2e-gaps:
 ## GITLAB_MCP_TEST_E2E_CALLS_DIR set; the JSON goes to $(E2E_REPORT_DIR).
 audit-e2e-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report -o $(E2E_REPORT_DIR)/e2e-coverage.json -summary -
+	go run ./cmd/audit_e2e_coverage/ -calls "$(E2E_CALLS_DIR)" -report -o "$(E2E_REPORT_DIR)/e2e-coverage.json" -summary -
 
 ## e2e-coverage-record: fold both Docker runs into the committed per-runtime
 ## coverage record and redraw the page beside it. Needs the shards and the
@@ -2364,14 +2390,14 @@ e2e-coverage-record:
 ## who ran only `make test-e2e-ce`. The write folds into the committed
 ## document and leaves the ee entry exactly as it was.
 e2e-coverage-record-ce:
-	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ce -results $(E2E_REPORT_DIR)/e2e-ce-log.json \
-		-runtime ce -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ce.json
+	go run ./cmd/audit_e2e_coverage/ -calls "$(E2E_CALLS_DIR)/ce" -results "$(E2E_REPORT_DIR)/e2e-ce-log.json" \
+		-runtime ce -static -record -o "$(E2E_REPORT_DIR)/e2e-coverage-ce.json"
 
 ## e2e-coverage-record-ee: record the licensed half alone, for a maintainer
 ## who ran only `make test-e2e-ee`.
 e2e-coverage-record-ee:
-	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ee -results $(E2E_REPORT_DIR)/e2e-ee-log.json \
-		-runtime ee -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ee.json
+	go run ./cmd/audit_e2e_coverage/ -calls "$(E2E_CALLS_DIR)/ee" -results "$(E2E_REPORT_DIR)/e2e-ee-log.json" \
+		-runtime ee -static -record -o "$(E2E_REPORT_DIR)/e2e-coverage-ee.json"
 
 ## e2e-coverage-record-render: redraw docs/development/testing/e2e-coverage.md
 ## from the committed record, without a GitLab. This is what to run after
@@ -2420,19 +2446,19 @@ e2e-go-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	bash -o pipefail -c 'set -eu; \
 	  dirs=""; \
-	  for meta in $$(find $(E2E_COVER_ROOT) -name "covmeta.*" -type f 2>/dev/null | sort); do \
+	  while IFS= read -r meta; do \
 	    dir=$$(dirname "$$meta"); \
 	    case ",$$dirs," in *",$$dir,"*) continue;; esac; \
 	    dirs="$${dirs:+$$dirs,}$$dir"; \
-	  done; \
+	  done < <(find "$(E2E_COVER_ROOT)" -name "covmeta.*" -type f 2>/dev/null | sort); \
 	  if [ -z "$$dirs" ]; then \
 	    echo "no coverage data under $(E2E_COVER_ROOT): run an e2e target with COVER=1, which builds the server with -cover and gives every child a GOCOVERDIR" >&2; \
 	    exit 1; \
 	  fi; \
 	  echo "merging $$dirs"; \
-	  go tool covdata textfmt -i="$$dirs" -o=$(E2E_COVER_PROFILE); \
+	  go tool covdata textfmt -i="$$dirs" -o="$(E2E_COVER_PROFILE)"; \
 	  go tool covdata percent -i="$$dirs"; \
-	  go tool cover -func=$(E2E_COVER_PROFILE) | tail -n 1'
+	  go tool cover -func="$(E2E_COVER_PROFILE)" | tail -n 1'
 
 ## e2e-support-coverage: report which statements of the e2e support packages
 ## (E2E_SUPPORT_COVERPKG) their offline tests and the complete runs reach
@@ -2460,14 +2486,14 @@ e2e-go-coverage:
 e2e-support-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	bash -o pipefail -c 'set -eu; shopt -s nullglob; \
-	  runs=($(E2E_REPORT_DIR)/*-coverprofile.out); \
+	  runs=("$(E2E_REPORT_DIR)"/*-coverprofile.out); \
 	  if [ "$${#runs[@]}" -eq 0 ]; then \
 	    echo "no run profile under $(E2E_REPORT_DIR): run make test-e2e-ce or make test-e2e-ee first, which write <stem>-coverprofile.out there" >&2; \
 	    exit 1; \
 	  fi; \
 	  online=(); for run in "$${runs[@]}"; do online+=(-online "$$run"); done; \
 	  $(e2e_support_offline); \
-	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" -o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") $(if $(E2E_SUPPORT_WRITE_RECORD),-write-record "$(E2E_SUPPORT_WRITE_RECORD)")'
+	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline "$(E2E_SUPPORT_OFFLINE_PROFILE)" "$${online[@]}" -o "$(E2E_SUPPORT_PROFILE)" $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") $(if $(E2E_SUPPORT_WRITE_RECORD),-write-record "$(E2E_SUPPORT_WRITE_RECORD)")'
 
 ## e2e-support-coverage-record: write $(E2E_SUPPORT_RECORD), the committed
 ## record of what the complete runs reached in the e2e support packages, from
@@ -2490,7 +2516,7 @@ e2e-support-coverage:
 # The scenarios, the harness and the server that drive the two packages are
 # not stamped.
 e2e-support-coverage-record:
-	@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=$(E2E_SUPPORT_RECORD)
+	@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD="$(E2E_SUPPORT_RECORD)"
 
 ## check-e2e-support-coverage: the gate the coverage job of ci.yml runs over
 ## the e2e support packages: their offline half on this tree, merged with
@@ -2503,7 +2529,7 @@ check-e2e-support-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	bash -o pipefail -c 'set -eu; \
 	  $(e2e_support_offline); \
-	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) -check-record $(E2E_SUPPORT_RECORD) -freshness $(E2E_SUPPORT_FRESHNESS) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'
+	  go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline "$(E2E_SUPPORT_OFFLINE_PROFILE)" -check-record "$(E2E_SUPPORT_RECORD)" -freshness $(E2E_SUPPORT_FRESHNESS) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package
@@ -2947,7 +2973,7 @@ check-graphql-documents-live:
 record-request-inventory:
 	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
 	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
-	@GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS) || { \
+	@GITLAB_MCP_TEST_INVENTORY_DIR="$(CURDIR)/$(REQUEST_INVENTORY_SHARDS)" go test -count=1 $(PKGS) || { \
 		$(call RM_RF,$(REQUEST_INVENTORY_SHARDS)); \
 		echo ''; \
 		echo 'NOT RECORDED: the unit suite failed, so no request was written down.'; \
@@ -3073,7 +3099,7 @@ check-plan-untracked:
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
-	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
+	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output="$(ANALYSIS_DIR)/godoc.md"
 	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
 
 ## audit-godocs-check: the audit check-godocs gates, with Test, Benchmark, Fuzz
@@ -3106,7 +3132,7 @@ fix-godocs:
 docs-local-go:
 	@if [ ! -x "$(PKGSITE)" ]; then echo "pkgsite not found. Install with: go install golang.org/x/pkgsite/cmd/pkgsite@latest"; exit 1; fi
 	@echo "Serving local Go documentation at http://127.0.0.1:6060"
-	$(PKGSITE) -http=127.0.0.1:6060
+	"$(PKGSITE)" -http=127.0.0.1:6060
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
 # Formatting is delegated to golangci-lint formatters configured in .golangci.yml.
@@ -3155,9 +3181,9 @@ INSPECTOR_BIN := /tmp/$(BINARY_NAME)-inspector$(BINARY_EXT)
 inspector:
 	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Create it with GITLAB_TOKEN; add GITLAB_URL for self-managed instances."; exit 1; fi
 	@echo "Compiling $(BINARY_NAME) to $(INSPECTOR_BIN)..."
-	@go build -ldflags="$(LDFLAGS)" -o $(INSPECTOR_BIN) $(CMD_PATH)
+	@go build -ldflags="$(LDFLAGS)" -o "$(INSPECTOR_BIN)" $(CMD_PATH)
 	@echo "Starting MCP Inspector (stdio) — press Ctrl+C to stop..."
-	@trap 'rm -f $(INSPECTOR_BIN); echo "Cleaned up $(INSPECTOR_BIN)"' EXIT INT TERM && \
+	@trap 'rm -f "$(INSPECTOR_BIN)"; echo "Cleaned up $(INSPECTOR_BIN)"' EXIT INT TERM && \
 		set -a && . ./.env && set +a && \
 		ALLOWED_ORIGINS="http://localhost:6274,http://127.0.0.1:6274,http://0.0.0.0:6274" \
 		HOST=0.0.0.0 \
@@ -3166,13 +3192,13 @@ inspector:
 			-e GITLAB_TOKEN="$$GITLAB_TOKEN" \
 			-e GITLAB_MCP_SKIP_TLS_VERIFY="$${GITLAB_MCP_SKIP_TLS_VERIFY:-false}" \
 			-e GITLAB_MCP_TOOL_SURFACE=meta \
-			-- $(INSPECTOR_BIN)
+			-- "$(INSPECTOR_BIN)"
 
 ## inspector-stop: stop any running MCP Inspector and server processes.
 inspector-stop:
 	@pkill -f "@modelcontextprotocol/inspector" 2>/dev/null || true
 	@pkill -f "node.*inspector" 2>/dev/null || true
-	@rm -f $(INSPECTOR_BIN)
+	@rm -f "$(INSPECTOR_BIN)"
 	@echo "MCP Inspector stopped."
 
 clean:

@@ -80,7 +80,7 @@ gitlab-mcp-server/
 │   ├── clientcompat/, gatewaycompat/, cachehints/, capguard/ # Per-client and gateway compatibility, cache hints, capability guard
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schemas, gitlab.com's and the release's (SDL embedded as text + provenance) and Validate()
-│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema; netfixture/ is the dead endpoint and the stoppable server a test uses instead of a closed httptest server
+│   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema; netfixture/ is the dead endpoint and the stoppable server a test uses instead of a closed httptest server; docblocks/ reads a block a site page prints by its e2e=<case> fence key
 │   ├── tools/              # Tool orchestration layer + 181 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from

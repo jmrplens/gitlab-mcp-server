@@ -191,7 +191,7 @@ Every entry of the CWE Top 25 Most Dangerous Software Weaknesses (2024) is eithe
 
 - **Where:** a page in a browser that can reach an HTTP deployment. OWASP A01:2021.
 - **Countered by:** the Go standard library's cross-origin protection on every route, which refuses a browser's cross-origin `POST` or `DELETE`; an `Origin` guard on the MCP endpoint, which refuses an untrusted origin on every method but a preflight; and a `Host` guard, which refuses a host the deployment did not declare, against DNS rebinding.
-- **Held by:** `test/e2e/http/cross_origin_test.go` and `test/e2e/http/proxy_test.go`.
+- **Held by:** `test/e2e/http/cross_origin_test.go`, `test/e2e/http/proxy_test.go`, and the cases that serve the nginx, Caddy, Traefik, Apache and LAN reverse proxy blocks of the [remote deployment guide](/gitlab-mcp-server/operations/remote-deployment/#behind-a-reverse-proxy) through their real proxies and hold that a host nobody declared is still refused behind each: `test/e2e/http/proxy_guide_test.go`, `proxy_caddy_test.go`, `proxy_traefik_test.go`, `proxy_apache_test.go` and `proxy_lan_test.go`, the first four through the assertion they share in `guide_test.go`; the guide's Cloudflare Tunnel `config.yml` is checked offline by `cloudflared`, in `cloudflare_tunnel_test.go`.
 
 ### Uncontrolled resource consumption (CWE-400, CWE-770)
 

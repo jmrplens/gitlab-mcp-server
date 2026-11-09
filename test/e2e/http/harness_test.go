@@ -223,11 +223,17 @@ func repoRoot() string {
 // another process remains, which is why startServer retries readiness rather
 // than assuming the port is ours the instant we ask for it.
 //
-// A port is handed out once per process. The kernel can give a port it has
+// A port is handed to one test at a time. The kernel can give a port it has
 // just seen released straight back, so two tests running in parallel were
 // handed the same one before either bound it: the proxy cases name their
 // container after its port, and the second docker run was refused for the
-// name, which is not the exit the cases take for a port race.
+// name, which is not the exit the cases take for a port race. The port stays
+// reserved until the test it was handed to has ended, its own cleanups
+// included: those remove the container named after it and stop the server on
+// it, and run before this one, which was registered first. A reservation kept
+// for the whole process recorded, under a long -count, every port bind(0)
+// offers (with SO_REUSEADDR, the odd ports of the lower half of the range),
+// and this loop had nothing left to return.
 func freePort(t *testing.T) int {
 	t.Helper()
 	for {
@@ -241,12 +247,14 @@ func freePort(t *testing.T) int {
 			t.Fatalf("releasing the reserved port: %v", closeErr)
 		}
 		if _, given := portsHandedOut.LoadOrStore(port, struct{}{}); !given {
+			t.Cleanup(func() { portsHandedOut.Delete(port) })
 			return port
 		}
 	}
 }
 
-// portsHandedOut holds every port freePort has returned in this process.
+// portsHandedOut holds the ports freePort has handed to tests that have not
+// ended.
 var portsHandedOut sync.Map
 
 // server is a running binary under test.
@@ -400,17 +408,26 @@ func tryStartServerLaunched(t *testing.T, port int, launch launcher, env map[str
 	// tripped it was already answered: no assertion fails, the report goes to
 	// the captured output of a test that passed, and the exit status is the
 	// only thing left saying anything happened.
+	//
+	// Only for a server that came up. One that exited before it served was
+	// returned to the caller as an error, which decides: a server that lost
+	// its port at startup is a race startServerOnFreePort and the quick
+	// tunnel case answer with another port, and reported again here it
+	// failed the case that had moved on and passed.
 	var waitErr error
 	exited := make(chan struct{})
 	go func() {
 		waitErr = cmd.Wait()
 		close(exited)
 	}()
+	served := false
 	t.Cleanup(func() {
 		select {
 		case <-exited:
-			t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do:\n%s",
-				describeExit(waitErr, cmd), logs())
+			if served {
+				t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do:\n%s",
+					describeExit(waitErr, cmd), logs())
+			}
 		default:
 		}
 		stopServer(cmd, exited)
@@ -431,6 +448,7 @@ func tryStartServerLaunched(t *testing.T, port int, launch launcher, env map[str
 	if err = awaitHealthy(t, srv, exited); err != nil {
 		return nil, err
 	}
+	served = true
 	return srv, nil
 }
 
@@ -1136,6 +1154,52 @@ func (s *server) raw(t *testing.T, wire string) string {
 		}
 	}
 	return reply.String()
+}
+
+// TestFreePort_TheTestEnds_RetiresItsPort holds freePort to reserving a port
+// for the test it was handed to, and no longer.
+//
+// The reservation was kept for the whole process, and bind(0) offers only
+// part of the range while that part has a free port (with SO_REUSEADDR, which
+// every Go listener sets, Linux offers the odd ports of the lower half), so a
+// long -count recorded every port it could offer and freePort's loop never
+// returned again. Not parallel: no other test runs while this one does, so
+// nothing can be handed the port between the subtest's end and the check.
+func TestFreePort_TheTestEnds_RetiresItsPort(t *testing.T) {
+	var port int
+	t.Run("handed a port", func(t *testing.T) {
+		port = freePort(t)
+		if _, held := portsHandedOut.Load(port); !held {
+			t.Fatalf("port %d is not reserved while the test it was handed to runs", port)
+		}
+	})
+	if _, held := portsHandedOut.Load(port); held {
+		t.Errorf("port %d is still reserved after the test it was handed to ended; under a long -count every port bind(0) offers ends up recorded and freePort never returns", port)
+	}
+}
+
+// TestTryStartServerOnPort_PortTaken_ReturnsTheRaceAndFailsNothing holds the
+// server's start to what startServerOnFreePort and the quick tunnel case
+// build on: a server that could not bind its port is a race the caller
+// answers with another port, and it fails nothing by itself.
+//
+// The cleanup reported any server that had exited by the time the test ended
+// as one that exited on its own during the test, the one that lost its port
+// at startup included, so a case that moved to another port and passed there
+// failed anyway when it ended.
+func TestTryStartServerOnPort_PortTaken_ReturnsTheRaceAndFailsNothing(t *testing.T) {
+	t.Parallel()
+	var lc net.ListenConfig
+	taken, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("taking a port: %v", err)
+	}
+	t.Cleanup(func() { _ = taken.Close() })
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	port := taken.Addr().(*net.TCPAddr).Port
+	if srv, startErr := tryStartServerOnPort(t, port, nil, "--gitlab-url="+gitlab.url); !errors.Is(startErr, errPortTaken) {
+		t.Errorf("starting a server on port %d, which this test holds, = (%v, %v), want errPortTaken", port, srv, startErr)
+	}
 }
 
 // TestMain removes the binary this package builds once its tests are done.

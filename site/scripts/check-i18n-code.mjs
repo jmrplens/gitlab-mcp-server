@@ -38,7 +38,12 @@
 // path, as check-i18n-parity.mjs requires, and blocks pair by their order on
 // the page; a page whose two languages hold a different number of blocks is
 // reported as such, because pairing past the first missing block would
-// compare unrelated blocks.
+// compare unrelated blocks. A fence is read as micromark, which renders the
+// site, reads it: the language ends at the first space or tab, and a fence
+// holding any other white space (a nonbreaking space) is refused on the page
+// that holds it, since there it joins the language and the options into one
+// word, and internal/testutil/docblocks, which reads fences the same way,
+// would find no e2e= key on it.
 //
 // Run: node scripts/check-i18n-code.mjs
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -132,7 +137,11 @@ export function fencedBlocks(source) {
 		if (!open) continue;
 		const [, indent, fence, rest] = open;
 		if (fence[0] === "`" && rest.includes("`")) continue;
-		const info = rest.trim();
+		// CommonMark trims an info string of spaces and tabs, and micromark,
+		// which renders the site, ends the language at the first of them. Any
+		// other white space belongs to the word it sits in, so it is kept and
+		// reported (stray) rather than trimmed or split on.
+		const info = rest.replace(/^[ \t]+|[ \t]+$/g, "");
 		const body = [];
 		let j = i + 1;
 		for (; j < lines.length; j++) {
@@ -144,11 +153,12 @@ export function fencedBlocks(source) {
 				line.startsWith(indent) ? line.slice(indent.length) : line.trimStart(),
 			);
 		}
-		const lang = info.split(/\s+/)[0];
+		const lang = /^[^ \t]*/.exec(info)[0];
 		blocks.push({
 			line: i + 1,
 			lang,
-			meta: info.slice(lang.length).trim(),
+			meta: info.slice(lang.length).replace(/^[ \t]+/, ""),
+			stray: /[^\S \t]/.exec(info)?.[0],
 			body,
 		});
 		i = j;
@@ -335,19 +345,48 @@ export function codeLines(body, syntax) {
 }
 
 /**
+ * The findings for the fences of one page that hold white space other than a
+ * space or a tab. micromark separates a fence's language and options only at
+ * those two, so a nonbreaking space joins what it separates into one word:
+ * the block renders in a language nobody knows, an option after it (an e2e=
+ * key included) is no option at all, and two fences that differ only by it
+ * would compare equal here. A space inside a quoted title is refused too,
+ * which costs a writer nothing and keeps the rule one sentence long.
+ */
+function strayWhiteSpace(rel, blocks) {
+	return blocks
+		.filter((block) => block.stray !== undefined)
+		.map((block) => {
+			const code = block.stray
+				.codePointAt(0)
+				.toString(16)
+				.toUpperCase()
+				.padStart(4, "0");
+			return (
+				`${rel}:${block.line}: the fence holds U+${code}, and the site's Markdown parser ` +
+				`separates a fence's language and options only at a space or a tab; write one of those`
+			);
+		});
+}
+
+/**
  * The findings for one pair of pages. `enRel` and `esRel` name them in
  * messages; each finding is one line, followed by indented detail lines.
  */
 export function comparePages(enRel, enSource, esRel, esSource) {
 	const en = fencedBlocks(enSource);
 	const es = fencedBlocks(esSource);
+	const findings = [
+		...strayWhiteSpace(enRel, en),
+		...strayWhiteSpace(esRel, es),
+	];
 	if (en.length !== es.length) {
 		return [
+			...findings,
 			`${esRel}: ${es.length} code blocks, ${enRel} has ${en.length}; ` +
 				`blocks pair by their order, so the two pages must hold the same blocks`,
 		];
 	}
-	const findings = [];
 	en.forEach((a, k) => {
 		const b = es[k];
 		const where = `${esRel}:${b.line} (${enRel}:${a.line})`;

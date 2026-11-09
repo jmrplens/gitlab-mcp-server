@@ -695,7 +695,7 @@ func TestMakefile_CompleteRunTargets_HandTheRunTheSupportPackages(t *testing.T) 
 // paid run, and the on-demand sweep's emptied so one exported in the shell
 // cannot make it delete anything.
 const supportOffline = "\ne2e_support_offline = MODELEVAL_MODELS= MODELEVAL_PROBE= E2E_SWEEP_MIN_AGE= E2E_SWEEP_PREFIX= " +
-	"go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=$(E2E_SUPPORT_OFFLINE_PROFILE) $(E2E_SUPPORT_PACKAGES)\n"
+	"go test -tags e2e -count=1 -coverpkg=$(E2E_SUPPORT_COVERPKG) -coverprofile=\"$(E2E_SUPPORT_OFFLINE_PROFILE)\" $(E2E_SUPPORT_PACKAGES)\n"
 
 // TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns holds
 // the report target to its three steps: it refuses a report directory no run
@@ -706,13 +706,13 @@ func TestMakefile_SupportCoverageTarget_MergesTheOfflineHalfWithTheRuns(t *testi
 	makefile := repoFile(t, "Makefile")
 	got := recipe(t, makefile, "e2e-support-coverage")
 	tests := []struct{ name, want string }{
-		{name: "the run profiles", want: "runs=($(E2E_REPORT_DIR)/*-coverprofile.out)"},
+		{name: "the run profiles", want: `runs=("$(E2E_REPORT_DIR)"/*-coverprofile.out)`},
 		{name: "no run profile refused", want: `if [ "$${#runs[@]}" -eq 0 ]; then`},
 		{name: "the offline half", want: "\n\t  $(e2e_support_offline); \\\n"},
 		{
 			name: "the merge",
-			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) "$${online[@]}" ` +
-				`-o $(E2E_SUPPORT_PROFILE) $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") ` +
+			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline "$(E2E_SUPPORT_OFFLINE_PROFILE)" "$${online[@]}" ` +
+				`-o "$(E2E_SUPPORT_PROFILE)" $(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)") ` +
 				`$(if $(E2E_SUPPORT_WRITE_RECORD),-write-record "$(E2E_SUPPORT_WRITE_RECORD)")'`,
 		},
 	}
@@ -747,7 +747,7 @@ func TestMakefile_SupportCoverageRecord_IsTheReportTargetWritingTheRecord(t *tes
 		t.Errorf("E2E_SUPPORT_RECORD names %q, want docs/development/e2e-support-coverage.json", got)
 	}
 	got := recipe(t, makefile, "e2e-support-coverage-record")
-	if want := "\n\t@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=$(E2E_SUPPORT_RECORD)"; !strings.HasSuffix(got, want) {
+	if want := "\n\t@$(MAKE) --no-print-directory e2e-support-coverage E2E_SUPPORT_WRITE_RECORD=\"$(E2E_SUPPORT_RECORD)\""; !strings.HasSuffix(got, want) {
 		t.Errorf("the e2e-support-coverage-record recipe is\n%s\nwant it to end with %q", got, want)
 	}
 }
@@ -763,8 +763,8 @@ func TestMakefile_SupportCoverageGate_HoldsTheOfflineHalfToTheRecord(t *testing.
 		{name: "the offline half", want: "\n\t  $(e2e_support_offline); \\\n"},
 		{
 			name: "the gate",
-			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline $(E2E_SUPPORT_OFFLINE_PROFILE) ` +
-				`-check-record $(E2E_SUPPORT_RECORD) -freshness $(E2E_SUPPORT_FRESHNESS) ` +
+			want: `go run ./cmd/merge_coverage/ -packages $(E2E_SUPPORT_COVERPKG) -offline "$(E2E_SUPPORT_OFFLINE_PROFILE)" ` +
+				`-check-record "$(E2E_SUPPORT_RECORD)" -freshness $(E2E_SUPPORT_FRESHNESS) ` +
 				`$(if $(E2E_SUPPORT_SUMMARY),-summary "$(E2E_SUPPORT_SUMMARY)")'`,
 		},
 	}

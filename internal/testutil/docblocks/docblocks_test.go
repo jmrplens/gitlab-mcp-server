@@ -30,9 +30,44 @@ func TestParse_Fences_AreReadAsTheSiteCheckReadsThem(t *testing.T) {
 			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 3}},
 		},
 		{
+			name: "a tab after the language separates it from the key",
+			src:  "```nginx\te2e=nginx\nserver {}\n```\n",
+			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
+			// micromark, which renders the site, ends the language only at a
+			// space or a tab, and the site check refuses a fence holding any
+			// other white space rather than read it differently.
+			name: "a nonbreaking space after the language is part of it, as micromark reads it",
+			src:  "```nginx e2e=nginx\nserver {}\n```\n",
+			want: []Block{{Lang: "nginx e2e=nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
+			// CommonMark trims an info string of spaces and tabs alone, so
+			// micromark keeps any other white space at either end.
+			name: "a nonbreaking space before the language is part of it, as micromark reads it",
+			src:  "```\u00a0nginx e2e=nginx\nserver {}\n```\n",
+			want: []Block{{Lang: "\u00a0nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
+			name: "a nonbreaking space ending the options stays in the last one",
+			src:  "```text comments=hash\u00a0\nglobal\n```\n",
+			want: []Block{{Lang: "text", Info: "comments=hash\u00a0", Body: "global\n", Line: 1}},
+		},
+		{
+			name: "spaces and tabs around the info string are trimmed",
+			src:  "``` \tnginx e2e=nginx \t \nserver {}\n```\n",
+			want: []Block{{Lang: "nginx", Info: "e2e=nginx", Key: "nginx", Body: "server {}\n", Line: 1}},
+		},
+		{
 			name: "a fence with no key",
 			src:  "```bash\necho hi\n```\n",
 			want: []Block{{Lang: "bash", Body: "echo hi\n", Line: 1}},
+		},
+		{
+			name: "a fence with no info string",
+			src:  "```\necho hi\n```\n",
+			want: []Block{{Body: "echo hi\n", Line: 1}},
 		},
 		{
 			name: "a tilde fence",
@@ -194,6 +229,9 @@ func TestParse_MalformedFences_AreRefused(t *testing.T) {
 		{name: "a key ending in a hyphen", src: "```nginx e2e=nginx-\na\n```\n", want: ErrBadKey, line: "line 1"},
 		{name: "two keys on one fence", src: "\n```nginx e2e=a e2e=b\na\n```\n", want: ErrBadKey, line: "line 2"},
 		{name: "a quoted key", src: "```nginx e2e=\"a\"\na\n```\n", want: ErrBadKey, line: "line 1"},
+		// micromark keeps the nonbreaking space in the option, so the page
+		// renders no e2e=nginx and the site check refuses it.
+		{name: "a key ending in a nonbreaking space", src: "```nginx e2e=nginx\u00a0\na\n```\n", want: ErrBadKey, line: `line 1 has e2e="nginx\u00a0"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -298,6 +336,11 @@ func TestPageBlock_KeyNotServedOnce_IsRefused(t *testing.T) {
 			name:    "a key the twin carries twice",
 			english: keyed, spanish: keyed + "\n" + keyed, key: "nginx",
 			want: ErrDuplicateKey, names: []string{"nginx", filepath.Join("es", "guide.mdx")},
+		},
+		{
+			name:    "the empty key, which an unkeyed fence on each page does not carry",
+			english: keyed + "\n```bash\nls\n```\n", spanish: keyed + "\n```bash\nls\n```\n", key: "",
+			want: ErrUnknownKey, names: []string{"guide.mdx"},
 		},
 	}
 	for _, tt := range tests {

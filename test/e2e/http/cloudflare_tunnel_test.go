@@ -27,10 +27,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -142,9 +145,11 @@ const (
 // come up when the name had not resolved.
 //
 // Run it with -timeout 20m. Its own waits add up to about eight and a half
-// minutes at worst, close to go test's default of ten, and a run the timeout
-// or an interrupt ends runs no cleanup, so the cloudflared container would
-// keep its public address open to a port another process can take.
+// minutes at worst, close to go test's default of ten, and each port another
+// listener takes before the server binds it adds a tunnel's start, at most
+// four and a half minutes, twice at most (quickTunnelServer). A run the
+// timeout or an interrupt ends runs no cleanup, so the cloudflared container
+// would keep its public address open to a port another process can take.
 func TestProxyGuide_CloudflareQuickTunnel(t *testing.T) {
 	requireQuickTunnelSwitch(t)
 	tunnel := startQuickTunnel(t)
@@ -211,38 +216,44 @@ func requireQuickTunnelSwitch(t *testing.T) {
 
 // startQuickTunnel opens a quick tunnel to a server started with the guide's
 // CF-Connecting-IP pairing and waits until the edge forwards to it. Every
-// way that can fail fails the case.
+// way that can fail fails the case, but for a port another listener took
+// before the server bound it, which moves to another port and another tunnel
+// (quickTunnelServer).
 func startQuickTunnel(t *testing.T) quickTunnel {
 	t.Helper()
 	if err := dockerUnusable(t.Context()); err != nil {
 		t.Fatalf("%s=true asks for this case, and %v", quickTunnelSwitch, err)
 	}
 	gitlab := startTokenGitLab(t, acceptedPrivateToken, forgedHeaderToken, directToken)
-	port := freePort(t)
-	name := fmt.Sprintf("gitlab-mcp-httpe2e-guide-cloudflared-%d", port)
-	if out, err := runContainer(t, name, cloudflaredImage, nil, "tunnel", "--no-autoupdate", "--url", fmt.Sprintf("http://127.0.0.1:%d", port)); err != nil {
-		t.Fatalf("could not start %s (%v):\n%s", cloudflaredImage, err, out)
+	open := func(port int) (string, func() error) {
+		name := quickTunnelContainer(port)
+		if out, err := runContainer(t, name, cloudflaredImage, nil, "tunnel", "--no-autoupdate", "--url", fmt.Sprintf("http://127.0.0.1:%d", port)); err != nil {
+			t.Fatalf("could not start %s (%v):\n%s", cloudflaredImage, err, out)
+		}
+		// The cleanup removes it, and a run the timeout or an interrupt ends
+		// runs none. Removed by the ID its own run was given, and by hand by
+		// its own name only: another run's container can be alive beside it.
+		t.Logf("%s keeps a public trycloudflare.com address open until it is removed; if this run is interrupted: docker rm -f %s", name, name)
+		return awaitQuickTunnel(t, name), func() error { return killContainer(name) }
 	}
-	// The cleanup removes it, and a run the timeout or an interrupt ends
-	// runs none. Removed by its own name only: another run's container can
-	// be alive beside it.
-	t.Logf("%s keeps a public trycloudflare.com address open until it is removed; if this run is interrupted: docker rm -f %s", name, name)
-	host := awaitQuickTunnel(t, name)
+	start := func(port int, host string) (*server, error) {
+		return tryStartServerOnPort(t, port, nil,
+			"--gitlab-url="+gitlab.url,
+			"--public-url=https://"+host,
+			"--trusted-origins="+trustedOrigin,
+			"--trusted-proxy-header=CF-Connecting-IP",
+			"--trusted-proxies=127.0.0.1",
+			"--auth-failure-limit=3",
+		)
+	}
+	port, host, srv := quickTunnelServer(t, func() int { return freePort(t) }, open, start)
+	name := quickTunnelContainer(port)
 	resolver := newTunnelResolver(time.Now().Add(quickTunnelDNSWait))
 	t.Cleanup(func() {
 		for _, question := range resolver.systemQuestions() {
 			t.Log(question)
 		}
 	})
-
-	srv := startServerOnPort(t, port, nil,
-		"--gitlab-url="+gitlab.url,
-		"--public-url=https://"+host,
-		"--trusted-origins="+trustedOrigin,
-		"--trusted-proxy-header=CF-Connecting-IP",
-		"--trusted-proxies=127.0.0.1",
-		"--auth-failure-limit=3",
-	)
 	if _, err := resolver.lookup(t.Context(), host); err != nil {
 		t.Fatalf("DNS: %v. cloudflared is up and printed the address, so this is the name, not the container", err)
 	}
@@ -251,6 +262,63 @@ func startQuickTunnel(t *testing.T) quickTunnel {
 	edge := &server{baseURL: "https://" + host, logs: srv.logs, client: client}
 	awaitEdge(t, edge, name)
 	return quickTunnel{edge: edge, direct: srv, gitlab: gitlab}
+}
+
+// quickTunnelContainer names the cloudflared container of a quick tunnel to
+// port.
+func quickTunnelContainer(port int) string {
+	return fmt.Sprintf("gitlab-mcp-httpe2e-guide-cloudflared-%d", port)
+}
+
+// killContainer stops the container named name at once, leaving its removal
+// to the cleanup runContainer registered, which removes it by its ID.
+func killContainer(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, "docker", "kill", name).CombinedOutput(); err != nil {
+		return fmt.Errorf("docker kill %s: %w: %s", name, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// fatalReporter is what quickTunnelServer needs of a test: a failure that
+// ends it.
+type fatalReporter interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
+// quickTunnelServer opens a quick tunnel to a port pick chooses, with open,
+// and starts the server on that port, with start, once the tunnel has
+// printed its host, which the server's --public-url names.
+//
+// The port is free for nobody from the moment pick releases it until the
+// server binds it, which is as long as the tunnel takes to come up, so a
+// server that lost it to another listener (errPortTaken) is started again on
+// another port, up to portRaceAttempts ports, as startServerOnFreePort does.
+// A tunnel names its origin's port when it starts, so each port has a tunnel
+// of its own, and every tunnel but the one returned is stopped as soon as its
+// server did not come up: until then its public address forwards to whatever
+// took the port. Any other failure ends the case on the port it came on.
+func quickTunnelServer(t fatalReporter, pick func() int, open func(port int) (host string, stop func() error), start func(port int, host string) (*server, error)) (port int, host string, srv *server) {
+	t.Helper()
+	for attempt := 1; ; attempt++ {
+		port = pick()
+		var stop func() error
+		host, stop = open(port)
+		var err error
+		if srv, err = start(port, host); err == nil {
+			return port, host, srv
+		}
+		if stopErr := stop(); stopErr != nil {
+			t.Fatalf("stopping the tunnel to port %d, whose server did not come up (%v): %v", port, err, stopErr)
+			return 0, "", nil
+		}
+		if !errors.Is(err, errPortTaken) || attempt == portRaceAttempts {
+			t.Fatalf("starting the server on port %d: %v", port, err)
+			return 0, "", nil
+		}
+	}
 }
 
 // assertForgedClientAddressRefused holds what the edge does to a
@@ -451,7 +519,8 @@ type hostLookup struct {
 type tunnelResolver struct {
 	// public is asked in order, and the first answer is taken.
 	public []hostLookup
-	// system is asked only when none of public could be reached.
+	// system is asked only when none of public could be reached, and for the
+	// rooted name too.
 	system func(ctx context.Context, host string) ([]string, error)
 	// deadline ends the asking again while the answer is that the name
 	// does not exist; any other answer ends it at once.
@@ -512,9 +581,13 @@ func (r *tunnelResolver) lookup(ctx context.Context, host string) ([]string, err
 // reached.
 func (r *tunnelResolver) ask(ctx context.Context, host string) ([]string, error) {
 	var unreachable []error
+	// Rooted, so no resolver, the system's included, appends the machine's
+	// search domains: a wildcard record under one would answer for the
+	// tunnel's name while it is not published yet, or before it with ndots
+	// set high.
+	rooted := host + "."
 	for _, resolver := range r.public {
-		// Rooted, so the machine's search domains are never appended.
-		addrs, err := resolver.lookup(ctx, host+".")
+		addrs, err := resolver.lookup(ctx, rooted)
 		switch {
 		case err == nil:
 			return addrs, nil
@@ -524,7 +597,7 @@ func (r *tunnelResolver) ask(ctx context.Context, host string) ([]string, error)
 		unreachable = append(unreachable, fmt.Errorf("%s: %w", resolver.address, err))
 	}
 	r.noteSystemQuestion(fmt.Sprintf("asked the system's resolver for %s, since no public one answered: %v", host, errors.Join(unreachable...)))
-	addrs, err := r.system(ctx, host)
+	addrs, err := r.system(ctx, rooted)
 	switch {
 	case err == nil:
 		return addrs, nil
@@ -764,9 +837,9 @@ func TestTunnelResolver_Lookup_AsksThePublicResolversFirst(t *testing.T) {
 				t.Errorf("the first, the second and the system's resolver were asked %v time(s), want %v", asked, tt.asked)
 			}
 			assertSystemQuestionsNoted(t, r, tt.asked[2])
-			for _, name := range append(first.names(), second.names()...) {
+			for _, name := range slices.Concat(first.names(), second.names(), system.names()) {
 				if name != host+"." {
-					t.Errorf("a public resolver was asked for %q, want the rooted %q, which no search domain is appended to", name, host+".")
+					t.Errorf("a resolver was asked for %q, want the rooted %q, which no search domain is appended to", name, host+".")
 				}
 			}
 		})
@@ -859,4 +932,511 @@ func TestEdgeError1000_EdgeAnswers_AreReadByTheirCode(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestQuickTunnelServer_PortTaken_StopsTheTunnelAndMovesToAnotherPort holds
+// the quick tunnel case to the rule every other case here keeps: a server
+// whose port another listener took in the meantime is started again on
+// another port.
+//
+// The tunnel names its origin's port when it starts, and the server can only
+// start once the tunnel has printed the host its --public-url names, so the
+// port stays free for nobody for as long as cloudflared takes to come up, the
+// longest such moment in the module. A quick tunnel cannot be pointed at
+// another port, so moving means another tunnel, and the first one is stopped
+// before it is: until then the public address forwards to whatever took the
+// port.
+func TestQuickTunnelServer_PortTaken_StopsTheTunnelAndMovesToAnotherPort(t *testing.T) {
+	t.Parallel()
+	portTaken := fmt.Errorf("%w. Output: bind: address already in use", errPortTaken)
+	tests := []struct {
+		name string
+		// starts is what each start returns, the last repeated.
+		starts   []error
+		stopErr  error
+		want     []string
+		wantPort int
+		wantFail string
+	}{
+		{
+			name:   "a port another listener took moves to another port and another tunnel",
+			starts: []error{portTaken, nil},
+			want: []string{
+				"open 40001", "start 40001 tunnel-1.trycloudflare.com", "stop tunnel-1.trycloudflare.com",
+				"open 40002", "start 40002 tunnel-2.trycloudflare.com",
+			},
+			wantPort: 40002,
+		},
+		{
+			name:     "any other failure ends the case on the first port",
+			starts:   []error{errors.New("the server never became healthy")},
+			want:     []string{"open 40001", "start 40001 tunnel-1.trycloudflare.com", "stop tunnel-1.trycloudflare.com"},
+			wantFail: "never became healthy",
+		},
+		{
+			name:   "a port taken every time ends the case after the attempts a race is given",
+			starts: []error{portTaken},
+			want: []string{
+				"open 40001", "start 40001 tunnel-1.trycloudflare.com", "stop tunnel-1.trycloudflare.com",
+				"open 40002", "start 40002 tunnel-2.trycloudflare.com", "stop tunnel-2.trycloudflare.com",
+				"open 40003", "start 40003 tunnel-3.trycloudflare.com", "stop tunnel-3.trycloudflare.com",
+			},
+			wantFail: "the port was taken",
+		},
+		{
+			name:     "a tunnel that cannot be stopped ends the case before another opens",
+			starts:   []error{portTaken, nil},
+			stopErr:  errors.New("docker kill: exit status 1"),
+			want:     []string{"open 40001", "start 40001 tunnel-1.trycloudflare.com", "stop tunnel-1.trycloudflare.com"},
+			wantFail: "docker kill",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var events []string
+			next := 40000
+			pick := func() int { next++; return next }
+			opened := 0
+			open := func(port int) (string, func() error) {
+				opened++
+				host := fmt.Sprintf("tunnel-%d.trycloudflare.com", opened)
+				events = append(events, fmt.Sprintf("open %d", port))
+				return host, func() error {
+					events = append(events, "stop "+host)
+					return tt.stopErr
+				}
+			}
+			started := 0
+			start := func(port int, host string) (*server, error) {
+				events = append(events, fmt.Sprintf("start %d %s", port, host))
+				err := tt.starts[min(started, len(tt.starts)-1)]
+				started++
+				if err != nil {
+					return nil, err
+				}
+				return &server{baseURL: fmt.Sprintf("http://127.0.0.1:%d", port)}, nil
+			}
+			reporter := &fatalRecorder{}
+			port, host, srv := quickTunnelServer(reporter, pick, open, start)
+			if !slices.Equal(events, tt.want) {
+				t.Errorf("events = %q, want %q", events, tt.want)
+			}
+			switch {
+			case tt.wantFail == "" && len(reporter.failures) != 0:
+				t.Errorf("failures = %q, want none", reporter.failures)
+			case tt.wantFail != "" && (len(reporter.failures) != 1 || !strings.Contains(reporter.failures[0], tt.wantFail)):
+				t.Errorf("failures = %q, want one naming %q", reporter.failures, tt.wantFail)
+			}
+			if tt.wantFail == "" {
+				wantHost := fmt.Sprintf("tunnel-%d.trycloudflare.com", opened)
+				if port != tt.wantPort || host != wantHost || srv == nil || srv.baseURL != fmt.Sprintf("http://127.0.0.1:%d", tt.wantPort) {
+					t.Errorf("quickTunnelServer = (%d, %q, %v), want port %d, %s and the server started there", port, host, srv, tt.wantPort, wantHost)
+				}
+			}
+		})
+	}
+}
+
+// TestCloudflareTunnelTarget_OverlappingRuns_EachRemovesOnlyItsOwnContainer
+// runs make test-e2e-cloudflare-tunnel's recipe twice at once in one
+// checkout, against a stand-in gotestsum and a stand-in docker, and holds the
+// run that fails or is interrupted to removing the container its own case
+// named and no other.
+//
+// Every run read the names from one log path and deleted it before it
+// started, so a second run unlinked the first one's log and wrote its own in
+// its place: the first run, once it failed, removed the second run's
+// cloudflared container, killing that tunnel mid-case, and left its own
+// container, and its public address, running. Two runs beside each other are
+// a state the case is built for, since it names its container after a port
+// no other run holds. The log sits in a reports directory whose path holds a
+// space (renderAll), where the recipe, which assigned the log's path
+// unquoted, kept no log at all and so removed no container.
+//
+// The recipe is rendered with make -n rather than read as text, so what runs
+// is the command make would run. Linux only: the target needs POSIX job
+// control (on Windows it runs under WSL), and macOS ships make 3.81, older
+// than the 4.2 whose $(file <) the Makefile reads its version with; CI's
+// e2e-http job runs this module on Linux.
+func TestCloudflareTunnelTarget_OverlappingRuns_EachRemovesOnlyItsOwnContainer(t *testing.T) {
+	t.Parallel()
+	target := newTunnelTarget(t)
+	tests := []struct {
+		name string
+		// interrupt sends the first run INT where it is otherwise left to
+		// fail.
+		interrupt  bool
+		wantStatus int
+		wantReason string
+	}{
+		{name: "the first run fails", wantStatus: 1, wantReason: "ended with status 1"},
+		{name: "the first run is interrupted", interrupt: true, wantStatus: 130, wantReason: "was interrupted by INT"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recipe := target.render(t)
+			state := t.TempDir()
+			first := target.start(t, recipe, state, "cf-first", 1)
+			awaitFile(t, filepath.Join(state, "cf-first"))
+			second := target.start(t, recipe, state, "cf-second", 0)
+			awaitFile(t, filepath.Join(state, "cf-second"))
+
+			if tt.interrupt {
+				if err := first.cmd.Process.Signal(os.Interrupt); err != nil {
+					t.Fatalf("interrupting the first run: %v", err)
+				}
+			} else {
+				release(t, state, "cf-first")
+			}
+			if status := first.wait(t); status != tt.wantStatus {
+				t.Errorf("the first run ended with status %d, want %d:\n%s", status, tt.wantStatus, first.stderr.String())
+			}
+			if want := "the run " + tt.wantReason + "; removing cf-first"; !strings.Contains(first.stderr.String(), want) {
+				t.Errorf("the first run printed %q, want it to say %q", first.stderr.String(), want)
+			}
+			removed, err := os.ReadFile(filepath.Join(state, "removed-by-cf-first"))
+			if err != nil || string(removed) != "cf-first\n" {
+				t.Errorf("the first run removed %q (%v), want its own container, cf-first, alone", removed, err)
+			}
+			if _, statErr := os.Stat(filepath.Join(state, "cf-second")); statErr != nil {
+				t.Errorf("the second run's container is gone while that run is still going (%v): the first run removed a container another run's case named", statErr)
+			}
+
+			release(t, state, "cf-second")
+			if status := second.wait(t); status != 0 {
+				t.Errorf("the second run ended with status %d, want 0:\n%s", status, second.stderr.String())
+			}
+		})
+	}
+}
+
+// TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn holds make
+// test-e2e-cloudflare-tunnel to measuring what it runs under COVER=1, as
+// every other run target does: the leaf cleared first and handed to the
+// harness, which gives each server child a GOCOVERDIR under it.
+//
+// The target built the instrumented binary and handed it no leaf, so every
+// server it started wrote nothing and printed "GOCOVERDIR not set" first,
+// and make e2e-go-coverage left the run out without a word.
+//
+// The leaf is cleared by the Makefile's RM_RF, which took its path unquoted:
+// under a coverage root such as "dist/e2e cover" it removed dist/e2e, the
+// staged server binary in it, and a "cover/cloudflare-tunnel" nobody named,
+// and left the leaf's stale counters in place.
+func TestCloudflareTunnelTarget_Cover_HandsTheRunALeafOfItsOwn(t *testing.T) {
+	t.Parallel()
+	target := newTunnelTarget(t)
+	leaf := filepath.Join(target.root, "dist", "e2e-cover", "cloudflare-tunnel")
+	t.Run("with COVER=1", func(t *testing.T) {
+		t.Parallel()
+		rendered := target.renderAll(t, "COVER=1")
+		if !strings.Contains(rendered, "rm -rf \"dist/e2e-cover/cloudflare-tunnel\"\n") {
+			t.Errorf("the target does not clear its leaf before the run:\n%s", rendered)
+		}
+		if !strings.Contains(rendered, `E2E_COVER_DIR="`+leaf+`" `) {
+			t.Errorf("the run is not handed E2E_COVER_DIR=%s:\n%s", leaf, rendered)
+		}
+	})
+	t.Run("with a coverage root holding a space", func(t *testing.T) {
+		t.Parallel()
+		rendered := target.renderAll(t, "COVER=1", "E2E_COVER_ROOT=dist/e2e cover")
+		if want := filepath.Join(target.root, "dist", "e2e cover", "cloudflare-tunnel"); !strings.Contains(rendered, `E2E_COVER_DIR="`+want+`" `) {
+			t.Errorf("the run is not handed E2E_COVER_DIR=%s:\n%s", want, rendered)
+		}
+		// The removal runs in a tree of the test's own, beside the staged
+		// server binary it has to leave in place.
+		tree := t.TempDir()
+		binary := filepath.Join(tree, "dist", "e2e", "gitlab-mcp-server")
+		stale := filepath.Join(tree, "dist", "e2e cover", "cloudflare-tunnel", "covmeta.stale")
+		touch(t, binary, stale)
+		runTheRemoval(t, rendered, tree)
+		if _, err := os.Stat(binary); err != nil {
+			t.Errorf("clearing the leaf removed the staged server binary: %v", err)
+		}
+		if _, err := os.Stat(filepath.Dir(stale)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("clearing the leaf left it and its stale counters in place (%v)", err)
+		}
+	})
+	t.Run("without it", func(t *testing.T) {
+		t.Parallel()
+		if rendered := target.renderAll(t); strings.Contains(rendered, "E2E_COVER_DIR") || strings.Contains(rendered, "e2e-cover") {
+			t.Errorf("a run without COVER names a coverage leaf:\n%s", rendered)
+		}
+	})
+}
+
+// TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths
+// renders make test-e2e-cloudflare-tunnel in a checkout whose path holds a
+// space and runs it against the stand-ins, holding the run to being handed
+// the server binary and, under COVER=1, the coverage leaf, each as one path.
+//
+// The recipe joined both onto $(CURDIR) unquoted, so the shell split them at
+// the space and ran the rest of the path as a command: the run ended with
+// status 127 before gotestsum started. A checkout under a Windows home folder
+// with a space in its name, reached from WSL, is such a path. The stand-in
+// gotestsum sits under such a folder too (newTunnelTarget), as a GOBIN or a
+// GOPATH under that home folder would put it, and the recipe ran it unquoted
+// as well, which ended this run, and every other one the tests here start,
+// with status 127 the same way.
+func TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths(t *testing.T) {
+	t.Parallel()
+	target := newTunnelTarget(t)
+	checkout := checkoutWithASpace(t)
+	target.root = checkout
+	binary := filepath.Join(checkout, "dist", "e2e", "gitlab-mcp-server")
+
+	tests := []struct {
+		name string
+		args []string
+		// want is what the stand-in gotestsum was handed: the server binary
+		// on one line and the coverage leaf on the next.
+		want string
+	}{
+		{name: "without COVER", want: binary + "\n\n"},
+		{name: "with COVER=1", args: []string{"COVER=1"}, want: binary + "\n" + filepath.Join(checkout, "dist", "e2e-cover", "cloudflare-tunnel") + "\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			recipe := target.render(t, tt.args...)
+			state := t.TempDir()
+			// Released before it starts, so the stand-in ends at once.
+			release(t, state, "cf-space")
+			run := target.start(t, recipe, state, "cf-space", 0)
+			if status := run.wait(t); status != 0 {
+				t.Fatalf("the run ended with status %d, want 0:\n%s", status, run.stderr.String())
+			}
+			handed, err := os.ReadFile(filepath.Join(state, "cf-space")) //#nosec G304 -- the mark the stand-in wrote in this test's own directory
+			if err != nil {
+				t.Fatalf("the stand-in gotestsum left no mark: %v", err)
+			}
+			if string(handed) != tt.want {
+				t.Errorf("the run was handed %q, want %q", handed, tt.want)
+			}
+		})
+	}
+}
+
+// TestCloudflareTunnelTarget_LeafThisRunWasHanded_ReachesNoRecipe runs the
+// recipe make test-e2e-cloudflare-tunnel renders without COVER in a process
+// that was handed a coverage leaf, as make test-e2e-http COVER=1 hands this
+// module the HTTP one, and holds the run to being handed no leaf.
+//
+// The recipe ran under this process's environment as it was, so under make
+// test-e2e-http COVER=1 the stand-in gotestsum read the HTTP module's leaf
+// and the case without COVER above failed. t.Setenv changes the whole
+// process, so this test is not parallel.
+func TestCloudflareTunnelTarget_LeafThisRunWasHanded_ReachesNoRecipe(t *testing.T) {
+	t.Setenv(coverDirEnv, filepath.Join(t.TempDir(), "e2e-cover", "http"))
+	target := newTunnelTarget(t)
+	recipe := target.render(t)
+	state := t.TempDir()
+	// Released before it starts, so the stand-in ends at once.
+	release(t, state, "cf-leaf")
+	run := target.start(t, recipe, state, "cf-leaf", 0)
+	if status := run.wait(t); status != 0 {
+		t.Fatalf("the run ended with status %d, want 0:\n%s", status, run.stderr.String())
+	}
+	handed, err := os.ReadFile(filepath.Join(state, "cf-leaf")) //#nosec G304 -- the mark the stand-in wrote in this test's own directory
+	if err != nil {
+		t.Fatalf("the stand-in gotestsum left no mark: %v", err)
+	}
+	if want := filepath.Join(target.root, "dist", "e2e", "gitlab-mcp-server") + "\n\n"; string(handed) != want {
+		t.Errorf("the run was handed %q, want %q: the leaf this process was handed reached a recipe that hands on none", handed, want)
+	}
+}
+
+// runTheRemoval runs, with sh in dir, the one rm -rf line make -n printed in
+// rendered, failing the test when it printed none or more than one, or when
+// the line fails.
+func runTheRemoval(t *testing.T, rendered, dir string) {
+	t.Helper()
+	var removals []string
+	for line := range strings.Lines(rendered) {
+		if strings.HasPrefix(line, "rm -rf ") {
+			removals = append(removals, line)
+		}
+	}
+	if len(removals) != 1 {
+		t.Fatalf("make -n printed %d removals, want the leaf's alone:\n%s", len(removals), rendered)
+	}
+	//#nosec G204 -- a line make rendered from this repository's own Makefile
+	removal := exec.CommandContext(t.Context(), "sh", "-c", removals[0])
+	removal.Dir = dir
+	if out, err := removal.CombinedOutput(); err != nil {
+		t.Fatalf("%s: %v: %s", strings.TrimSpace(removals[0]), err, out)
+	}
+}
+
+// tunnelTarget is what rendering and running the test-e2e-cloudflare-tunnel
+// recipe needs: make, the repository the Makefile sits in, and a directory
+// holding the stand-in gotestsum and docker.
+type tunnelTarget struct {
+	makeBin, root, stubs string
+}
+
+// The stand-ins the recipe runs. The gotestsum one writes the log line the
+// case prints to the file --jsonfile names, marks its container as existing,
+// writing into the mark the server binary and the coverage leaf the run was
+// handed, and waits for its release; the docker one answers an inspect from
+// those marks and records each removal under the run that made it. Each reads
+// the run it belongs to from FAKE_*.
+const (
+	stubGotestsum = `#!/bin/sh
+log=
+while [ $# -gt 0 ]; do
+  if [ "$1" = --jsonfile ]; then log=$2; fi
+  shift
+done
+printf '{"Action":"output","Output":"%s keeps a public trycloudflare.com address open until it is removed; if this run is interrupted: docker rm -f %s\\n"}\n' "$FAKE_NAME" "$FAKE_NAME" > "$log"
+printf '%s\n%s\n' "$E2E_SERVER_BINARY" "${E2E_COVER_DIR-}" > "$FAKE_STATE/$FAKE_NAME"
+while [ ! -e "$FAKE_STATE/release-$FAKE_NAME" ]; do sleep 0.05; done
+exit "$FAKE_STATUS"
+`
+	stubDocker = `#!/bin/sh
+case "$1 $2" in
+"container inspect") [ -e "$FAKE_STATE/$3" ] ;;
+"rm -f") rm -f "$FAKE_STATE/$3" && printf '%s\n' "$3" >> "$FAKE_STATE/removed-by-$FAKE_NAME" ;;
+*) exit 2 ;;
+esac
+`
+)
+
+// newTunnelTarget finds make, sh and bash, skipping the test where one is
+// missing or the platform is not Linux, and writes the stand-ins under a
+// folder whose path holds a space, as a GOBIN, a GOPATH or a PATH directory
+// can, so every recipe rendered here hands the shell such a gotestsum path.
+func newTunnelTarget(t *testing.T) tunnelTarget {
+	t.Helper()
+	target := tunnelTarget{
+		makeBin: makeOnLinux(t),
+		root:    repoRoot(),
+		stubs:   filepath.Join(t.TempDir(), "bin with space"),
+	}
+	for name, body := range map[string]string{"gotestsum": stubGotestsum, "docker": stubDocker} {
+		writeStandIn(t, filepath.Join(target.stubs, name), body)
+	}
+	return target
+}
+
+// renderAll returns everything make -n prints for the target, the
+// prerequisites' commands included, with the stand-in gotestsum and a
+// reports directory of the test's own, whose path holds a space as an
+// override can give it. The recipe assigned the run's log path under that
+// directory unquoted, so a run wrote no log and, once it failed, removed
+// nothing its case had named.
+func (tt tunnelTarget) renderAll(t *testing.T, args ...string) string {
+	t.Helper()
+	reports := filepath.Join(t.TempDir(), "reports with space")
+	if err := os.MkdirAll(reports, 0o750); err != nil {
+		t.Fatalf("creating the reports directory: %v", err)
+	}
+	return renderMake(t, tt.makeBin, tt.root, append([]string{
+		"test-e2e-cloudflare-tunnel",
+		"GOTESTSUM=" + filepath.Join(tt.stubs, "gotestsum"), "E2E_REPORT_DIR=" + reports,
+	}, args...)...)
+}
+
+// render returns the target's own recipe line, the one that runs the case,
+// as make -n prints it with args.
+func (tt tunnelTarget) render(t *testing.T, args ...string) string {
+	t.Helper()
+	rendered := tt.renderAll(t, args...)
+	start := strings.Index(rendered, "exec bash -o pipefail -c '")
+	end := strings.LastIndex(rendered, `exit "$status"'`)
+	if start < 0 || end < start {
+		t.Fatalf("make -n printed no recipe running the case under bash:\n%s", rendered)
+	}
+	return rendered[start : end+len(`exit "$status"'`)]
+}
+
+// tunnelRun is one run of the rendered recipe.
+type tunnelRun struct {
+	cmd    *exec.Cmd
+	stderr *strings.Builder
+	done   chan struct{}
+	err    error
+}
+
+// start runs recipe the way make would, with sh, under makeEnviron, so a
+// coverage leaf this run was handed never reaches a recipe that hands on
+// none, with the stand-ins first on the PATH, as the run whose case names the
+// container name and whose gotestsum ends with status once released.
+func (tt tunnelTarget) start(t *testing.T, recipe, state, name string, status int) *tunnelRun {
+	t.Helper()
+	//#nosec G204 -- the recipe is what make rendered from this repository's own Makefile
+	cmd := exec.CommandContext(t.Context(), "sh", "-c", recipe)
+	cmd.Dir = t.TempDir()
+	cmd.Env = makeEnviron(
+		"PATH="+tt.stubs+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"FAKE_STATE="+state, "FAKE_NAME="+name, fmt.Sprintf("FAKE_STATUS=%d", status),
+	)
+	run := &tunnelRun{cmd: cmd, stderr: &strings.Builder{}, done: make(chan struct{})}
+	cmd.Stdout = io.Discard
+	cmd.Stderr = run.stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("starting the recipe: %v", err)
+	}
+	go func() {
+		run.err = cmd.Wait()
+		close(run.done)
+	}()
+	// Released however the test ends, so no stand-in outlives it waiting.
+	t.Cleanup(func() {
+		release(t, state, name)
+		<-run.done
+	})
+	return run
+}
+
+// wait returns the run's exit status once it has ended, failing the test
+// when it has not within a minute.
+func (r *tunnelRun) wait(t *testing.T) int {
+	t.Helper()
+	select {
+	case <-r.done:
+	case <-time.After(time.Minute):
+		// Its output is not read here: the run still writes it.
+		t.Fatal("the run had not ended a minute after it was released")
+	}
+	if exit, ok := errors.AsType[*exec.ExitError](r.err); ok {
+		return exit.ExitCode()
+	}
+	if r.err != nil {
+		t.Fatalf("waiting for the run: %v", r.err)
+	}
+	return 0
+}
+
+// release lets the stand-in gotestsum of the run whose case names name end.
+func release(t *testing.T, state, name string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(state, "release-"+name), nil, 0o600); err != nil {
+		t.Errorf("releasing %s: %v", name, err)
+	}
+}
+
+// awaitFile waits up to thirty seconds for path to exist.
+func awaitFile(t *testing.T, path string) {
+	t.Helper()
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+	}
+	t.Fatalf("%s did not appear within thirty seconds", path)
+}
+
+// fatalRecorder is a fatalReporter that keeps its failures for the test to
+// read, where testing.T would end the test.
+type fatalRecorder struct {
+	failures []string
+}
+
+func (r *fatalRecorder) Helper() {}
+
+func (r *fatalRecorder) Fatalf(format string, args ...any) {
+	r.failures = append(r.failures, fmt.Sprintf(format, args...))
 }
