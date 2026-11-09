@@ -552,23 +552,7 @@ func TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing(t *testing.T) 
 			name: "no probe slot is free",
 			arrange: func(t *testing.T, _ *refusingGitLab, pool *ServerPool, _ string) {
 				t.Helper()
-				// Filled until a send would block rather than a fixed number
-				// of times: a slot something else still holds must not turn
-				// the arrangement into a hang.
-				taken := 0
-				for full := false; !full; {
-					select {
-					case pool.probes <- struct{}{}:
-						taken++
-					default:
-						full = true
-					}
-				}
-				t.Cleanup(func() {
-					for range taken {
-						<-pool.probes
-					}
-				})
+				takeEveryProbeSlot(t, pool)
 			},
 			wantProbes: 0,
 			wantPooled: 1,
@@ -1689,14 +1673,7 @@ func TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial(t *test
 			t.Helper()
 			g := newRefusingGitLab(t, plainUnauthorizedBody)
 			pool, entry := entryOver(t, testConfig(g.URL), token)
-			for range cap(pool.probes) {
-				pool.probes <- struct{}{}
-			}
-			t.Cleanup(func() {
-				for range cap(pool.probes) {
-					<-pool.probes
-				}
-			})
+			takeEveryProbeSlot(t, pool)
 			return g.URL, approveAndAwait(t, logs, entry, noSlotToConfirmLog)
 		}},
 		{name: "a 401 is not confirmed", messages: []string{unconfirmedA401Log}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
@@ -1898,6 +1875,35 @@ func approveAndAwait(t *testing.T, logs *capturedRecords, entry *Entry, message 
 		return len(linesAbout(logs, message, entry.Config().GitLabURL)) > 0
 	})
 	return entry
+}
+
+// fillProbeSlots takes every probe slot of pool that is still free and returns
+// how many it took. It stops when a send would block rather than after a fixed
+// count: a slot something else still holds, such as one a broken build never
+// gave back, must not turn the arrangement into a hang. It calls nothing on a
+// testing.T, so a stand-in's handler may run it.
+func fillProbeSlots(pool *ServerPool) int {
+	taken := 0
+	for {
+		select {
+		case pool.probes <- struct{}{}:
+			taken++
+		default:
+			return taken
+		}
+	}
+}
+
+// takeEveryProbeSlot is [fillProbeSlots] on the test goroutine, giving the
+// slots it took back when the test ends.
+func takeEveryProbeSlot(t *testing.T, pool *ServerPool) {
+	t.Helper()
+	taken := fillProbeSlots(pool)
+	t.Cleanup(func() {
+		for range taken {
+			<-pool.probes
+		}
+	})
 }
 
 // linesAbout returns the captured records carrying message and naming
@@ -6702,11 +6708,7 @@ func TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves(t *test
 func TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	var pool *ServerPool
-	fill := func() {
-		for range cap(pool.probes) {
-			pool.probes <- struct{}{}
-		}
-	}
+	fill := func() { fillProbeSlots(pool) }
 	g.onSelf.Store(&fill)
 	cfg := testConfig(g.server.URL)
 	cfg.IgnoreScopes = false
@@ -6730,9 +6732,7 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	pool, entry := fineGrainedEntry(t, g)
 	first := entry.Client().Authority()
-	for range cap(pool.probes) {
-		pool.probes <- struct{}{}
-	}
+	takeEveryProbeSlot(t, pool)
 	logs := captureLogs(t)
 
 	g.setVersion("")
@@ -6869,9 +6869,7 @@ func TestRevalidateAll_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	g.selfStatus.Store(http.StatusBadGateway)
 	pool, entry := fineGrainedEntry(t, g)
-	for range cap(pool.probes) {
-		pool.probes <- struct{}{}
-	}
+	takeEveryProbeSlot(t, pool)
 	logs := captureLogs(t)
 
 	pool.revalidateAll(context.Background())
