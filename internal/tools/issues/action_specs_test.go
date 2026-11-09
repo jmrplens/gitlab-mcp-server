@@ -330,11 +330,15 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // Each text is served on its own by some surface, so each has to say both
 // halves: what an omitted scope returns, and the value that lists everything.
 //
-// GitLab.com refuses that value on this route, and the usage recommended it
+// GitLab.com may refuse that value on this route, and the usage recommended it
 // for a cross-project overview, which led a model there to a 400 (issue 1779).
-// So each text also says that GitLab.com refuses it and what answers there: the
-// two scopes it accepts, or a group's or a project's list, which the usage
-// names by their canonical IDs.
+// So each text also says that GitLab.com may refuse it and what answers there
+// when it does: the two scopes it accepts, or a group's or a project's list,
+// which the usage names by their canonical IDs. The refusal is conditional:
+// GitLab.com applies it behind restrict_global_issues_scope_all, a flag whose
+// actor is the caller and which it is rolling out to a share of users, so no
+// text may say that GitLab.com refuses the value outright and steer a caller
+// it still answers away from a working read.
 //
 // Whatever the scope, GET /issues leaves out the issues of archived projects,
 // since non_archived defaults to true and client-go does not model it, so each
@@ -348,15 +352,18 @@ func TestActionSpecs_ListAll_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 		text      string
 		fragments []string
 	}{
-		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses scope=all", "scope=assigned_to_me", actionIssueListGroup + " or " + actionIssueList + ",", "not archived", "issues of archived projects"}},
-		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com refuses", "scope=assigned_to_me", "a group's or a project's issues", "not archived", "archived project's issues"}},
-		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com refuses", "a group's or a project's issues", "not archived"}},
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com may refuse scope=all", "When it does", "scope=assigned_to_me", actionIssueListGroup + " or " + actionIssueList + ",", "not archived", "issues of archived projects"}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com may refuse", "if it does", "scope=assigned_to_me", "a group's or a project's issues", "not archived", "archived project's issues"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com may refuse", "if it does", "a group's or a project's issues", "not archived"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, fragment := range tt.fragments {
 				if !strings.Contains(tt.text, fragment) {
 					t.Errorf("%s = %q, want it to carry %q", tt.name, tt.text, fragment)
 				}
+			}
+			if strings.Contains(tt.text, "GitLab.com refuses") {
+				t.Errorf("%s = %q, which says GitLab.com refuses scope=all outright; it refuses it only for the users its feature flag is enabled for", tt.name, tt.text)
 			}
 		})
 	}

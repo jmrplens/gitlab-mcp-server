@@ -645,7 +645,7 @@ func assertGlobalListScope(t *testing.T, handle promptHandlerFunc, args map[stri
 // had opened and was reviewing, almost always none, and every list about
 // another user was that user's work intersected with the caller's. The
 // caller's own issues are read with scope=assigned_to_me instead, which
-// GitLab.com accepts where it refuses scope=all on the issue list, and which
+// GitLab.com accepts where it may refuse scope=all on the issue list, and which
 // TestMyIssues_Scope_NamesTheCallerOrEverybody holds.
 func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T) {
 	alice := map[string]string{argUsername: "alice"}
@@ -672,8 +672,8 @@ func TestCrossProjectPrompts_GlobalListFilteredByUser_SendsScopeAll(t *testing.T
 }
 
 // scopeAllRefusedJSON is the body GitLab.com answers GET /issues?scope=all
-// with since the feature flag restrict_global_issues_scope_all was enabled
-// there, byte for byte as the issue 1779 report recorded it.
+// with for a caller the feature flag restrict_global_issues_scope_all is
+// enabled for, byte for byte as the issue 1779 report recorded it.
 const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not supported on this endpoint. Use `created_by_me` or `assigned_to_me`, or query a specific group or project.\"}"
 
 // routePostGraphQL is the route GitLab serves its GraphQL API on.
@@ -705,8 +705,8 @@ func myIssuesAgainst(t *testing.T, args map[string]string, issues, graphQL http.
 	return handleMyIssues(t.Context(), testutil.NewTestClient(t, mux), testPromptRequest(args))
 }
 
-// refuseScopeAll answers the global issue list the way GitLab.com does since
-// it refuses scope=all there (issue 1779).
+// refuseScopeAll answers the global issue list the way GitLab.com does for a
+// caller it refuses scope=all for (issue 1779).
 func refuseScopeAll(w http.ResponseWriter, _ *http.Request) {
 	respondJSON(w, http.StatusBadRequest, scopeAllRefusedJSON)
 }
@@ -728,7 +728,7 @@ func promptText(t *testing.T, result *mcp.GetPromptResult) string {
 	return result.Messages[0].Content.(*mcp.TextContent).Text
 }
 
-// wantAssignedIssuesQuery is the document my_issues sends where GitLab.com
+// wantAssignedIssuesQuery is the document my_issues sends when GitLab.com
 // refuses scope=all, spelled out rather than read from [assignedIssuesQuery]
 // so that a change to the document fails the comparison instead of moving
 // with it. The issue types are what keeps the read to the issues GET /issues
@@ -782,13 +782,16 @@ const assignedIssueJSON = `{"iid":"12","title":"Fix the parser","reference":"gro
 // TestMyIssues_Scope_NamesTheCallerOrEverybody verifies the request my_issues
 // sends for each user it can be about.
 //
-// GitLab.com refuses scope=all on the global issue list (issue 1779), which the
-// prompt sent for the caller as well, so the default form of the prompt, which
-// names no user, failed there on every call. The caller's issues are what
-// scope=assigned_to_me names on every instance, with no assignee filter beside
-// it. Another user's are named by the assignee filter, which needs scope=all,
-// since GitLab otherwise applies it to the caller's own issues only (issue
-// 1164).
+// GitLab.com may refuse scope=all on the global issue list (issue 1779), which
+// the prompt sent for the caller as well, so the default form of the prompt,
+// which names no user, failed on every call for a caller it refuses. The
+// caller's issues are what scope=assigned_to_me names on every instance, with
+// no assignee filter beside it. Another user's are named by the assignee
+// filter, which needs scope=all, since GitLab otherwise applies it to the
+// caller's own issues only (issue 1164). Where GitLab answers scope=all, as
+// GitLab.com does for a caller its feature flag is not enabled for, that one
+// REST read is the whole answer and no GraphQL request is sent, which the nil
+// GraphQL handler of [myIssuesAgainst] holds.
 func TestMyIssues_Scope_NamesTheCallerOrEverybody(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
@@ -820,8 +823,8 @@ func TestMyIssues_Scope_NamesTheCallerOrEverybody(t *testing.T) {
 }
 
 // TestMyIssues_ScopeAllRefused_ReadsTheGraphQLIssueList verifies that
-// my_issues still lists another user's issues across every project on
-// GitLab.com, which refuses the scope=all its REST read sends (issue 1779).
+// my_issues still lists another user's issues across every project when
+// GitLab.com refuses the scope=all its REST read sends (issue 1779).
 //
 // GraphQL's root issue list is not behind that refusal, and the issue
 // dashboard of GitLab.com reads it, so the prompt reads it in its place, once,
@@ -940,7 +943,7 @@ func TestMyIssues_GraphQLListAnsweredInPart_SaysSo(t *testing.T) {
 // say the user has no issues, which nobody knows), and an iid that is not the
 // number GitLab sends as a String.
 func TestMyIssues_GraphQLListFails_ReportsBothReads(t *testing.T) {
-	const both = "failed to list issues: GitLab.com refuses scope=all on the REST issue list, and the GraphQL issue list read in its place failed: "
+	const both = "failed to list issues: GitLab.com refused scope=all on the REST issue list, and the GraphQL issue list read in its place failed: "
 	for _, tt := range []struct {
 		name    string
 		graphQL http.HandlerFunc
