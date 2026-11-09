@@ -40,6 +40,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -208,6 +209,29 @@ func skipNotice(test, reason string) string {
 	return test + ": " + strings.Join(strings.Fields(reason), " ")
 }
 
+// requireDocker ends the calling test unless Docker is present and usable:
+// a skip, or a failure where dockerMustRun says Docker is expected.
+func requireDocker(t *testing.T) {
+	t.Helper()
+	if err := dockerUnusable(t.Context()); err != nil {
+		environmentUnavailablef(t, "%v", err)
+	}
+}
+
+// dockerUnusable says why Docker cannot run a case here, or returns nil when
+// it can.
+func dockerUnusable(ctx context.Context) error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return errors.New("docker not available; a proxy or a balancer is run rather than modeled, so this case cannot run without it")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
+		return fmt.Errorf("docker is installed but not usable (%w), so this case cannot run", err)
+	}
+	return nil
+}
+
 // containerDir returns a directory a container's own user can read files
 // from, which t.TempDir is not: its per-test parent is created 0700 and never
 // handed out, and a bind mount below it stops another user at that component.
@@ -248,7 +272,20 @@ func writeContainerFile(t *testing.T, dir, name, body string) string {
 func startContainer(t *testing.T, name, image string, mounts []string, args ...string) {
 	t.Helper()
 	requireDocker(t)
+	if out, err := runContainer(t, name, image, mounts, args...); err != nil {
+		environmentUnavailablef(t, "could not start %s (%v):\n%s", image, err, out)
+	}
+}
 
+// runContainer is startContainer without the decision: it returns what docker
+// run printed and why it failed, for a case that does not skip, and removes
+// the container when the test ends once it has started.
+//
+// Only once it has started: a run refused because the name is taken leaves
+// the name to the container that holds it, which another case started and
+// still needs.
+func runContainer(t *testing.T, name, image string, mounts []string, args ...string) ([]byte, error) {
+	t.Helper()
 	runArgs := []string{"run", "-d", "--name", name, "--network", "host"}
 	for _, mount := range mounts {
 		runArgs = append(runArgs, "-v", mount)
@@ -259,13 +296,20 @@ func startContainer(t *testing.T, name, image string, mounts []string, args ...s
 	defer cancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
 	if err != nil {
-		environmentUnavailablef(t, "could not start %s (%v):\n%s", image, err, out)
+		return out, err
 	}
 	t.Cleanup(func() {
 		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer rmCancel()
-		_ = exec.CommandContext(rmCtx, "docker", "rm", "-f", name).Run()
+		// Logged rather than failed, so a daemon slow to remove a container
+		// does not fail a case that passed; named, because the container a
+		// failed removal leaves behind can be the quick tunnel's, and its
+		// public address stays open until it is removed.
+		if rmOut, rmErr := exec.CommandContext(rmCtx, "docker", "rm", "-f", name).CombinedOutput(); rmErr != nil {
+			t.Logf("docker rm -f %s: %v: %s; remove it by hand", name, rmErr, strings.TrimSpace(string(rmOut)))
+		}
 	})
+	return out, nil
 }
 
 // containerLogs returns what a container has written, for a failure message.
@@ -285,6 +329,14 @@ type publicCert struct {
 	// a proxy that is handed one, under the names Let's Encrypt gives them).
 	dir  string
 	pool *x509.CertPool
+	// chain and key are the leaf's PEM files' contents.
+	chain, key string
+}
+
+// combinedPEM is the leaf, its chain and its key in one file, which is how
+// HAProxy reads a certificate.
+func (c *publicCert) combinedPEM() string {
+	return c.chain + c.key
 }
 
 // newPublicCert issues a fresh root and a certificate for publicHost.
@@ -330,14 +382,16 @@ func newPublicCert(t *testing.T) *publicCert {
 
 	dir := containerDir(t)
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+	chain := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})) + string(caPEM)
+	key := string(keyPEM(t, leafKey))
 	writeContainerFile(t, dir, "ca.crt", string(caPEM))
 	writeContainerFile(t, dir, "ca.key", string(keyPEM(t, caKey)))
-	writeContainerFile(t, dir, "fullchain.pem", string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}))+string(caPEM))
-	writeContainerFile(t, dir, "privkey.pem", string(keyPEM(t, leafKey)))
+	writeContainerFile(t, dir, "fullchain.pem", chain)
+	writeContainerFile(t, dir, "privkey.pem", key)
 
 	pool := x509.NewCertPool()
 	pool.AddCert(ca)
-	return &publicCert{dir: dir, pool: pool}
+	return &publicCert{dir: dir, pool: pool, chain: chain, key: key}
 }
 
 // newKey generates a P-256 key.
@@ -411,43 +465,186 @@ func throughProxy(t *testing.T, scheme string, port int, roots *x509.CertPool, f
 	return &server{baseURL: scheme + "://" + publicHost, logs: logs, client: client}
 }
 
-// awaitForwarding polls a proxy until it forwards a health check to the server
-// behind it.
+// serverCSP is the Content-Security-Policy the server sets on every response
+// it writes, a refusal included, and that no documented proxy sets: a response
+// carrying it came from the server.
+const serverCSP = "default-src 'none'; frame-ancestors 'none'"
+
+// awaitForwarding polls a proxy until a request through it reaches the server
+// behind it, whatever the server answers.
 //
 // A proxy that never answers is a container that did not come up, which is
-// the environment. One that answers with the gateway errors of an upstream it
-// cannot reach, for as long as the server behind it has already been
+// the environment, unless it exited. One that answers and never with the
+// server's own headers, for as long as the server behind it has already been
 // serving, is the block this case served, and that fails: the configuration
 // does not reach the server it names.
-func awaitForwarding(t *testing.T, through *server, container string) {
+//
+// It returns errPortRace, for the caller to try another port, when the
+// container exited because something else bound its port first; every other
+// outcome but forwarding ends the test.
+func awaitForwarding(t *testing.T, through *server, path, container string) error {
 	t.Helper()
 	deadline := time.Now().Add(45 * time.Second)
 	var lastErr error
 	lastStatus := 0
-	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, through.baseURL+"/health", http.NoBody)
+	for poll := 0; time.Now().Before(deadline); poll++ {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, through.baseURL+path, http.NoBody)
 		if err != nil {
-			t.Fatalf("building the health request: %v", err)
+			t.Fatalf("building the readiness request: %v", err)
 		}
 		resp, err := through.httpClient().Do(req)
 		if err != nil {
 			lastErr = err
 		} else {
 			_ = resp.Body.Close()
-			switch resp.StatusCode {
-			case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-				lastStatus = resp.StatusCode
-			default:
-				return
+			if resp.Header.Get("Content-Security-Policy") == serverCSP {
+				return nil
+			}
+			lastStatus = resp.StatusCode
+		}
+		// Asked once a second rather than on every poll: an exit is
+		// rare, and docker inspect is not free.
+		if poll%4 == 3 {
+			if exitErr := exitedContainer(t, container); exitErr != nil {
+				return exitErr
 			}
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
 	if lastStatus != 0 {
-		t.Fatalf("%s answered and never forwarded (last status %d), with the server behind it already serving: the block served does not reach the upstream it names.\n%s",
-			container, lastStatus, containerLogs(container))
+		t.Fatalf("%s answered GET %s and never with the server's answer (last status %d), with the server behind it already serving: the block served does not reach the upstream it names.\n%s",
+			container, path, lastStatus, containerLogs(container))
+	}
+	if err := exitedContainer(t, container); err != nil {
+		return err
 	}
 	environmentUnavailablef(t, "%s never answered a request (%v); the container did not come up:\n%s", container, lastErr, containerLogs(container))
+	return nil
+}
+
+// errPortRace is a container that exited because another listener bound the
+// port the case had picked for it, in the moment between freePort releasing
+// the port and the container binding it. Every test here picks ports that
+// way and runs beside others, so it happens, and another port answers it.
+var errPortRace = errors.New("another listener took the port before the container bound it")
+
+// addressInUse is how the proxies here log that race.
+var addressInUse = regexp.MustCompile(`(?i)address (already )?in use|cannot bind socket`)
+
+// portRaceAttempts is how many ports a case tries before the race is taken
+// for something else.
+const portRaceAttempts = 3
+
+// loopbackBind is the address every proxy here listens on, where the
+// documented block listens on every interface.
+//
+// A wildcard listener and one on 127.0.0.1 can both hold a port when both
+// ask for address reuse, which Go's listeners and these proxies do, and the
+// one on 127.0.0.1 then takes every connection the case's client makes. A
+// server that took the case's port in the race above would answer the case
+// instead of the proxy, and the case would read a plain HTTP answer where it
+// expected TLS. Two listeners on one address cannot share the port, so the
+// proxy fails to bind and the race is seen for what it is.
+const loopbackBind = "127.0.0.1"
+
+// exitedContainer ends the test when a container has exited, unless it exited
+// because its port was taken, which it returns as errPortRace.
+//
+// An image that could not be pulled fails before the container exists, and
+// a container that runs and does not answer is the machine's to explain. One
+// that started and stopped for any other reason refused the configuration it
+// was given, which on a page that changed is the page's doing, and that is a
+// failure wherever the case runs.
+func exitedContainer(t *testing.T, container string) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Running}} {{.State.ExitCode}}", container).Output()
+	if err != nil {
+		return nil
+	}
+	state := strings.Fields(string(out))
+	if len(state) != 2 || state[0] != "false" {
+		return nil
+	}
+	logs := containerLogs(container)
+	if addressInUse.MatchString(logs) {
+		return fmt.Errorf("%s: %w", container, errPortRace)
+	}
+	t.Fatalf("%s exited with status %s: it refused the configuration this case served.\n%s", container, state[1], logs)
+	return nil
+}
+
+// requireStillRunning fails the test when a container that never answered
+// has exited, whatever the reason.
+func requireStillRunning(t *testing.T, container string) {
+	t.Helper()
+	if err := exitedContainer(t, container); err != nil {
+		t.Fatalf("%v; this container's port is not the case's to change", err)
+	}
+}
+
+// startServerOnFreePort starts a server on a port the case picks, as a proxy
+// in front of it has to name the port before the server starts, and picks
+// another when a listener took the first in the meantime.
+func startServerOnFreePort(t *testing.T, flags ...string) (int, *server) {
+	t.Helper()
+	for attempt := 1; ; attempt++ {
+		port := freePort(t)
+		srv, err := tryStartServerOnPort(t, port, nil, flags...)
+		if err == nil {
+			return port, srv
+		}
+		if !errors.Is(err, errPortTaken) || attempt == portRaceAttempts {
+			t.Fatalf("starting the server on port %d: %v", port, err)
+		}
+	}
+}
+
+// runOnce runs image to completion with no network and returns what it
+// printed and whether it exited zero. The image is pulled first, so a pull
+// failure is the environment's and a nonzero exit is the command's.
+func runOnce(t *testing.T, image string, mounts []string, args ...string) (string, error) {
+	t.Helper()
+	requireDocker(t)
+	pullCtx, pullCancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer pullCancel()
+	if exec.CommandContext(pullCtx, "docker", "image", "inspect", image).Run() != nil {
+		if out, err := exec.CommandContext(pullCtx, "docker", "pull", "-q", image).CombinedOutput(); err != nil {
+			environmentUnavailablef(t, "could not pull %s (%v):\n%s", image, err, out)
+		}
+	}
+	runArgs := []string{"run", "--rm", "--network", "none"}
+	for _, mount := range mounts {
+		runArgs = append(runArgs, "-v", mount)
+	}
+	runArgs = append(runArgs, image)
+	runArgs = append(runArgs, args...)
+	runCtx, runCancel := context.WithTimeout(t.Context(), time.Minute)
+	defer runCancel()
+	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
+	return string(out), err
+}
+
+// guideProse returns the one paragraph of an English page that contains
+// marker, with its line breaks folded, so a case can hold what the page says
+// in a sentence (a flag to pair, a module list, a rule) to what the case does.
+func guideProse(t *testing.T, page, marker string) string {
+	t.Helper()
+	src, err := os.ReadFile(filepath.Join(docsDir(), filepath.FromSlash(page)))
+	if err != nil {
+		t.Fatalf("reading %s: %v", page, err)
+	}
+	var found []string
+	for paragraph := range strings.SplitSeq(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n\n") {
+		if folded := strings.Join(strings.Fields(paragraph), " "); strings.Contains(folded, marker) {
+			found = append(found, folded)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("%s has %d paragraphs saying %q, want exactly one: the case reads what that sentence says, so the page and the case have to change together", page, len(found), marker)
+	}
+	return found[0]
 }
 
 // tokenGitLab is a GitLab that accepts the tokens it was given and refuses
@@ -516,6 +713,9 @@ type documentedProxy struct {
 	// clientHeader is the header the guide pairs with --trusted-proxy-header
 	// for this proxy, with --trusted-proxies=127.0.0.1.
 	clientHeader string
+	// ready is the path polled until the proxy forwards it; /health when
+	// empty, for a route that does not reach the server's root.
+	ready string
 }
 
 // scheme is how a client reaches the proxy.
@@ -538,12 +738,23 @@ type proxied struct {
 // and waits until the proxy forwards to it.
 func (p documentedProxy) behind(t *testing.T, flags ...string) proxied {
 	t.Helper()
-	upstream := freePort(t)
-	srv := startServerOnPort(t, upstream, nil, flags...)
-	container, port := p.start(t, upstream)
-	running := proxied{proxy: p, port: port, logs: srv.logs}
-	awaitForwarding(t, running.from(t, clientForHeaders), container)
-	return running
+	upstream, srv := startServerOnFreePort(t, flags...)
+	ready := p.ready
+	if ready == "" {
+		ready = "/health"
+	}
+	for attempt := 1; ; attempt++ {
+		container, port := p.start(t, upstream)
+		running := proxied{proxy: p, port: port, logs: srv.logs}
+		err := awaitForwarding(t, running.from(t, clientForHeaders), ready, container)
+		if err == nil {
+			return running
+		}
+		if attempt == portRaceAttempts {
+			t.Fatalf("%v, on %d ports in a row", err, attempt)
+		}
+		t.Logf("%v; starting it again on another port", err)
+	}
 }
 
 // from returns a handle that reaches the server through the proxy from
