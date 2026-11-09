@@ -1146,15 +1146,15 @@ The server logs to stderr in JSON. Durations are `slog`'s rendering of a Go `tim
 
 ```json
 {"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"held_requests_per_process":229120,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"credential_hash":"3f9a0c17be52d8e4"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"detected","scopes_detected":true,"credential_hash":"a61d4e09c3b7f285"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"tier":"free","tier_source":"detected","scopes_detected":true,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"3f9a0c17be52d8e4"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"tier":"ultimate","tier_source":"detected","scopes_detected":true,"gitlab_url":"https://gitlab.example.com","enterprise":true,"credential_hash":"a61d4e09c3b7f285"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"credential_hash":"3f9a0c17be52d8e4"}
-{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
-{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"in_use":false,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"3f9a0c17be52d8e4"}
+{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"in_use":true,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"7c2e95b04d1af836"}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
-Under `--stateless=false` the startup line also carries `stateful_sessions_per_process`. The two eviction lines are separate messages rather than one message at two levels, so an operator can filter for exactly one of them. The `WARN` is the busy fallback of [Session lifecycle](#session-lifecycle): the pool held nothing quiet to take, so an entry serving a subscription went and that client's watch ended. It is a signal rather than an error, and `max_size` on the line is the number to raise. The same event is counted as `size_pressure_busy` on `gitlab_mcp.credential_pool.evictions` for a deployment running [telemetry](/gitlab-mcp-server/operations/telemetry/).
+Every line the pool writes about one entry ends with `gitlab_url`, `enterprise` and the credential's [handle](/gitlab-mcp-server/operations/security/#does-the-token-appear-in-logs), `credential_hash`, so the `INFO` eviction above can be matched to the entry the first credential created. Under `--stateless=false` the startup line also carries `stateful_sessions_per_process`. The two eviction lines are separate messages rather than one message at two levels, so an operator can filter for exactly one of them. The `WARN` is the busy fallback of [Session lifecycle](#session-lifecycle): the pool held nothing quiet to take, so an entry serving a subscription went and that client's watch ended. It is a signal rather than an error, and `max_size` on the line is the number to raise. The same event is counted as `size_pressure_busy` on `gitlab_mcp.credential_pool.evictions` for a deployment running [telemetry](/gitlab-mcp-server/operations/telemetry/).
 
 ## Health check
 

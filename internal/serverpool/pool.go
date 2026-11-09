@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -95,12 +96,13 @@ type Entry struct {
 	// entry is built.
 	rememberBelowMinimum func()
 	// credentialHash is [CredentialHash] of the entry's credential, so that
-	// the lines dropping the entry for a rejected or below-minimum credential
-	// name it by the handle the created-entry line wrote. It is set when the
-	// entry is built, before anything can observe it, and never changed.
-	// Holding it keeps no credential material: it is the keyed digest that
-	// line already writes, and the key never leaves the process. It is not
-	// the pool key, an unkeyed digest of the token and URL that is never logged.
+	// every line the pool writes about the entry, from its build to the line
+	// that ends it, names it by the one handle ([entryLogArgs]). It is
+	// computed when the entry's build starts, before anything can observe it,
+	// and never changed. Holding it keeps no credential material: it is the
+	// keyed digest those lines write, and the key never leaves the process.
+	// It is not the pool key, an unkeyed digest of the token and URL that is
+	// never logged.
 	credentialHash string
 }
 
@@ -875,7 +877,10 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		return nil, verifyErr
 	}
 
-	entryCfg, facts, err := p.entryConfig(client, gitlabURL, known)
+	// The handle every line about this entry names it by, the fine-grained
+	// authority lines entryConfig writes before the entry exists among them.
+	handle := CredentialHash(token)
+	entryCfg, facts, err := p.entryConfig(client, gitlabURL, known, handle)
 	if err != nil {
 		return nil, err
 	}
@@ -897,11 +902,10 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
-		identity:     resolveIdentity(p.lifetime(), client),
 		// Minted before anything can observe the entry, and never again: see
 		// [Entry.Owner] for why it is random rather than derived.
 		owner:          rand.Text(),
-		credentialHash: CredentialHash(token),
+		credentialHash: handle,
 		token:          facts,
 		rememberBelowMinimum: func() {
 			if record := p.belowMinimum.Load(); record != nil {
@@ -909,6 +913,10 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 			}
 		},
 	}
+	// Resolved once the entry exists, so the lines saying the user could not
+	// be resolved name it like every other line about it. Nothing else can
+	// observe the entry yet.
+	entry.identity = resolveIdentity(p.lifetime(), entry)
 	// The first data call GitLab refuses is the revocation signal. Without
 	// this, a token revoked while its entry was live kept being served until
 	// the periodic re-check, up to an hour, and every call in between was
@@ -1028,7 +1036,7 @@ func (p *ServerPool) confirmUnexplainedRefusal(key string, entry *Entry) {
 	}
 	release, ok := p.tryProbeSlot()
 	if !ok {
-		slog.Debug("server pool: no credential probe slot free to confirm a 401, keeping the entry")
+		slog.Debug("server pool: no credential probe slot free to confirm a 401, keeping the entry", entryLogArgs(entry)...)
 		return
 	}
 	defer release()
@@ -1050,7 +1058,7 @@ func (p *ServerPool) confirmUnexplainedRefusal(key string, entry *Entry) {
 	case gitlabclient.CredentialAccepted, gitlabclient.CredentialAcceptedPermissionMissing:
 		p.keepConfirmedEntry(key, entry)
 	default:
-		slog.Debug("server pool: could not confirm a 401 that named no cause, keeping the entry")
+		slog.Debug("server pool: could not confirm a 401 that named no cause, keeping the entry", entryLogArgs(entry)...)
 	}
 }
 
@@ -1095,9 +1103,8 @@ func (p *ServerPool) keepConfirmedEntry(key string, entry *Entry) {
 		return
 	}
 	p.metrics.UnauthorizedKept.Add(1)
-	gitlabURL, _ := entryConfigLogValues(entry)
 	slog.Debug("server pool: gitlab refused a call with 401 and still accepts the credential, keeping the entry",
-		"gitlab_url", gitlabURL)
+		entryLogArgs(entry)...)
 }
 
 // evictRejectedCredential drops entry, if it is still the one under key: a
@@ -1118,32 +1125,29 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 // request that finds the entry already marked both call it, so whichever
 // takes the lock first logs and the other finds nothing to drop.
 func (p *ServerPool) dropRejectedCredential(key string, entry *Entry) {
-	gitlabURL, size, dropped := p.dropRejectedEntry(key, entry)
+	size, dropped := p.dropRejectedEntry(key, entry)
 	if !dropped {
 		return
 	}
 	slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
-		"gitlab_url", gitlabURL,
-		"pool_size", size,
-		telemetry.LogFieldCredentialHash, entry.credentialHash)
+		entryLogArgs(entry, "pool_size", size)...)
 }
 
 // dropRejectedEntry removes entry under the lock, if it is still the one
-// under key, and reports what to log about it.
-func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (gitlabURL string, size int, dropped bool) {
+// under key, and reports the pool's size once it is gone.
+func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (size int, dropped bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	current, ok := p.entries[key]
 	if !ok || current != entry {
-		return "", 0, false
+		return 0, false
 	}
-	gitlabURL, _ = entryConfigLogValues(entry)
 	if entry.element != nil {
 		p.lru.Remove(entry.element)
 	}
 	p.metrics.RejectedCredentialEvictions.Add(1)
 	p.dropEntry(key, CauseRejectedCredential)
-	return gitlabURL, len(p.entries), true
+	return len(p.entries), true
 }
 
 // evictBelowMinimum drops entry, if it is still the one under key, because
@@ -1159,7 +1163,7 @@ func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (gitlabURL stri
 // eviction callback or the record stops there as it would for any other
 // removal those make.
 func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *Entry) {
-	gitlabURL, size, dropped := p.dropBelowMinimumEntry(key, entry)
+	size, dropped := p.dropBelowMinimumEntry(key, entry)
 	if !dropped {
 		return
 	}
@@ -1169,29 +1173,29 @@ func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *E
 		entry.rememberBelowMinimum()
 	}
 	slog.InfoContext(ctx, "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
-		"gitlab_url", gitlabURL,
-		"pool_size", size,
-		telemetry.LogFieldCredentialHash, entry.credentialHash)
+		entryLogArgs(entry, "pool_size", size)...)
 }
 
 // dropBelowMinimumEntry removes entry under the lock, if it is still the one
-// under key, and reports what to log about it.
-func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (gitlabURL string, size int, dropped bool) {
+// under key, and reports the pool's size once it is gone.
+func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (size int, dropped bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if current, ok := p.entries[key]; !ok || current != entry {
-		return "", 0, false
+		return 0, false
 	}
-	gitlabURL, _ = entryConfigLogValues(entry)
 	// An entry the map holds was given its element when it was inserted, so
 	// it is removed unguarded, as evictStaleCredential removes one.
 	p.lru.Remove(entry.element)
 	p.metrics.BelowMinimumEvictions.Add(1)
 	p.dropEntry(key, CauseBelowMinimum)
-	return gitlabURL, len(p.entries), true
+	return len(p.entries), true
 }
 
-// resolveIdentity looks up the GitLab user behind a pooled credential.
+// resolveIdentity looks up the GitLab user behind a pooled credential, with
+// the client of the entry being built for it, which nothing else can observe
+// yet. The entry is taken whole so the lines saying the user could not be
+// resolved name it as every other line about it does.
 //
 // Cost is one call per pool entry, not per request, alongside the tier and
 // scope lookups the entry already performs. A failure is not fatal: the
@@ -1205,13 +1209,13 @@ func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (gitlabURL 
 // same credential. Deriving from the request that happened to trigger
 // construction would let one client disconnecting abort a build that other
 // requests are already waiting on, and leave the next one to start it over.
-func resolveIdentity(base context.Context, client *gitlabclient.Client) UserIdentity {
+func resolveIdentity(base context.Context, entry *Entry) UserIdentity {
 	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
 
-	info, err := client.CurrentUser(ctx)
+	info, err := entry.client.CurrentUser(ctx)
 	if err != nil {
-		slog.Debug("could not resolve the user behind a pooled token", "error", err)
+		slog.Debug("could not resolve the user behind a pooled token", entryLogArgs(entry, "error", err)...)
 		return UserIdentity{}
 	}
 	// A zero id is not user zero: no such user can exist. GitLab's users.id
@@ -1221,7 +1225,7 @@ func resolveIdentity(base context.Context, client *gitlabclient.Client) UserIden
 	// response carried no id, and formatting it would put the string "0" in
 	// the logs as though it were a real user.
 	if info.UserID == 0 {
-		slog.Debug("gitlab returned no user id for a pooled token")
+		slog.Debug("gitlab returned no user id for a pooled token", entryLogArgs(entry)...)
 		return UserIdentity{}
 	}
 	return UserIdentity{UserID: strconv.Itoa(info.UserID), Username: info.Username}
@@ -1322,16 +1326,12 @@ func (p *ServerPool) insertEntry(key string, entry *Entry) *Entry {
 		return entry
 	}
 
-	slog.Info(
-		"server pool: created new entry",
+	slog.Info("server pool: created new entry", entryLogArgs(entry,
 		"pool_size", len(p.entries),
-		"gitlab_url", entry.serverConfig.GitLabURL,
 		"tier", entry.serverConfig.Tier.String(),
-		"enterprise", entry.serverConfig.Enterprise(),
 		"tier_source", p.tierSource(),
 		"scopes_detected", entry.serverConfig.TokenScopes != nil,
-		telemetry.LogFieldCredentialHash, entry.credentialHash,
-	)
+	)...)
 
 	return entry
 }
@@ -1351,13 +1351,8 @@ func (p *ServerPool) dropRefusedEntry(key string, entry *Entry) {
 	p.dropEntry(key, CauseRebuild)
 	p.metrics.Evictions.Add(1)
 	p.metrics.RebuildEvictions.Add(1)
-	gitlabURL, enterprise := entryConfigLogValues(entry)
-	slog.Warn(
-		"server pool: dropped a new entry whose server was already unusable",
-		"pool_size", len(p.entries),
-		"gitlab_url", gitlabURL,
-		"enterprise", enterprise,
-	)
+	slog.Warn("server pool: dropped a new entry whose server was already unusable",
+		entryLogArgs(entry, "pool_size", len(p.entries))...)
 }
 
 // existingEntryLocked returns an existing entry for key while p.mu is held.
@@ -1625,8 +1620,10 @@ const entryDetectTimeout = 10 * time.Second
 //
 // The token is asked about before the tier, so a token refused for its scopes
 // costs no tier request and leaves no warning about a tier nobody will be
-// served.
-func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts) (*config.ServerConfig, gitlabclient.TokenFacts, error) {
+// served. The handle is the credential's [CredentialHash], which the lines
+// about a fine-grained token's authority name it by, as every later line
+// about its entry does.
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts, handle string) (*config.ServerConfig, gitlabclient.TokenFacts, error) {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
@@ -1672,7 +1669,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// What a fine-grained token may be shown, on the entry's own client, since
 	// the entry is per credential and every request of it binds that client
 	// (register rows AUT-007 and AUT-008). A classic token gets nil.
-	authority, err := p.fineGrainedAuthority(ctx, client, facts)
+	authority, err := p.fineGrainedAuthority(ctx, client, facts, entryCfg, handle)
 	if err != nil {
 		return nil, facts, err
 	}
@@ -1708,8 +1705,10 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 // evaluated, and in phase B that it was read and what it decides, so an
 // operator can tell an entry judged by its grant from a classic one, and one
 // on the prerelease past the table, judged for the listing alone, from one
-// judged for the calls too (issue 1417).
-func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts) (*finegrained.Authority, error) {
+// judged for the calls too (issue 1417). The line names the credential as
+// every line about its entry does ([credentialLogArgs]), by the configuration
+// being built for it and its handle, since the entry does not exist yet.
+func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabclient.Client, facts gitlabclient.TokenFacts, entryCfg *config.ServerConfig, handle string) (*finegrained.Authority, error) {
 	if !facts.FineGrained {
 		return nil, nil //nolint:nilnil // no authority and no error is what a token that is not fine-grained is worth, and the entry stores it as such
 	}
@@ -1723,11 +1722,11 @@ func (p *ServerPool) fineGrainedAuthority(ctx context.Context, client *gitlabcli
 	authority := actiongrants.Build(true, reading)
 	if authority.Phase() == finegrained.PhaseUnknown {
 		slog.InfoContext(ctx, "server pool: a fine-grained token's grant was not evaluated; withholding what no grant reaches",
-			authority.LogArgs()...)
+			credentialLogArgs(entryCfg, handle, authority.LogArgs()...)...)
 		return authority, nil
 	}
 	slog.InfoContext(ctx, "server pool: a fine-grained token's grant was read; it decides "+authority.GrantDecides(),
-		authority.LogArgs()...)
+		credentialLogArgs(entryCfg, handle, authority.LogArgs()...)...)
 	return authority, nil
 }
 
@@ -1754,9 +1753,10 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 // upgraded to a release no table records, is logged with the same arguments an
 // entry build logs its authority with, and one that found the verdict it had
 // writes nothing; one that kept the authority is logged once per entry, with
-// its reason and nothing else. An entry whose token's kind is still unknown is
-// asked that instead ([redetectKind]), and ends if the answer names scopes
-// below the admission minimum, as admission would have refused it.
+// its reason and the pairs naming the entry. An entry whose token's kind is
+// still unknown is asked that instead ([redetectKind]), and ends if the answer
+// names scopes below the admission minimum, as admission would have refused
+// it.
 func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *Entry) {
 	facts := entry.tokenFacts()
 	if facts.KindUnknown {
@@ -1767,12 +1767,13 @@ func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *En
 	}
 	moved, reason := entry.client.RefreshAuthority(ctx, facts, actiongrants.Table())
 	if moved != nil {
-		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read moved what it is shown", moved.LogArgs()...)
+		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read moved what it is shown",
+			entryLogArgs(entry, moved.LogArgs()...)...)
 		return
 	}
 	if reason != "" && entry.rereadKept.CompareAndSwap(false, true) {
 		slog.InfoContext(ctx, "server pool: a fine-grained token's re-read could not be used; keeping what it was shown",
-			"reason", reason)
+			entryLogArgs(entry, "reason", reason)...)
 	}
 }
 
@@ -1813,7 +1814,7 @@ func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
 	}
 	authority := actiongrants.Build(true, entry.client.ReadFineGrained(ctx, detected))
 	slog.InfoContext(ctx, "server pool: a token whose kind was not known is a fine-grained one; serving it what it may be shown",
-		authority.LogArgs()...)
+		entryLogArgs(entry, authority.LogArgs()...)...)
 	entry.client.SetAuthority(authority)
 	return false
 }
@@ -1943,7 +1944,6 @@ func (p *ServerPool) evictLRU() {
 	}
 	key, _ := victim.Value.(string)
 	if entry := p.dropEntry(key, CauseSizePressure); entry != nil {
-		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.metrics.Evictions.Add(1)
 		// Two messages rather than one message at two levels, so an operator
 		// can grep for exactly this event. The busy one is the fallback firing:
@@ -1952,24 +1952,18 @@ func (p *ServerPool) evictLRU() {
 		// raise is on the line beside it.
 		if busy {
 			p.metrics.BusyEvictions.Add(1)
-			slog.Warn(
-				"server pool: evicted an entry that was serving a subscription",
+			slog.Warn("server pool: evicted an entry that was serving a subscription", entryLogArgs(entry,
 				"pool_size", len(p.entries),
 				"max_size", p.maxSize,
-				"gitlab_url", gitlabURL,
-				"enterprise", enterprise,
 				"in_use", true,
-			)
+			)...)
 		} else {
 			p.metrics.SizeEvictions.Add(1)
-			slog.Info(
-				"server pool: evicted LRU entry",
+			slog.Info("server pool: evicted LRU entry", entryLogArgs(entry,
 				"pool_size", len(p.entries),
 				"max_size", p.maxSize,
-				"gitlab_url", gitlabURL,
-				"enterprise", enterprise,
 				"in_use", false,
-			)
+			)...)
 		}
 	}
 	p.lru.Remove(victim)
@@ -2043,10 +2037,10 @@ func newCredentialHashKey() []byte {
 // It replaced the token's last four characters, which were credential material
 // in clear: four characters of a working token on every pooled credential, or
 // most of a short secret pasted where a token belongs. The handle keeps what
-// the suffix was there for, tying a refusal, a pool entry's creation and its
-// drop for a rejected or below-minimum credential, and an ignored-options
-// warning to the same credential within one process, and nothing else.
-// It is keyed rather than a plain digest so that a log cannot
+// the suffix was there for, tying a refusal, every line the pool writes about
+// an entry from its build to whatever ends it ([entryLogArgs]), and an
+// ignored-options warning to the same credential within one process, and
+// nothing else. It is keyed rather than a plain digest so that a log cannot
 // confirm a guess: hashing a candidate password yields its handle only with the
 // key, and the key never leaves the process. The price is that an operator
 // cannot compute the handle from a client's token, and that one credential's
@@ -2188,17 +2182,13 @@ func (p *ServerPool) evictIdle() {
 			p.lru.MoveToFront(entry.element)
 			continue
 		}
-		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key, CauseIdle)
 		p.metrics.IdleEvictions.Add(1)
-		slog.Info(
-			"server pool: evicted idle entry",
+		slog.Info("server pool: evicted idle entry", entryLogArgs(entry,
 			"pool_size", len(p.entries),
 			"idle_for", time.Since(entry.lastUsed).Round(time.Second),
-			"gitlab_url", gitlabURL,
-			"enterprise", enterprise,
-		)
+		)...)
 	}
 }
 
@@ -2286,11 +2276,10 @@ func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Ent
 	// the entry already serves what its grant allows.
 	switch check.Verdict {
 	case gitlabclient.CredentialRefused:
-		slog.WarnContext(ctx,
-			"server pool: gitlab rejected a pooled credential, evicting entry",
+		slog.WarnContext(ctx, "server pool: gitlab rejected a pooled credential, evicting entry", entryLogArgs(entry,
 			"status", check.Status,
 			"age", time.Since(entry.createdAt).Round(time.Second),
-		)
+		)...)
 		p.metrics.RevalidationsFailed.Add(1)
 		p.evictByKey(key)
 	case gitlabclient.CredentialAcceptedBelowMinimum:
@@ -2316,12 +2305,11 @@ func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Ent
 		// learns the kind of a token its build could not tell.
 		p.refreshAuthority(checkCtx, key, entry)
 	default:
-		slog.WarnContext(ctx,
-			"server pool: token revalidation could not reach a verdict, keeping entry",
+		slog.WarnContext(ctx, "server pool: token revalidation could not reach a verdict, keeping entry", entryLogArgs(entry,
 			"status", check.Status,
 			"error", check.Err,
 			"age", time.Since(entry.createdAt).Round(time.Second),
-		)
+		)...)
 		p.metrics.RevalidationsTransient.Add(1)
 	}
 }
@@ -2340,19 +2328,16 @@ func (p *ServerPool) evictStaleCredential(key string) {
 		p.mu.Unlock()
 		return
 	}
-	gitlabURL, _ := entryConfigLogValues(entry)
 	age := time.Since(entry.lastValidated).Round(time.Second)
 	p.lru.Remove(entry.element)
 	p.dropEntry(key, CauseStaleCredential)
 	p.metrics.StaleCredentialEvictions.Add(1)
 	p.mu.Unlock()
 
-	slog.Info(
-		"server pool: credential not re-checked within the ceiling, rebuilding entry",
+	slog.Info("server pool: credential not re-checked within the ceiling, rebuilding entry", entryLogArgs(entry,
 		"unverified_for", age,
 		"ceiling", p.maxCredentialAge,
-		"gitlab_url", gitlabURL,
-	)
+	)...)
 }
 
 // evictByKey removes the entry with the given key from the pool.
@@ -2360,17 +2345,11 @@ func (p *ServerPool) evictByKey(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if entry, ok := p.entries[key]; ok {
-		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key, CauseInvalidCredential)
 		p.metrics.Evictions.Add(1)
 		p.metrics.InvalidEvictions.Add(1)
-		slog.Info(
-			"server pool: evicted invalid entry",
-			"pool_size", len(p.entries),
-			"gitlab_url", gitlabURL,
-			"enterprise", enterprise,
-		)
+		slog.Info("server pool: evicted invalid entry", entryLogArgs(entry, "pool_size", len(p.entries))...)
 	}
 }
 
@@ -2410,27 +2389,56 @@ func (p *ServerPool) EvictServer(srv *mcp.Server) bool {
 		if entry.Server() != srv {
 			continue
 		}
-		gitlabURL, enterprise := entryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
 		p.dropEntry(key, CauseRebuild)
 		p.metrics.Evictions.Add(1)
 		p.metrics.RebuildEvictions.Add(1)
 		evicted = true
-		slog.Info(
-			"server pool: evicted entry whose build did not finish",
-			"pool_size", len(p.entries),
-			"gitlab_url", gitlabURL,
-			"enterprise", enterprise,
-		)
+		slog.Info("server pool: evicted entry whose build did not finish",
+			entryLogArgs(entry, "pool_size", len(p.entries))...)
 	}
 	return evicted
 }
 
-// entryConfigLogValues extracts safe configuration values for eviction
-// logs without requiring callers to nil-check partially initialized entries.
-func entryConfigLogValues(entry *Entry) (string, bool) {
-	if entry == nil || entry.serverConfig == nil {
-		return "", false
+// entryLogArgs returns args, the pairs a line about one pooled entry says of
+// what happened to it, followed by the pairs every such line names the entry
+// by ([credentialLogArgs]). Every line this package writes about one entry
+// goes through it, from the one that creates the entry to the one that ends
+// it, which is what lets an operator follow one credential through them all
+// by its handle, and what keeps a line added later from forgetting the handle.
+//
+// An entry that is not there at all is named by an empty instance and handle,
+// and one assembled without a configuration, as the tests assemble theirs, by
+// an empty instance, rather than by a panic: a log line is not worth one in an
+// eviction path.
+func entryLogArgs(entry *Entry, args ...any) []any {
+	if entry == nil {
+		return credentialLogArgs(nil, "", args...)
 	}
-	return entry.serverConfig.GitLabURL, entry.serverConfig.Enterprise()
+	return credentialLogArgs(entry.serverConfig, entry.credentialHash, args...)
+}
+
+// credentialLogArgs returns args followed by the three pairs that name the
+// credential a pool line is about: the instance it was presented to
+// (gitlab_url), whether that instance is licensed (enterprise), and the
+// credential's handle ([CredentialHash]) under
+// [telemetry.LogFieldCredentialHash], the name the OTLP export strips from
+// every record. Nothing of the token itself, no unkeyed digest of it and not
+// the pool key is among them.
+//
+// It takes the configuration and the handle rather than an entry because the
+// lines about a fine-grained token's authority are written while its entry is
+// still being built; [entryLogArgs] is the form every other line uses. args is
+// clipped before the pairs are appended, so the pairs always land in a new
+// array and never in spare capacity of a slice the caller still holds.
+func credentialLogArgs(entryCfg *config.ServerConfig, handle string, args ...any) []any {
+	gitlabURL, enterprise := "", false
+	if entryCfg != nil {
+		gitlabURL, enterprise = entryCfg.GitLabURL, entryCfg.Enterprise()
+	}
+	return append(slices.Clip(args),
+		"gitlab_url", gitlabURL,
+		"enterprise", enterprise,
+		telemetry.LogFieldCredentialHash, handle,
+	)
 }

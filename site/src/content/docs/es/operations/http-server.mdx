@@ -1148,15 +1148,15 @@ El servidor registra en stderr en formato JSON. Las duraciones son la forma en q
 
 ```json
 {"level":"INFO","msg":"starting MCP server in HTTP mode","addr":":8080","auth_mode":"legacy","max_clients":100,"held_requests_per_process":229120,"session_timeout":1800000000000,"stateless":true,"json_response":false,"trusted_proxy_header":"","trusted_proxies":null,"drain_delay":0}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"gitlab_url":"https://gitlab.com","tier":"free","enterprise":false,"tier_source":"detected","scopes_detected":true,"credential_hash":"3f9a0c17be52d8e4"}
-{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","tier":"ultimate","enterprise":true,"tier_source":"detected","scopes_detected":true,"credential_hash":"a61d4e09c3b7f285"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":1,"tier":"free","tier_source":"detected","scopes_detected":true,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"3f9a0c17be52d8e4"}
+{"level":"INFO","msg":"server pool: created new entry","pool_size":2,"tier":"ultimate","tier_source":"detected","scopes_detected":true,"gitlab_url":"https://gitlab.example.com","enterprise":true,"credential_hash":"a61d4e09c3b7f285"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"credential_hash":"3f9a0c17be52d8e4"}
-{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":false}
-{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"gitlab_url":"https://gitlab.com","enterprise":false,"in_use":true}
+{"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"max_size":100,"in_use":false,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"3f9a0c17be52d8e4"}
+{"level":"WARN","msg":"server pool: evicted an entry that was serving a subscription","pool_size":99,"max_size":100,"in_use":true,"gitlab_url":"https://gitlab.com","enterprise":false,"credential_hash":"7c2e95b04d1af836"}
 {"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
-Con `--stateless=false` la línea de arranque lleva también `stateful_sessions_per_process`. Las dos líneas de desalojo son mensajes distintos y no un mismo mensaje con dos niveles, para que un operador pueda filtrar exactamente uno de ellos. El `WARN` es el recurso de último caso del [Ciclo de vida de la sesión](#ciclo-de-vida-de-la-sesión): el pool no tenía nada inactivo que llevarse, así que se fue una entrada que atendía una suscripción y terminó la vigilancia de ese cliente. Es una señal, no un error, y `max_size` en la línea es el número que hay que subir. El mismo evento se cuenta como `size_pressure_busy` en `gitlab_mcp.credential_pool.evictions` en un despliegue con [telemetría](/gitlab-mcp-server/es/operations/telemetry/).
+Toda línea que el pool escribe sobre una entrada termina con `gitlab_url`, `enterprise` y el [identificador](/gitlab-mcp-server/es/operations/security/#el-token-aparece-en-los-logs) de la credencial, `credential_hash`, así que el desalojo `INFO` de arriba se puede asociar a la entrada que creó la primera credencial. Con `--stateless=false` la línea de arranque lleva también `stateful_sessions_per_process`. Las dos líneas de desalojo son mensajes distintos y no un mismo mensaje con dos niveles, para que un operador pueda filtrar exactamente uno de ellos. El `WARN` es el recurso de último caso del [Ciclo de vida de la sesión](#ciclo-de-vida-de-la-sesión): el pool no tenía nada inactivo que llevarse, así que se fue una entrada que atendía una suscripción y terminó la vigilancia de ese cliente. Es una señal, no un error, y `max_size` en la línea es el número que hay que subir. El mismo evento se cuenta como `size_pressure_busy` en `gitlab_mcp.credential_pool.evictions` en un despliegue con [telemetría](/gitlab-mcp-server/es/operations/telemetry/).
 
 ## Verificación de salud
 
