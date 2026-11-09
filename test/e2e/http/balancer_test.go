@@ -309,17 +309,28 @@ func TestBalancer_NginxConsistentHashPinsEachCredential(t *testing.T) {
 	}
 }
 
+// saltedDigestKey is the routing key the load balancing page promises for
+// HAProxy: the credential the frontend puts in txn.cred, with the salt
+// appended and the result digested, so the key never carries the credential.
+var saltedDigestKey = regexp.MustCompile(`(?m)^\s*balance hash var\(txn\.cred\),concat\([^()]+\),sha(1|2\([0-9]+\))(,hex)?\s*$`)
+
 // TestBalancer_HAProxyHashesADigestOfTheCredential is the second balancer,
 // and the one that never sees a raw credential in a routing key.
 //
 // The digest is computed in the balancer's own configuration, so nothing has
 // to be trusted to keep the token out of the hash bucket, the stick table or
-// a log line naming the variable. The assertion is the same as nginx's,
-// because the property being checked is that the digest is a function of the
-// credential: the same token must reach the same instance every time, and
-// different tokens must not all reach one.
+// a log line naming the variable. Each half of the case proves one thing.
+// The block's balance line shows the key is the salted digest, which no
+// request can: a raw credential pins and spreads too. The affinity
+// assertions, the same as nginx's, show HAProxy resolves that key: the same
+// token must reach the same instance every time, and different tokens must
+// not all reach one, while a sample expression HAProxy cannot resolve falls
+// back to round robin, which the first of them catches.
 func TestBalancer_HAProxyHashesADigestOfTheCredential(t *testing.T) {
 	t.Parallel()
+	if block := guideBlock(t, loadBalancingPage, "haproxy"); !saltedDigestKey.MatchString(block) {
+		t.Fatalf("the HAProxy block of %s no longer routes on a salted digest of txn.cred (no balance line matching %s); a raw credential pins and spreads too, so the affinity assertions below cannot tell the difference", loadBalancingPage, saltedDigestKey)
+	}
 	b := startDocumentedHAProxy(t, newPublicCert(t), instances(t))
 	assertEachCredentialPins(t, b, func(token string) [2]string {
 		return [2]string{"PRIVATE-TOKEN", token}
@@ -410,12 +421,17 @@ func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
 				break
 			}
 		}
-		if moved {
+		// Every request of the round was made before this check, so a
+		// round that ends before the deadline saw the move while the
+		// instance was still listening. One that ends after it saw nothing
+		// the window promises: a balancer that took the instance out only
+		// once the listener closed passes it too.
+		if moved && time.Now().Before(deadline) {
 			return
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	t.Errorf("the balancer was still routing to %s at the end of the drain window the page recommends (%v); "+
+	t.Errorf("the balancer was not seen moving every credential pinned to %s elsewhere before the end of the drain window the page recommends (%v); "+
 		"the instance answers /health with 503 while draining, so a polling balancer must eject it before the listener closes", target, drainDelay)
 }
 

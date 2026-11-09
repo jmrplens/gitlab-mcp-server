@@ -107,10 +107,10 @@ E2E_CALLS_DIR=dist/e2e-calls
 # children a GOCOVERDIR under here, one directory per target, cleared where the
 # calls directory is cleared: in run-docker-e2e.sh for the two Docker targets,
 # since CI invokes that script rather than the target, and in the recipe for
-# the self-hosted one and for the three transport modules. `make
-# e2e-go-coverage` merges what the run left, so a GitLab run and a transport
-# run fold into one figure. dist/ is gitignored, so `make clean` removes all of
-# it.
+# the self-hosted one, for the three transport modules and for the HTTP
+# module's Cloudflare Tunnel target. `make e2e-go-coverage` merges what the run
+# left, so a GitLab run and a transport run fold into one figure. dist/ is
+# gitignored, so `make clean` removes all of it.
 #
 # Two names for two things, the way E2E_CALLS_DIR and the exported
 # GITLAB_MCP_TEST_E2E_CALLS_DIR are two names: E2E_COVER_ROOT is the parent
@@ -446,10 +446,15 @@ test-e2e-http: ensure-gotestsum e2e-server-binary
 # went away (ssh without a terminal) does not end it at its first message, and
 # a closed terminal under which make itself leads the session (ssh -t host
 # make ...), whose HUP make does not pass on, ends the run at its next line of
-# output, which gotestsum cannot write. The names are read from the run's own JSON log, deleted
-# before the run starts, so a name an earlier run printed is never taken for
-# one of this run's. test-e2e-http clears the quick tunnel's switch, so this
-# is the only target that opens the tunnel.
+# output, which gotestsum cannot write. The names are read from the run's own
+# JSON log, named after the recipe shell's process ID so that two runs in one
+# checkout never share it (a second run used to delete the first one's log and
+# write its own in its place, and the first then removed the second's
+# container and left its own), and deleted before the run starts, so a name
+# an earlier run with that ID printed is never taken for one of this run's.
+# test-e2e-http clears the quick tunnel's switch, so this is the only target
+# that opens the tunnel. COVER=1 hands the run a leaf of its own, as every
+# other run target does.
 ifneq ($(filter test-e2e-cloudflare-tunnel,$(MAKECMDGOALS)),)
 ifneq ($(CI),)
 $(error test-e2e-cloudflare-tunnel never runs on CI (CI=$(CI)): its quick tunnel opens a public trycloudflare.com address to a server on this machine, see test/e2e/README.md)
@@ -457,7 +462,8 @@ endif
 endif
 test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	exec bash -o pipefail -c 'log=$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-log.json; pid=; \
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/cloudflare-tunnel))
+	exec bash -o pipefail -c 'log=$(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-log-$$$$.json; pid=; \
 	  rm -f "$$log"; \
 	  remove_named() { \
 	    trap "" PIPE; \
@@ -480,6 +486,7 @@ test-e2e-cloudflare-tunnel: ensure-gotestsum e2e-server-binary
 	  trap "stop HUP 129" HUP; \
 	  set -m; \
 	  E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) E2E_CLOUDFLARE_QUICK_TUNNEL=true E2E_HTTP_DOCKER=required \
+	  $(call e2e_cover_env,cloudflare-tunnel) \
 	  $(GOTESTSUM) \
 	  --format standard-verbose \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-cloudflare-tunnel-junit.xml \

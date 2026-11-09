@@ -49,6 +49,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/docblocks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // The pages whose blocks the cases serve, relative to the site's content root.
@@ -526,14 +527,26 @@ const serverCSP = "default-src 'none'; frame-ancestors 'none'"
 // the environment, unless it exited. One that answers and never with the
 // server's own headers, for as long as the server behind it has already been
 // serving, is the block this case served, and that fails: the configuration
-// does not reach the server it names.
+// does not reach the server it names. So does one that takes every request
+// and refuses it at the TLS layer (refusedAtTLS), which is up and serving a
+// certificate or a scheme the block did not mean.
 //
 // It returns errPortRace, for the caller to try another port, when the
 // container exited because something else bound its port first; every other
 // outcome but forwarding ends the test.
 func awaitForwarding(t *testing.T, through *server, path, container string) error {
 	t.Helper()
-	deadline := time.Now().Add(45 * time.Second)
+	return awaitForwardingWithin(t, through, path, container, forwardingWait)
+}
+
+// forwardingWait is how long awaitForwarding waits for a proxy to forward.
+const forwardingWait = 45 * time.Second
+
+// awaitForwardingWithin is awaitForwarding with the time it waits, which a
+// test of its own outcomes shortens.
+func awaitForwardingWithin(t *testing.T, through *server, path, container string, wait time.Duration) error {
+	t.Helper()
+	deadline := time.Now().Add(wait)
 	var lastErr error
 	lastStatus := 0
 	for poll := 0; time.Now().Before(deadline); poll++ {
@@ -560,15 +573,32 @@ func awaitForwarding(t *testing.T, through *server, path, container string) erro
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
+	// The exit first: a container that exited answered none of it, and
+	// whatever did answer on its port was the listener that took it, whose
+	// answers can be slow enough that no poll above reached the check.
+	if err := exitedContainer(t, container); err != nil {
+		return err
+	}
 	if lastStatus != 0 {
 		t.Fatalf("%s answered GET %s and never with the server's answer (last status %d), with the server behind it already serving: the block served does not reach the upstream it names.\n%s",
 			container, path, lastStatus, containerLogs(container))
 	}
-	if err := exitedContainer(t, container); err != nil {
-		return err
+	if refusedAtTLS(lastErr) {
+		t.Fatalf("%s took GET %s and refused it at the TLS layer until the deadline (%v): the container is up, so the configuration it was served is the cause, wherever the case runs.\n%s",
+			container, path, lastErr, containerLogs(container))
 	}
 	environmentUnavailablef(t, "%s never answered a request (%v); the container did not come up:\n%s", container, lastErr, containerLogs(container))
 	return nil
+}
+
+// refusedAtTLS reports whether a readiness request reached a proxy that took
+// the connection and refused it at the TLS layer: a certificate the case's
+// root does not verify, or a host it does not name, or plain HTTP answering
+// on the port a TLS block listens on. Either is a container that is up and
+// serving what it was given.
+func refusedAtTLS(err error) bool {
+	_, unverified := errors.AsType[*tls.CertificateVerificationError](err)
+	return unverified || errors.Is(err, http.ErrSchemeMismatch)
 }
 
 // errPortRace is a container that exited because another listener bound the
@@ -655,17 +685,38 @@ func startServerOnFreePort(t *testing.T, flags ...string) (int, *server) {
 // failure is the environment's and a nonzero exit is the command's.
 func runOnce(t *testing.T, image string, mounts []string, args ...string) (string, error) {
 	t.Helper()
+	return runOnceWithin(t, filepath.Join(t.TempDir(), "cid"), time.Minute, image, mounts, args...)
+}
+
+// runOnceWithin is runOnce with the file docker run writes the container's ID
+// to and the time the run is given.
+//
+// The deadline kills the docker client, not its container: one that started
+// keeps running, one created before the client reached the start is never
+// started, and --rm removes a container only once it has exited or its start
+// failed. A run the deadline ended therefore removes, when the test ends, the
+// container docker run wrote the ID of; one that returned on its own waited
+// for --rm's removal and leaves nothing.
+func runOnceWithin(t *testing.T, cidFile string, timeout time.Duration, image string, mounts []string, args ...string) (string, error) {
+	t.Helper()
 	requireDocker(t)
 	requireImage(t, image)
-	runArgs := []string{"run", "--rm", "--network", "none"}
+	runArgs := []string{"run", "--rm", "--cidfile", cidFile, "--network", "none"}
 	for _, mount := range mounts {
 		runArgs = append(runArgs, "-v", mount)
 	}
 	runArgs = append(runArgs, image)
 	runArgs = append(runArgs, args...)
-	runCtx, runCancel := context.WithTimeout(t.Context(), time.Minute)
+	runCtx, runCancel := context.WithTimeout(t.Context(), timeout)
 	defer runCancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
+	if runCtx.Err() != nil {
+		// Named by its ID, the one name it has: the failure then prints a
+		// docker rm -f that works by hand.
+		if cid, readErr := os.ReadFile(cidFile); readErr == nil && len(cid) > 0 { //#nosec G304 -- the file docker run was just told to write, in this test's own directory
+			removeWhenDone(t, string(cid), string(cid), dockerRemove)
+		}
+	}
 	return string(out), err
 }
 
@@ -1294,6 +1345,46 @@ func TestRunContainer_RunRefused_RemovesTheContainerItCreatedAndNoOther(t *testi
 	})
 }
 
+// TestRunOnce_DeadlinePassed_RemovesTheContainer holds runOnce to leaving no
+// container behind when its deadline ends the run.
+//
+// The deadline kills the docker client, not the container: one that started
+// keeps running, and --rm removes a container only once it has exited or
+// its start failed. Such a container carries no name, so nothing that removes
+// containers by the names a case printed could find it either.
+func TestRunOnce_DeadlinePassed_RemovesTheContainer(t *testing.T) {
+	t.Parallel()
+	requireDocker(t)
+	requireImage(t, nginxImage)
+
+	t.Run("a run its deadline ends", func(t *testing.T) {
+		t.Parallel()
+		cidFile := filepath.Join(t.TempDir(), "cid")
+		// Not parallel: its cleanups have to have run when it returns,
+		// which is what the check below reads.
+		t.Run("the case that ran it", func(t *testing.T) {
+			// nginx serves in the foreground until it is stopped, so only
+			// the deadline ends this run.
+			if out, err := runOnceWithin(t, cidFile, 20*time.Second, nginxImage, nil); err == nil {
+				t.Fatalf("nginx exited before the deadline, and this case needs a run the deadline ends:\n%s", out)
+			}
+		})
+		cid, err := os.ReadFile(cidFile) //#nosec G304 -- the file docker run was told to write, in this test's own directory
+		if err != nil || len(cid) == 0 {
+			t.Fatalf("docker run wrote no container ID before the deadline (%v), and this case needs a container the run created", err)
+		}
+		//#nosec G204 -- docker from the PATH, asked about the ID its own run wrote
+		out, err := exec.CommandContext(t.Context(), "docker", "ps", "--all", "--quiet", "--no-trunc", "--filter", "id="+string(cid)).Output()
+		if err != nil {
+			t.Fatalf("asking Docker for container %.12s: %v", cid, err)
+		}
+		if strings.TrimSpace(string(out)) != "" {
+			removeContainer(t, string(cid))
+			t.Errorf("container %.12s is still on the host after the case whose run the deadline ended: the deadline killed the docker client, and nothing removed the container", cid)
+		}
+	})
+}
+
 // TestRemoveWhenDone_RemovalFails_FailsTheCase holds runContainer's cleanup
 // to failing the case whose container it could not remove.
 //
@@ -1408,6 +1499,101 @@ func removeContainer(t *testing.T, id string) {
 	defer cancel()
 	if out, err := dockerRemove(ctx, id); err != nil {
 		t.Errorf("docker rm -f %s: %v: %s; it is still on the host", id, err, strings.TrimSpace(string(out)))
+	}
+}
+
+// TestAwaitForwarding_PortTakenByASlowListener_ReturnsThePortRace holds
+// awaitForwarding to the race its comment promises to return: a proxy whose
+// port another listener took exits, and that listener answers in its place,
+// without the server's headers, and too slowly for the wait to reach the exit
+// check it makes once a second. That is a port to try again, not a block that
+// does not reach its upstream.
+//
+// The answers used to be read first, so the case failed blaming the block it
+// served while the container that never served it had exited for its port.
+func TestAwaitForwarding_PortTakenByASlowListener_ReturnsThePortRace(t *testing.T) {
+	t.Parallel()
+	requireDocker(t)
+	requireImage(t, haproxyImage)
+	var lc net.ListenConfig
+	taken, err := lc.Listen(t.Context(), "tcp", loopbackBind+":0")
+	if err != nil {
+		t.Fatalf("taking a port: %v", err)
+	}
+	port := taken.Addr().(*net.TCPAddr).Port
+	// Three seconds an answer: two polls start inside the five-second wait
+	// below and neither is the fourth, after which the loop asks Docker.
+	slow := &http.Server{
+		ReadHeaderTimeout: 5 * time.Second,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-time.After(3 * time.Second):
+				w.WriteHeader(http.StatusNotFound)
+			case <-r.Context().Done():
+			}
+		}),
+	}
+	go func() { _ = slow.Serve(taken) }()
+	t.Cleanup(func() { _ = slow.Close() })
+
+	name := scratchContainerName("taken-port")
+	conf := writeContainerFile(t, containerDir(t), "haproxy.cfg", fmt.Sprintf(haproxyForwardforConfig, port, freePort(t)))
+	startContainer(t, name, haproxyImage, []string{conf + ":/usr/local/etc/haproxy/haproxy.cfg:ro"})
+
+	through := throughProxy(t, "http", publicHost, port, nil, clientForHeaders, nil)
+	if got := awaitForwardingWithin(t, through, "/health", name, 5*time.Second); !errors.Is(got, errPortRace) {
+		t.Errorf("awaitForwarding on a port another listener holds = %v, want errPortRace: HAProxy could not bind it and exited, so every answer came from that listener", got)
+	}
+}
+
+// TestRefusedAtTLS_ProxyAnsweredAtTheTLSLayer_IsTheConfigurations holds the
+// reading awaitForwarding gives a proxy that never answers a request it took:
+// refused at the TLS layer, it is up and serving what it was given, and that
+// fails the case wherever it runs, while a connection that ends before any
+// answer is still a container coming up.
+//
+// Both were read as a container that did not come up, which skips on a
+// developer machine and in the release's race job: a Traefik serving its own
+// default certificate, which the guide says every client refuses, passed
+// there as an environment that could not run the case.
+func TestRefusedAtTLS_ProxyAnsweredAtTheTLSLayer_IsTheConfigurations(t *testing.T) {
+	t.Parallel()
+	untrusted := httptest.NewTLSServer(http.NotFoundHandler())
+	t.Cleanup(untrusted.Close)
+	plain := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(plain.Close)
+	tests := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{name: "a certificate the case's root does not verify", url: untrusted.URL, want: true},
+		{name: "plain HTTP on the port a TLS block listens on", url: "https://" + plain.Listener.Addr().String(), want: true},
+		{name: "a listener that hangs up before any answer", url: strings.Replace(netfixture.DeadEndpoint(t), "http://", "https://", 1), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: x509.NewCertPool(), MinVersion: tls.VersionTLS12},
+			}}
+			t.Cleanup(client.CloseIdleConnections)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.url+"/health", http.NoBody)
+			if err != nil {
+				t.Fatalf("building the request: %v", err)
+			}
+			resp, err := client.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+				t.Fatalf("GET %s answered %d, and this case needs a request that fails", tt.url, resp.StatusCode)
+			}
+			if got := refusedAtTLS(err); got != tt.want {
+				t.Errorf("refusedAtTLS(%v) = %v, want %v", err, got, tt.want)
+			}
+		})
+	}
+	if refusedAtTLS(nil) {
+		t.Error("refusedAtTLS(nil) = true, want false: no error is no refusal")
 	}
 }
 
