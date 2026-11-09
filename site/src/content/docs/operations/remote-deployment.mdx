@@ -555,7 +555,7 @@ expected a `401` usually means the path never reached the handler.
 <Tabs>
 <TabItem label="nginx">
 
-```nginx
+```nginx e2e=nginx
 upstream gitlab_mcp {
     server 127.0.0.1:8080;
     keepalive 16;
@@ -643,7 +643,7 @@ is there to reuse.
 </TabItem>
 <TabItem label="Caddy">
 
-```text
+```text e2e=caddy
 # Caddyfile
 mcp.example.com {
     reverse_proxy 127.0.0.1:8080 {
@@ -671,7 +671,7 @@ already routed.
 
 With the Docker provider, on the container from the Compose block above:
 
-```yaml
+```yaml e2e=traefik-labels
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.mcp.rule=Host(`mcp.example.com`)"
@@ -684,7 +684,7 @@ Traefik does not buffer responses unless a `buffering` middleware is added, so
 the fix here is to not add one. What does need attention is the entry point's
 responding timeout, which is global rather than per route:
 
-```yaml
+```yaml e2e=traefik-static
 # traefik static configuration
 entryPoints:
   websecure:
@@ -711,7 +711,7 @@ same service.
 </TabItem>
 <TabItem label="Apache">
 
-```apache
+```apache e2e=apache
 <VirtualHost *:443>
     ServerName mcp.example.com
 
@@ -746,7 +746,7 @@ use it.
 A tunnel replaces the inbound listener entirely: `cloudflared` dials out, so the
 host needs no open port and no certificate of its own.
 
-```yaml
+```yaml e2e=cloudflared
 # ~/.cloudflared/config.yml
 tunnel: <tunnel-uuid>
 credentials-file: /etc/cloudflared/<tunnel-uuid>.json
@@ -962,7 +962,7 @@ Three details decide whether the affinity actually holds:
 into the key expression without ever becoming a loggable variable of its own.
 This needs no third-party module:
 
-```nginx
+```nginx e2e=nginx-balancer
 # Keep the salt out of the repository: include it from a 0600 file.
 map $host $mcp_salt {
     default "a-long-random-per-deployment-salt";

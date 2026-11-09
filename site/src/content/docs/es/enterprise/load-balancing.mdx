@@ -69,7 +69,7 @@ nginx hace hash de una cadena con variables él mismo, así que la sal entra en 
 expresión de la clave sin llegar a ser nunca una variable registrable. No hace
 falta ningún módulo de terceros.
 
-```nginx
+```nginx e2e=nginx
 # Mantén la sal fuera del repositorio: inclúyela desde un fichero 0600.
 map $host $mcp_salt {
     default "a-long-random-per-deployment-salt";
@@ -155,7 +155,7 @@ HAProxy calcula el digest en su propia configuración, así que no hay que confi
 en nadie para mantener la credencial en bruto fuera de una clave de enrutado, y
 consulta `/health`, que es lo que hace que la ventana de drenaje signifique algo.
 
-```text comments=hash
+```text comments=hash e2e=haproxy
 global
   daemon
 defaults

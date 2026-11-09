@@ -20,7 +20,8 @@
 // that difference.
 //
 // Docker is required and both skip without it, because the point is to run
-// the real balancer rather than to model one.
+// the real balancer rather than to model one; where the job says Docker is
+// expected, they fail instead (environmentUnavailablef).
 package httpe2e
 
 import (
@@ -229,10 +230,11 @@ func TestBalancer_HAProxyForwardforChargesTheRealClient(t *testing.T) {
 // startBalancer runs a container with the given configuration mounted where
 // the image expects it, and returns the base URL of the port it listens on.
 //
-// It skips rather than fails on every environmental problem, the way
-// startProxy does: a missing Docker, an image that cannot be pulled and a
-// container that never answers are all facts about the machine, not about the
-// server under test.
+// A missing Docker, an image that cannot be pulled and a container that never
+// answers are facts about the machine rather than the server under test, so
+// each skips, except where the job says Docker is expected, where each fails
+// (environmentUnavailablef): a balancer layer skipped there was reported green
+// without having run.
 func startBalancer(t *testing.T, image, confPath, confMountPath string, port int, args ...string) string {
 	t.Helper()
 	requireDocker(t)
@@ -248,7 +250,7 @@ func startBalancer(t *testing.T, image, confPath, confMountPath string, port int
 	defer runCancel()
 	out, err := exec.CommandContext(runCtx, "docker", runArgs...).CombinedOutput()
 	if err != nil {
-		t.Skipf("could not start %s (%v):\n%s", image, err, out)
+		environmentUnavailablef(t, "could not start %s (%v):\n%s", image, err, out)
 	}
 	t.Cleanup(func() {
 		rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -261,16 +263,17 @@ func startBalancer(t *testing.T, image, confPath, confMountPath string, port int
 	return base
 }
 
-// requireDocker skips the calling test unless Docker is present and usable.
+// requireDocker ends the calling test unless Docker is present and usable:
+// a skip, or a failure where dockerMustRun says Docker is expected.
 func requireDocker(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not available; a balancer is run rather than modeled, so this is skipped")
+		environmentUnavailablef(t, "docker not available; a proxy or a balancer is run rather than modeled, so this case cannot run without it")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
-		t.Skip("docker is installed but not usable; skipping the balancer layer")
+		environmentUnavailablef(t, "docker is installed but not usable (%v), so this case cannot run", err)
 	}
 }
 
@@ -284,10 +287,7 @@ func waitBalancer(t *testing.T, base, container string) {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	logCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	logs, _ := exec.CommandContext(logCtx, "docker", "logs", container).CombinedOutput()
-	t.Skipf("the balancer never forwarded a request; skipping rather than failing on the environment:\n%s", logs)
+	environmentUnavailablef(t, "the balancer never forwarded a request:\n%s", containerLogs(container))
 }
 
 // getThrough performs one GET and returns its status together with the
@@ -342,7 +342,7 @@ func TestBalancer_NginxConsistentHashPinsEachCredential(t *testing.T) {
 	port := freePort(t)
 	conf := writeBalancerConfig(t, "nginx.conf",
 		fmt.Sprintf(nginxBalancerConfig, balancerSalt, first, second, port))
-	base := startBalancer(t, "nginx:alpine", conf, "/etc/nginx/nginx.conf", port)
+	base := startBalancer(t, nginxImage, conf, "/etc/nginx/nginx.conf", port)
 
 	assertEachCredentialPins(t, base, func(token string) [2]string {
 		return [2]string{"PRIVATE-TOKEN", token}

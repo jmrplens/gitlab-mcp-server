@@ -138,8 +138,27 @@ jobs:
       # module's runtime is dominated by a per-test cost that the detector
       # multiplies. The bound is here to end a hang with goroutine stacks, not
       # to express how long the module should take.
+      #
+      # E2E_HTTP_DOCKER=optional lets the HTTP module's proxy and balancer
+      # cases skip where Docker cannot run them, which ci.yml's e2e-http job,
+      # with required, does not: this job gates a release, and a registry
+      # outage pulling one of their images would otherwise block it. go test
+      # prints nothing the tests of a passing package wrote, a skip's reason
+      # included, so each skipped case appends a line to the file
+      # E2E_HTTP_DOCKER_NOTICES names, and the step prints those lines under
+      # one warning once the module is done. The other two modules read
+      # neither variable.
       - name: Module under the race detector
         env:
           TAG: ${{ matrix.tag }}
           DIR: ${{ matrix.dir }}
-        run: go test -race -tags "$TAG" -count=1 -timeout 45m "$DIR"
+          E2E_HTTP_DOCKER: optional
+          E2E_HTTP_DOCKER_NOTICES: ${{ runner.temp }}/http-docker-skips.txt
+        run: |
+          status=0
+          go test -race -tags "$TAG" -count=1 -timeout 45m "$DIR" || status=$?
+          if [ -s "$E2E_HTTP_DOCKER_NOTICES" ]; then
+            echo "::warning title=Docker cases skipped::$(wc -l < "$E2E_HTTP_DOCKER_NOTICES") Docker case(s) of the HTTP module could not run on this runner and were skipped; this step's log lists each with its reason"
+            cat "$E2E_HTTP_DOCKER_NOTICES"
+          fi
+          exit "$status"
