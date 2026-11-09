@@ -313,6 +313,76 @@ func TestMakeTargets_PathWithASpace_ReachesTheToolWhole(t *testing.T) {
 	}
 }
 
+// TestMakeTargets_PathMakeWouldRead_ReachesTheToolUnchanged runs the targets
+// that ask where a directory an override names is, or whether it is there, in
+// a checkout whose path holds a | and a space, against stand-ins for go and
+// docker, and holds each to asking it of that path character for character.
+//
+// They asked make. The validate targets mounted what abspath_of returned,
+// which carried each space through $(abspath) as a | and turned every | back
+// into a space, the checkout's own among them, so they mounted a sibling
+// whose name had a space where the path had a |, or a directory nobody named,
+// which docker run -v creates. audit-1to1-grants-report asked $(wildcard),
+// which read the path's [ ] and ? as a pattern, so it dropped -e2e-calls for
+// a calls directory named with brackets and handed on one that is not there
+// when the pattern matched a sibling.
+func TestMakeTargets_PathMakeWouldRead_ReachesTheToolUnchanged(t *testing.T) {
+	t.Parallel()
+	makeBin := makeOnLinux(t)
+	checkout := checkoutAs(t, "checkout with a|pipe")
+	tools := filepath.Join(t.TempDir(), "tools")
+	writeStandIns(t, tools, standInRecordsArgs, "go", "docker")
+
+	// Each directory sits beside the one the old recipes reached in its place.
+	const relative = "dist/release|binaries"
+	elsewhere := t.TempDir()
+	absolute := filepath.Join(elsewhere, "release|binaries")
+	touch(t,
+		filepath.Join(checkout, filepath.FromSlash(relative), "gitlab-mcp-server-linux-amd64"),
+		filepath.Join(absolute, "gitlab-mcp-server-linux-amd64"),
+		filepath.Join(elsewhere, "release binaries", "gitlab-mcp-server-linux-amd64"),
+		filepath.Join(checkout, "dist", "e2e [calls]", "shard"),
+		filepath.Join(checkout, "dist", "e2e x", "shard"))
+
+	type testCase struct {
+		name string
+		goal string
+		args []string
+		// want is the call the stand-ins were to be handed, the arguments it
+		// holds in a row.
+		want []string
+	}
+	var tests []testCase
+	for _, goal := range []string{"validate-npm", "validate-pypi", "validate-nuget"} {
+		variable := strings.ToUpper(strings.TrimPrefix(goal, "validate-")) + "_BINARIES="
+		tests = append(tests,
+			testCase{
+				name: goal + " relative", goal: goal, args: []string{variable + relative},
+				want: []string{"-v", filepath.Join(checkout, filepath.FromSlash(relative)) + ":/binaries:ro"},
+			},
+			testCase{name: goal + " absolute", goal: goal, args: []string{variable + absolute}, want: []string{"-v", absolute + ":/binaries:ro"}})
+	}
+	tests = append(tests,
+		testCase{
+			name: "audit-1to1-grants-report brackets", goal: "audit-1to1-grants-report", args: []string{"E2E_CALLS_DIR=dist/e2e [calls]"},
+			want: []string{"-scope=grants", "-e2e-calls", "dist/e2e [calls]", "-output"},
+		},
+		testCase{
+			name: "audit-1to1-grants-report pattern", goal: "audit-1to1-grants-report", args: []string{"E2E_CALLS_DIR=dist/e2e ?"},
+			want: []string{"-scope=grants", "-output"},
+		})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			state := t.TempDir()
+			runMake(t, makeBin, checkout, []string{
+				"FAKE_STATE=" + state, "PATH=" + tools + string(os.PathListSeparator) + os.Getenv("PATH"),
+			}, append([]string{tt.goal}, tt.args...)...)
+			assertCalled(t, "make "+tt.goal, recordedArgs(t, state), tt.want)
+		})
+	}
+}
+
 // TestInspectorTargets_BinaryPathWithASpace_RemoveThatFileAlone runs make
 // inspector with an INSPECTOR_BIN whose path holds a space, against stand-ins
 // for go and npx, then the removal make inspector-stop renders, and holds
@@ -425,12 +495,14 @@ func makeOnLinux(t *testing.T) string {
 }
 
 // makeEnviron returns this process's environment for a make the test starts,
-// followed by extra: without CI, which the tunnel target refuses at parse
-// time, and without what an enclosing make or a COVER=1 run would hand it.
+// or a recipe it runs as make would, followed by extra: without CI, which the
+// tunnel target refuses at parse time, and without what an enclosing make or
+// a COVER=1 run would hand it, the coverage leaf make test-e2e-http COVER=1
+// hands this module included.
 func makeEnviron(extra ...string) []string {
 	env := slices.DeleteFunc(os.Environ(), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains([]string{"CI", "COVER", "E2E_COVER_ROOT", "MAKEFLAGS", "MFLAGS", "MAKELEVEL"}, name)
+		return slices.Contains([]string{"CI", "COVER", "E2E_COVER_ROOT", coverDirEnv, "MAKEFLAGS", "MFLAGS", "MAKELEVEL"}, name)
 	})
 	return append(env, extra...)
 }
@@ -463,12 +535,19 @@ func runMake(t *testing.T, makeBin, dir string, extra []string, args ...string) 
 	return string(out)
 }
 
-// checkoutWithASpace copies the Makefile, the two files make reads while it
-// parses it (it includes nothing) and the files named, into a directory of
-// the test's own whose path holds a space, and returns that directory.
+// checkoutWithASpace returns a checkout checkoutAs makes in a directory whose
+// path holds a space.
 func checkoutWithASpace(t *testing.T, names ...string) string {
 	t.Helper()
-	checkout := filepath.Join(t.TempDir(), "checkout with space")
+	return checkoutAs(t, "checkout with space", names...)
+}
+
+// checkoutAs copies the Makefile, the two files make reads while it parses it
+// (it includes nothing) and the files named, into a directory of the test's
+// own named dir, and returns that directory.
+func checkoutAs(t *testing.T, dir string, names ...string) string {
+	t.Helper()
+	checkout := filepath.Join(t.TempDir(), dir)
 	var copyErr error
 	for _, name := range append([]string{"Makefile", "VERSION", "go.mod"}, names...) {
 		path := filepath.Join(checkout, filepath.FromSlash(name))

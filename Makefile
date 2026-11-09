@@ -264,11 +264,12 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 # a mkdir that makes the whole directory turns an unquoted path from a loud
 # failure into a quiet one, as audit-e2e-coverage showed when its -o, given a
 # report directory of "my reports", wrote the report to a file named my and
-# exited 0. make's own path functions split their argument at every space as
-# well, so a $(wildcard) of such a path escapes its spaces and abspath_of takes
-# the place of $(abspath) for one.
-space := $(subst ,, )
-abspath_of = $(subst |,$(space),$(abspath $(subst $(space),|,$1)))
+# exited 0. Such a path never goes through make's own path functions, which
+# split it at every blank and read its glob characters as a pattern; a helper
+# that carried each space through $(abspath) as a | turned every | the path
+# already held into a space as well. A recipe asks the shell instead: cd and
+# pwd for the absolute path a validate target mounts, test -e for the calls
+# directory audit-1to1-grants-report reads.
 ifeq ($(OS),Windows_NT)
   BINARY_EXT=.exe
   MKDIR_P=if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
@@ -1769,7 +1770,7 @@ sync-npm-version:
 validate-npm:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-npm-local)"; exit 1; }
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	@VER=$$(tr -d '[:space:]' < VERSION); 	docker run --rm 		-v "$(CURDIR):/work" -v "$(call abspath_of,$(NPM_BINARIES)):/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
+	@VER=$$(tr -d '[:space:]' < VERSION); BINARIES=$$(CDPATH= cd -- "$(NPM_BINARIES)" && pwd) || exit 1; 	docker run --rm 		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
 
 ## validate-npm-local: same validation without Docker, for the ephemeral CI
 ## runner (already disposable). Builds packages from NPM_BINARIES, then validates.
@@ -1807,8 +1808,9 @@ validate-pypi:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-pypi-local)"; exit 1; }
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
+	BINARIES=$$(CDPATH= cd -- "$(PYPI_BINARIES)" && pwd) || exit 1; \
 	docker run --rm \
-		-v "$(CURDIR):/work" -v "$(call abspath_of,$(PYPI_BINARIES)):/binaries:ro" \
+		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-w /work python:3.14-slim sh -euc ' \
 			python3 scripts/build_pypi.py --binaries /binaries --version '"$$VER"' && \
 			python3 scripts/validate_pypi.py --wheels pypi/dist --version '"$$VER"
@@ -1862,8 +1864,9 @@ validate-nuget:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
+	BINARIES=$$(CDPATH= cd -- "$(NUGET_BINARIES)" && pwd) || exit 1; \
 	docker run --rm \
-		-v "$(CURDIR):/work" -v "$(call abspath_of,$(NUGET_BINARIES)):/binaries:ro" \
+		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-e DOTNET_NOLOGO=1 -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
 		-w /work $(NUGET_SDK_IMAGE) sh -euc ' \
 			apt-get -qq update && apt-get -qq install -y --no-install-recommends python3 >/dev/null && \
@@ -2212,7 +2215,8 @@ audit-1to1-grants:
 ## not.
 audit-1to1-grants-report:
 	@mkdir -p plan
-	go run ./cmd/audit_1to1/ -scope=grants $(if $(wildcard $(subst $(space),\ ,$(E2E_CALLS_DIR))),-e2e-calls "$(E2E_CALLS_DIR)") -output plan/1to1-grants.json
+	if test -e "$(E2E_CALLS_DIR)"; then set -- -e2e-calls "$(E2E_CALLS_DIR)"; fi; \
+	go run ./cmd/audit_1to1/ -scope=grants "$$@" -output plan/1to1-grants.json
 	@echo "R-GRANT report written to plan/1to1-grants.json"
 
 ## audit-1to1-required: gate the parameters every input schema requires (R-REQUIRED,

@@ -1219,6 +1219,35 @@ func TestCloudflareTunnelTarget_CheckoutPathWithASpace_HandsTheRunWholePaths(t *
 	}
 }
 
+// TestCloudflareTunnelTarget_LeafThisRunWasHanded_ReachesNoRecipe runs the
+// recipe make test-e2e-cloudflare-tunnel renders without COVER in a process
+// that was handed a coverage leaf, as make test-e2e-http COVER=1 hands this
+// module the HTTP one, and holds the run to being handed no leaf.
+//
+// The recipe ran under this process's environment as it was, so under make
+// test-e2e-http COVER=1 the stand-in gotestsum read the HTTP module's leaf
+// and the case without COVER above failed. t.Setenv changes the whole
+// process, so this test is not parallel.
+func TestCloudflareTunnelTarget_LeafThisRunWasHanded_ReachesNoRecipe(t *testing.T) {
+	t.Setenv(coverDirEnv, filepath.Join(t.TempDir(), "e2e-cover", "http"))
+	target := newTunnelTarget(t)
+	recipe := target.render(t)
+	state := t.TempDir()
+	// Released before it starts, so the stand-in ends at once.
+	release(t, state, "cf-leaf")
+	run := target.start(t, recipe, state, "cf-leaf", 0)
+	if status := run.wait(t); status != 0 {
+		t.Fatalf("the run ended with status %d, want 0:\n%s", status, run.stderr.String())
+	}
+	handed, err := os.ReadFile(filepath.Join(state, "cf-leaf")) //#nosec G304 -- the mark the stand-in wrote in this test's own directory
+	if err != nil {
+		t.Fatalf("the stand-in gotestsum left no mark: %v", err)
+	}
+	if want := filepath.Join(target.root, "dist", "e2e", "gitlab-mcp-server") + "\n\n"; string(handed) != want {
+		t.Errorf("the run was handed %q, want %q: the leaf this process was handed reached a recipe that hands on none", handed, want)
+	}
+}
+
 // runTheRemoval runs, with sh in dir, the one rm -rf line make -n printed in
 // rendered, failing the test when it printed none or more than one, or when
 // the line fails.
@@ -1331,17 +1360,19 @@ type tunnelRun struct {
 	err    error
 }
 
-// start runs recipe the way make would, with sh, with the stand-ins first on
-// the PATH, as the run whose case names the container name and whose
-// gotestsum ends with status once released.
+// start runs recipe the way make would, with sh, under makeEnviron, so a
+// coverage leaf this run was handed never reaches a recipe that hands on
+// none, with the stand-ins first on the PATH, as the run whose case names the
+// container name and whose gotestsum ends with status once released.
 func (tt tunnelTarget) start(t *testing.T, recipe, state, name string, status int) *tunnelRun {
 	t.Helper()
 	//#nosec G204 -- the recipe is what make rendered from this repository's own Makefile
 	cmd := exec.CommandContext(t.Context(), "sh", "-c", recipe)
 	cmd.Dir = t.TempDir()
-	cmd.Env = append(os.Environ(),
+	cmd.Env = makeEnviron(
 		"PATH="+tt.stubs+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"FAKE_STATE="+state, "FAKE_NAME="+name, fmt.Sprintf("FAKE_STATUS=%d", status))
+		"FAKE_STATE="+state, "FAKE_NAME="+name, fmt.Sprintf("FAKE_STATUS=%d", status),
+	)
 	run := &tunnelRun{cmd: cmd, stderr: &strings.Builder{}, done: make(chan struct{})}
 	cmd.Stdout = io.Discard
 	cmd.Stderr = run.stderr
