@@ -482,14 +482,15 @@ type DeploymentApprovalSummaryOutput struct {
 }
 
 // DeploymentExtra is what GitLab's extended deployment entity sends that
-// client-go's Deployment does not carry: the approvals recorded so far, how
-// many are still outstanding, and the rules they are counted against. All
-// three are exposed under no condition, so a deployment that needs no approval
-// carries them empty rather than not at all.
+// client-go's Deployment does not carry: the approvals recorded so far and the
+// rules they are counted against. Both are exposed under no condition, so a
+// deployment that needs no approval carries them empty rather than not at
+// all. How many approvals are still outstanding is the third field of that
+// entity, which Deployment models since client-go v3.46.1 and the handlers
+// read from it.
 type DeploymentExtra struct {
-	Approvals            []DeploymentApprovalOutput       `json:"approvals"`
-	ApprovalSummary      *DeploymentApprovalSummaryOutput `json:"approval_summary"`
-	PendingApprovalCount int64                            `json:"pending_approval_count"`
+	Approvals       []DeploymentApprovalOutput       `json:"approvals"`
+	ApprovalSummary *DeploymentApprovalSummaryOutput `json:"approval_summary"`
 }
 
 // CapturedDeployment reads them off the captured answer to a request for one

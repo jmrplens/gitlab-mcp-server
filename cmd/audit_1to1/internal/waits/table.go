@@ -252,8 +252,8 @@ var upstreamWaits = []Entry{
 		Row: 149, Category: CategoryUpstream,
 		Sites:      []string{"deployments.rawGetDeployment", "deployments.rawListDeployments"},
 		Replaces:   []string{"Deployments.GetProjectDeployment", "Deployments.ListProjectDeployments"},
-		Predicates: lacksKeys("Deployment", "approvals", "approval_summary", "pending_approval_count", "deployable.project"),
-		Reason:     "Deployment models none of approvals, approval_summary and pending_approval_count, and DeploymentDeployable no project, so the deployment get and list decode into deployments.deploymentAPI",
+		Predicates: lacksKeys("Deployment", "approvals", "approval_summary", "deployable.project"),
+		Reason:     "Deployment models neither approvals nor approval_summary, and DeploymentDeployable no project, so the deployment get and list decode into deployments.deploymentAPI",
 	},
 	{
 		Row: 149, Category: CategoryUpstream,
