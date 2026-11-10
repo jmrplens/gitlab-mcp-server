@@ -111,10 +111,11 @@ func authorizeDecisions() []Decision {
 			// Issue 1782 told a step GitLab answered from one it did not. A
 			// refusal, an empty page, a fine-grained token's null nodes and the
 			// page bound are answers. No status at all (a deadline, a network
-			// failure, a body that does not decode), 408, 429, a 5xx after the
-			// retries, a membership answer with no groups connection and a
-			// document refused for anything but the caller's permission are
-			// not: such a step lowers nothing (the asymmetry INV-008 records)
+			// failure, a body that does not decode), a redirect not followed,
+			// 408, 429, a 5xx after the retries, a membership answer with no
+			// groups connection, and a document refused, or a page with a
+			// group null, for anything but the caller's permission
+			// are not: such a step lowers nothing (the asymmetry INV-008 records)
 			// and leaves the tier provisional, the best known so far, which
 			// the build warns about, unless it is already Ultimate. The tier
 			// is asked when an entry is built and kept while the entry lives
@@ -127,10 +128,11 @@ func authorizeDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages", "TierMembershipTimeout"},
 			Source: Constant, Zero: ZeroNotApplicable,
-			Fixed: "the pages and the membership step's clock bound what detecting the tier costs at every entry build, and a caller past them " +
+			Fixed: "the pages bound what detecting the tier costs at every entry build, and a caller past them " +
 				"resolves lower than it should, which --tier answers, while a warning says so only when an " +
-				"enterprise instance falls back to Free: the operator's lever is the tier itself rather than the " +
-				"pages read to guess it",
+				"enterprise instance falls back to Free; the membership step's clock bounds the one step the " +
+				"others could starve, and a step it ends is left unread, so the tier is provisional and warned " +
+				"about: the operator's lever is the tier itself rather than the pages read to guess it",
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
 			// Issue 956 answered F-10: the actions the tier filter removed are
 			// recorded beside the scope and operator narrowings, so a call for

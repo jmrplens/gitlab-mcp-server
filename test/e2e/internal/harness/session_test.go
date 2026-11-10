@@ -16,6 +16,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -75,6 +76,31 @@ func instanceForStub(t *testing.T, stub *httptest.Server) *instance {
 		runID:       configuredRunID(time.Now(), "", "harness"),
 		facts:       facts,
 		client:      client,
+	}
+}
+
+// TestSessionCredential_ATierLeftUnanswered_IsRefused checks that a session's
+// own credential whose tier GitLab leaves unanswered is refused with the step
+// named, rather than recorded as the Free the probe falls back to, which would
+// build every expectation of the session on the wrong catalog.
+func TestSessionCredential_ATierLeftUnanswered_IsRefused(t *testing.T) {
+	const unanswered = "glpat-harness-unanswered"
+	stub := startStubGitLab(t, stubRoute{pattern: "/api/v4/license", handler: func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("PRIVATE-TOKEN") == unanswered {
+			<-r.Context().Done()
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}})
+	inst := instanceForStub(t, stub)
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+
+	_, err := sessionCredential(ctx, inst, unanswered)
+
+	if err == nil || !strings.Contains(err.Error(), "the session's own credential") || !strings.Contains(err.Error(), "left license") ||
+		!errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("sessionCredential() error = %v, want the unanswered license named and the deadline wrapped", err)
 	}
 }
 

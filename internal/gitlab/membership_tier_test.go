@@ -85,6 +85,12 @@ type fakeMembershipPage struct {
 // package, so a change of the constant the code compares against is caught.
 const refusedMessage = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
 
+// fieldTimeoutMessage stands for an error GitLab answers beside a page for a
+// reason of its own rather than the caller's permission, such as a field that
+// ran out of time: it nulls the node as a refusal does, and says nothing about
+// what the caller holds.
+const fieldTimeoutMessage = "Timeout on Group.licensedFeatureAvailability"
+
 // fakeGitLabDotCom answers the questions the tier cascade asks the way
 // GitLab.com answers a caller who administers no paid namespace: the license
 // refused, the namespaces with the plans given (refused when nil), and the
@@ -348,6 +354,21 @@ func (g *fakeGitLabDotCom) retryingClient(t *testing.T) *Client {
 	return client
 }
 
+// unretriedClient builds a GitLab.com client against g with client-go's
+// retries turned off, through the constructor the pool's tests build theirs
+// with.
+func (g *fakeGitLabDotCom) unretriedClient(t *testing.T) *Client {
+	t.Helper()
+	standInForGitLabDotCom(t)
+	srv := httptest.NewServer(g.serve(t))
+	t.Cleanup(srv.Close)
+	client, err := NewClientWithTokenRetries(srv.URL, testValidToken, false, true)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	return client
+}
+
 // standInForGitLabDotCom makes every client of the test a GitLab.com client,
 // since a test server cannot have GitLab.com's host.
 func standInForGitLabDotCom(t *testing.T) {
@@ -547,9 +568,12 @@ func TestDetectTier_Membership_StopsAtThePageBound(t *testing.T) {
 // namespace step already gave, never less. ADR-0018's asymmetry decides it, a
 // tier resolved too low silently removing tools, and a failed read is no
 // evidence that the caller holds less than it was already shown to hold. A
-// read GitLab did not answer, a server error or an answer with no groups
-// connection, also leaves the answer provisional, while GitLab's refusal of
-// the caller is an answer and does not (issue 1782).
+// read GitLab did not answer, a server error, an answer with no groups
+// connection or a page with a group null beside an error that is not the
+// permission refusal, also leaves the answer provisional, and so does a page
+// that resolved a group beside such an error, which still counts as the floor:
+// the null node may be the group that raises the tier. GitLab's refusal of the
+// caller is an answer and does not (issue 1782).
 func TestDetectTier_Membership_FailedRead_KeepsTheEarlierAnswer(t *testing.T) {
 	premiumNamespace := []map[string]any{{"full_path": "acme", "kind": "group", "plan": "premium"}}
 	cases := []struct {
@@ -564,6 +588,18 @@ func TestDetectTier_Membership_FailedRead_KeepsTheEarlierAnswer(t *testing.T) {
 		{name: "every group refused after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{refusedMessage}}, want: edition.Premium},
 		{name: "no groups connection after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{noConnection: true}, want: edition.Premium, provisional: true},
 		{name: "a server error after free namespaces", namespaces: freeNamespaces, page: fakeMembershipPage{status: http.StatusInternalServerError}, want: edition.Free, provisional: true},
+		{
+			name: "every group null beside a timeout after a premium namespace", namespaces: premiumNamespace,
+			page: fakeMembershipPage{groups: []*fakeGroup{nil, nil}, errors: []string{fieldTimeoutMessage}}, want: edition.Premium, provisional: true,
+		},
+		{
+			name: "every group null beside a timeout and a refusal after free namespaces", namespaces: freeNamespaces,
+			page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{refusedMessage, fieldTimeoutMessage}}, want: edition.Free, provisional: true,
+		},
+		{
+			name: "a premium group resolved beside a timeout after free namespaces", namespaces: freeNamespaces,
+			page: fakeMembershipPage{groups: []*fakeGroup{{path: "acme", premium: true}}, errors: []string{fieldTimeoutMessage}}, want: edition.Premium, provisional: true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -646,6 +682,7 @@ func TestDetectTier_GitLabDotCom_NoStepAnswers_Warns(t *testing.T) {
 		{name: "a membership read that fails", page: fakeMembershipPage{status: http.StatusInternalServerError}, warns: false, provisional: true},
 		{name: "a refused document", page: fakeMembershipPage{refused: true}, warns: true},
 		{name: "every group refused", page: fakeMembershipPage{groups: []*fakeGroup{nil, nil}, errors: []string{refusedMessage}}, warns: true},
+		{name: "every group null beside a timeout", page: fakeMembershipPage{groups: []*fakeGroup{nil, nil}, errors: []string{fieldTimeoutMessage}}, warns: false, provisional: true},
 		{name: "free groups", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}}}, warns: false},
 	}
 	for _, tc := range cases {
@@ -697,6 +734,27 @@ func TestDetectTier_Membership_PartialPage_KeepsTheGroupsItResolved(t *testing.T
 	}
 }
 
+// TestDetectTier_Membership_ResolvedGroupBesideATimeout_IsProvisional checks
+// a page that resolved a Free group beside a node GitLab nulled for a reason
+// of its own, a field that ran out of time. The null node may be the paid
+// group, and the walk ends at that page, so the pages after it go unread too:
+// the Free group is the floor the step answers, not its answer, and the step
+// is left unresolved so it is asked again rather than settled at Free while
+// the second page holds Ultimate (issue 1782).
+func TestDetectTier_Membership_ResolvedGroupBesideATimeout_IsProvisional(t *testing.T) {
+	server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: []fakeMembershipPage{
+		{groups: []*fakeGroup{{path: "hobby"}, nil}, errors: []string{fieldTimeoutMessage}, hasNext: true},
+		{groups: []*fakeGroup{{path: "acme", premium: true, ultimate: true}}},
+	}}
+	got, _ := server.detect(t, false)
+	if got.Tier != edition.Free || !got.Answered || !got.Provisional || !slices.Equal(got.Unresolved, []string{"membership"}) {
+		t.Errorf("DetectTier() = %+v, want Free answered, provisional, the membership step unresolved", got)
+	}
+	if asked := server.requests(); len(asked) != 1 {
+		t.Errorf("membership pages read = %d, want 1: the page with the timeout ends the walk", len(asked))
+	}
+}
+
 // TestDetectTier_Membership_FailedRead_SaysSoAtInfo checks that a membership
 // read on GitLab.com that did not come back whole is reported above debug,
 // naming the setting that pins the tier. The namespace step may already have
@@ -713,6 +771,8 @@ func TestDetectTier_Membership_FailedRead_SaysSoAtInfo(t *testing.T) {
 		{name: "a server error", page: fakeMembershipPage{status: http.StatusInternalServerError}, says: true, unresolved: true},
 		{name: "a refused document", page: fakeMembershipPage{refused: true}, says: true},
 		{name: "a page answered in part", page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{refusedMessage}}, says: true},
+		{name: "a page of null groups beside a timeout", page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{fieldTimeoutMessage}}, says: true, unresolved: true},
+		{name: "a free group beside a timeout", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}, nil}, errors: []string{fieldTimeoutMessage}}, says: true, unresolved: true},
 		{name: "free groups", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}}}, says: false},
 	}
 	for _, tc := range cases {
@@ -823,14 +883,18 @@ func TestClient_MembershipRetry_RetriesTheReadLikeAGet(t *testing.T) {
 // TestDetectTier_Membership_IsRetriedOnTheClientsPolicy drives the retry
 // through client-go with the production policy: a page GitLab answers 502 and
 // then answers is read on the second request, a 501 or a 502 on every attempt
-// leaves the step unread after as many requests as RTC-006 allows, and a page
-// whose clock ran out is not asked again.
+// leaves the step unread after as many requests as RTC-006 allows, a page
+// whose clock ran out is not asked again, and a client built with retries off,
+// as the pool's tests build theirs, sends a 502 page once: client-go consults
+// the request's own check whatever the client says, so the check is what keeps
+// such a client from retrying in silence.
 func TestDetectTier_Membership_IsRetriedOnTheClientsPolicy(t *testing.T) {
 	cases := []struct {
 		name        string
 		failFirst   []int
 		pages       []fakeMembershipPage
 		base        time.Duration
+		retriesOff  bool
 		want        edition.Tier
 		provisional bool
 		requests    int
@@ -848,11 +912,20 @@ func TestDetectTier_Membership_IsRetriedOnTheClientsPolicy(t *testing.T) {
 			pages: []fakeMembershipPage{{hang: true}}, base: 200 * time.Millisecond,
 			want: edition.Free, provisional: true, requests: 1,
 		},
+		{
+			name:      "a 502 on a client built with retries off",
+			failFirst: []int{http.StatusBadGateway}, retriesOff: true,
+			pages: ultimateGroup, want: edition.Free, provisional: true, requests: 1,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: tc.pages, failFirst: tc.failFirst}
-			client := server.retryingClient(t)
+			build := server.retryingClient
+			if tc.retriesOff {
+				build = server.unretriedClient
+			}
+			client := build(t)
 			base := t.Context()
 			if tc.base > 0 {
 				var cancel context.CancelFunc

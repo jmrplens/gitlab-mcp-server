@@ -160,9 +160,14 @@ func (g *membershipGroup) tier() edition.Tier {
 // whatever GitLab refused beside it, and discarding it would resolve lower
 // than the caller was shown to hold; the page after it would be refused the
 // same way, which is what a fine-grained token's walk would otherwise spend
-// up to membershipMaxPages requests learning. Such a page is GitLab's answer,
-// so the step it ends is resolved; a page GitLab did not answer
-// ([membershipReadUnresolved]) leaves it unresolved.
+// up to membershipMaxPages requests learning. A page whose every error is
+// that permission refusal is GitLab's answer, so the step it ends is
+// resolved, the fine-grained token's page of null nodes included. Any other
+// error leaves the step unresolved ([membershipReadUnresolved]), whatever
+// the page resolved beside it: a feature that ran out of time nulls its node
+// as a refused one does, so the null node may be the group that raises the
+// tier, and the pages after it go unread. The groups the page resolved still
+// count, as the floor the step answers, and the step is asked again.
 //
 // A read that did not come back whole is said at info, naming the setting
 // that pins the tier, because the namespace step may already have answered
@@ -186,7 +191,7 @@ func (c *Client) tierFromMembership(ctx context.Context) tierStep {
 			}
 		}
 		if err != nil {
-			unresolved = groups == nil && membershipReadUnresolved(err)
+			unresolved = membershipReadUnresolved(err)
 			slog.InfoContext(ctx, "could not read every top-level group the token is a member of; the tier is resolved without the rest, "+
 				"and GITLAB_MCP_TIER (or --tier in HTTP mode) pins it", "page", page, "error", err, "unresolved", unresolved)
 			break
@@ -301,8 +306,9 @@ func (r *documentRefusalError) permissionOnly() bool {
 }
 
 // membershipReadUnresolved reports whether a membership page that came back
-// with no groups left the step unread, as opposed to GitLab answering it: a
-// document refused for anything but the caller's permission, an answer with
+// with an error, whatever groups it resolved beside it, left the step unread,
+// as opposed to GitLab answering it: a document refused or answered in part
+// for anything but the caller's permission, an answer with
 // no groups connection and no reason, or a read [tierReadUnresolved] says
 // GitLab did not answer.
 func membershipReadUnresolved(err error) bool {

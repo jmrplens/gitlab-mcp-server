@@ -9,14 +9,20 @@
 package harness
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
@@ -385,5 +391,90 @@ func TestSlicesContainError_OneFailedProbe_IsEnough(t *testing.T) {
 	}
 	if !slicesContainError([]error{nil, errors.New("connection reset"), nil}) {
 		t.Fatal("a round with one dropped connection was reported as clean")
+	}
+}
+
+// TestProbe_ATierLeftUnanswered_FailsTheBootstrap checks that the bootstrap's
+// probe stops on a tier GitLab leaves unanswered, naming the step, instead of
+// recording the instance as Free.
+func TestProbe_ATierLeftUnanswered_FailsTheBootstrap(t *testing.T) {
+	stub := startStubGitLab(t, stubRoute{pattern: "/api/v4/license", handler: func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}})
+	client, err := gitlabclient.NewClientWithTokenRetries(stub.URL, stubToken, false, true)
+	if err != nil {
+		t.Fatalf("building a client for the stub: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+
+	_, err = probe(ctx, client, stub.URL, false, stubToken)
+
+	if err == nil || !strings.Contains(err.Error(), "left license") || !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("probe() error = %v, want the unanswered license named and the deadline wrapped", err)
+	}
+}
+
+// TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused checks how the
+// harness reads the tier it builds its expectations on: a tier every step
+// answered is taken at once, a license that answers on a later ask is asked
+// again until it does, and one GitLab keeps leaving unanswered, or a run whose
+// time ran out, is refused with the step named rather than taken as the
+// instance's Free.
+func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
+	previous := tierRetryPause
+	tierRetryPause = time.Millisecond
+	t.Cleanup(func() { tierRetryPause = previous })
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	cases := []struct {
+		name      string
+		ctx       context.Context
+		failures  int64
+		want      edition.Tier
+		wantErr   error
+		wantReads int64
+	}{
+		{name: "every step answered", ctx: t.Context(), want: edition.Premium, wantReads: 1},
+		{name: "the license answered on the third ask", ctx: t.Context(), failures: tierAttempts - 1, want: edition.Premium, wantReads: tierAttempts},
+		{name: "the license never answered", ctx: t.Context(), failures: tierAttempts, want: edition.Free, wantReads: tierAttempts},
+		{name: "the time to ask again ran out", ctx: cancelled, want: edition.Free, wantErr: context.Canceled},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var reads atomic.Int64
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+				if reads.Add(1) <= tc.failures {
+					w.WriteHeader(http.StatusBadGateway)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"plan":"premium"}`))
+			})
+			stub := httptest.NewServer(mux)
+			t.Cleanup(stub.Close)
+			client, err := gitlabclient.NewClientWithTokenRetries(stub.URL, stubToken, false, true)
+			if err != nil {
+				t.Fatalf("building a client for the stub: %v", err)
+			}
+
+			got, err := settledTier(tc.ctx, client)
+
+			if got != tc.want {
+				t.Errorf("settledTier() = %s, want %s", got, tc.want)
+			}
+			wantRefused := tc.wantErr != nil || tc.failures >= tierAttempts
+			if (err != nil) != wantRefused || (err != nil && !strings.Contains(err.Error(), "left license")) {
+				t.Errorf("settledTier() error = %v, want refused %t naming the license", err, wantRefused)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Errorf("settledTier() error = %v, want it to wrap %v", err, tc.wantErr)
+			}
+			if reads.Load() != tc.wantReads {
+				t.Errorf("license reads = %d, want %d", reads.Load(), tc.wantReads)
+			}
+		})
 	}
 }

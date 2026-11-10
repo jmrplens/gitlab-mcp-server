@@ -174,6 +174,42 @@ func (inst *instance) cleanupBudget() time.Duration {
 // probeTimeout bounds each question the probe asks.
 const probeTimeout = 30 * time.Second
 
+// tierAttempts is how many times the harness asks the tier before it takes a
+// step GitLab keeps leaving unanswered as a failure of the run.
+const tierAttempts = 3
+
+// tierRetryPause is how long the harness waits between two asks of a tier
+// left provisional. A variable so the harness's own tests can shorten it.
+var tierRetryPause = 2 * time.Second
+
+// settledTier asks the licensing tier the way the binary does, again while a
+// step of the probe went unanswered, and refuses a tier still provisional
+// after tierAttempts with the steps GitLab left unread.
+//
+// A provisional tier is only the best known so far: an enterprise container
+// that has just started can answer its license 502, and taking the Free that
+// leaves as the instance's tier would turn every licensed test into a skip,
+// which a complete run reports as undeclared skips rather than as the probe
+// that caused them.
+func settledTier(ctx context.Context, client *gitlabclient.Client) (edition.Tier, error) {
+	for attempt := 1; ; attempt++ {
+		got := client.DetectTier(ctx, ctx)
+		if !got.Provisional {
+			return got.Tier, nil
+		}
+		if attempt == tierAttempts {
+			return got.Tier, fmt.Errorf("the tier probe left %s unanswered %d times in a row, and would read %s",
+				strings.Join(got.Unresolved, ", "), tierAttempts, got.Tier)
+		}
+		select {
+		case <-ctx.Done():
+			return got.Tier, fmt.Errorf("the tier probe left %s unanswered and the time to ask again ran out: %w",
+				strings.Join(got.Unresolved, ", "), ctx.Err())
+		case <-time.After(tierRetryPause):
+		}
+	}
+}
+
 // probe asks the instance what it is, without changing anything.
 func probe(ctx context.Context, client *gitlabclient.Client, url string, skipTLSVerify bool, token string) (runtimeFacts, error) {
 	version, err := client.Ping(ctx)
@@ -187,7 +223,10 @@ func probe(ctx context.Context, client *gitlabclient.Client, url string, skipTLS
 	// image, licensed or not. The harness wants the two facts apart.
 	facts.Enterprise = instanceIsEnterprise(ctx, url, token, skipTLSVerify)
 
-	facts.Tier = client.DetectTier(ctx, ctx).Tier
+	facts.Tier, err = settledTier(ctx, client)
+	if err != nil {
+		return facts, err
+	}
 	client.SetTier(facts.Tier)
 	facts.TierConfirmed = facts.Tier.IsEnterprise()
 
