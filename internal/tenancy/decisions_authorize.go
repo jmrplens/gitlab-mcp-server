@@ -175,6 +175,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgGitLab, "Client.ResolveTier"),
 				enforce(pkgGitLab, "tierReadUnresolved"),
+				enforce(pkgServer, "warnStdioProvisionalTier"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
 				enforce(pkgTools, "pruneSpecFieldsByTier"),

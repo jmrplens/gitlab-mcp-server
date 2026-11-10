@@ -1816,7 +1816,9 @@ func prepareStdioCatalog(
 	// GITLAB_MCP_TIER, use it verbatim (no license check) and pin it on the
 	// client, so the lazy re-initialization of a degraded start cannot replace
 	// it with the edition /api/v4/version reports (issue 1016). Otherwise
-	// detect it from the instance license, falling back to Free.
+	// detect it from the instance, falling back to Free. The membership step
+	// runs on its own clock measured from the process context, so a slow
+	// license or namespace step cannot spend it.
 	switch {
 	case cfg.TierExplicit:
 		client.PinTier(cfg.Tier)
@@ -1825,7 +1827,9 @@ func prepareStdioCatalog(
 		client.SetTier(cfg.Tier)
 		serverCfg.Tier = cfg.Tier
 	default:
-		serverCfg.Tier = client.DetectTier(ctx, ctx).Tier
+		resolution := client.DetectTier(ctx, ctx)
+		warnStdioProvisionalTier(ctx, resolution)
+		serverCfg.Tier = resolution.Tier
 	}
 
 	// Narrow the surface by the scopes detected above the way the HTTP pool
@@ -1863,6 +1867,22 @@ func prepareStdioCatalog(
 	// setting and then re-read at its default whatever it said (issue 1171).
 	go refreshStdioAuthority(ctx, client, facts, cfg.RevalidateInterval, recovered, stdioBelowMinimumRefuser(ctx, shell.gate))
 	return nil
+}
+
+// warnStdioProvisionalTier tells the operator what a provisional tier means on
+// stdio, beside the warning [gitlabclient.Client.DetectTier] writes for it on
+// either transport: the process registers its catalog once and never asks the
+// tier again, unlike a pool entry (register row AUT-010), so the tier detected
+// so far is served until the process ends. A restart of the MCP client starts
+// a new process, which asks again, and GITLAB_MCP_TIER settles it for good
+// (issue 1782). A tier GitLab answered whole is not warned about here.
+func warnStdioProvisionalTier(ctx context.Context, resolution gitlabclient.TierResolution) {
+	if !resolution.Provisional {
+		return
+	}
+	slog.WarnContext(ctx, "the stdio process serves this provisional licensing tier until it ends: "+
+		"restarting the MCP client detects it again, and GITLAB_MCP_TIER pins it",
+		"tier", resolution.Tier.String(), "unresolved", resolution.Unresolved)
 }
 
 // stdioAuthority is what the process's fine-grained token may be shown, judged
