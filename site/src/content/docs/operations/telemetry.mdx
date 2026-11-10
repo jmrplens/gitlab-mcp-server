@@ -521,7 +521,7 @@ namespace the semantic convention owns. They are published by HTTP mode only,
 and `capacity` is published beside `entries` so "how close to the bound" is
 answerable without typing the flag's value into a dashboard query.
 
-`gitlab_mcp.credential_pool.eviction.reason` takes one of eight values, one per
+`gitlab_mcp.credential_pool.eviction.reason` takes one of nine values, one per
 removal path, and every one of them is exported from process start whether it
 has fired or not, zeros included, so a panel is never empty for the ambiguous
 reason:
@@ -536,6 +536,7 @@ reason:
 | `invalid_credential`  | Periodic revalidation found GitLab refusing the credential                                                                                                                                                                                                                                                                                                                                                                           |
 | `below_minimum`       | GitLab said of a credential the pool already serves that it is genuine and carries neither `read_api` nor `api`, the admission minimum: a confirmation or a revalidation got `403 insufficient_scope`, or the token's own description, asked again because its kind was unknown when the entry was built, named only scopes below it ([Credential verification](/gitlab-mcp-server/operations/http-server/#credential-verification)) |
 | `rebuild`             | The configuration shape's catalog registration failed, taking its entries with it                                                                                                                                                                                                                                                                                                                                                    |
+| `tier_resolved`       | An entry built on a provisional tier, because a step of the tier detection went unanswered, was asked again and the answer resolved another tier, so the credential moved to the server of that tier on a new entry that keeps its client and its credential age ([A provisional tier](/gitlab-mcp-server/operations/http-server/#a-provisional-tier)). Its listens end with `credential_reset`                                      |
 
 `size_pressure_busy` is the one to alert on. Every eviction ends the
 subscriptions of the credential it removes, but this is the only one that takes
