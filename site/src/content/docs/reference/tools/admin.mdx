@@ -247,27 +247,26 @@ No parameters.
 - **Fine-grained token**: Application Appearance: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
 - **Behavior**: writes, idempotent
 
-| Parameter                         | Type      | Mandatory | Description                                                      |
-| --------------------------------- | --------- | --------- | ---------------------------------------------------------------- |
-| `description`                     | `string`  | no        | Instance description on sign-in page                             |
-| `email_header_and_footer_enabled` | `boolean` | no        | Enable header and footer in emails                               |
-| `favicon`                         | `string`  | no        | Path to the favicon image asset                                  |
-| `footer_message`                  | `string`  | no        | Message in footer bar                                            |
-| `header_logo`                     | `string`  | no        | Path to the header logo image asset                              |
-| `header_message`                  | `string`  | no        | Message in header bar                                            |
-| `logo`                            | `string`  | no        | Path to the instance logo image asset                            |
-| `member_guidelines`               | `string`  | no        | Markdown guidelines for adding members                           |
-| `message_background_color`        | `string`  | no        | Background color for header/footer messages (hex)                |
-| `message_font_color`              | `string`  | no        | Font color for header/footer messages (hex)                      |
-| `new_project_guidelines`          | `string`  | no        | Markdown guidelines for new projects                             |
-| `profile_image_guidelines`        | `string`  | no        | Markdown guidelines for profile images                           |
-| `pwa_description`                 | `string`  | no        | PWA description                                                  |
-| `pwa_icon`                        | `string`  | no        | Path to the PWA icon image asset                                 |
-| `pwa_name`                        | `string`  | no        | Progressive Web App name                                         |
-| `pwa_short_name`                  | `string`  | no        | PWA short name                                                   |
-| `site_name`                       | `string`  | no        | Site name GitLab appends after the page title in the browser tab |
-| `title`                           | `string`  | no        | Application title displayed in the header                        |
-| `url`                             | `string`  | no        | Redirect URL for the system header/footer logo image             |
+| Parameter                         | Type      | Mandatory | Description                                                                                                                               |
+| --------------------------------- | --------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `description`                     | `string`  | no        | Instance description on sign-in page. Pass an empty string to remove it. Omit the field to leave it untouched                             |
+| `email_header_and_footer_enabled` | `boolean` | no        | Enable header and footer in emails                                                                                                        |
+| `favicon`                         | `string`  | no        | Path to the favicon image asset                                                                                                           |
+| `footer_message`                  | `string`  | no        | Message in footer bar. Pass an empty string to remove it. Omit the field to leave it untouched                                            |
+| `header_logo`                     | `string`  | no        | Path to the header logo image asset                                                                                                       |
+| `header_message`                  | `string`  | no        | Message in header bar. Pass an empty string to remove it. Omit the field to leave it untouched                                            |
+| `logo`                            | `string`  | no        | Path to the instance logo image asset                                                                                                     |
+| `member_guidelines`               | `string`  | no        | Markdown guidelines for adding members. Pass an empty string to remove them. Omit the field to leave them untouched                       |
+| `message_background_color`        | `string`  | no        | Background color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched                |
+| `message_font_color`              | `string`  | no        | Font color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched                      |
+| `new_project_guidelines`          | `string`  | no        | Markdown guidelines for new projects. Pass an empty string to remove them. Omit the field to leave them untouched                         |
+| `profile_image_guidelines`        | `string`  | no        | Markdown guidelines for profile images. Pass an empty string to remove them. Omit the field to leave them untouched                       |
+| `pwa_description`                 | `string`  | no        | PWA description. Pass an empty string to remove it. Omit the field to leave it untouched                                                  |
+| `pwa_icon`                        | `string`  | no        | Path to the PWA icon image asset                                                                                                          |
+| `pwa_name`                        | `string`  | no        | Progressive Web App name. Pass an empty string to remove it. Omit the field to leave it untouched                                         |
+| `pwa_short_name`                  | `string`  | no        | PWA short name. Pass an empty string to remove it. Omit the field to leave it untouched                                                   |
+| `site_name`                       | `string`  | no        | Site name GitLab appends after the page title in the browser tab. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `title`                           | `string`  | no        | Application title displayed in the header. Pass an empty string to remove it. Omit the field to leave it untouched                        |
 
 ### `admin.application_create`
 
@@ -422,10 +421,10 @@ No parameters.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                   | `integer`                                                                                                              | yes       | Broadcast message ID                                                                                                                                                                                                                        |
 | `broadcast_type`       | `string` (`banner`, `notification`)                                                                                    | no        | Type: banner or notification                                                                                                                                                                                                                |
-| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it                                                                                                                                |
+| `color`                | `string`                                                                                                               | no        | Background color as a hex code such as \#E75E40. GitLab deprecates it in favor of theme and still accepts it. Pass an empty string to remove it. Omit the field to leave it untouched                                                       |
 | `dismissable`          | `boolean`                                                                                                              | no        | Whether message can be dismissed                                                                                                                                                                                                            |
 | `ends_at`              | `string`                                                                                                               | no        | End time in ISO 8601 format                                                                                                                                                                                                                 |
-| `font`                 | `string`                                                                                                               | no        | Font for the message                                                                                                                                                                                                                        |
+| `font`                 | `string`                                                                                                               | no        | Font for the message. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                               |
 | `message`              | `string`                                                                                                               | no        | Message text. Supports Markdown.                                                                                                                                                                                                            |
 | `starts_at`            | `string`                                                                                                               | no        | Start time in ISO 8601 format                                                                                                                                                                                                               |
 | `target_access_levels` | `integer[]` (`10`, `15`, `20`, `30`, `40`, `50`)                                                                       | no        | Access levels to target (10=Guest, 15=Planner, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). A broadcast message cannot target Security Manager. Pass \[\] to show the message to every role. Omit the field to leave them untouched |
@@ -1367,7 +1366,7 @@ No parameters.
 | `description`               | `string`  | no        | Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched                                                        |
 | `enable_ssl_verification`   | `boolean` | no        | Enable SSL verification for the hook URL                                                                                                                 |
 | `merge_requests_events`     | `boolean` | no        | Trigger on merge request events                                                                                                                          |
-| `name`                      | `string`  | no        | Updated hook name                                                                                                                                        |
+| `name`                      | `string`  | no        | Updated hook name. Pass an empty string to remove it. Omit the field to leave it untouched                                                               |
 | `push_events`               | `boolean` | no        | Trigger on push events                                                                                                                                   |
 | `push_events_branch_filter` | `string`  | no        | Branch filter for push events (wildcard, regex, or branch name). Pass an empty string to remove it. Omit the field to leave it untouched                 |
 | `repository_update_events`  | `boolean` | no        | Trigger on repository update events                                                                                                                      |
