@@ -7447,6 +7447,35 @@
       ]
     },
     {
+      "id": "environment.stop_stale",
+      "handlers": [
+        "environments.StopStale"
+      ],
+      "classic": "api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /projects/:id/environments/stop_stale",
+          "placeholders": {
+            "id": "project_id"
+          },
+          "class": "mandatory",
+          "classic": "api",
+          "sites": [
+            "environments.StopStale"
+          ],
+          "sdk_methods": [
+            "Environments.StopStaleEnvironments"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "environment.update",
       "handlers": [
         "environments.Update"

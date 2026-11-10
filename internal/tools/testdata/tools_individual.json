@@ -20221,6 +20221,10 @@
           "description": "Topic name (slug-like unique identifier)",
           "type": "string"
         },
+        "organization_id": {
+          "description": "ID of the organization to create the topic in. Omitted, GitLab creates it in the organization it resolves for the request",
+          "type": "integer"
+        },
         "title": {
           "description": "Topic display title",
           "type": "string"
@@ -34133,6 +34137,71 @@
         "name",
         "slug",
         "state"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_environment_stop_stale",
+    "description": "Stop every environment of a project last modified or deployed to before a time, protected environments excepted, and the stops run in the background. Returns: the request's status and GitLab's message. See also: gitlab_environment_list, gitlab_environment_stop, gitlab_environment_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "description": "Stop the environments last modified or deployed to before this time (ISO 8601 format). GitLab takes a time between 10 years ago and 1 week ago",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "before",
+        "project_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "before"
       ],
       "type": "object"
     },
@@ -128276,6 +128345,10 @@
           "description": "Column to order results by",
           "type": "string"
         },
+        "organization_id": {
+          "description": "Return the topics of the organization with this ID. Omitted, GitLab lists the topics of the organization it resolves for the request",
+          "type": "integer"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "minimum": 1,
@@ -166934,15 +167007,17 @@
           "type": "string"
         },
         "status": {
-          "description": "Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled). Applies to the list fallback.",
+          "description": "Filter by status (created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, scheduled). Applies to the list fallback.",
           "enum": [
             "created",
             "waiting_for_resource",
             "preparing",
+            "waiting_for_callback",
             "pending",
             "running",
             "success",
             "failed",
+            "canceling",
             "canceled",
             "skipped",
             "manual",
@@ -167276,15 +167351,17 @@
           "type": "string"
         },
         "status": {
-          "description": "Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled)",
+          "description": "Filter by status (created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, scheduled)",
           "enum": [
             "created",
             "waiting_for_resource",
             "preparing",
+            "waiting_for_callback",
             "pending",
             "running",
             "success",
             "failed",
+            "canceling",
             "canceled",
             "skipped",
             "manual",

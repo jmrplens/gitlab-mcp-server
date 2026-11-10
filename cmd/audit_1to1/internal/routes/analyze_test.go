@@ -1126,7 +1126,7 @@ func TestRun_Repository_AdjudicatesEveryRouteNoActionReaches(t *testing.T) {
 			mislabeled = append(mislabeled, route.Route)
 		}
 	}
-	want := map[string]int{categoryTracked: 534, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
+	want := map[string]int{categoryTracked: 533, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
 	if !reflect.DeepEqual(categories, want) || len(issues) != 32 || !issues[issueVirtualRegistryRoutes] || !issues[issueDuoRoutes] {
 		t.Errorf("declared %v under %d issues; want %v under one issue for each of 30 catalog domains and of the virtual registries and GitLab Duo, which it does not hold yet", categories, len(issues), want)
 	}

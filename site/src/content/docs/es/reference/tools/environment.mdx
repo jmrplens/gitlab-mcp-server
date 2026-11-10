@@ -28,13 +28,13 @@ Parar un entorno ejecuta sus jobs de parada, y `force` se los salta; parar y bor
 
 ## Disponibilidad
 
-Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 23:
+Cuántas de estas acciones sirve una instancia en cada nivel, de un total de 24:
 
-- **Free**: 18
-- **Premium**: 23
-- **Ultimate**: 23
+- **Free**: 19
+- **Premium**: 24
+- **Ultimate**: 24
 
-Acciones de solo lectura: 9 de 23, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 9 de las 23.
+Acciones de solo lectura: 9 de 24, las que conserva un despliegue en modo de solo lectura. A un token con `read_api` y sin `api` se le sirven 9 de las 24.
 
 ## Acciones
 
@@ -64,6 +64,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | [`environment.protected_unprotect`](#environmentprotected_unprotect)                   | Premium | `gitlab_protected_environment_unprotect` |
 | [`environment.protected_update`](#environmentprotected_update)                         | Premium | `gitlab_protected_environment_update`    |
 | [`environment.stop`](#environmentstop)                                                 | Free    | `gitlab_environment_stop`                |
+| [`environment.stop_stale`](#environmentstop_stale)                                     | Free    | `gitlab_environment_stop_stale`          |
 | [`environment.update`](#environmentupdate)                                             | Free    | `gitlab_environment_update`              |
 
 ### `environment.create`
@@ -511,6 +512,22 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `environment_id` | `integer`        | sí        | Environment ID                                        |
 | `project_id`     | `string/integer` | sí        | Project ID or URL-encoded path                        |
 | `force`          | `boolean`        | no        | Force stop even if environment has active deployments |
+
+### `environment.stop_stale`
+
+> Stop every environment of a project last modified or deployed to before a time, protected environments excepted, and the stops run in the background. Returns: the request's status and GitLab's message. See also: [`environment.list`](#environmentlist), [`environment.stop`](#environmentstop), [`environment.delete`](#environmentdelete).
+
+- **Meta-herramienta**: `gitlab_environment`, acción `stop_stale`
+- **Herramienta individual**: `gitlab_environment_stop_stale`
+- **Nivel**: Free
+- **Token clásico u OAuth**: `api`
+- **Token de grano fino**: Environment: Stop en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#environment))
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
+
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                    |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `before`     | `string`         | sí        | Stop the environments last modified or deployed to before this time (ISO 8601 format). GitLab takes a time between 10 years ago and 1 week ago |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                 |
 
 ### `environment.update`
 

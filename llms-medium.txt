@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 3.4.0 | up to 1101 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.4.0 | up to 1102 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -109,7 +109,7 @@ Resolve a full git remote URL to a GitLab project and return its project_id and 
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail.
 
-Actions (23): create, delete, deployment_approve_or_reject, deployment_create, deployment_delete, deployment_get, deployment_list, deployment_merge_requests, deployment_update, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, update
+Actions (24): create, delete, deployment_approve_or_reject, deployment_create, deployment_delete, deployment_get, deployment_list, deployment_merge_requests, deployment_update, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, stop_stale, update
 
 ### gitlab_feature_flags
 
@@ -447,7 +447,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1101 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out.
@@ -661,6 +661,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1101 tools, one per operation
 - gitlab_environment_get: Get details of a specific environment in a GitLab project by its ID.
 - gitlab_environment_list: List environments for a GitLab project.
 - gitlab_environment_stop: Stop a running environment in a GitLab project.
+- gitlab_environment_stop_stale: Stop every environment of a project last modified or deployed to before a time, protected environments excepted, and the stops run in the background.
 - gitlab_environment_update: Update an existing environment in a project.
 - gitlab_epic_create: Create a new epic in a group, optionally under a parent epic and already linked to others.
 - gitlab_epic_delete: Permanently delete an epic from a group.
