@@ -1069,34 +1069,34 @@ Sin parámetros.
 - **Token de grano fino**: User: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                 | Tipo      | Requerido | Descripción                                                                               |
-| ------------------------- | --------- | --------- | ----------------------------------------------------------------------------------------- |
-| `user_id`                 | `integer` | sí        | The ID of the user to modify                                                              |
-| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                          |
-| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                     |
-| `avatar`                  | `object`  | no        | New avatar image to upload for the user, from a local file or base64 content              |
-| `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched     |
-| `can_create_group`        | `boolean` | no        | Allow user to create groups                                                               |
-| `commit_email`            | `string`  | no        | Email used for commits                                                                    |
-| `email`                   | `string`  | no        | New email address                                                                         |
-| `extern_uid`              | `string`  | no        | External UID for the provider                                                             |
-| `external`                | `boolean` | no        | Mark or unmark as external                                                                |
-| `linkedin`                | `string`  | no        | LinkedIn account                                                                          |
-| `location`                | `string`  | no        | New location                                                                              |
-| `name`                    | `string`  | no        | New display name                                                                          |
-| `note`                    | `string`  | no        | New admin note                                                                            |
-| `organization`            | `string`  | no        | New organization. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `password`                | `string`  | no        | New password                                                                              |
-| `private_profile`         | `boolean` | no        | Set profile as private                                                                    |
-| `projects_limit`          | `integer` | no        | New maximum projects limit                                                                |
-| `provider`                | `string`  | no        | External provider name (use with extern_uid)                                              |
-| `public_email`            | `string`  | no        | Publicly visible email address                                                            |
-| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                                                       |
-| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                                                         |
-| `twitter`                 | `string`  | no        | Twitter/X account                                                                         |
-| `username`                | `string`  | no        | New username                                                                              |
-| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file                                             |
-| `website_url`             | `string`  | no        | User website URL. Pass an empty string to remove it. Omit the field to leave it untouched |
+| Parámetro                 | Tipo      | Requerido | Descripción                                                                                                                                                                      |
+| ------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`                 | `integer` | sí        | The ID of the user to modify                                                                                                                                                     |
+| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                                                                                                                 |
+| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                                                                                                            |
+| `avatar`                  | `object`  | no        | New avatar image to upload for the user, from a local file or base64 content                                                                                                     |
+| `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                            |
+| `can_create_group`        | `boolean` | no        | Allow user to create groups                                                                                                                                                      |
+| `commit_email`            | `string`  | no        | Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched |
+| `email`                   | `string`  | no        | New email address                                                                                                                                                                |
+| `extern_uid`              | `string`  | no        | External UID for the provider                                                                                                                                                    |
+| `external`                | `boolean` | no        | Mark or unmark as external                                                                                                                                                       |
+| `linkedin`                | `string`  | no        | LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
+| `location`                | `string`  | no        | New location. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                            |
+| `name`                    | `string`  | no        | New display name                                                                                                                                                                 |
+| `note`                    | `string`  | no        | New admin note. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                          |
+| `organization`            | `string`  | no        | New organization. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
+| `password`                | `string`  | no        | New password                                                                                                                                                                     |
+| `private_profile`         | `boolean` | no        | Set profile as private                                                                                                                                                           |
+| `projects_limit`          | `integer` | no        | New maximum projects limit                                                                                                                                                       |
+| `provider`                | `string`  | no        | External provider name (use with extern_uid)                                                                                                                                     |
+| `public_email`            | `string`  | no        | Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched                                                                          |
+| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                                                                                                                                              |
+| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                                                                                                                                                |
+| `twitter`                 | `string`  | no        | Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                       |
+| `username`                | `string`  | no        | New username                                                                                                                                                                     |
+| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file                                                                                                                                    |
+| `website_url`             | `string`  | no        | User website URL. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
 
 ### `user.namespace_exists`
 
@@ -1189,28 +1189,28 @@ Sin parámetros.
 - **Token de grano fino**: Notification Setting: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                      | Tipo                                                                 | Requerido | Descripción                                                         |
-| ------------------------------ | -------------------------------------------------------------------- | --------- | ------------------------------------------------------------------- |
-| `close_issue`                  | `boolean`                                                            | no        | Notify on issue close                                               |
-| `close_merge_request`          | `boolean`                                                            | no        | Notify on MR close                                                  |
-| `failed_pipeline`              | `boolean`                                                            | no        | Notify on pipeline failure                                          |
-| `fixed_pipeline`               | `boolean`                                                            | no        | Notify on pipeline fix                                              |
-| `issue_due`                    | `boolean`                                                            | no        | Notify on issue due date                                            |
-| `level`                        | `string` (`disabled`, `participating`, `watch`, `mention`, `custom`) | no        | Notification level: disabled, participating, watch, mention, custom |
-| `merge_merge_request`          | `boolean`                                                            | no        | Notify on MR merge                                                  |
-| `merge_when_pipeline_succeeds` | `boolean`                                                            | no        | Notify on merge when pipeline succeeds                              |
-| `moved_project`                | `boolean`                                                            | no        | Notify on project move                                              |
-| `new_epic` (Premium)           | `boolean`                                                            | no        | Notify on new epic                                                  |
-| `new_issue`                    | `boolean`                                                            | no        | Notify on new issue                                                 |
-| `new_merge_request`            | `boolean`                                                            | no        | Notify on new MR                                                    |
-| `new_note`                     | `boolean`                                                            | no        | Notify on new note                                                  |
-| `notification_email`           | `string`                                                             | no        | Email address for notifications                                     |
-| `push_to_merge_request`        | `boolean`                                                            | no        | Notify on push to MR                                                |
-| `reassign_issue`               | `boolean`                                                            | no        | Notify on issue reassign                                            |
-| `reassign_merge_request`       | `boolean`                                                            | no        | Notify on MR reassign                                               |
-| `reopen_issue`                 | `boolean`                                                            | no        | Notify on issue reopen                                              |
-| `reopen_merge_request`         | `boolean`                                                            | no        | Notify on MR reopen                                                 |
-| `success_pipeline`             | `boolean`                                                            | no        | Notify on pipeline success                                          |
+| Parámetro                      | Tipo                                                                 | Requerido | Descripción                                                                                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `close_issue`                  | `boolean`                                                            | no        | Notify on issue close                                                                                                                                                              |
+| `close_merge_request`          | `boolean`                                                            | no        | Notify on MR close                                                                                                                                                                 |
+| `failed_pipeline`              | `boolean`                                                            | no        | Notify on pipeline failure                                                                                                                                                         |
+| `fixed_pipeline`               | `boolean`                                                            | no        | Notify on pipeline fix                                                                                                                                                             |
+| `issue_due`                    | `boolean`                                                            | no        | Notify on issue due date                                                                                                                                                           |
+| `level`                        | `string` (`disabled`, `participating`, `watch`, `mention`, `custom`) | no        | Notification level: disabled, participating, watch, mention, custom                                                                                                                |
+| `merge_merge_request`          | `boolean`                                                            | no        | Notify on MR merge                                                                                                                                                                 |
+| `merge_when_pipeline_succeeds` | `boolean`                                                            | no        | Notify on merge when pipeline succeeds                                                                                                                                             |
+| `moved_project`                | `boolean`                                                            | no        | Notify on project move                                                                                                                                                             |
+| `new_epic` (Premium)           | `boolean`                                                            | no        | Notify on new epic                                                                                                                                                                 |
+| `new_issue`                    | `boolean`                                                            | no        | Notify on new issue                                                                                                                                                                |
+| `new_merge_request`            | `boolean`                                                            | no        | Notify on new MR                                                                                                                                                                   |
+| `new_note`                     | `boolean`                                                            | no        | Notify on new note                                                                                                                                                                 |
+| `notification_email`           | `string`                                                             | no        | Email address for notifications. Pass an empty string to remove it, so notifications go to the primary email, which GitLab then reports here. Omit the field to leave it untouched |
+| `push_to_merge_request`        | `boolean`                                                            | no        | Notify on push to MR                                                                                                                                                               |
+| `reassign_issue`               | `boolean`                                                            | no        | Notify on issue reassign                                                                                                                                                           |
+| `reassign_merge_request`       | `boolean`                                                            | no        | Notify on MR reassign                                                                                                                                                              |
+| `reopen_issue`                 | `boolean`                                                            | no        | Notify on issue reopen                                                                                                                                                             |
+| `reopen_merge_request`         | `boolean`                                                            | no        | Notify on MR reopen                                                                                                                                                                |
+| `success_pipeline`             | `boolean`                                                            | no        | Notify on pipeline success                                                                                                                                                         |
 
 ### `user.notification_group_get`
 
@@ -1351,12 +1351,12 @@ Sin parámetros.
 - **Token de grano fino**: Status: Update en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro            | Tipo                                                                                  | Requerido | Descripción                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
-| `availability`       | `string` (`not_set`, `busy`)                                                          | no        | User availability: not_set (clear busy state) or busy.                                                        |
-| `clear_status_after` | `string` (`30_minutes`, `3_hours`, `8_hours`, `1_day`, `3_days`, `7_days`, `30_days`) | no        | Duration after which the status auto-clears: 30_minutes, 3_hours, 8_hours, 1_day, 3_days, 7_days, or 30_days. |
-| `emoji`              | `string`                                                                              | no        | The emoji to set for the status (e.g. coffee or speech_balloon)                                               |
-| `message`            | `string`                                                                              | no        | The status message text                                                                                       |
+| Parámetro            | Tipo                                                                                  | Requerido | Descripción                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `availability`       | `string` (`not_set`, `busy`)                                                          | no        | User availability: not_set (clear busy state) or busy.                                                                                                                                                                                                                                            |
+| `clear_status_after` | `string` (`30_minutes`, `3_hours`, `8_hours`, `1_day`, `3_days`, `7_days`, `30_days`) | no        | Duration after which the status auto-clears: 30_minutes, 3_hours, 8_hours, 1_day, 3_days, 7_days, or 30_days.                                                                                                                                                                                     |
+| `emoji`              | `string`                                                                              | no        | The emoji to set for the status (e.g. coffee or speech_balloon). This action replaces the whole status: an empty or omitted emoji gets GitLab's default speech_balloon while a message or a busy availability remains, and an empty emoji and message with availability not_set remove the status |
+| `message`            | `string`                                                                              | no        | The status message text. This action replaces the whole status: pass an empty string, or leave it out, for no message. An empty message and emoji with availability not_set remove the status                                                                                                     |
 
 ### `user.ssh_keys`
 

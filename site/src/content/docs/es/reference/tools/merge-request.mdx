@@ -182,14 +182,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Merge Request Approval Rule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_request))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro            | Tipo             | Requerido | Descripción                    |
+| Parámetro            | Tipo             | Requerido | Descripción                                                                                                       |
 | -------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| `approval_rule_id`   | `integer`        | sí        | Approval rule ID               |
-| `merge_request_iid`  | `integer`        | sí        | Merge request internal ID      |
-| `project_id`         | `string/integer` | sí        | Project ID or URL-encoded path |
-| `approvals_required` | `integer`        | no        | Number of approvals required   |
+| `approval_rule_id`   | `integer`        | sí        | Approval rule ID                                                                                                  |
+| `merge_request_iid`  | `integer`        | sí        | Merge request internal ID                                                                                         |
+| `project_id`         | `string/integer` | sí        | Project ID or URL-encoded path                                                                                    |
+| `approvals_required` | `integer`        | no        | Number of approvals required                                                                                      |
 | `group_ids`          | `integer[]`      | no        | Group IDs eligible to approve. Pass \[\] to take every group off the rule. Omit the field to leave them untouched |
-| `name`               | `string`         | no        | Rule name                      |
+| `name`               | `string`         | no        | Rule name                                                                                                         |
 | `user_ids`           | `integer[]`      | no        | User IDs eligible to approve. Pass \[\] to take every user off the rule. Omit the field to leave them untouched   |
 
 ### `merge_request.approval_rules`

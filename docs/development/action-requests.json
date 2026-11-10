@@ -7485,6 +7485,10 @@
         {
           "kind": "rest",
           "route": "GET /projects/:id/environments/:environment_id",
+          "placeholders": {
+            "environment_id": "environment_id",
+            "id": "project_id"
+          },
           "class": "optional",
           "classic": "read_api",
           "sites": [

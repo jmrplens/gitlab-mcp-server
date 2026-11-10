@@ -287,32 +287,32 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 
 ## `environment`
 
-| Action                                     | Needs                                            | Served empty |
-| ------------------------------------------ | ------------------------------------------------ | ------------ |
-| `environment.create`                       | Environment: Create at project                   |              |
-| `environment.delete`                       | Environment: Delete at project                   |              |
-| `environment.deployment_approve_or_reject` | Deployment: Approve at project                   |              |
-| `environment.deployment_create`            | Deployment: Create at project                    |              |
-| `environment.deployment_delete`            | Deployment: Delete at project                    |              |
-| `environment.deployment_get`               | Deployment: Read at project                      |              |
-| `environment.deployment_list`              | Deployment: Read at project                      |              |
-| `environment.deployment_merge_requests`    | Deployment: Read, Merge Request: Read at project |              |
-| `environment.deployment_update`            | Deployment: Update at project                    |              |
-| `environment.freeze_create`                | Freeze Period: Create at project                 |              |
-| `environment.freeze_delete`                | Freeze Period: Delete at project                 |              |
-| `environment.freeze_get`                   | Freeze Period: Read at project                   |              |
-| `environment.freeze_list`                  | Freeze Period: Read at project                   |              |
-| `environment.freeze_update`                | Freeze Period: Update at project                 |              |
-| `environment.get`                          | Environment: Read at project                     |              |
-| `environment.list`                         | Environment: Read at project                     |              |
-| `environment.protected_get`                | Protected Environment: Read at project           |              |
-| `environment.protected_list`               | Protected Environment: Read at project           |              |
-| `environment.protected_protect`            | Protected Environment: Create at project         |              |
-| `environment.protected_unprotect`          | Protected Environment: Delete at project         |              |
-| `environment.protected_update`             | Protected Environment: Update at project         |              |
-| `environment.stop`                         | Environment: Stop at project                     |              |
-| `environment.stop_stale`                   | Environment: Stop at project                     |              |
-| `environment.update`                       | Environment: Update at project                   |              |
+| Action                                     | Needs                                                                              | Served empty |
+| ------------------------------------------ | ---------------------------------------------------------------------------------- | ------------ |
+| `environment.create`                       | Environment: Create at project                                                     |              |
+| `environment.delete`                       | Environment: Delete at project                                                     |              |
+| `environment.deployment_approve_or_reject` | Deployment: Approve at project                                                     |              |
+| `environment.deployment_create`            | Deployment: Create at project                                                      |              |
+| `environment.deployment_delete`            | Deployment: Delete at project                                                      |              |
+| `environment.deployment_get`               | Deployment: Read at project                                                        |              |
+| `environment.deployment_list`              | Deployment: Read at project                                                        |              |
+| `environment.deployment_merge_requests`    | Deployment: Read, Merge Request: Read at project                                   |              |
+| `environment.deployment_update`            | Deployment: Update at project                                                      |              |
+| `environment.freeze_create`                | Freeze Period: Create at project                                                   |              |
+| `environment.freeze_delete`                | Freeze Period: Delete at project                                                   |              |
+| `environment.freeze_get`                   | Freeze Period: Read at project                                                     |              |
+| `environment.freeze_list`                  | Freeze Period: Read at project                                                     |              |
+| `environment.freeze_update`                | Freeze Period: Update at project                                                   |              |
+| `environment.get`                          | Environment: Read at project                                                       |              |
+| `environment.list`                         | Environment: Read at project                                                       |              |
+| `environment.protected_get`                | Protected Environment: Read at project                                             |              |
+| `environment.protected_list`               | Protected Environment: Read at project                                             |              |
+| `environment.protected_protect`            | Protected Environment: Create at project                                           |              |
+| `environment.protected_unprotect`          | Protected Environment: Delete at project                                           |              |
+| `environment.protected_update`             | Protected Environment: Update at project                                           |              |
+| `environment.stop`                         | Environment: Stop at project                                                       |              |
+| `environment.stop_stale`                   | Environment: Stop at project                                                       |              |
+| `environment.update`                       | Environment: Update at project. Some calls also need: Environment: Read at project |              |
 
 ## `external_status_check`
 

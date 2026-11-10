@@ -6771,7 +6771,8 @@
       "method": "PUT",
       "path": "/projects/:project_id/feature_flags_user_lists/:feature_flags_user_list_id",
       "body": [
-        "name"
+        "name",
+        "user_xids"
       ],
       "identifiers": {
         ":feature_flags_user_list_id": 1,
@@ -15993,10 +15994,12 @@
         "external_authorization_classification_label",
         "import_url",
         "issue_branch_template",
+        "issues_template",
         "max_artifacts_size",
         "merge_commit_template",
         "merge_request_title_regex",
         "merge_request_title_regex_description",
+        "merge_requests_template",
         "merge_train_enforcement",
         "mirror",
         "mirror_branch_regex",
