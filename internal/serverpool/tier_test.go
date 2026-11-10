@@ -897,10 +897,6 @@ func TestRedetectTier_AnEntryNoLongerPooled_IsNotAsked(t *testing.T) {
 // has refused, which is left to the path that is ending it.
 func TestReplaceTier_KeepsTheOldEntryWhenTheNewShapeCannotTakeIt(t *testing.T) {
 	ultimate := gitlabclient.TierResolution{Tier: edition.Ultimate, Answered: true}
-	const (
-		factoryFailed = "server pool: could not build the shape a provisional tier resolved to; keeping the entry and asking again"
-		insertRefused = "server pool: the shape a provisional tier resolved to could not take the entry; keeping it and asking again"
-	)
 	cases := []struct {
 		name string
 		// refuseInsert has the insert callback refuse every entry after the
@@ -917,16 +913,16 @@ func TestReplaceTier_KeepsTheOldEntryWhenTheNewShapeCannotTakeIt(t *testing.T) {
 			prepare: func(f *shapeFactory, _ *ServerPool, _ string, _ *Entry) {
 				f.breaks(errors.New("the shape could not be built"))
 			},
-			wantAsked: 1, wantLog: factoryFailed,
+			wantAsked: 1, wantLog: tierShapeFailedLog,
 		},
 		{
 			name:      "the factory hands back no server",
 			prepare:   func(f *shapeFactory, _ *ServerPool, _ string, _ *Entry) { f.breaks(nil) },
-			wantAsked: 1, wantLog: factoryFailed,
+			wantAsked: 1, wantLog: tierShapeFailedLog,
 		},
 		{
 			name: "the insert callback refuses the replacement", refuseInsert: true,
-			wantAsked: 1, wantLog: insertRefused,
+			wantAsked: 1, wantLog: tierShapeRefusedLog,
 		},
 		{
 			name:    "the entry was dropped meanwhile",

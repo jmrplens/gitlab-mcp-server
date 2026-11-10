@@ -1602,7 +1602,41 @@ const (
 	evictedSubscriberLog  = "server pool: evicted an entry that was serving a subscription"
 	refusedAtInsertLog    = "server pool: dropped a new entry whose server was already unusable"
 	unfinishedBuildLog    = "server pool: evicted entry whose build did not finish"
+	tierNoSlotLog         = "server pool: no credential probe slot free to ask a provisional tier again; asking on the next tick"
+	tierAskedAgainLog     = "server pool: asking a provisional tier again"
+	tierKeptLog           = "server pool: a provisional tier was answered whole and is kept"
+	tierStillLog          = "server pool: a provisional tier is still provisional; asking again later"
+	tierShapeFailedLog    = "server pool: could not build the shape a provisional tier resolved to; keeping the entry and asking again"
+	tierShapeRefusedLog   = "server pool: the shape a provisional tier resolved to could not take the entry; keeping it and asking again"
+	tierMovedLog          = "server pool: moved an entry to the tier its re-detection resolved"
 )
+
+// provisionalEntryOver builds a pool that detects the tier against a
+// self-managed stand-in whose license answers 502, and the entry of token in
+// it, provisional on Free and due for its next ask. Before the drive asks the
+// tier again, the stand-in answers license from then on, and factory and
+// options shape the pool.
+func provisionalEntryOver(t *testing.T, token string, license func(w http.ResponseWriter), factory *shapeFactory, options ...Option) (*ServerPool, *Entry, string) {
+	t.Helper()
+	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+	pool := tierPool(t, g, factory, &evictionLog{}, options...)
+	entry, _ := buildTierEntry(t, pool, g, token)
+	g.set(license, "")
+	makeTierDue(t, pool, entry)
+	return pool, entry, g.url
+}
+
+// movedFrom returns the entry a re-detection pooled in place of entry, the
+// entry of token on gitlabURL, failing the test unless one was pooled on the
+// Ultimate shape.
+func movedFrom(t *testing.T, pool *ServerPool, entry *Entry, gitlabURL, token string) *Entry {
+	t.Helper()
+	next := pooledUnder(pool, sessionKey(token, gitlabURL))
+	if next == nil || next == entry || next.Config().Tier != edition.Ultimate {
+		t.Fatal("the re-detection did not move the entry to the Ultimate shape")
+	}
+	return next
+}
 
 // entryLineCase is one way the pool comes to write about an entry: the lines
 // it writes, each exactly once, and how a request, a sweep or a caller of the
@@ -1620,10 +1654,13 @@ type entryLineCase struct {
 // TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial verifies
 // that every line the pool writes about one entry names it by the handle the
 // entry was created with, the one the created-entry line writes, and by the
-// instance it was built for: the lines of its build, of a 401 on one of its
-// calls and the confirmation that follows, of a revalidation round, of a
-// fine-grained token's grant read at the build and re-read after it, and every
-// line that ends it, for each of its causes. Before issue 1761 only the
+// instance it was built for, with whether that instance is licensed for the
+// tier the entry serves: the lines of its build, of a 401 on one of its calls
+// and the confirmation that follows, of a revalidation round, of a
+// fine-grained token's grant read at the build and re-read after it, of a
+// provisional tier asked again, kept, left provisional or moved to the shape
+// it resolved to (issue 1782), and every line that ends it, for each of its
+// causes, a replacement on another tier's shape included. Before issue 1761 only the
 // created-entry line and the two credential drops named the handle, so an
 // operator could see an entry refused on revalidation, aged past the ceiling
 // or taken for a subscriber's room and not tell whose credential it was.
@@ -1824,6 +1861,77 @@ func TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial(t *test
 			pool.revalidateAll(t.Context())
 			return g.server.URL, entry
 		}},
+		{name: "it is created on a provisional tier", messages: []string{createdEntryLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			_, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusBadGateway, ""), &shapeFactory{})
+			return gitlabURL, entry
+		}},
+		{name: "its provisional tier finds no probe slot free", messages: []string{tierNoSlotLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusBadGateway, ""), &shapeFactory{})
+			takeEveryProbeSlot(t, pool)
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, entry
+		}},
+		{name: "its provisional tier is still provisional", messages: []string{tierAskedAgainLog, tierStillLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusBadGateway, ""), &shapeFactory{})
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, entry
+		}},
+		{name: "its provisional tier is answered whole", messages: []string{tierAskedAgainLog, tierKeptLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusForbidden, ""), &shapeFactory{})
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, entry
+		}},
+		{name: "the shape its tier resolved to cannot be built", messages: []string{tierShapeFailedLog, tierStillLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			factory := &shapeFactory{}
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusOK, "ultimate"), factory)
+			factory.breaks(errors.New("the shape could not be built"))
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, entry
+		}},
+		{name: "the shape its tier resolved to refuses it", messages: []string{tierShapeRefusedLog, tierStillLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			var inserts atomic.Int64
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusOK, "ultimate"), &shapeFactory{},
+				WithOnInsert(func(*Entry) bool { return inserts.Add(1) == 1 }))
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, entry
+		}},
+		// The three below name the replacement: it serves the tier the
+		// re-detection resolved, and whether the instance is licensed is that
+		// tier's, not the provisional one the entry was built on.
+		{name: "it is moved to the tier its re-detection resolved", messages: []string{tierMovedLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusOK, "ultimate"), &shapeFactory{})
+			pool.redetectDueTiers(t.Context())
+			return gitlabURL, movedFrom(t, pool, entry, gitlabURL, token)
+		}},
+		{name: "a 401 handed to the entry it replaced ends the replacement", messages: []string{rejectedOnACallLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			pool, entry, gitlabURL := provisionalEntryOver(t, token, licenseAnswer(http.StatusOK, "ultimate"), &shapeFactory{})
+			pool.redetectDueTiers(t.Context())
+			next := movedFrom(t, pool, entry, gitlabURL, token)
+			entry.rejected.Store(true)
+			pool.evictRejectedCredential(sessionKey(token, gitlabURL), entry)
+			return gitlabURL, next
+		}},
+		{name: "a revalidation of the entry it replaced finds it below the minimum", messages: []string{belowMinimumLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+			pool := tierPool(t, g, &shapeFactory{}, &evictionLog{})
+			entry, key := buildTierEntry(t, pool, g, token)
+			g.set(licenseAnswer(http.StatusOK, "ultimate"), "")
+			makeTierDue(t, pool, entry)
+			pool.redetectDueTiers(t.Context())
+			next := movedFrom(t, pool, entry, g.url, token)
+			g.selfScopes.Store(&[]string{"read_user"})
+			pool.revalidateEntry(t.Context(), key, entry)
+			return g.url, next
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1836,7 +1944,7 @@ func TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial(t *test
 					}
 					for _, message := range tc.messages {
 						t.Run(message, func(t *testing.T) {
-							assertEntryLine(t, captured, message, token, gitlabURL, entry.credentialHash)
+							assertEntryLine(t, captured, message, token, gitlabURL, entry)
 						})
 					}
 				})
@@ -1932,22 +2040,27 @@ func linesAbout(captured *capturedRecords, message, gitlabURL string) []slog.Rec
 	return lines
 }
 
-// assertEntryLine holds the line message written about the entry of token on
-// gitlabURL to being written once, naming the handle the entry was created
-// with, and to carrying in no value the token, its last four characters, its
+// assertEntryLine holds the line message written about entry, the entry of
+// token on gitlabURL, to being written once, naming the handle the entry was
+// created with and whether the instance is licensed for the tier entry
+// serves, and to carrying in no value the token, its last four characters, its
 // unkeyed digest or the pool key. Where a created-entry line was written on
 // the same instance, the handle is also one of those it names: an insertion
 // the pool refused writes none.
-func assertEntryLine(t *testing.T, captured *capturedRecords, message, token, gitlabURL, created string) {
+func assertEntryLine(t *testing.T, captured *capturedRecords, message, token, gitlabURL string, entry *Entry) {
 	t.Helper()
 	lines := linesAbout(captured, message, gitlabURL)
 	if len(lines) != 1 {
 		t.Fatalf("%d records of %q about the entry, want exactly one", len(lines), message)
 	}
 	record := lines[0]
+	created := entry.credentialHash
 	handle, ok := logAttr(record, telemetry.LogFieldCredentialHash)
 	if !ok || handle.String() != created {
 		t.Errorf("%s = %v, present %v; want the creation handle %q", telemetry.LogFieldCredentialHash, handle, ok, created)
+	}
+	if enterprise, named := logAttr(record, "enterprise"); !named || enterprise.Kind() != slog.KindBool || enterprise.Bool() != entry.Config().Enterprise() {
+		t.Errorf("enterprise = %v, present %v; want %t, the tier the entry serves", enterprise, named, entry.Config().Enterprise())
 	}
 	var namedAtCreation []string
 	for _, line := range linesAbout(captured, createdEntryLog, gitlabURL) {

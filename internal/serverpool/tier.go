@@ -11,7 +11,6 @@ import (
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
@@ -161,7 +160,8 @@ func (p *ServerPool) redetectDueTiers(ctx context.Context) {
 		}
 		release, ok := p.tryProbeSlot()
 		if !ok {
-			slog.DebugContext(ctx, "server pool: no credential probe slot free to ask a provisional tier again; asking on the next tick")
+			slog.DebugContext(ctx, "server pool: no credential probe slot free to ask a provisional tier again; asking on the next tick",
+				entryLogArgs(due.entry)...)
 			break
 		}
 		asks.Go(func() {
@@ -220,8 +220,7 @@ func (p *ServerPool) redetectTier(ctx context.Context, key string, entry *Entry)
 	askCtx, cancel := context.WithTimeout(ctx, p.detectTimeout)
 	defer cancel()
 	slog.DebugContext(ctx, "server pool: asking a provisional tier again",
-		"tier", entry.serverConfig.Tier.String(),
-		telemetry.LogFieldCredentialHash, entry.credentialHash)
+		entryLogArgs(entry, "tier", entry.serverConfig.Tier.String())...)
 	got := entry.client.ResolveTier(askCtx, ctx)
 	p.metrics.TierRedetections.Add(1)
 	p.settleTier(ctx, key, entry, got)
@@ -269,9 +268,10 @@ func (p *ServerPool) keepResolvedTier(ctx context.Context, key string, entry *En
 	asked := entry.provisional.asked + 1
 	entry.provisional = nil
 	slog.InfoContext(ctx, "server pool: a provisional tier was answered whole and is kept",
-		"tier", entry.serverConfig.Tier.String(),
-		"asked", asked,
-		telemetry.LogFieldCredentialHash, entry.credentialHash)
+		entryLogArgs(entry,
+			"tier", entry.serverConfig.Tier.String(),
+			"asked", asked,
+		)...)
 }
 
 // askTierLater schedules the next ask of entry's provisional tier, if entry is
@@ -293,10 +293,11 @@ func (p *ServerPool) askTierLaterLocked(ctx context.Context, entry *Entry) {
 	mark.asked++
 	mark.askAfter(time.Now(), tierRedetectDelay(mark.wait))
 	slog.DebugContext(ctx, "server pool: a provisional tier is still provisional; asking again later",
-		"tier", entry.serverConfig.Tier.String(),
-		"asked", mark.asked,
-		"next_ask_in", mark.wait,
-		telemetry.LogFieldCredentialHash, entry.credentialHash)
+		entryLogArgs(entry,
+			"tier", entry.serverConfig.Tier.String(),
+			"asked", mark.asked,
+			"next_ask_in", mark.wait,
+		)...)
 }
 
 // errNoReplacementServer is a factory that reported success while handing
@@ -347,10 +348,11 @@ func (p *ServerPool) replaceTier(ctx context.Context, key string, old *Entry, go
 	}
 	if err != nil {
 		slog.WarnContext(ctx, "server pool: could not build the shape a provisional tier resolved to; keeping the entry and asking again",
-			"tier", old.serverConfig.Tier.String(),
-			"resolved", got.Tier.String(),
-			"error", err,
-			telemetry.LogFieldCredentialHash, old.credentialHash)
+			entryLogArgs(old,
+				"tier", old.serverConfig.Tier.String(),
+				"resolved", got.Tier.String(),
+				"error", err,
+			)...)
 		p.askTierLater(ctx, key, old)
 		return
 	}
@@ -379,21 +381,24 @@ func (p *ServerPool) replaceTier(ctx context.Context, key string, old *Entry, go
 	if p.onInsert != nil && !p.onInsert(next) {
 		p.entries[key] = old
 		slog.WarnContext(ctx, "server pool: the shape a provisional tier resolved to could not take the entry; keeping it and asking again",
-			"tier", old.serverConfig.Tier.String(),
-			"resolved", got.Tier.String(),
-			telemetry.LogFieldCredentialHash, old.credentialHash)
+			entryLogArgs(old,
+				"tier", old.serverConfig.Tier.String(),
+				"resolved", got.Tier.String(),
+			)...)
 		p.askTierLaterLocked(ctx, old)
 		return
 	}
 	old.client.SetTier(got.Tier)
 	p.watchUnauthorized(key, next) //nolint:contextcheck // the hook runs on a later 401, on the refused call's goroutine, under no context of this sweep's
 	p.metrics.TierResolvedEvictions.Add(1)
+	// Named as the replacement: whether the instance is licensed follows the
+	// tier it now serves.
 	slog.InfoContext(ctx, "server pool: moved an entry to the tier its re-detection resolved",
-		"tier_from", old.serverConfig.Tier.String(),
-		"tier_to", got.Tier.String(),
-		"tier_source", p.tierSource(next),
-		"gitlab_url", cfg.GitLabURL,
-		telemetry.LogFieldCredentialHash, next.credentialHash)
+		entryLogArgs(next,
+			"tier_from", old.serverConfig.Tier.String(),
+			"tier_to", got.Tier.String(),
+			"tier_source", p.tierSource(next),
+		)...)
 	// The second of the two places an entry leaves p.entries, beside
 	// dropEntry: here something takes its place, and the callback is told the
 	// old one is gone all the same. Last, so a callback that panics leaves the
