@@ -66,6 +66,6 @@ the option to build from source.
 
 ## Links
 
-- Documentation: <https://docs.jmrp.io/gitlab-mcp-server>
+- Documentation: <https://docs.jmrp.io/gitlab-mcp-server/>
 - Source and issues: <https://github.com/jmrplens/gitlab-mcp-server>
 - License: MIT

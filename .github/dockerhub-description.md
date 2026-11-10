@@ -54,7 +54,7 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 ## Documentation
 
-- [Documentation](https://docs.jmrp.io/gitlab-mcp-server)
+- [Documentation](https://docs.jmrp.io/gitlab-mcp-server/)
 - [Source repository](https://github.com/jmrplens/gitlab-mcp-server)
 - [Releases and signed binaries](https://github.com/jmrplens/gitlab-mcp-server/releases)
 

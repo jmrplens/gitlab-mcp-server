@@ -101,7 +101,7 @@ For a self-managed instance, set `GITLAB_URL=https://gitlab.example.com` beside 
 
 ## Documentation
 
-Everything else is at **[docs.jmrp.io/gitlab-mcp-server](https://docs.jmrp.io/gitlab-mcp-server)**, in English and Spanish: [getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/), [configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/), [tool surfaces](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/), [HTTP server mode](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/), [security](https://docs.jmrp.io/gitlab-mcp-server/operations/security/), [privacy](https://docs.jmrp.io/gitlab-mcp-server/operations/privacy/) and [troubleshooting](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/).
+Everything else is at **[docs.jmrp.io/gitlab-mcp-server](https://docs.jmrp.io/gitlab-mcp-server/)**, in English and Spanish: [getting started](https://docs.jmrp.io/gitlab-mcp-server/getting-started/), [configuration](https://docs.jmrp.io/gitlab-mcp-server/configuration/), [tool surfaces](https://docs.jmrp.io/gitlab-mcp-server/tools/overview/), [HTTP server mode](https://docs.jmrp.io/gitlab-mcp-server/operations/http-server/), [security](https://docs.jmrp.io/gitlab-mcp-server/operations/security/), [privacy](https://docs.jmrp.io/gitlab-mcp-server/operations/privacy/) and [troubleshooting](https://docs.jmrp.io/gitlab-mcp-server/operations/troubleshooting/).
 
 ## Packages and listings
 

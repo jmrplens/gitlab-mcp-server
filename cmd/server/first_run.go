@@ -66,8 +66,8 @@ Set them in your MCP client's configuration rather than in this terminal. The
 per-client JSON, and the OAuth alternative if you would rather not paste a
 token at all, are here:
 
-  %s/getting-started/
-  %s/configuration/
+  %sgetting-started/
+  %sconfiguration/
 
 For every flag and environment variable this build accepts:
 

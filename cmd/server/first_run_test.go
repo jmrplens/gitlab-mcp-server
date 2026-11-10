@@ -93,6 +93,11 @@ func TestFirstRunGuidance_NamesWhatItNeeds(t *testing.T) {
 	if strings.Contains(got, "/guides/") {
 		t.Errorf("the screen links into /guides/, a path the documentation site does not serve:\n%s", got)
 	}
+	// projectWebsite ends with a slash, so a route is appended without one;
+	// requireSitePages trims every leading slash and would not see a doubled one.
+	if strings.Contains(got, "gitlab-mcp-server//") {
+		t.Errorf("the screen joins the site root and a route with a doubled slash:\n%s", got)
+	}
 	requireSitePages(t, got)
 	// Each value in its own place: the banner names the version, and the
 	// command line to copy names the program, spelled the way it runs here.
