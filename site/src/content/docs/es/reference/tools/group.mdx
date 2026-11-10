@@ -981,7 +981,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 | `start_date`               | `string`                                               | no        | Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched                          |
 | `state_event`              | `string` (`CLOSE`, `REOPEN`)                           | no        | State event: CLOSE or REOPEN                                                                                                          |
 | `title`                    | `string`                                               | no        | Updated epic title                                                                                                                    |
-| `weight`                   | `integer`                                              | no        | Weight of the epic                                                                                                                    |
+| `weight`                   | `integer`                                              | no        | Weight of the epic, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched       |
 
 ### `group.event_epic_label_get`
 
