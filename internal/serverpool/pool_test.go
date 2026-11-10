@@ -552,23 +552,7 @@ func TestConfirmUnexplainedRefusal_WithoutAVerdict_ChangesNothing(t *testing.T) 
 			name: "no probe slot is free",
 			arrange: func(t *testing.T, _ *refusingGitLab, pool *ServerPool, _ string) {
 				t.Helper()
-				// Filled until a send would block rather than a fixed number
-				// of times: a slot something else still holds must not turn
-				// the arrangement into a hang.
-				taken := 0
-				for full := false; !full; {
-					select {
-					case pool.probes <- struct{}{}:
-						taken++
-					default:
-						full = true
-					}
-				}
-				t.Cleanup(func() {
-					for range taken {
-						<-pool.probes
-					}
-				})
+				takeEveryProbeSlot(t, pool)
 			},
 			wantProbes: 0,
 			wantPooled: 1,
@@ -1585,6 +1569,394 @@ func assertCredentialLog(t *testing.T, captured *capturedRecords, message, token
 	if count != 1 {
 		t.Errorf("%s: logged %d records, want exactly one", message, count)
 	}
+}
+
+// The lines the pool writes about one entry and that only the test of every
+// such line names, beside the fine-grained ones declared with their own tests.
+const (
+	createdEntryLog       = "server pool: created new entry"
+	noUserIDLog           = "gitlab returned no user id for a pooled token"
+	userUnresolvedLog     = "could not resolve the user behind a pooled token"
+	rejectedOnACallLog    = "server pool: gitlab rejected the credential on a call, dropping the entry"
+	keptAfterA401Log      = "server pool: gitlab refused a call with 401 and still accepts the credential, keeping the entry"
+	noSlotToConfirmLog    = "server pool: no credential probe slot free to confirm a 401, keeping the entry"
+	unconfirmedA401Log    = "server pool: could not confirm a 401 that named no cause, keeping the entry"
+	belowMinimumLog       = "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry"
+	revalidationRefused   = "server pool: gitlab rejected a pooled credential, evicting entry"
+	evictedInvalidLog     = "server pool: evicted invalid entry"
+	revalidationNoVerdict = "server pool: token revalidation could not reach a verdict, keeping entry"
+	ceilingLog            = "server pool: credential not re-checked within the ceiling, rebuilding entry"
+	evictedIdleLog        = "server pool: evicted idle entry"
+	evictedLRULog         = "server pool: evicted LRU entry"
+	evictedSubscriberLog  = "server pool: evicted an entry that was serving a subscription"
+	refusedAtInsertLog    = "server pool: dropped a new entry whose server was already unusable"
+	unfinishedBuildLog    = "server pool: evicted entry whose build did not finish"
+)
+
+// entryLineCase is one way the pool comes to write about an entry: the lines
+// it writes, each exactly once, and how a request, a sweep or a caller of the
+// pool makes it write them.
+type entryLineCase struct {
+	name     string
+	messages []string
+	// drive builds a pool and the entry of token in it, makes the pool write
+	// messages about that entry the way production does, and returns the
+	// instance the entry was built for and the entry. logs are the records
+	// captured meanwhile, for a drive that has to wait for a line.
+	drive func(t *testing.T, logs *capturedRecords, token string) (gitlabURL string, entry *Entry)
+}
+
+// TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial verifies
+// that every line the pool writes about one entry names it by the handle the
+// entry was created with, the one the created-entry line writes, and by the
+// instance it was built for: the lines of its build, of a 401 on one of its
+// calls and the confirmation that follows, of a revalidation round, of a
+// fine-grained token's grant read at the build and re-read after it, and every
+// line that ends it, for each of its causes. Before issue 1761 only the
+// created-entry line and the two credential drops named the handle, so an
+// operator could see an entry refused on revalidation, aged past the ceiling
+// or taken for a subscriber's room and not tell whose credential it was.
+//
+// Each line is reached through the path that writes it in production, a
+// request, a refused call, a sweep's round or a caller of the pool, never by
+// calling the function that logs, and the below-minimum drop through each of
+// its three callers. Each is held, for a long token and for a four- and a
+// two-character one, to exactly one record, and to carrying in no value the
+// token, its last four characters, its unkeyed digest or the pool key.
+//
+//nolint:maintidx // one table of drives, one per way the pool writes about an entry; splitting it would scatter the list the test exists to hold in one place.
+func TestEntry_EveryLineAboutIt_NamesTheCreationHandleAndNoTokenMaterial(t *testing.T) {
+	cases := []entryLineCase{
+		{name: "the entry is created", messages: []string{createdEntryLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			return g.URL, entry
+		}},
+		{name: "the user behind it has no id", messages: []string{noUserIDLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte("{}"))
+			}))
+			t.Cleanup(srv.Close)
+			_, entry := entryOver(t, testConfig(srv.URL), token)
+			return srv.URL, entry
+		}},
+		{name: "the user behind it is not resolved", messages: []string{userUnresolvedLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			g.userStatus.Store(http.StatusInternalServerError)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			return g.URL, entry
+		}},
+		{name: "a 401 names the credential", messages: []string{rejectedOnACallLog}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, expiredTokenBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			return g.URL, approveAndAwait(t, logs, entry, rejectedOnACallLog)
+		}},
+		{name: "a 401 is confirmed as a refusal", messages: []string{rejectedOnACallLog}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			g.userStatus.Store(http.StatusUnauthorized)
+			return g.URL, approveAndAwait(t, logs, entry, rejectedOnACallLog)
+		}},
+		{name: "a 401 is confirmed as a permission refusal", messages: []string{keptAfterA401Log}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			return g.URL, approveAndAwait(t, logs, entry, keptAfterA401Log)
+		}},
+		{name: "a 401 finds no probe slot free", messages: []string{noSlotToConfirmLog}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			takeEveryProbeSlot(t, pool)
+			return g.URL, approveAndAwait(t, logs, entry, noSlotToConfirmLog)
+		}},
+		{name: "a 401 is not confirmed", messages: []string{unconfirmedA401Log}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			g.userStatus.Store(http.StatusInternalServerError)
+			return g.URL, approveAndAwait(t, logs, entry, unconfirmedA401Log)
+		}},
+		{name: "a 401 is confirmed below the minimum", messages: []string{belowMinimumLog}, drive: func(t *testing.T, logs *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token)
+			refuseTheProbeForScope(g)
+			return g.URL, approveAndAwait(t, logs, entry, belowMinimumLog)
+		}},
+		{name: "a revalidation finds it below the minimum", messages: []string{belowMinimumLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			refuseTheProbeForScope(g)
+			pool.revalidateAll(t.Context())
+			return g.URL, entry
+		}},
+		{name: "a revalidation learns its kind below the minimum", messages: []string{belowMinimumLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newBelowMinimumGitLab(t)
+			cfg := testConfig(g.URL)
+			cfg.IgnoreScopes = false
+			pool, entry := entryOver(t, cfg, token)
+			g.answer("read_user")
+			pool.revalidateAll(t.Context())
+			return g.URL, entry
+		}},
+		{name: "a revalidation is refused", messages: []string{revalidationRefused, evictedInvalidLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			g.userStatus.Store(http.StatusUnauthorized)
+			pool.revalidateAll(t.Context())
+			return g.URL, entry
+		}},
+		{name: "a revalidation reaches no verdict", messages: []string{revalidationNoVerdict}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			g.userStatus.Store(http.StatusInternalServerError)
+			pool.revalidateAll(t.Context())
+			return g.URL, entry
+		}},
+		{name: "its credential passes the ceiling", messages: []string{ceilingLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			pool.mu.Lock()
+			entry.lastValidated = time.Now().Add(-2 * pool.maxCredentialAge)
+			pool.mu.Unlock()
+			if rebuilt, err := pool.GetOrCreateEntry(token, g.URL, nil); err != nil || rebuilt == entry {
+				t.Fatalf("GetOrCreateEntry past the ceiling = %p, %v; want a rebuilt entry", rebuilt, err)
+			}
+			return g.URL, entry
+		}},
+		{name: "it goes idle", messages: []string{evictedIdleLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token, WithIdleTimeout(time.Minute))
+			pool.mu.Lock()
+			entry.lastUsed = time.Now().Add(-time.Hour)
+			pool.mu.Unlock()
+			pool.evictIdle()
+			return g.URL, entry
+		}},
+		{name: "a full pool takes it", messages: []string{evictedLRULog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token, WithMaxSize(1))
+			mustGetOrCreate(t, pool, "glpat-the-next-credential", g.URL)
+			return g.URL, entry
+		}},
+		{name: "a full pool takes it while it serves a subscription", messages: []string{evictedSubscriberLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token, WithMaxSize(1), WithInUse(func(*Entry) bool { return true }))
+			mustGetOrCreate(t, pool, "glpat-the-next-credential", g.URL)
+			return g.URL, entry
+		}},
+		{name: "its insertion is refused", messages: []string{refusedAtInsertLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			_, entry := entryOver(t, testConfig(g.URL), token, WithOnInsert(func(*Entry) bool { return false }))
+			return g.URL, entry
+		}},
+		{name: "its server's build does not finish", messages: []string{unfinishedBuildLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newRefusingGitLab(t, plainUnauthorizedBody)
+			pool, entry := entryOver(t, testConfig(g.URL), token)
+			if !pool.EvictServer(entry.Server()) {
+				t.Fatal("EvictServer found no entry served by the entry's own server")
+			}
+			return g.URL, entry
+		}},
+		{name: "a fine-grained grant is read at the build", messages: []string{phaseBEntryLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newFineGrainedGitLab(t)
+			_, entry := entryOver(t, fineGrainedConfig(g), token)
+			return g.server.URL, entry
+		}},
+		{name: "a fine-grained grant is not evaluated at the build", messages: []string{phaseAEntryLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newFineGrainedGitLab(t)
+			g.setVersion(releaseOutsideTheTable)
+			_, entry := entryOver(t, fineGrainedConfig(g), token)
+			return g.server.URL, entry
+		}},
+		{name: "a fine-grained re-read moves it", messages: []string{rereadMovedLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newFineGrainedGitLab(t)
+			pool, entry := entryOver(t, fineGrainedConfig(g), token)
+			g.setVersion(releaseOutsideTheTable)
+			pool.revalidateAll(t.Context())
+			return g.server.URL, entry
+		}},
+		{name: "a fine-grained re-read cannot be used", messages: []string{rereadKeptLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newFineGrainedGitLab(t)
+			pool, entry := entryOver(t, fineGrainedConfig(g), token)
+			g.setVersion("")
+			pool.revalidateAll(t.Context())
+			return g.server.URL, entry
+		}},
+		{name: "a revalidation learns it is fine-grained", messages: []string{kindLearnedLog}, drive: func(t *testing.T, _ *capturedRecords, token string) (string, *Entry) {
+			t.Helper()
+			g := newFineGrainedGitLab(t)
+			g.selfStatus.Store(http.StatusBadGateway)
+			pool, entry := entryOver(t, fineGrainedConfig(g), token)
+			g.selfStatus.Store(0)
+			pool.revalidateAll(t.Context())
+			return g.server.URL, entry
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, token := range []string{"glpat-pooled-token-ZZZ9", "ZZZ9", "Z9"} {
+				t.Run(strconv.Itoa(len(token))+" characters", func(t *testing.T) {
+					captured := captureLogs(t)
+					gitlabURL, entry := tc.drive(t, captured, token)
+					if entry.credentialHash != CredentialHash(token) {
+						t.Fatalf("the entry was created with the handle %q, want CredentialHash of its token", entry.credentialHash)
+					}
+					for _, message := range tc.messages {
+						t.Run(message, func(t *testing.T) {
+							assertEntryLine(t, captured, message, token, gitlabURL, entry.credentialHash)
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+// entryOver builds a pool with cfg and options and the entry of token on the
+// instance cfg names, failing the test if it cannot.
+func entryOver(t *testing.T, cfg *config.Config, token string, options ...Option) (*ServerPool, *Entry) {
+	t.Helper()
+	pool := New(cfg, testFactory(), options...)
+	t.Cleanup(pool.Close)
+	entry, err := pool.GetOrCreateEntry(token, cfg.GitLabURL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	return pool, entry
+}
+
+// fineGrainedConfig is the configuration a pool over the fine-grained
+// stand-in is built with: its instance, and the token asked about.
+func fineGrainedConfig(g *fineGrainedGitLab) *config.Config {
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	return cfg
+}
+
+// refuseTheProbeForScope makes g answer the credential probe as it answers a
+// token carrying no scope GET /api/v4/user takes: 403 insufficient_scope.
+func refuseTheProbeForScope(g *refusingGitLab) {
+	body := insufficientScopeBody
+	g.userBody.Store(&body)
+	g.userStatus.Store(http.StatusForbidden)
+}
+
+// approveAndAwait makes the call the refusing stand-in refuses, with the
+// entry's own client, so the 401 reaches the pool the way every tool call's
+// does, and waits for logs to hold message about the entry: the pool acts on
+// a 401 off the calling goroutine, and two of the lines it may write are the
+// only trace of what it did.
+func approveAndAwait(t *testing.T, logs *capturedRecords, entry *Entry, message string) *Entry {
+	t.Helper()
+	approve(t, entry)
+	awaitCondition(t, "the pool writing "+message, func() bool {
+		return len(linesAbout(logs, message, entry.Config().GitLabURL)) > 0
+	})
+	return entry
+}
+
+// fillProbeSlots takes every probe slot of pool that is still free and returns
+// how many it took. It stops when a send would block rather than after a fixed
+// count: a slot something else still holds, such as one a broken build never
+// gave back, must not turn the arrangement into a hang. It calls nothing on a
+// testing.T, so a stand-in's handler may run it.
+func fillProbeSlots(pool *ServerPool) int {
+	taken := 0
+	for {
+		select {
+		case pool.probes <- struct{}{}:
+			taken++
+		default:
+			return taken
+		}
+	}
+}
+
+// takeEveryProbeSlot is [fillProbeSlots] on the test goroutine, giving the
+// slots it took back when the test ends.
+func takeEveryProbeSlot(t *testing.T, pool *ServerPool) {
+	t.Helper()
+	taken := fillProbeSlots(pool)
+	t.Cleanup(func() {
+		for range taken {
+			<-pool.probes
+		}
+	})
+}
+
+// linesAbout returns the captured records carrying message and naming
+// gitlabURL, so a line another test's pool writes on an instance of its own
+// is never counted.
+func linesAbout(captured *capturedRecords, message, gitlabURL string) []slog.Record {
+	captured.mu.Lock()
+	defer captured.mu.Unlock()
+	var lines []slog.Record
+	for _, record := range captured.records {
+		if url, _ := logAttr(record, "gitlab_url"); record.Message == message && url.String() == gitlabURL {
+			lines = append(lines, record)
+		}
+	}
+	return lines
+}
+
+// assertEntryLine holds the line message written about the entry of token on
+// gitlabURL to being written once, naming the handle the entry was created
+// with, and to carrying in no value the token, its last four characters, its
+// unkeyed digest or the pool key. Where a created-entry line was written on
+// the same instance, the handle is also one of those it names: an insertion
+// the pool refused writes none.
+func assertEntryLine(t *testing.T, captured *capturedRecords, message, token, gitlabURL, created string) {
+	t.Helper()
+	lines := linesAbout(captured, message, gitlabURL)
+	if len(lines) != 1 {
+		t.Fatalf("%d records of %q about the entry, want exactly one", len(lines), message)
+	}
+	record := lines[0]
+	handle, ok := logAttr(record, telemetry.LogFieldCredentialHash)
+	if !ok || handle.String() != created {
+		t.Errorf("%s = %v, present %v; want the creation handle %q", telemetry.LogFieldCredentialHash, handle, ok, created)
+	}
+	var namedAtCreation []string
+	for _, line := range linesAbout(captured, createdEntryLog, gitlabURL) {
+		named, _ := logAttr(line, telemetry.LogFieldCredentialHash)
+		namedAtCreation = append(namedAtCreation, named.String())
+	}
+	if len(namedAtCreation) > 0 && !slices.Contains(namedAtCreation, handle.String()) {
+		t.Errorf("the handle %q is none of those the created-entry lines wrote, %q", handle.String(), namedAtCreation)
+	}
+	tail := token[max(0, len(token)-4):]
+	key := sessionKey(token, gitlabURL)
+	record.Attrs(func(attr slog.Attr) bool {
+		value := attr.Value.String()
+		for _, material := range []string{token, tail, tokenHash(token), key} {
+			if strings.Contains(value, material) {
+				t.Errorf("%s = %q carries credential material or an unkeyed digest", attr.Key, value)
+			}
+		}
+		return true
+	})
 }
 
 // TestWithMaxSize verifies WithMaxSize.
@@ -5158,7 +5530,7 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 		pool.entries[key] = replacement
 		pool.mu.Unlock()
 
-		if _, _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+		if _, dropped := pool.dropRejectedEntry(key, entry); dropped {
 			t.Error("dropRejectedEntry() removed a replacement built after the refusal")
 		}
 		pool.mu.Lock()
@@ -5174,7 +5546,7 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 		delete(pool.entries, key)
 		pool.mu.Unlock()
 
-		if _, _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+		if _, dropped := pool.dropRejectedEntry(key, entry); dropped {
 			t.Error("dropRejectedEntry() reported dropping an entry that was already gone")
 		}
 	})
@@ -5189,7 +5561,7 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 		pool.entries[key] = partial
 		pool.mu.Unlock()
 
-		if _, _, dropped := pool.dropRejectedEntry(key, partial); !dropped {
+		if _, dropped := pool.dropRejectedEntry(key, partial); !dropped {
 			t.Error("dropRejectedEntry() left behind an entry that had no LRU element")
 		}
 	})
@@ -5736,37 +6108,63 @@ func TestGetOrCreateEntry_NoCredentialAgeCeiling_NeverCallsAnEntryStale(t *testi
 	}
 }
 
-// TestEntryConfigLogValues_TolerateAPartiallyBuiltEntry verifies the accessor
-// eviction logging goes through.
+// TestEntryLogArgs_TolerateAPartiallyBuiltEntry verifies the pairs every line
+// about one entry is written with: the line's own pairs first, then the
+// instance, whether it is licensed and the credential's handle, in that order.
 //
-// It is called from paths that run while an entry is still being assembled,
-// so both halves of its guard are real: an entry that is not there at all,
-// and one whose configuration has not been resolved yet. A log line is not
-// worth a panic in an eviction path.
-func TestEntryConfigLogValues_TolerateAPartiallyBuiltEntry(t *testing.T) {
+// The guard is real on both halves: an entry that is not there at all, and
+// one assembled without a configuration, as the tests assemble theirs, are
+// named by what they have rather than by a panic, since a log line is not
+// worth one in an eviction path. A licensed instance is named as one, so the
+// pair is read from the configuration rather than written as a constant. And
+// a caller's slice with room to spare is never written past its length: the
+// pairs land in an array of their own.
+func TestEntryLogArgs_TolerateAPartiallyBuiltEntry(t *testing.T) {
+	const handle = "0123456789abcdef"
 	tests := []struct {
-		name           string
-		entry          *Entry
-		wantURL        string
-		wantEnterprise bool
+		name  string
+		entry *Entry
+		want  []any
 	}{
-		{name: "no entry at all", entry: nil},
-		{name: "an entry with no configuration yet", entry: &Entry{}},
 		{
-			name:    "a fully built entry",
-			entry:   &Entry{serverConfig: &config.ServerConfig{GitLabURL: "https://gitlab.example.com"}},
-			wantURL: "https://gitlab.example.com",
+			name:  "no entry at all",
+			entry: nil,
+			want:  []any{"pool_size", 1, "gitlab_url", "", "enterprise", false, telemetry.LogFieldCredentialHash, ""},
+		},
+		{
+			name:  "an entry with no configuration yet",
+			entry: &Entry{credentialHash: handle},
+			want:  []any{"pool_size", 1, "gitlab_url", "", "enterprise", false, telemetry.LogFieldCredentialHash, handle},
+		},
+		{
+			name: "a fully built entry",
+			entry: &Entry{
+				serverConfig:   &config.ServerConfig{GitLabURL: "https://gitlab.example.com", Tier: edition.Free},
+				credentialHash: handle,
+			},
+			want: []any{"pool_size", 1, "gitlab_url", "https://gitlab.example.com", "enterprise", false, telemetry.LogFieldCredentialHash, handle},
+		},
+		{
+			name: "an entry on a licensed instance",
+			entry: &Entry{
+				serverConfig:   &config.ServerConfig{GitLabURL: "https://gitlab.example.com", Tier: edition.Premium},
+				credentialHash: handle,
+			},
+			want: []any{"pool_size", 1, "gitlab_url", "https://gitlab.example.com", "enterprise", true, telemetry.LogFieldCredentialHash, handle},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotURL, gotEnterprise := entryConfigLogValues(tt.entry)
-			if gotURL != tt.wantURL {
-				t.Errorf("gitlabURL = %q, want %q", gotURL, tt.wantURL)
+			backing := make([]any, 8)
+			own := backing[:2]
+			own[0], own[1] = "pool_size", 1
+			got := entryLogArgs(tt.entry, own...)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("entryLogArgs() = %v, want %v", got, tt.want)
 			}
-			if gotEnterprise != tt.wantEnterprise {
-				t.Errorf("enterprise = %v, want %v", gotEnterprise, tt.wantEnterprise)
+			if spare := backing[2]; spare != nil {
+				t.Errorf("entryLogArgs() wrote %v into the caller's spare capacity", spare)
 			}
 		})
 	}
@@ -6168,8 +6566,8 @@ func TestGetOrCreate_AFineGrainedEntry_WritesOneStartLineNamingWhatItsGrantDecid
 	cases := []struct {
 		name, version string
 		// line is the start line as its level, its message and its pairs,
-		// every pair it carries and in order, which leaves no room for the
-		// token's id.
+		// every pair it carries and in order up to the three that name the
+		// entry, which leaves no room for the token's id.
 		line []string
 	}{
 		{
@@ -6199,9 +6597,15 @@ func TestGetOrCreate_AFineGrainedEntry_WritesOneStartLineNamingWhatItsGrantDecid
 			if g.versions.Load() != 3 {
 				t.Fatalf("the build and two revalidations read the version %d times, want three", g.versions.Load())
 			}
+			// Every line about the entry ends naming it, this one before the
+			// entry exists: the instance, whether it is licensed, and the
+			// handle of the credential, never the credential.
+			want := append(slices.Clone(tc.line),
+				"gitlab_url="+g.server.URL, "enterprise=false",
+				telemetry.LogFieldCredentialHash+"="+CredentialHash("glpat-fine-grained"))
 			starts, rereads := fineGrainedEntryLines(logs)
-			if len(starts) != 1 || !slices.Equal(starts[0], tc.line) {
-				t.Errorf("start lines = %q, want one, %q", starts, tc.line)
+			if len(starts) != 1 || !slices.Equal(starts[0], want) {
+				t.Errorf("start lines = %q, want one, %q", starts, want)
 			}
 			if len(rereads) != 0 {
 				t.Errorf("revalidations that found the verdict the build judged wrote %q", rereads)
@@ -6304,11 +6708,7 @@ func TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves(t *test
 func TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	var pool *ServerPool
-	fill := func() {
-		for range cap(pool.probes) {
-			pool.probes <- struct{}{}
-		}
-	}
+	fill := func() { fillProbeSlots(pool) }
 	g.onSelf.Store(&fill)
 	cfg := testConfig(g.server.URL)
 	cfg.IgnoreScopes = false
@@ -6332,9 +6732,7 @@ func TestRevalidateAll_FineGrainedEntry_RereadsWithoutASlot(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	pool, entry := fineGrainedEntry(t, g)
 	first := entry.Client().Authority()
-	for range cap(pool.probes) {
-		pool.probes <- struct{}{}
-	}
+	takeEveryProbeSlot(t, pool)
 	logs := captureLogs(t)
 
 	g.setVersion("")
@@ -6471,9 +6869,7 @@ func TestRevalidateAll_AnUnknownKind_IsAskedUntilGitLabAnswers(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	g.selfStatus.Store(http.StatusBadGateway)
 	pool, entry := fineGrainedEntry(t, g)
-	for range cap(pool.probes) {
-		pool.probes <- struct{}{}
-	}
+	takeEveryProbeSlot(t, pool)
 	logs := captureLogs(t)
 
 	pool.revalidateAll(context.Background())
