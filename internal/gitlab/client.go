@@ -776,81 +776,29 @@ func (c *Client) editionUnreadable(ctx context.Context, fallback bool) bool {
 	return fallback
 }
 
-// DetectTier resolves the GitLab licensing tier and stores it on the client.
-//
-// It asks up to three questions, because no one of them answers for every
-// deployment:
-//
-//   - GET /license, which carries the instance's own plan and is **admin-only
-//     on self-managed**. It is the authoritative answer where it is available.
-//   - GET /namespaces, which carries a plan per namespace and is readable by
-//     any token, for the namespaces the caller administers. On GitLab.com that
-//     plan is the subscription; on self-managed it is "default" whatever the
-//     instance is licensed for, since a subscription is a GitLab.com concept.
-//   - On GitLab.com alone, the top-level groups the caller is a member of, each
-//     with whether its plan carries a Premium and an Ultimate feature
-//     ([Client.tierFromMembership]), asked unless the namespaces already
-//     answered Ultimate.
-//
-// Measured on 2026-09-22 against a licensed EE 19.3.1 and against GitLab.com:
-// a non-admin token is refused /license with 403 on both, /namespaces reports
-// "default" for admin and non-admin alike on self-managed, and reports the real
-// plan on GitLab.com for each namespace the caller administers. So the second
-// question rescues the GitLab.com caller who owns a paid group, and rescues
-// nobody on self-managed. It does not rescue a member: GitLab.com shows a
-// namespace's plan only to a caller who may administer it, while it serves a
-// licensed feature to every member of a group whose top-level group's plan
-// carries it, which is most of the people working in a paid group (issue
-// 1224). The third question is that check, and GitLab.com answered it for the
-// maintainer's account, a Developer of a subgroup of a licensed group, on
-// 2026-10-08.
-//
-// The highest answer of the second and third wins, on ADR-0018's asymmetry,
-// and a third that fails keeps the second's: a failed read is no evidence that
-// the caller holds less than it was already shown to hold.
-//
-// Where none answers, the tier is [edition.Free] as before. That is right on a
-// CE instance and wrong on a licensed one the caller cannot read the license
-// of, and the two are told apart by the edition rather than guessed at: an
-// enterprise build that could not be resolved gets a warning naming the flag
-// that settles it, and a CE build stays silent because Free is the truth there.
-func (c *Client) DetectTier(ctx context.Context) edition.Tier {
-	if tier, ok := c.tierFromLicense(ctx); ok {
-		c.SetTier(tier)
-		return tier
-	}
-	tier, found := c.tierFromNamespaces(ctx)
-	if tier < edition.Ultimate && membershipTierApplies(c) {
-		if member, answered := c.tierFromMembership(ctx); answered {
-			tier, found = max(tier, member), true
-		}
-	}
-	if found {
-		c.SetTier(tier)
-		return tier
-	}
-
-	c.warnUnresolvedTier(ctx)
-	c.SetTier(edition.Free)
-	return edition.Free
-}
-
 // tierFromLicense reads the instance license, which only an administrator may
 // do on a self-managed instance and nobody may do on GitLab.com.
-func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
+//
+// A refusal and a license with no plan are answers that name no tier, and the
+// probe goes on to the namespaces. A read GitLab did not answer
+// ([tierReadUnresolved]) goes on as well, and is marked unresolved: an
+// administrator's token whose license read met a 502 holds whatever the
+// license says, which the read did not learn.
+func (c *Client) tierFromLicense(ctx context.Context) tierStep {
 	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
+		unresolved := tierReadUnresolved(err)
 		slog.DebugContext(ctx, "the instance license is not readable with this token, trying the namespace plan",
-			"error", err)
-		return edition.Free, false
+			"error", err, "unresolved", unresolved)
+		return tierStep{unresolved: unresolved}
 	}
 	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
 		slog.DebugContext(ctx, "GitLab license reported no plan, trying the namespace plan")
-		return edition.Free, false
+		return tierStep{}
 	}
 	tier := edition.TierFromPlan(lic.Plan)
 	slog.InfoContext(ctx, "detected GitLab tier from the instance license", "plan", lic.Plan, "tier", tier.String())
-	return tier, true
+	return tierStep{tier: tier, answered: true}
 }
 
 // tierFromNamespaces reads the plan of the namespaces the caller administers
@@ -877,13 +825,15 @@ func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
 // **It pages**, under the two bounds namespacePlanPageSize and
 // namespacePlanMaxPages describe: reading only the first page resolved Free for
 // a caller whose paid namespace sat past the hundredth. A page that fails after
-// an earlier one answered keeps that answer rather than discarding it.
-func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
+// an earlier one answered keeps that answer rather than discarding it, and a
+// page GitLab did not answer ([tierReadUnresolved]) marks the step unresolved,
+// since a paid plan on it, or past it, was never seen.
+func (c *Client) tierFromNamespaces(ctx context.Context) tierStep {
 	opts := &gl.ListNamespacesOptions{}
 	opts.PerPage = namespacePlanPageSize
 	opts.Page = 1
 
-	best, found := edition.Free, false
+	best, found, unresolved := edition.Free, false, false
 	// No bound in the loop header: the page cap below is what ends the walk,
 	// and it has to be the one that does, since it is where the walk says it
 	// stopped short. A second copy of the bound up here could never be reached
@@ -895,7 +845,8 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 			// answered: the tier found so far is a fact, and discarding it
 			// would resolve lower than the caller has already been shown to
 			// hold.
-			slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "page", page, "error", err)
+			unresolved = tierReadUnresolved(err)
+			slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "page", page, "error", err, "unresolved", unresolved)
 			break
 		}
 
@@ -933,7 +884,7 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
 	}
-	return best, found
+	return tierStep{tier: best, answered: found, unresolved: unresolved}
 }
 
 // nextNamespacePage is the page GitLab says follows resp, or zero when it names

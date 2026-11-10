@@ -4,9 +4,11 @@
 package gitlab
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,8 +58,10 @@ type fakeGroup struct {
 // fakeMembershipPage is what one page of the membership query answers. A
 // status other than zero answers the request with that status and no body;
 // refused answers HTTP 200 with a top-level errors array and data null, which
-// is how GitLab refuses a document; noConnection answers data with no groups
-// field. errors are top-level errors answered beside the page's groups, which
+// is how GitLab refuses a document, with refusedMessage unless message names
+// another; noConnection answers data with no groups field; hang answers
+// nothing until the request ends, which is a GitLab that does not answer in
+// time. errors are top-level errors answered beside the page's groups, which
 // is how GitLab answers a page it resolved in part: a node one of whose
 // non-null features it refused is null, and the reason is in errors.
 type fakeMembershipPage struct {
@@ -65,12 +69,16 @@ type fakeMembershipPage struct {
 	hasNext      bool
 	status       int
 	refused      bool
+	message      string
 	noConnection bool
+	hang         bool
 	errors       []string
 }
 
 // refusedMessage is the message the refused fixture answers with, so a test
 // can tell GitLab's refusal from an answer that carried no groups connection.
+// It is GitLab's permission refusal, written out rather than read from the
+// package, so a change of the constant the code compares against is caught.
 const refusedMessage = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
 
 // fakeGitLabDotCom answers the questions the tier cascade asks the way
@@ -80,12 +88,58 @@ const refusedMessage = "The resource that you are attempting to access does not 
 // pinned GitLab schema, document and variables alike, as the transport
 // testutil.NewTestClient serves judges them; this package cannot use that
 // transport, since testutil imports it.
+//
+// Its answers can change between two detections on the same client (set),
+// which is how a test shows that a step GitLab did not answer is answered
+// when asked again.
 type fakeGitLabDotCom struct {
 	namespaces []map[string]any
 	pages      []fakeMembershipPage
+	// license is the status /license answers, 403 when zero; with 200 it
+	// answers licensePlan. licenseHang answers nothing until the request
+	// ends.
+	license     int
+	licensePlan string
+	licenseHang bool
+	// namespacesStatus, when not zero, is the status /namespaces answers in
+	// place of the list.
+	namespacesStatus int
 
-	mu    sync.Mutex
-	asked []map[string]any // the variables of every membership request
+	mu       sync.Mutex
+	asked    []map[string]any // the variables of every membership request
+	versions int              // the /version requests
+}
+
+// set changes what g answers from the next request on.
+func (g *fakeGitLabDotCom) set(change func(*fakeGitLabDotCom)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	change(g)
+}
+
+// answers is what g answers now, read under its lock, so a test that changes
+// it between two detections races with no handler still running.
+func (g *fakeGitLabDotCom) answers() fakeGitLabDotCom {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return fakeGitLabDotCom{
+		namespaces: g.namespaces, pages: g.pages,
+		license: g.license, licensePlan: g.licensePlan, licenseHang: g.licenseHang,
+		namespacesStatus: g.namespacesStatus,
+	}
+}
+
+// versionRequests is how many times /version was asked.
+func (g *fakeGitLabDotCom) versionRequests() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.versions
+}
+
+// hangUntilTheRequestEnds answers nothing until the client gives up on r or
+// the server closes, which is a GitLab that does not answer in time.
+func hangUntilTheRequestEnds(r *http.Request) {
+	<-r.Context().Done()
 }
 
 // serve answers one request. It runs on the httptest server's goroutine, so it
@@ -93,17 +147,32 @@ type fakeGitLabDotCom struct {
 func (g *fakeGitLabDotCom) serve(t *testing.T) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
+		now := g.answers()
 		switch r.URL.Path {
 		case versionAPIPath:
+			g.set(func(g *fakeGitLabDotCom) { g.versions++ })
 			respondJSON(w, `{"version":"19.5.0-pre","enterprise":true}`)
 		case "/api/v4/license":
-			w.WriteHeader(http.StatusForbidden)
+			switch {
+			case now.licenseHang:
+				hangUntilTheRequestEnds(r)
+			case now.license == http.StatusOK:
+				respondJSON(w, `{"plan":"`+now.licensePlan+`"}`)
+			case now.license != 0:
+				w.WriteHeader(now.license)
+			default:
+				w.WriteHeader(http.StatusForbidden)
+			}
 		case "/api/v4/namespaces":
-			if g.namespaces == nil {
+			if now.namespacesStatus != 0 {
+				w.WriteHeader(now.namespacesStatus)
+				return
+			}
+			if now.namespaces == nil {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
-			body, err := json.Marshal(g.namespaces)
+			body, err := json.Marshal(now.namespaces)
 			if err != nil {
 				t.Errorf("encoding the namespaces fixture: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -143,6 +212,7 @@ func (g *fakeGitLabDotCom) membership(t *testing.T, w http.ResponseWriter, r *ht
 	}
 	g.mu.Lock()
 	g.asked = append(g.asked, request.Variables)
+	pages := g.pages
 	g.mu.Unlock()
 
 	index := 0
@@ -156,19 +226,27 @@ func (g *fakeGitLabDotCom) membership(t *testing.T, w http.ResponseWriter, r *ht
 		}
 		index = parsed
 	}
-	if index >= len(g.pages) {
+	if index >= len(pages) {
 		// A walk past the fixture is answered as the end, so a walk that
 		// never stops asking ends here and is caught by the count.
 		respondJSON(w, `{"data":{"groups":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}`)
 		return
 	}
-	page := g.pages[index]
+	page := pages[index]
 	switch {
+	case page.hang:
+		hangUntilTheRequestEnds(r)
+		return
 	case page.status != 0:
 		w.WriteHeader(page.status)
 		return
 	case page.refused:
-		respondJSON(w, `{"data":null,"errors":[{"message":"`+refusedMessage+`"}]}`)
+		message := cmp.Or(page.message, refusedMessage)
+		body, err := json.Marshal(map[string]any{"data": nil, "errors": []map[string]any{{"message": message}}})
+		if err != nil {
+			t.Errorf("encoding the refusal: %v", err)
+		}
+		respondJSON(w, string(body))
 		return
 	case page.noConnection:
 		respondJSON(w, `{"data":{}}`)
@@ -217,14 +295,12 @@ func (g *fakeGitLabDotCom) requests() []map[string]any {
 	return append([]map[string]any(nil), g.asked...)
 }
 
-// detect builds a client against g, treats it as a GitLab.com client unless
-// selfManaged, and resolves its tier.
-func (g *fakeGitLabDotCom) detect(t *testing.T, selfManaged bool) (edition.Tier, *Client) {
+// client builds a client against g with retries off, and treats it as a
+// GitLab.com client unless selfManaged.
+func (g *fakeGitLabDotCom) client(t *testing.T, selfManaged bool) *Client {
 	t.Helper()
 	if !selfManaged {
-		previous := membershipTierApplies
-		membershipTierApplies = func(*Client) bool { return true }
-		t.Cleanup(func() { membershipTierApplies = previous })
+		standInForGitLabDotCom(t)
 	}
 	srv := httptest.NewServer(g.serve(t))
 	t.Cleanup(srv.Close)
@@ -232,6 +308,23 @@ func (g *fakeGitLabDotCom) detect(t *testing.T, selfManaged bool) (edition.Tier,
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
+	return client
+}
+
+// standInForGitLabDotCom makes every client of the test a GitLab.com client,
+// since a test server cannot have GitLab.com's host.
+func standInForGitLabDotCom(t *testing.T) {
+	t.Helper()
+	previous := membershipTierApplies
+	membershipTierApplies = func(*Client) bool { return true }
+	t.Cleanup(func() { membershipTierApplies = previous })
+}
+
+// detect builds a client against g, treats it as a GitLab.com client unless
+// selfManaged, and resolves its tier.
+func (g *fakeGitLabDotCom) detect(t *testing.T, selfManaged bool) (TierResolution, *Client) {
+	t.Helper()
+	client := g.client(t, selfManaged)
 	return client.DetectTier(t.Context()), client
 }
 
@@ -285,8 +378,8 @@ func TestDetectTier_GitLabDotComMember_ResolvesTheTopLevelGroupsPlan(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: []fakeMembershipPage{{groups: tc.groups}}}
 			got, client := server.detect(t, false)
-			if got != tc.want || client.Tier() != tc.want {
-				t.Errorf("DetectTier() = %v, client tier %v; want %v", got, client.Tier(), tc.want)
+			if got.Tier != tc.want || client.Tier() != tc.want || got.Provisional {
+				t.Errorf("DetectTier() = %+v, client tier %v; want %v, not provisional", got, client.Tier(), tc.want)
 			}
 			asked := server.requests()
 			if len(asked) != 1 {
@@ -310,8 +403,8 @@ func TestDetectTier_NamespaceAlreadyUltimate_AsksNoMembership(t *testing.T) {
 		namespaces: []map[string]any{{"full_path": "acme", "kind": "group", "plan": "ultimate"}},
 		pages:      []fakeMembershipPage{{groups: []*fakeGroup{{path: "other", premium: true}}}},
 	}
-	if got, _ := server.detect(t, false); got != edition.Ultimate {
-		t.Errorf("DetectTier() = %v, want Ultimate", got)
+	if got, _ := server.detect(t, false); got.Tier != edition.Ultimate || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Ultimate, not provisional", got)
 	}
 	if asked := server.requests(); len(asked) != 0 {
 		t.Errorf("membership pages read = %d, want 0: the namespace plan already answered Ultimate", len(asked))
@@ -327,8 +420,8 @@ func TestDetectTier_SelfManaged_AsksNoMembership(t *testing.T) {
 		namespaces: []map[string]any{{"full_path": "root", "kind": "user", "plan": "default"}},
 		pages:      []fakeMembershipPage{{groups: []*fakeGroup{{path: "acme", premium: true, ultimate: true}}}},
 	}
-	if got, _ := server.detect(t, true); got != edition.Free {
-		t.Errorf("DetectTier() = %v, want Free", got)
+	if got, _ := server.detect(t, true); got.Tier != edition.Free || got.Answered || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Free with no step answering and none unread", got)
 	}
 	if asked := server.requests(); len(asked) != 0 {
 		t.Errorf("membership pages read = %d, want 0 on a self-managed instance", len(asked))
@@ -351,8 +444,8 @@ func TestDetectTier_Membership_AnswersWhereNoNamespaceDid(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &fakeGitLabDotCom{pages: []fakeMembershipPage{{groups: tc.groups}}}
-			if got, _ := server.detect(t, false); got != tc.want {
-				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			if got, _ := server.detect(t, false); got.Tier != tc.want || got.Provisional {
+				t.Errorf("DetectTier() = %+v, want %v, not provisional", got, tc.want)
 			}
 		})
 	}
@@ -365,8 +458,8 @@ func TestDetectTier_Membership_ReadsPastTheFirstPage(t *testing.T) {
 		{groups: []*fakeGroup{{path: "plens1"}}, hasNext: true},
 		{groups: []*fakeGroup{{path: "acme", premium: true}}},
 	}}
-	if got, _ := server.detect(t, false); got != edition.Premium {
-		t.Errorf("DetectTier() = %v, want Premium: the paid group is on the second page", got)
+	if got, _ := server.detect(t, false); got.Tier != edition.Premium || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Premium, not provisional: the paid group is on the second page", got)
 	}
 	asked := server.requests()
 	if len(asked) != 2 {
@@ -384,8 +477,8 @@ func TestDetectTier_Membership_StopsAtUltimate(t *testing.T) {
 		{groups: []*fakeGroup{{path: "top", premium: true, ultimate: true}}, hasNext: true},
 		{groups: []*fakeGroup{{path: "never-read", premium: true}}},
 	}}
-	if got, _ := server.detect(t, false); got != edition.Ultimate {
-		t.Errorf("DetectTier() = %v, want Ultimate", got)
+	if got, _ := server.detect(t, false); got.Tier != edition.Ultimate || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Ultimate, not provisional", got)
 	}
 	if asked := server.requests(); len(asked) != 1 {
 		t.Errorf("membership pages read = %d, want 1: Ultimate is the highest answer there is", len(asked))
@@ -402,8 +495,10 @@ func TestDetectTier_Membership_StopsAtThePageBound(t *testing.T) {
 	}
 	pages[membershipMaxPages].groups = []*fakeGroup{{path: "past-the-bound", premium: true}}
 	server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: pages}
-	if got, _ := server.detect(t, false); got != edition.Free {
-		t.Errorf("DetectTier() = %v, want Free: the paid group sits past the page bound", got)
+	// The bound is policy rather than a read that failed, so the answer is
+	// definitive and is not asked again.
+	if got, _ := server.detect(t, false); got.Tier != edition.Free || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Free, not provisional: the paid group sits past the page bound", got)
 	}
 	if asked := server.requests(); len(asked) != membershipMaxPages {
 		t.Errorf("membership pages read = %d, want the bound, %d", len(asked), membershipMaxPages)
@@ -411,29 +506,37 @@ func TestDetectTier_Membership_StopsAtThePageBound(t *testing.T) {
 }
 
 // TestDetectTier_Membership_FailedRead_KeepsTheEarlierAnswer checks what a
-// membership read GitLab does not answer resolves to: the answer the namespace
-// step already gave, never less. ADR-0018's asymmetry decides it, a tier
-// resolved too low silently removing tools, and a failed read is no evidence
-// that the caller holds less than it was already shown to hold.
+// membership read that did not come back whole resolves to: the answer the
+// namespace step already gave, never less. ADR-0018's asymmetry decides it, a
+// tier resolved too low silently removing tools, and a failed read is no
+// evidence that the caller holds less than it was already shown to hold. A
+// read GitLab did not answer, a server error or an answer with no groups
+// connection, also leaves the answer provisional, while GitLab's refusal of
+// the caller is an answer and does not (issue 1782).
 func TestDetectTier_Membership_FailedRead_KeepsTheEarlierAnswer(t *testing.T) {
 	premiumNamespace := []map[string]any{{"full_path": "acme", "kind": "group", "plan": "premium"}}
 	cases := []struct {
-		name       string
-		namespaces []map[string]any
-		page       fakeMembershipPage
-		want       edition.Tier
+		name        string
+		namespaces  []map[string]any
+		page        fakeMembershipPage
+		want        edition.Tier
+		provisional bool
 	}{
-		{name: "a server error after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{status: http.StatusInternalServerError}, want: edition.Premium},
+		{name: "a server error after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{status: http.StatusInternalServerError}, want: edition.Premium, provisional: true},
 		{name: "a refused document after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{refused: true}, want: edition.Premium},
 		{name: "every group refused after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{refusedMessage}}, want: edition.Premium},
-		{name: "no groups connection after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{noConnection: true}, want: edition.Premium},
-		{name: "a server error after free namespaces", namespaces: freeNamespaces, page: fakeMembershipPage{status: http.StatusInternalServerError}, want: edition.Free},
+		{name: "no groups connection after a premium namespace", namespaces: premiumNamespace, page: fakeMembershipPage{noConnection: true}, want: edition.Premium, provisional: true},
+		{name: "a server error after free namespaces", namespaces: freeNamespaces, page: fakeMembershipPage{status: http.StatusInternalServerError}, want: edition.Free, provisional: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &fakeGitLabDotCom{namespaces: tc.namespaces, pages: []fakeMembershipPage{tc.page}}
-			if got, _ := server.detect(t, false); got != tc.want {
-				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			got, _ := server.detect(t, false)
+			if got.Tier != tc.want || got.Provisional != tc.provisional || !got.Answered {
+				t.Errorf("DetectTier() = %+v, want %v answered, provisional %t", got, tc.want, tc.provisional)
+			}
+			if wantUnresolved := tc.provisional; slices.Equal(got.Unresolved, []string{"membership"}) != wantUnresolved {
+				t.Errorf("Unresolved = %v, want the membership step named: %t", got.Unresolved, wantUnresolved)
 			}
 		})
 	}
@@ -441,14 +544,15 @@ func TestDetectTier_Membership_FailedRead_KeepsTheEarlierAnswer(t *testing.T) {
 
 // TestDetectTier_Membership_FailedLaterPage_KeepsWhatAnEarlierPageAnswered
 // checks the failure path mid-walk: a page that fails after an earlier one
-// answered keeps that answer.
+// answered keeps that answer, provisional, since the page that failed may
+// have carried a higher one.
 func TestDetectTier_Membership_FailedLaterPage_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: []fakeMembershipPage{
 		{groups: []*fakeGroup{{path: "acme", premium: true}}, hasNext: true},
 		{status: http.StatusInternalServerError},
 	}}
-	if got, _ := server.detect(t, false); got != edition.Premium {
-		t.Errorf("DetectTier() = %v, want Premium: the first page answered before the second failed", got)
+	if got, _ := server.detect(t, false); got.Tier != edition.Premium || !got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Premium, provisional: the first page answered before the second failed", got)
 	}
 }
 
@@ -461,20 +565,21 @@ func TestDetectTier_Membership_FailedLaterPage_KeepsWhatAnEarlierPageAnswered(t 
 func TestDetectTier_Membership_LowerAnswer_NeverLowersTheNamespaces(t *testing.T) {
 	premiumNamespace := []map[string]any{{"full_path": "acme", "kind": "group", "plan": "premium"}}
 	cases := []struct {
-		name  string
-		pages []fakeMembershipPage
+		name        string
+		pages       []fakeMembershipPage
+		provisional bool
 	}{
 		{name: "free groups only", pages: []fakeMembershipPage{{groups: []*fakeGroup{{path: "hobby"}}}}},
 		{name: "free groups, then a page that fails", pages: []fakeMembershipPage{
 			{groups: []*fakeGroup{{path: "hobby"}}, hasNext: true},
 			{status: http.StatusInternalServerError},
-		}},
+		}, provisional: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &fakeGitLabDotCom{namespaces: premiumNamespace, pages: tc.pages}
-			if got, _ := server.detect(t, false); got != edition.Premium {
-				t.Errorf("DetectTier() = %v, want Premium: the namespace step answered Premium", got)
+			if got, _ := server.detect(t, false); got.Tier != edition.Premium || got.Provisional != tc.provisional {
+				t.Errorf("DetectTier() = %+v, want Premium, provisional %t: the namespace step answered Premium", got, tc.provisional)
 			}
 			if asked := server.requests(); len(asked) != len(tc.pages) {
 				t.Errorf("membership pages read = %d, want %d", len(asked), len(tc.pages))
@@ -489,15 +594,17 @@ func TestDetectTier_Membership_LowerAnswer_NeverLowersTheNamespaces(t *testing.T
 // takes: the namespace listing refused, and every group of the membership
 // page refused as well, which GitLab answers as null nodes beside an errors
 // array. A membership answer of Free with groups in it has answered, and
-// warns nobody.
+// warns nobody. A membership read GitLab did not answer leaves the tier
+// provisional, which is warned about in its own words, naming the step.
 func TestDetectTier_GitLabDotCom_NoStepAnswers_Warns(t *testing.T) {
 	cases := []struct {
-		name  string
-		page  fakeMembershipPage
-		warns bool
+		name        string
+		page        fakeMembershipPage
+		warns       bool
+		provisional bool
 	}{
 		{name: "a member of no group", page: fakeMembershipPage{}, warns: true},
-		{name: "a membership read that fails", page: fakeMembershipPage{status: http.StatusInternalServerError}, warns: true},
+		{name: "a membership read that fails", page: fakeMembershipPage{status: http.StatusInternalServerError}, warns: true, provisional: true},
 		{name: "a refused document", page: fakeMembershipPage{refused: true}, warns: true},
 		{name: "every group refused", page: fakeMembershipPage{groups: []*fakeGroup{nil, nil}, errors: []string{refusedMessage}}, warns: true},
 		{name: "free groups", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}}}, warns: false},
@@ -506,14 +613,23 @@ func TestDetectTier_GitLabDotCom_NoStepAnswers_Warns(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			logged := captureClientLog(t)
 			server := &fakeGitLabDotCom{pages: []fakeMembershipPage{tc.page}}
-			if got, _ := server.detect(t, false); got != edition.Free {
-				t.Errorf("DetectTier() = %v, want Free", got)
+			if got, _ := server.detect(t, false); got.Tier != edition.Free || got.Provisional != tc.provisional {
+				t.Errorf("DetectTier() = %+v, want Free, provisional %t", got, tc.provisional)
 			}
-			warned := strings.Contains(logged.String(), `"level":"WARN"`) &&
-				strings.Contains(logged.String(), "could not determine the licensing tier") &&
-				strings.Contains(logged.String(), "GITLAB_MCP_TIER")
+			warned, warnedProvisional := false, false
+			for line := range strings.Lines(logged.String()) {
+				if !strings.Contains(line, `"level":"WARN"`) || !strings.Contains(line, "GITLAB_MCP_TIER") {
+					continue
+				}
+				warned = warned || strings.Contains(line, "could not determine the licensing tier")
+				warnedProvisional = warnedProvisional || (strings.Contains(line, "could not finish detecting the licensing tier") &&
+					strings.Contains(line, `"unresolved":["membership"]`))
+			}
 			if warned != tc.warns {
 				t.Errorf("warned naming GITLAB_MCP_TIER = %t, want %t:\n%s", warned, tc.warns, logged)
+			}
+			if warnedProvisional != tc.provisional {
+				t.Errorf("warned that the membership step went unanswered = %t, want %t:\n%s", warnedProvisional, tc.provisional, logged)
 			}
 		})
 	}
@@ -532,8 +648,10 @@ func TestDetectTier_Membership_PartialPage_KeepsTheGroupsItResolved(t *testing.T
 		{groups: []*fakeGroup{nil, {path: "acme", premium: true}}, errors: []string{refusedMessage}, hasNext: true},
 		{groups: []*fakeGroup{{path: "never-read", premium: true, ultimate: true}}},
 	}}
-	if got, _ := server.detect(t, false); got != edition.Premium {
-		t.Errorf("DetectTier() = %v, want Premium: the page resolved a Premium group beside a refused one", got)
+	// A page GitLab answered in part is its answer, so the walk it ends is
+	// not provisional.
+	if got, _ := server.detect(t, false); got.Tier != edition.Premium || got.Provisional {
+		t.Errorf("DetectTier() = %+v, want Premium, not provisional: the page resolved a Premium group beside a refused one", got)
 	}
 	if asked := server.requests(); len(asked) != 1 {
 		t.Errorf("membership pages read = %d, want 1: a page GitLab answered in part ends the walk", len(asked))
@@ -544,14 +662,16 @@ func TestDetectTier_Membership_PartialPage_KeepsTheGroupsItResolved(t *testing.T
 // read on GitLab.com that did not come back whole is reported above debug,
 // naming the setting that pins the tier. The namespace step may already have
 // answered Free, so no warning fires, and without this line the tier a caller
-// is served would say nothing about the step that could have raised it.
+// is served would say nothing about the step that could have raised it. The
+// line says whether the read was GitLab's answer or went unanswered.
 func TestDetectTier_Membership_FailedRead_SaysSoAtInfo(t *testing.T) {
 	cases := []struct {
-		name string
-		page fakeMembershipPage
-		says bool
+		name       string
+		page       fakeMembershipPage
+		says       bool
+		unresolved bool
 	}{
-		{name: "a server error", page: fakeMembershipPage{status: http.StatusInternalServerError}, says: true},
+		{name: "a server error", page: fakeMembershipPage{status: http.StatusInternalServerError}, says: true, unresolved: true},
 		{name: "a refused document", page: fakeMembershipPage{refused: true}, says: true},
 		{name: "a page answered in part", page: fakeMembershipPage{groups: []*fakeGroup{nil}, errors: []string{refusedMessage}}, says: true},
 		{name: "free groups", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}}}, says: false},
@@ -560,17 +680,19 @@ func TestDetectTier_Membership_FailedRead_SaysSoAtInfo(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			logged := captureClientLog(t)
 			server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: []fakeMembershipPage{tc.page}}
-			if got, _ := server.detect(t, false); got != edition.Free {
-				t.Errorf("DetectTier() = %v, want Free", got)
+			if got, _ := server.detect(t, false); got.Tier != edition.Free {
+				t.Errorf("DetectTier() = %+v, want Free", got)
 			}
-			said := false
+			said, unresolved := false, false
 			for line := range strings.Lines(logged.String()) {
 				if strings.Contains(line, `"level":"INFO"`) && strings.Contains(line, "top-level group") && strings.Contains(line, "GITLAB_MCP_TIER") {
 					said = true
+					unresolved = strings.Contains(line, `"unresolved":true`)
 				}
 			}
-			if said != tc.says {
-				t.Errorf("an INFO line naming the membership read and GITLAB_MCP_TIER = %t, want %t:\n%s", said, tc.says, logged)
+			if said != tc.says || unresolved != tc.unresolved {
+				t.Errorf("an INFO line naming the membership read and GITLAB_MCP_TIER = %t (unresolved %t), want %t (unresolved %t):\n%s",
+					said, unresolved, tc.says, tc.unresolved, logged)
 			}
 		})
 	}

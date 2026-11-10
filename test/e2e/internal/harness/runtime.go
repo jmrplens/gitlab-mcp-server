@@ -187,7 +187,7 @@ func probe(ctx context.Context, client *gitlabclient.Client, url string, skipTLS
 	// image, licensed or not. The harness wants the two facts apart.
 	facts.Enterprise = instanceIsEnterprise(ctx, url, token, skipTLSVerify)
 
-	facts.Tier = client.DetectTier(ctx)
+	facts.Tier = client.DetectTier(ctx).Tier
 	client.SetTier(facts.Tier)
 	facts.TierConfirmed = facts.Tier.IsEnterprise()
 

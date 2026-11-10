@@ -105,13 +105,23 @@ func authorizeDecisions() []Decision {
 			// a plan only to a caller who administers the namespace while it
 			// serves a licensed feature to every member. A license answer is
 			// final and nothing else is asked after it; otherwise the higher of
-			// the namespace and membership answers wins, a membership read that
-			// fails keeps what the namespaces answered (the asymmetry INV-008
-			// records), and the pages are bounded as the namespace pages are. The tier is asked when an entry is built and
-			// kept while the entry lives (POL-007), as a namespace plan always
-			// was, so a plan or a membership that changes reaches a caller when
-			// the entry is next built, after it goes unused (POL-004) or is
-			// evicted, and a stdio process at its next start.
+			// the namespace and membership answers wins, and the pages are
+			// bounded as the namespace pages are.
+			//
+			// Issue 1782 told a step GitLab answered from one it did not. A
+			// refusal, an empty page, a fine-grained token's null nodes and the
+			// page bound are answers. No status at all (a deadline, a network
+			// failure, a body that does not decode), 408, 429, a 5xx after the
+			// retries, a membership answer with no groups connection and a
+			// document refused for anything but the caller's permission are
+			// not: such a step lowers nothing (the asymmetry INV-008 records)
+			// and leaves the tier provisional, the best known so far, which
+			// the build warns about, unless it is already Ultimate. The tier
+			// is asked when an entry is built and kept while the entry lives
+			// (POL-007), as a namespace plan always was, so a plan or a
+			// membership that changes reaches a caller when the entry is next
+			// built, after it goes unused (POL-004) or is evicted, and a stdio
+			// process at its next start.
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
 			Resource: "the licensing tier, and the namespace and top-level group pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
@@ -138,7 +148,7 @@ func authorizeDecisions() []Decision {
 			// the meta surface or refused as unknown. The answer is the
 			// tier's, Ask the operator, and allows a detected tier may be
 			// wrong.
-			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239"},
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
@@ -156,6 +166,8 @@ func authorizeDecisions() []Decision {
 				alias(pkgGitLab, "membershipPageSize", "TierMembershipPageSize"),
 				alias(pkgGitLab, "membershipMaxPages", "TierMembershipMaxPages"),
 				enforce(pkgGitLab, "Client.DetectTier"),
+				enforce(pkgGitLab, "Client.ResolveTier"),
+				enforce(pkgGitLab, "tierReadUnresolved"),
 				enforce(pkgTools, "TierWithheld"),
 				refuse(pkgTools, "filterActionSpecGroupsByTier"),
 				enforce(pkgTools, "pruneSpecFieldsByTier"),

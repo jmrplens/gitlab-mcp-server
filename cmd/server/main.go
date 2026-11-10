@@ -1825,7 +1825,7 @@ func prepareStdioCatalog(
 		client.SetTier(cfg.Tier)
 		serverCfg.Tier = cfg.Tier
 	default:
-		serverCfg.Tier = client.DetectTier(ctx)
+		serverCfg.Tier = client.DetectTier(ctx).Tier
 	}
 
 	// Narrow the surface by the scopes detected above the way the HTTP pool
