@@ -6493,6 +6493,61 @@ func TestListAll_Unauthorized_PointsAtTheTokenAlone(t *testing.T) {
 	}
 }
 
+// scopeAllRefusedJSON is the body GitLab.com answers GET /issues?scope=all
+// with for a caller the feature flag restrict_global_issues_scope_all is
+// enabled for, byte for byte as the issue 1779 report recorded it.
+const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not supported on this endpoint. Use `created_by_me` or `assigned_to_me`, or query a specific group or project.\"}"
+
+// TestListAll_ScopeAllRefused_NamesWhatGitLabComAccepts holds the global
+// listing's answer to GitLab.com's refusal of scope=all to the scopes and the
+// lists that answer there (issue 1779). The usage recommended scope=all for a
+// cross-project overview, so on GitLab.com that advice could lead to a 400
+// whose only remedy was GitLab's own sentence. The hint is shown only once
+// GitLab.com has refused, so it says that it refused, and that the restriction
+// is one GitLab.com rolls out per user. It also says that the group list,
+// like this one, leaves out the issues of archived projects, so a model does
+// not read its answer as every issue the caller can see in the group.
+//
+// The hint is keyed on the sentence and not on the status, since GitLab answers
+// 400 for any parameter it cannot read: a 400 that says something else carries
+// no hint, and neither does any other status.
+func TestListAll_ScopeAllRefused_NamesWhatGitLabComAccepts(t *testing.T) {
+	remedies := []string{"GitLab.com refused scope=all", "rolling out per user", "scope=created_by_me", "scope=assigned_to_me", "issue.list_group", "issue.list,", "issues of archived projects"}
+	for _, tt := range []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"GitLab.com's refusal", http.StatusBadRequest, scopeAllRefusedJSON, true},
+		{"another 400", http.StatusBadRequest, `{"message":"400 Bad request - scope does not have a valid value"}`, false},
+		{"the sentence under another status", http.StatusUnprocessableEntity, scopeAllRefusedJSON, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "scope", "all")
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := ListAll(t.Context(), client, ListAllInput{Scope: "all"})
+			if err == nil {
+				t.Fatal("ListAll() error = nil, want the refusal reported")
+			}
+			msg := err.Error()
+			if !strings.HasPrefix(msg, "issueListAll: ") {
+				t.Errorf("ListAll() error = %q, want it to name the operation", msg)
+			}
+			if got := strings.Contains(msg, "Suggestion: "); got != tt.wantHint {
+				t.Fatalf("ListAll() error = %q, carries a hint = %v, want %v", msg, got, tt.wantHint)
+			}
+			for _, remedy := range remedies {
+				if got := strings.Contains(msg, remedy); got != tt.wantHint {
+					t.Errorf("ListAll() error = %q, names %q = %v, want %v", msg, remedy, got, tt.wantHint)
+				}
+			}
+		})
+	}
+}
+
 // TestList_KeysetPage_FollowsTheNextPageToken verifies that a project's issue
 // list, which GitLab pages by cursor under keyset pagination, can be followed
 // past its first page: the first page publishes the next link as

@@ -414,6 +414,60 @@ func TestGet_APIError403(t *testing.T) {
 	}
 }
 
+// scopeAllRefusedJSON is the body GitLab.com answers GET
+// /issues_statistics?scope=all with for a caller the feature flag
+// restrict_global_issues_scope_all is enabled for: the API's
+// reject_global_scope_all! writes the same sentence for this route and for
+// GET /issues, the one the issue 1779 report recorded.
+const scopeAllRefusedJSON = "{\"message\":\"400 Bad request - `scope=all` is not supported on this endpoint. Use `created_by_me` or `assigned_to_me`, or query a specific group or project.\"}"
+
+// TestGet_ScopeAllRefused_NamesWhatGitLabComAccepts holds the global
+// statistics' answer to GitLab.com's refusal of scope=all to the scopes and
+// the statistics that answer there (issue 1779): the usage offered scope=all
+// to count every issue the caller can see, which GitLab.com may answer with
+// 400. The hint is shown only once GitLab.com has refused, so it says that it
+// refused, and that the restriction is one GitLab.com rolls out per user.
+//
+// The hint is keyed on the sentence and not on the status, since GitLab answers
+// 400 for any parameter it cannot read: a 400 that says something else carries
+// no hint, and the sentence under another status carries no hint of its own.
+func TestGet_ScopeAllRefused_NamesWhatGitLabComAccepts(t *testing.T) {
+	remedies := []string{"GitLab.com refused scope=all", "rolling out per user", "scope=created_by_me", "scope=assigned_to_me", actionStatisticsGetGroup + " or " + actionStatisticsGetProject + ","}
+	for _, tt := range []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{"GitLab.com's refusal", http.StatusBadRequest, scopeAllRefusedJSON, true},
+		{"another 400", http.StatusBadRequest, `{"message":"400 Bad request - scope does not have a valid value"}`, false},
+		{"the sentence under another status", http.StatusUnprocessableEntity, scopeAllRefusedJSON, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "scope", "all")
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+			_, err := Get(t.Context(), client, GetInput{Scope: "all"})
+			if err == nil {
+				t.Fatal("Get() error = nil, want the refusal reported")
+			}
+			msg := err.Error()
+			if !strings.HasPrefix(msg, "gitlab_get_issue_statistics: ") {
+				t.Errorf("Get() error = %q, want it to name the operation", msg)
+			}
+			if got := strings.Contains(msg, "Suggestion: "); got != tt.wantHint {
+				t.Fatalf("Get() error = %q, carries a hint = %v, want %v", msg, got, tt.wantHint)
+			}
+			for _, remedy := range remedies {
+				if got := strings.Contains(msg, remedy); got != tt.wantHint {
+					t.Errorf("Get() error = %q, names %q = %v, want %v", msg, remedy, got, tt.wantHint)
+				}
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // GetGroup -- filter branches
 // ---------------------------------------------------------------------------.
@@ -1256,6 +1310,14 @@ func TestActionSpecs_EnumOverridesConstrainPublishedFields(t *testing.T) {
 // the caller, which is what scope=all does (issue 1172). Each text is served
 // on its own by some surface, so each has to say both halves: what an omitted
 // scope counts, and the value that counts everything.
+//
+// GitLab.com may refuse that value on this route (issue 1779), so each text
+// also says that it may and what counts there when it does: the two scopes it
+// accepts, or a group's or a project's statistics, which the usage names by
+// their canonical IDs. The refusal is conditional: GitLab.com applies it behind
+// restrict_global_issues_scope_all, a flag whose actor is the caller and which
+// it is rolling out to a share of users, so no text may say that GitLab.com
+// refuses the value outright.
 func TestActionSpecs_Get_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 	spec := issueStatsSpecsByTool(issueStatsSpecs(t))["gitlab_get_issue_statistics"]
 	properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
@@ -1269,15 +1331,18 @@ func TestActionSpecs_Get_SaysWhatAnOmittedScopeReturns(t *testing.T) {
 		text      string
 		fragments []string
 	}{
-		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all"}},
-		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all"}},
-		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue"}},
+		{"usage", spec.Usage, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com may refuse scope=all", "When it does", "scope=assigned_to_me", actionStatisticsGetGroup + " or " + actionStatisticsGetProject + ","}},
+		{"individual description", spec.IndividualTool.Description, []string{"omitted", "scope=created_by_me", "scope=all", "GitLab.com may refuse", "if it does", "scope=assigned_to_me", "a group's or a project's issues"}},
+		{"scope parameter", scopeDescription, []string{"omitted", "created_by_me", "all (every issue", "GitLab.com may refuse", "if it does", "a group's or a project's issues"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, fragment := range tt.fragments {
 				if !strings.Contains(tt.text, fragment) {
 					t.Errorf("%s = %q, want it to carry %q", tt.name, tt.text, fragment)
 				}
+			}
+			if strings.Contains(tt.text, "GitLab.com refuses") {
+				t.Errorf("%s = %q, which says GitLab.com refuses scope=all outright; it refuses it only for the users its feature flag is enabled for", tt.name, tt.text)
 			}
 		})
 	}

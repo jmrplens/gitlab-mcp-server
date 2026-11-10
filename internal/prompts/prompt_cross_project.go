@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -192,23 +193,16 @@ func registerMyIssuesPrompt(server promptAdder, client *gitlabclient.Client) {
 // handleMyIssues lists all issues assigned to the user across all projects.
 func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	args := req.Params.Arguments
-	username, userID, _, err := resolveUser(ctx, client, args[argUsername])
+	username, userID, isSelf, err := resolveUser(ctx, client, args[argUsername])
 	if err != nil {
 		return nil, err
 	}
 
 	state := getArgOr(args, argState, "opened")
 
-	issues, _, err := client.GL().Issues.ListIssues(
-		&gl.ListIssuesOptions{
-			AssigneeID: gl.AssigneeID(userID),
-			State:      new(state),
-			Scope:      new(scopeAll),
-			PerPage:    maxListItems,
-		}, gl.WithContext(ctx),
-	)
+	issues, partial, err := listIssuesAssignedTo(ctx, client, username, userID, isSelf, state)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list issues: %w", err)
+		return nil, err
 	}
 
 	grouped := groupIssuesByProject(issues)
@@ -227,6 +221,9 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Issues Assigned to @%s (%d issues, state: %s)\n\n", mdHeading(username), len(issues), state)
+	if partial != "" {
+		fmt.Fprintf(&b, "> GitLab answered this list in part (%s), so an issue it could not resolve may be missing from it.\n\n", mdInline(partial))
+	}
 
 	b.WriteString("## Summary\n")
 	b.WriteString(tableCategoryHeader)
@@ -244,6 +241,188 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	writeClosingRule(&b, "Please summarize the issue backlog, highlight overdue items, and suggest priorities based on due dates and labels.")
 
 	return promptResult(b.String()), nil
+}
+
+// scopeAllRefusal is the sentence GitLab.com refuses scope=all on the global
+// issue list with when it does: reject_global_scope_all! in lib/api/issues.rb,
+// behind the gitlab_com_derisk feature flag restrict_global_issues_scope_all
+// (19.6, off by default), answers a 400 whose message is "400 Bad request - ",
+// this sentence and the scopes and lists to use instead. The flag's actor is
+// the caller and GitLab.com is rolling it out to a share of users, so one
+// caller may be refused while another is answered. The status alone does not
+// say it, since GitLab answers 400 for any parameter it cannot read.
+const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
+
+// refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
+// refusal of scope=all on the global issue list (issue 1779).
+func refusesGlobalScopeAll(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, scopeAllRefusal)
+}
+
+// listIssuesAssignedTo reads up to [maxListItems] issues in state assigned to
+// the user, across every project the caller can see, and returns with them
+// the account [toolutil.GraphQLPartialPage] gives of a list GitLab answered in
+// part, empty for one it answered whole.
+//
+// The caller's own issues are what scope=assigned_to_me names, which every
+// GitLab accepts, GitLab.com included. Another user's are named by the
+// assignee filter alone, so the scope has to name everybody's issues (issue
+// 1164), and GitLab.com may refuse scope=all on this list (issue 1779). The
+// REST read is sent first wherever the prompt runs, and only when GitLab.com
+// refuses it are the same issues read from GraphQL's root issue list
+// ([listIssuesAssignedToByGraphQL]), which that refusal does not reach.
+func listIssuesAssignedTo(ctx context.Context, client *gitlabclient.Client, username string, userID int64, isSelf bool, state string) (issues []*gl.Issue, partial string, err error) {
+	opts := &gl.ListIssuesOptions{
+		State:   new(state),
+		Scope:   new(scopeAssignedToMe),
+		PerPage: maxListItems,
+	}
+	if !isSelf {
+		opts.AssigneeID = gl.AssigneeID(userID)
+		opts.Scope = new(scopeAll)
+	}
+	issues, _, err = client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
+	if err == nil {
+		return issues, "", nil
+	}
+	if !refusesGlobalScopeAll(err) {
+		return nil, "", fmt.Errorf("failed to list issues: %w", err)
+	}
+	issues, partial, err = listIssuesAssignedToByGraphQL(ctx, client, username, state)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to list issues: GitLab.com refused scope=all on the REST issue list, and the GraphQL issue list read in its place failed: %w", err)
+	}
+	return issues, partial, nil
+}
+
+// myIssuesOperation names the GraphQL read of my_issues in the errors and the
+// partial-page account it gives.
+const myIssuesOperation = "my_issues"
+
+// assignedIssuesQuery reads the issues assigned to one user across every
+// project the caller can see, from GraphQL's root issue list (Query.issues),
+// which is what the issue dashboard of GitLab.com reads and which GitLab.com
+// does not refuse the way it may refuse scope=all on GET /issues (issue 1779).
+//
+// It is the REST read of my_issues about another user in another form: the
+// assignee by username, the state, the same page of [maxListItems], the same
+// order (created_desc is the default sort of both), archived projects left out
+// on both (includeArchived and non_archived default to it), and the same issue
+// types. GET /issues without an issue_type reads every base type but epic,
+// key_result and objective (unfiltered_base_types_for_issues, which
+// lib/api/helpers/issues_helpers.rb passes to the finder), while the root
+// resolver's types argument has no default and would list objectives and key
+// results as well, so the document names the six: ISSUE, INCIDENT, TEST_CASE,
+// REQUIREMENT, TASK and TICKET. GitLab marks the field an experiment and
+// refuses it without a filter, which the assignee is. It selects what the
+// summary and the issue table read: the reference names the project an issue
+// is grouped under, as references.full does on REST.
+const assignedIssuesQuery = `query AssignedIssues($assignees: [String!], $state: IssuableState, $first: Int) {
+  issues(assigneeUsernames: $assignees, state: $state, types: [ISSUE, INCIDENT, TEST_CASE, REQUIREMENT, TASK, TICKET], first: $first) {
+    nodes {
+      iid
+      title
+      reference(full: true)
+      createdAt
+      dueDate
+      milestone {
+        title
+      }
+      labels {
+        nodes {
+          title
+        }
+      }
+    }
+  }
+}`
+
+// assignedIssuesAnswer is GitLab's answer to [assignedIssuesQuery]. The list is
+// a pointer so a list GitLab answered null reads apart from an empty one, and
+// its nodes are pointers so a node answered null is counted rather than read
+// as an issue of zero values (issue 1298).
+type assignedIssuesAnswer struct {
+	Data struct {
+		Issues *struct {
+			Nodes []*assignedIssueNode `json:"nodes"`
+		} `json:"issues"`
+	} `json:"data"`
+	Errors []toolutil.GraphQLError `json:"errors"`
+}
+
+// assignedIssueNode is one issue of [assignedIssuesAnswer]. GitLab sends the
+// iid as a String, which the ",string" option reads as the number REST sends,
+// and the due date as a date, which [gl.ISOTime] reads.
+type assignedIssueNode struct {
+	IID       int64       `json:"iid,string"`
+	Title     string      `json:"title"`
+	Reference string      `json:"reference"`
+	CreatedAt time.Time   `json:"createdAt"`
+	DueDate   *gl.ISOTime `json:"dueDate"`
+	Milestone *struct {
+		Title string `json:"title"`
+	} `json:"milestone"`
+	Labels *struct {
+		Nodes []*struct {
+			Title string `json:"title"`
+		} `json:"nodes"`
+	} `json:"labels"`
+}
+
+// issue converts n to the REST issue the summary and the issue table read,
+// leaving out a label GitLab answered null.
+func (n assignedIssueNode) issue() *gl.Issue {
+	issue := &gl.Issue{
+		IID:        n.IID,
+		Title:      n.Title,
+		CreatedAt:  &n.CreatedAt,
+		DueDate:    n.DueDate,
+		References: &gl.IssueReferences{Full: n.Reference},
+	}
+	if n.Milestone != nil {
+		issue.Milestone = &gl.Milestone{Title: n.Milestone.Title}
+	}
+	if n.Labels != nil {
+		for _, label := range n.Labels.Nodes {
+			if label != nil {
+				issue.Labels = append(issue.Labels, label.Title)
+			}
+		}
+	}
+	return issue
+}
+
+// listIssuesAssignedToByGraphQL reads the issues [assignedIssuesQuery] lists
+// for username in state, and the account [toolutil.GraphQLPartialPage] gives
+// of a page GitLab answered in part. A list GitLab answered null is an error:
+// with errors[] beside it, theirs, and without them one saying so, since
+// read as an empty list it would say the user has no issues, which nobody
+// knows.
+func listIssuesAssignedToByGraphQL(ctx context.Context, client *gitlabclient.Client, username, state string) (issues []*gl.Issue, partial string, err error) {
+	var answer assignedIssuesAnswer
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query: assignedIssuesQuery,
+		Variables: map[string]any{
+			"assignees": []string{username},
+			"state":     state,
+			"first":     maxListItems,
+		},
+	}, &answer, gl.WithContext(ctx))
+	if err != nil {
+		return nil, "", err
+	}
+	if answer.Data.Issues == nil {
+		if graphQLErr := toolutil.GraphQLTopLevelError(myIssuesOperation, answer.Errors); graphQLErr != nil {
+			return nil, "", graphQLErr
+		}
+		return nil, "", fmt.Errorf("%s: GitLab answered the issue list null with no error", myIssuesOperation)
+	}
+	issues, nulled := toolutil.NodesAnswered(answer.Data.Issues.Nodes, assignedIssueNode.issue)
+	partial, err = toolutil.GraphQLPartialPage(myIssuesOperation, answer.Errors, len(issues), nulled)
+	if err != nil {
+		return nil, "", err
+	}
+	return issues, partial, nil
 }
 
 // registerMyActivitySummaryPrompt registers the my_activity_summary prompt.

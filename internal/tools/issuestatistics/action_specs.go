@@ -75,11 +75,15 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 	// is sent, so the usage and the description say what an omitted scope
 	// counts and which value counts everything (issue 1172). They used to
 	// describe counts taken across every project visible to the caller.
+	// GitLab.com may refuse that value on this route, behind a feature flag it
+	// rolls out per user, and GitLab Self-Managed and Dedicated never do, so
+	// each text says where it may be refused and what counts issues there when
+	// it is (issue 1779).
 	case "gitlab_get_issue_statistics":
-		options.Usage = "Get aggregate issue counts (all, opened, closed) across projects, optionally filtered by labels, milestone, assignee, author, dates, or search. When scope is omitted GitLab answers scope=created_by_me and counts only the issues the caller created. Pass scope=all to count every issue the caller can see."
+		options.Usage = "Get aggregate issue counts (all, opened, closed) across projects, optionally filtered by labels, milestone, assignee, author, dates, or search. When scope is omitted GitLab answers scope=created_by_me and counts only the issues the caller created. Pass scope=all to count every issue the caller can see, which GitLab Self-Managed and Dedicated accept. GitLab.com may refuse scope=all here with 400, a restriction it is rolling out per user. When it does, pass scope=created_by_me or scope=assigned_to_me, or count one group's or project's issues with issue.statistics_get_group or issue.statistics_get_project, which count every issue the caller can see in it."
 		options.Aliases = []string{individualTool, "issue statistics", "count issues", "global issue counts"}
 		options.RelatedActions = []string{actionStatisticsGetGroup, actionStatisticsGetProject, "issue.list_all"}
-		options.IndividualTool.Description = "Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
+		options.IndividualTool.Description = "Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all, which GitLab.com may refuse here (if it does, pass scope=created_by_me or scope=assigned_to_me, or count a group's or a project's issues). Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
 			toolutil.SchemaEnumOverride("in", "title", "description", "title,description"),

@@ -263,6 +263,18 @@
     },
     {
       "package": "internal/prompts",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
+      "operation": "query AssignedIssues issues",
+      "variables": [
+        "assignees",
+        "first",
+        "state"
+      ]
+    },
+    {
+      "package": "internal/prompts",
       "kind": "rest",
       "method": "GET",
       "path": "/groups/:group_id/issues",

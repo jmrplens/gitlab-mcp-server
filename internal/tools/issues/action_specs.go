@@ -268,12 +268,18 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	// GET /issues answers with scope=created_by_me when no scope is sent, so
 	// the usage and the description say what an omitted scope returns and
 	// which value lists everything (issue 1172). They used to call the result
-	// every issue visible to the caller.
+	// every issue visible to the caller. GitLab.com may refuse that value on
+	// this route, behind a feature flag it rolls out per user, and GitLab
+	// Self-Managed and Dedicated never do, so each text says where it may be
+	// refused and what lists issues there when it is (issue 1779).
+	// GET /issues and GET /groups/:id/issues default non_archived to true and
+	// client-go models neither, so both texts say that archived projects'
+	// issues are left out and that the project list is the one returning them.
 	case "gitlab_issue_list_all":
-		options.Usage = "List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see, which is what a cross-project issue overview needs."
+		options.Usage = "List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see in a project that is not archived, which GitLab Self-Managed and Dedicated accept. Whatever the scope, GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list. GitLab.com may refuse scope=all on this list with 400, a restriction it is rolling out per user. When it does, pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return the issues the caller can see in it, the group list leaving out its archived projects' issues as well."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
 		options.RelatedActions = []string{actionIssueList, actionIssueListGroup, actionSearchIssues}
-		options.IndividualTool.Description = "List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+		options.IndividualTool.Description = "List issues across projects that are not archived: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every one the caller can see with scope=all, which GitLab.com may refuse on this list (if it does, pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). An archived project's issues are listed by project. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
 	case toolIssueListGroup:
 		decorateIssueMeta(&options, individualTool)
@@ -330,7 +336,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	// The group surface owns the individual-tool description to avoid a
 	// projected-description drift across the two canonical actions.
 	toolIssueListGroup: {
-		usage:   "List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.",
+		usage:   "List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project. GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list.",
 		aliases: []string{"issues in a group", "group-scoped issue list", "list a group's issues", "issues across subgroups"},
 		related: []string{actionIssueList, actionGroupGet, actionSearchIssues},
 	},
@@ -543,7 +549,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := groupIssueOptions(individualTool)
 	if individualTool == toolIssueListGroup {
-		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project."
+		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project. GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list."
 		options.Aliases = []string{"list group issues", "show issues in group", "find issues across group"}
 		options.RelatedActions = []string{actionIssueList, actionGroupGet, actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -554,7 +560,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 				CommonConfusions: []string{"Use group_id for group paths or IDs. Use project_id only with issue.list for a single project."},
 			},
 		}
-		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."
+		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from the group's projects that are not archived, with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
 	}
 	return toolutil.NewReadActionSpec(name, route, options)

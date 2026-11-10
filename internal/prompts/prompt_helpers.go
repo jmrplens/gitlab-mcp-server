@@ -97,9 +97,9 @@ const (
 	maxListItems = 100
 )
 
-// scopeAll is the scope every read of GitLab's global merge request and issue
-// lists sends (GET /merge_requests and GET /issues, the lists that are not a
-// project's or a group's).
+// scopeAll is the scope every read of GitLab's global merge request list sends,
+// and the read of the global issue list about another user (GET /merge_requests
+// and GET /issues, the lists that are not a project's or a group's).
 //
 // Those two routes answer with scope=created_by_me when no scope is sent, so a
 // list filtered by an author, an assignee or a reviewer is that filter applied
@@ -110,7 +110,19 @@ const (
 // user here, so the scope has to name everybody. The project and group lists
 // declare no default and answer with every visible item already, which is why
 // their calls carry no scope.
+//
+// GitLab.com may refuse scope=all on the global issue list (issue 1779), so a
+// read of the caller's own issues sends [scopeAssignedToMe] instead, which
+// names the same issues on every instance, and a read about another user that
+// GitLab.com refuses is answered from GraphQL's root issue list
+// ([assignedIssuesQuery]).
 const scopeAll = "all"
+
+// scopeAssignedToMe is the scope the global issue list names the issues
+// assigned to the caller with. GitLab.com accepts it where it may refuse
+// [scopeAll], and every other instance answers it with what scope=all filtered
+// by the caller as assignee returns.
+const scopeAssignedToMe = "assigned_to_me"
 
 // groupIDArg returns a required prompt argument for the GitLab group ID.
 func groupIDArg() *mcp.PromptArgument {

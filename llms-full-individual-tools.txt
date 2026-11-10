@@ -3887,7 +3887,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_issue_statistics
 
-Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.
+Get global issue count statistics: of the issues the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and of every issue the caller can see with scope=all, which GitLab.com may refuse here (if it does, pass scope=created_by_me or scope=assigned_to_me, or count a group's or a project's issues). Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list.
 
 **Parameters:**
 
@@ -3903,7 +3903,7 @@ Get global issue count statistics: of the issues the caller created when scope i
 - `labels` (array of strings): Label names to filter by
 - `milestone` (string): Milestone title to filter by
 - `my_reaction_emoji` (string): Filter by issues you reacted to with this emoji (or None/Any)
-- `scope` (string): Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)
+- `scope` (string): Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com may refuse here, and if it does, count a group's or a project's issues instead)
 - `search` (string): Search string for title and description
 - `updated_after` (string): Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
@@ -6708,7 +6708,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_all
 
-List issues across projects: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every issue the caller can see with scope=all. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
+List issues across projects that are not archived: only the ones the caller created when scope is omitted, since GitLab defaults to scope=created_by_me, and every one the caller can see with scope=all, which GitLab.com may refuse on this list (if it does, pass scope=created_by_me or scope=assigned_to_me, or list a group's or a project's issues). An archived project's issues are listed by project. Returns: the matching issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
 
 **Parameters:**
 
@@ -6739,7 +6739,7 @@ List issues across projects: only the ones the caller created when scope is omit
 - `order_by` (string): Field to order by: created_at (the default), due_date, label_priority, milestone_due, popularity, priority, relative_position, title, updated_at, or weight, which only GitLab Enterprise Edition accepts
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `scope` (string): Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)
+- `scope` (string): Which issues to return: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see in a project that is not archived, which GitLab.com may refuse on this list, and if it does, list a group's or a project's issues instead)
 - `search` (string): Search in title and description
 - `sort` (string): Sort direction (asc, desc)
 - `state` (string): Filter by state (opened, closed, all)
@@ -6751,7 +6751,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_group
 
-List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.
+List issues across a group. Returns: matching issues from the group's projects that are not archived, with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.
 
 **Parameters:**
 

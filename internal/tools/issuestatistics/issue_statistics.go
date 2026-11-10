@@ -117,7 +117,7 @@ func optIIDs(iids []int64) *[]int64 {
 type GetInput struct {
 	Labels           []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
 	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string               `json:"scope,omitempty"             jsonschema:"Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see)"`
+	Scope            string               `json:"scope,omitempty"             jsonschema:"Which issues to count: created_by_me (the caller's own, and GitLab's default when scope is omitted), assigned_to_me, or all (every issue the caller can see, which GitLab.com may refuse here, and if it does, count a group's or a project's issues instead)"`
 	Search           string               `json:"search,omitempty"            jsonschema:"Search string for title and description"`
 	In               string               `json:"in,omitempty"                jsonschema:"Fields the search query applies to (title, description, or title,description)"`
 	AssigneeID       toolutil.StringOrInt `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee: a user ID, None for issues nobody is assigned, or Any for issues somebody is"`
@@ -133,11 +133,35 @@ type GetInput struct {
 	MyReactionEmoji  string               `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
+// scopeAllRefusal is the sentence GitLab.com refuses scope=all on the global
+// issue statistics with when it does: reject_global_scope_all! in
+// lib/api/issues.rb, behind the gitlab_com_derisk feature flag
+// restrict_global_issues_scope_all (19.6, off by default), answers a 400 whose
+// message is "400 Bad request - ", this sentence and the scopes and lists to
+// use instead. The flag's actor is the caller and GitLab.com is rolling it out
+// to a share of users, so one caller may be refused while another is answered;
+// the handler sends what it was given and reads the answer. The status alone
+// does not say it, since GitLab answers 400 for any parameter it cannot read.
+const scopeAllRefusal = "`scope=all` is not supported on this endpoint"
+
+// hintScopeAllRefused is the remedy for that refusal, shown only once
+// GitLab.com has refused. GitLab Self-Managed and Dedicated accept scope=all
+// here, so the action keeps offering it, and the group and project statistics
+// count every issue the caller can see in them whatever the instance.
+const hintScopeAllRefused = "GitLab.com refused scope=all on the global issue statistics, a restriction it is rolling out per user and GitLab Self-Managed and Dedicated do not apply: pass scope=created_by_me or scope=assigned_to_me, or count one group's or project's issues with issue.statistics_get_group or issue.statistics_get_project, which count every issue the caller can see in it"
+
+// refusesGlobalScopeAll reports whether GitLab answered err with GitLab.com's
+// refusal of scope=all on the global issue statistics (issue 1779).
+func refusesGlobalScopeAll(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, scopeAllRefusal)
+}
+
 // Get retrieves global issue statistics via the GitLab Issue statistics API
 // (GET /issues_statistics). The scope is passed through as the caller wrote
 // it, so an omitted one gets GitLab's default, created_by_me, and the counts
 // cover only the issues the caller created; scope=all counts every issue it
-// can see. Optional filters narrow the result.
+// can see, and GitLab.com may refuse it on this route. Optional filters narrow
+// the result.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (StatisticsOutput, error) {
 	opts := &gl.GetIssuesStatisticsOptions{
 		Labels:           labelOptions(input.Labels),
@@ -166,6 +190,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx), assigneeQuery)
 	if err != nil {
+		if refusesGlobalScopeAll(err) {
+			return StatisticsOutput{}, toolutil.WrapErrWithHint("gitlab_get_issue_statistics", err, hintScopeAllRefused)
+		}
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_issue_statistics", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
 	return fromGL(stats), nil
