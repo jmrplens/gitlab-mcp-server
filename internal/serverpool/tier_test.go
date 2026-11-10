@@ -96,6 +96,13 @@ func standInForGitLabDotCom(t *testing.T, handler http.Handler) {
 // client gives up, or, once healthy, naming that group.
 type dotComTierGitLab struct {
 	healthy atomic.Bool
+	// timingOut answers the membership page at once with every group null
+	// beside a field timeout, which leaves the step unread without the clock
+	// running out, while the membership is not healthy.
+	timingOut atomic.Bool
+	// namespacesHang holds the namespace listing until the request ends,
+	// which spends the context the license and namespace steps share.
+	namespacesHang atomic.Bool
 	// probes counts the credential probes, the GET /user a build sends and a
 	// re-detection does not.
 	probes atomic.Int64
@@ -108,6 +115,13 @@ type dotComTierGitLab struct {
 const ultimateMembershipPage = `{"data":{"groups":{"nodes":[{"fullPath":"acme",` +
 	`"premium":{"available":true},"ultimate":{"available":true}}],` +
 	`"pageInfo":{"hasNextPage":false,"endCursor":""}}}}`
+
+// timedOutMembershipPage is a membership page whose one group came back null
+// beside a field timeout: GitLab's own moment rather than an answer about the
+// caller, so the step is left unread.
+const timedOutMembershipPage = `{"data":{"groups":{"nodes":[null],` +
+	`"pageInfo":{"hasNextPage":false,"endCursor":""}}},` +
+	`"errors":[{"message":"Timeout on Group.licensedFeatureAvailability"}]}`
 
 // newDotComTierGitLab installs the stand-in. A membership page still hanging
 // when the test ends is let go then, so nothing outlives it.
@@ -127,12 +141,24 @@ func newDotComTierGitLab(t *testing.T) *dotComTierGitLab {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"message":"403 Forbidden"}`))
 	})
-	mux.HandleFunc("GET /api/v4/namespaces", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v4/namespaces", func(w http.ResponseWriter, r *http.Request) {
+		if g.namespacesHang.Load() {
+			select {
+			case <-r.Context().Done():
+			case <-done:
+			}
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[{"id":1,"full_path":"builder","kind":"user","plan":"free"}]`))
 	})
 	mux.HandleFunc("POST /api/graphql", func(w http.ResponseWriter, r *http.Request) {
 		g.memberships.Add(1)
+		if !g.healthy.Load() && g.timingOut.Load() {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(timedOutMembershipPage))
+			return
+		}
 		if !g.healthy.Load() {
 			select {
 			case <-r.Context().Done():
@@ -393,6 +419,83 @@ func TestRedetectDueTiers_TheProductionCase_IsServedUltimateWithoutARestart(t *t
 	assertMovedLine(t, captured, "free", "ultimate", "detected")
 }
 
+// sharedClockEnd is how long a test gives the context an entry build or a
+// re-detection shares between its license and namespace reads: far shorter
+// than the membership step's own eight seconds, so a step that ran on what the
+// shared context left would find it ended.
+const sharedClockEnd = 100 * time.Millisecond
+
+// dotComTierPool is a pool against the GitLab.com stand-in that detects the
+// tier, whose shared detection context ends after sharedClockEnd while its
+// lifetime does not.
+func dotComTierPool(t *testing.T) *ServerPool {
+	t.Helper()
+	cfg := testConfig(gitLabDotComURL)
+	cfg.TierExplicit, cfg.AuthMode = false, config.AuthModeOAuth
+	pool := New(cfg, (&shapeFactory{}).build)
+	pool.detectTimeout = sharedClockEnd
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// TestEntryConfig_NamespacesSpendTheSharedClock_MembershipStillAnswersUltimate
+// checks that the membership step of a build runs on its own clock, measured
+// from the pool's lifetime: the namespace listing hangs until the context it
+// shares with the license read ends, and the membership page, asked after it,
+// still answers Ultimate, which nothing can raise, so the entry is built
+// Ultimate and not provisional. Asked on what the namespace read left, the
+// step would find its context ended and the entry would be Free, provisional.
+func TestEntryConfig_NamespacesSpendTheSharedClock_MembershipStillAnswersUltimate(t *testing.T) {
+	g := newDotComTierGitLab(t)
+	g.healthy.Store(true)
+	g.namespacesHang.Store(true)
+	pool := dotComTierPool(t)
+
+	built, err := pool.GetOrCreateEntryWithFacts("glpat-own-clock", gitLabDotComURL, &gitlabclient.TokenFacts{Scopes: []string{"api"}})
+	if err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts(): %v", err)
+	}
+	if built.Config().Tier != edition.Ultimate || g.memberships.Load() != 1 {
+		t.Errorf("built on %v after %d membership pages, want Ultimate from the one page", built.Config().Tier, g.memberships.Load())
+	}
+	assertProvisionalMark(t, pool, built, nil)
+}
+
+// TestRedetectTier_NamespacesSpendTheSharedClock_MembershipStillResolvesUltimate
+// is the same check for a re-detection: an entry built Free and provisional,
+// its membership page answered with a field timeout, is asked again while the
+// namespace listing hangs until the shared context ends and the membership is
+// healthy. The membership step runs on its own clock, measured from the
+// sweep's context, answers Ultimate, and the entry moves to the Ultimate shape.
+func TestRedetectTier_NamespacesSpendTheSharedClock_MembershipStillResolvesUltimate(t *testing.T) {
+	g := newDotComTierGitLab(t)
+	g.timingOut.Store(true)
+	pool := dotComTierPool(t)
+	const token = "glpat-own-clock-again"
+	known := &gitlabclient.TokenFacts{Scopes: []string{"api"}}
+	built, err := pool.GetOrCreateEntryWithFacts(token, gitLabDotComURL, known)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntryWithFacts(): %v", err)
+	}
+	if mark, marked := markOf(pool, built); built.Config().Tier != edition.Free || !marked || !slices.Contains(mark.unresolved, "membership") {
+		t.Fatalf("built on %v, marked %t with %v; want Free, provisional on the membership step", built.Config().Tier, marked, mark.unresolved)
+	}
+
+	g.healthy.Store(true)
+	g.namespacesHang.Store(true)
+	makeTierDue(t, pool, built)
+	pool.redetectDueTiers(t.Context())
+
+	current := pooledUnder(pool, sessionKey(token, gitLabDotComURL))
+	if current == nil {
+		t.Fatal("the credential is no longer pooled after the ask")
+	}
+	if current == built || current.Config().Tier != edition.Ultimate {
+		t.Errorf("after the ask the credential is served by a new entry %t on %v; want the Ultimate shape",
+			current != built, current.Config().Tier)
+	}
+}
+
 // assertReplacedKeepingTheCredential holds a replacement to what it keeps of
 // the entry it replaced: the client and the credential's age, under an owner
 // of its own.
@@ -566,6 +669,76 @@ func TestRedetectDueTiers_AnAnswerStillProvisional_BacksOffToTheCeiling(t *testi
 	}
 }
 
+// TestRedetectDueTiers_TheTickOnWhichTheWaitEnds_AsksAgain checks that the
+// next ask falls on the tick at which its wait ends, counted from the tick
+// that asked: the wait starts once GitLab has answered, a moment after that
+// tick, and the tick a whole wait later must still find it due rather than
+// leave it to the one after.
+func TestRedetectDueTiers_TheTickOnWhichTheWaitEnds_AsksAgain(t *testing.T) {
+	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+	pool := tierPool(t, g, &shapeFactory{}, &evictionLog{})
+	entry, _ := buildTierEntry(t, pool, g, "glpat-on-time")
+	makeTierDue(t, pool, entry)
+
+	tick := time.Now()
+	pool.redetectDueTiers(t.Context())
+
+	mark, _ := markOf(pool, entry)
+	if mark.wait != 2*time.Minute {
+		t.Fatalf("the wait after the first ask is %v, want two minutes", mark.wait)
+	}
+	if due := pool.dueTiers(tick.Add(mark.wait)); len(due) != 1 || due[0].entry != entry {
+		t.Error("the tick two minutes after the one that asked found the entry not yet due, which leaves the ask a tick late")
+	}
+	if due := pool.dueTiers(tick.Add(mark.wait - pool.tierRetry)); len(due) != 0 {
+		t.Error("the tick before the one on which the wait ends already found the entry due")
+	}
+}
+
+// TestStartTierRedetection_AsksOnTheTicksItsWaitsEndOn measures the asks the
+// sweep's own goroutine makes of a tier GitLab keeps leaving unanswered, with
+// the tick shortened: each ask after the first lands a whole wait after the
+// one before it, two ticks and then four, rather than a tick later than that,
+// which a wait measured from after the ask's answer used to make it.
+//
+// The tick is a second: an ask whose answer takes more than half a tick moves
+// the next ask a tick later by design, so the test leaves each answer half a
+// second on a loaded runner. The fourth ask comes seven ticks after the build,
+// past awaitCondition's five seconds, so the wait has a budget of its own.
+func TestStartTierRedetection_AsksOnTheTicksItsWaitsEndOn(t *testing.T) {
+	const tick = time.Second
+	var (
+		mu    sync.Mutex
+		asked []time.Time
+	)
+	g := newTierGitLab(t, func(w http.ResponseWriter) {
+		mu.Lock()
+		asked = append(asked, time.Now())
+		mu.Unlock()
+		w.WriteHeader(http.StatusBadGateway)
+	}, "")
+	pool := tierPool(t, g, &shapeFactory{}, &evictionLog{}, WithTierRetry(tick))
+	buildTierEntry(t, pool, g, "glpat-intervals")
+	pool.StartTierRedetection(t.Context())
+
+	awaitConditionWithin(t, "three asks after the build", 20*tick, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(asked) >= 4
+	})
+	pool.Close()
+	mu.Lock()
+	defer mu.Unlock()
+	for i, wantTicks := range []int{2, 4} {
+		t.Run("ask "+strconv.Itoa(i+2)+" after ask "+strconv.Itoa(i+1), func(t *testing.T) {
+			interval := asked[i+2].Sub(asked[i+1])
+			if got := int((interval + tick/2) / tick); got != wantTicks {
+				t.Errorf("the ask came %v after the one before, %d ticks; want %d", interval, got, wantTicks)
+			}
+		})
+	}
+}
+
 // TestRedetectDueTiers_TheSameTierAnsweredWhole_IsNotAskedAgain checks that a
 // re-detection that reads the entry's tier whole clears the mark, says so at
 // INFO with the asks it took, and that the sweep asks nothing more of it.
@@ -644,16 +817,17 @@ func TestRedetectDueTiers_AsksOnlyWhatIsDueAndOnlyWithASlot(t *testing.T) {
 		}
 	})
 
-	t.Run("the wait ends at its due time", func(t *testing.T) {
+	t.Run("the wait ends on the tick nearest its due time", func(t *testing.T) {
 		g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
 		pool := tierPool(t, g, &shapeFactory{}, &evictionLog{})
 		entry, _ := buildTierEntry(t, pool, g, "glpat-edge")
 		mark, _ := markOf(pool, entry)
-		if due := pool.dueTiers(mark.due.Add(-time.Nanosecond)); len(due) != 0 {
-			t.Error("an entry was due a nanosecond before its time")
+		edge := mark.due.Add(-pool.tierRetry / 2)
+		if due := pool.dueTiers(edge.Add(-time.Nanosecond)); len(due) != 0 {
+			t.Error("an entry was due on a tick more than half a tick before its time")
 		}
-		if due := pool.dueTiers(mark.due); len(due) != 1 || due[0].entry != entry {
-			t.Errorf("dueTiers() at the due time = %v, want the entry", due)
+		if due := pool.dueTiers(edge); len(due) != 1 || due[0].entry != entry {
+			t.Errorf("dueTiers() half a tick before the due time = %v, want the entry", due)
 		}
 	})
 
@@ -867,24 +1041,123 @@ func TestReplaceTier_TheReplacementKeepsWhatBelongsToTheCredential(t *testing.T)
 	}
 }
 
-// TestReplaceTier_ARefusalTheOldEntryIsHanded_EndsNothing checks the window a
-// replacement leaves: a refusal of the credential that reaches the old entry,
-// through the hook it carried before the swap, finds it no longer pooled, and
-// ends nothing and counts nothing; the next refused call reaches the
-// replacement ([TestReplaceTier_TheClientsHook_PointsAtTheReplacement]).
-func TestReplaceTier_ARefusalTheOldEntryIsHanded_EndsNothing(t *testing.T) {
+// TestReplaceTier_ARefusalTheOldEntryIsHanded_EndsTheReplacement checks the
+// window a replacement leaves: a refusal of the credential handed to the old
+// entry, through the hook it carried before the swap, ends the replacement,
+// which carries the same client and so the same refused credential, and
+// counts it as a rejected credential. A 401 naming the credential reaches the
+// client's hook once, so the replacement would otherwise never hear of it.
+func TestReplaceTier_ARefusalTheOldEntryIsHanded_EndsTheReplacement(t *testing.T) {
 	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
 	evicted := &evictionLog{}
 	pool := tierPool(t, g, &shapeFactory{}, evicted)
-	old, key := buildTierEntry(t, pool, g, "glpat-refused-later")
+	old, key := buildTierEntry(t, pool, g, refusedLaterToken)
 	pool.replaceTier(t.Context(), key, old, gitlabclient.TierResolution{Tier: edition.Ultimate, Answered: true})
 	next := pooledUnder(pool, key)
 
 	old.rejected.Store(true)
 	pool.evictRejectedCredential(key, old)
 
-	if pooledUnder(pool, key) != next || pool.Stats().RejectedCredentialEvictions != 0 {
-		t.Error("a refusal handed to the replaced entry ended its replacement")
+	assertReplacementRefused(t, pool, g, next, evicted)
+}
+
+// assertReplacementRefused holds a replacement a refusal handed to the entry it
+// replaced was meant for to having ended: no longer pooled, marked rejected,
+// counted once as a rejected credential, and handed to the eviction callback
+// with that cause after the tier_resolved of the entry it replaced.
+func assertReplacementRefused(t *testing.T, pool *ServerPool, g *tierGitLab, next *Entry, evicted *evictionLog) {
+	t.Helper()
+	if pooledUnder(pool, sessionKey(refusedLaterToken, g.url)) != nil || !next.rejected.Load() {
+		t.Error("the replacement still serves a credential GitLab refused through the entry it replaced")
+	}
+	if got := pool.Stats().RejectedCredentialEvictions; got != 1 {
+		t.Errorf("RejectedCredentialEvictions = %d, want 1", got)
+	}
+	entries, causes := evicted.seen()
+	if !slices.Equal(causes, []EvictionCause{CauseTierResolved, CauseRejectedCredential}) || entries[1] != next {
+		t.Errorf("eviction callback handed %v, want tier_resolved and then the replacement as a rejected credential", causes)
+	}
+	if pool.Admitted(refusedLaterToken, g.url) {
+		t.Error("the door still admits the refused credential")
+	}
+}
+
+// refusedLaterToken is the credential GitLab refuses once its entry was
+// replaced.
+const refusedLaterToken = "glpat-refused-later"
+
+// TestReplaceTier_ARefusalInsideTheSwap_EndsTheReplacement drives the window
+// through the shared client rather than by hand: while the replacement is
+// being pooled, before its 401 hook is set, a call GitLab refuses for the
+// credential reaches the hook the old entry carried. That 401 is the only one
+// the client hands its hook, and the replacement ends all the same.
+func TestReplaceTier_ARefusalInsideTheSwap_EndsTheReplacement(t *testing.T) {
+	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+	evicted := &evictionLog{}
+	var armed atomic.Bool
+	pool := tierPool(t, g, &shapeFactory{}, evicted, WithOnInsert(func(entry *Entry) bool {
+		if armed.Load() {
+			_ = entry.Client().ResolveTier(t.Context(), t.Context())
+		}
+		return true
+	}))
+	old, key := buildTierEntry(t, pool, g, refusedLaterToken)
+	g.set(revokedTokenAnswer, "")
+	armed.Store(true)
+
+	pool.replaceTier(t.Context(), key, old, gitlabclient.TierResolution{Tier: edition.Ultimate, Answered: true})
+
+	if !old.rejected.Load() {
+		t.Fatal("the refusal inside the swap did not reach the old entry's hook; the test no longer drives the window")
+	}
+	awaitCondition(t, "the replacement to end", func() bool { return pooledUnder(pool, key) == nil })
+	entries, causes := evicted.seen()
+	if len(causes) != 2 || entries[1] == old {
+		t.Fatalf("eviction callback handed %v, want the old entry's tier_resolved and then its replacement", causes)
+	}
+	assertReplacementRefused(t, pool, g, entries[1], evicted)
+}
+
+// revokedTokenAnswer is GitLab's answer to a call whose token it revoked: a
+// 401 naming the credential with the RFC 6750 invalid_token code.
+func revokedTokenAnswer(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}`))
+}
+
+// TestRevalidateEntry_ABelowMinimumVerdictForTheOldEntry_EndsTheReplacement
+// covers the revalidation sweep's half of the same window: the sweep walks a
+// snapshot taken before a re-detection replaced the entry, so it asks about
+// the old one, and when the self endpoint says the token is below the
+// admission minimum, the replacement, which carries the same token, ends as
+// below the minimum and the door is told to remember it.
+func TestRevalidateEntry_ABelowMinimumVerdictForTheOldEntry_EndsTheReplacement(t *testing.T) {
+	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+	evicted := &evictionLog{}
+	pool := tierPool(t, g, &shapeFactory{}, evicted)
+	var remembered []string
+	pool.RememberBelowMinimum(func(gitlabURL, token string) { remembered = append(remembered, gitlabURL+" "+token) })
+	old, key := buildTierEntry(t, pool, g, "glpat-read-user")
+	if !old.tokenFacts().KindUnknown {
+		t.Fatal("the build learned the token's kind; the revalidation needs it unknown")
+	}
+	pool.replaceTier(t.Context(), key, old, gitlabclient.TierResolution{Tier: edition.Ultimate, Answered: true})
+	next := pooledUnder(pool, key)
+	g.selfScopes.Store(&[]string{"read_user"})
+
+	pool.revalidateEntry(t.Context(), key, old)
+
+	if pooledUnder(pool, key) != nil || pool.Stats().BelowMinimumEvictions != 1 {
+		t.Errorf("the replacement is pooled %t with %d below-minimum evictions; want it gone and one counted",
+			pooledUnder(pool, key) != nil, pool.Stats().BelowMinimumEvictions)
+	}
+	entries, causes := evicted.seen()
+	if !slices.Equal(causes, []EvictionCause{CauseTierResolved, CauseBelowMinimum}) || entries[1] != next {
+		t.Errorf("eviction callback handed %v, want tier_resolved and then the replacement as below the minimum", causes)
+	}
+	if want := []string{g.url + " glpat-read-user"}; !slices.Equal(remembered, want) {
+		t.Errorf("the door was told %v, want %v", remembered, want)
 	}
 }
 

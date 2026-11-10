@@ -130,11 +130,12 @@ func authorizeDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages", "TierMembershipTimeout"},
 			Source: Constant, Zero: ZeroNotApplicable,
-			Fixed: "the pages bound what detecting the tier costs at every entry build, and a caller past them " +
-				"resolves lower than it should, which --tier answers, while a warning says so only when an " +
+			Fixed: "the pages bound what detecting the tier costs at every entry build and re-detection, and a caller " +
+				"past them resolves lower than it should, which --tier answers, while a warning says so only when an " +
 				"enterprise instance falls back to Free; the membership step's clock bounds the one step the " +
-				"others could starve, and a step it ends is left unread, so the tier is provisional and warned " +
-				"about: the operator's lever is the tier itself rather than the pages read to guess it",
+				"others could starve, and a step it ends is left unread, so the tier is provisional, warned " +
+				"about and asked again (AUT-010): the operator's lever is the tier itself rather than the pages " +
+				"read to guess it",
 			Flags: []string{"--tier"}, Envs: []string{"GITLAB_MCP_TIER"}, Malformed: RefuseStartup,
 			// Issue 956 answered F-10: the actions the tier filter removed are
 			// recorded beside the scope and operator narrowings, so a call for
@@ -419,7 +420,8 @@ func authorizeDecisions() []Decision {
 			// a later probe may raise and a transient failure must not keep
 			// (INV-008). A pool entry built on one is asked again by a sweep of
 			// its own, after TierProvisionalRetry and then twice as long each
-			// time up to TierProvisionalRetryMax, so neither a request, the
+			// time up to TierProvisionalRetryMax, each ask on the sweep's tick
+			// nearest the end of its wait, so neither a request, the
 			// revalidation sweep nor an open subscription decides when: an
 			// entry serving nothing but a subscriptions/listen made no request
 			// through the pool, and --revalidate-interval 0 switched the
@@ -474,7 +476,8 @@ func authorizeDecisions() []Decision {
 			Key:      KeyEntry, StdioKey: KeyProcess,
 			// Issue 1782: an entry whose provisional tier resolves to another
 			// is replaced on the shape of that tier rather than kept, which is
-			// the one change of an entry's tier after its build.
+			// the only way an entry's tier changes after its build, at most
+			// twice (AUT-010).
 			Decided: []string{"issue 1782"},
 			Sites:   []Site{enforce(pkgPool, "ServerPool.entryConfig"), enforce(pkgPool, "ServerPool.replaceTier")},
 		},

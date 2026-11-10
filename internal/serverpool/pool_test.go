@@ -248,10 +248,17 @@ func approve(t *testing.T, entry *Entry) {
 // read straight after the call.
 func awaitCondition(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	awaitConditionWithin(t, what, 5*time.Second, cond)
+}
+
+// awaitConditionWithin polls cond until it holds or budget passes, for a wait
+// that runs over several of a sweep's ticks.
+func awaitConditionWithin(t *testing.T, what string, budget time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(budget)
 	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatalf("five seconds passed without %s", what)
+			t.Fatalf("%v passed without %s", budget, what)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -5564,12 +5571,19 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 	key := sessionKey("glpat-original", stubGitLabBase)
 
 	t.Run("a key holding a different entry is left alone", func(t *testing.T) {
-		replacement := &Entry{server: entry.server, client: entry.client, serverConfig: entry.serverConfig}
+		// A rebuild is a new client for the same credential, as buildEntry
+		// makes one; an entry sharing the client is a replacement on another
+		// tier's shape, which the refusal does reach.
+		rebuilt, rebuildErr := gitlabclient.NewClientWithTokenRetries(stubGitLabBase, "glpat-original", false, true)
+		if rebuildErr != nil {
+			t.Fatalf("NewClientWithTokenRetries(): %v", rebuildErr)
+		}
+		replacement := &Entry{server: entry.server, client: rebuilt, serverConfig: entry.serverConfig}
 		pool.mu.Lock()
 		pool.entries[key] = replacement
 		pool.mu.Unlock()
 
-		if _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+		if _, dropped := pool.dropRejectedEntry(key, entry); dropped != nil {
 			t.Error("dropRejectedEntry() removed a replacement built after the refusal")
 		}
 		pool.mu.Lock()
@@ -5585,7 +5599,7 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 		delete(pool.entries, key)
 		pool.mu.Unlock()
 
-		if _, dropped := pool.dropRejectedEntry(key, entry); dropped {
+		if _, dropped := pool.dropRejectedEntry(key, entry); dropped != nil {
 			t.Error("dropRejectedEntry() reported dropping an entry that was already gone")
 		}
 	})
@@ -5600,7 +5614,7 @@ func TestDropRejectedEntry_LeavesAReplacementAlone(t *testing.T) {
 		pool.entries[key] = partial
 		pool.mu.Unlock()
 
-		if _, dropped := pool.dropRejectedEntry(key, partial); !dropped {
+		if _, dropped := pool.dropRejectedEntry(key, partial); dropped != partial {
 			t.Error("dropRejectedEntry() left behind an entry that had no LRU element")
 		}
 	})

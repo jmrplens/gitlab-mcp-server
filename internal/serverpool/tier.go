@@ -63,8 +63,10 @@ func (t *provisionalTier) askAfter(now time.Time, wait time.Duration) {
 // tierRedetectDelay is how long the sweep waits before asking a provisional
 // tier again, given how long it waited before the ask that left it
 // provisional: twice that, never past [tierProvisionalRetryMax]. The first
-// wait is [ServerPool.tierRetry], so the asks fall one, two, four, eight and
-// then every fifteen minutes after the build.
+// wait is [ServerPool.tierRetry], and each ask falls on the sweep's tick
+// nearest the end of its wait ([ServerPool.dueTiers]), so the asks come about
+// a minute after the build and then two, four, eight and every fifteen minutes
+// after the ask before, each within half a minute of that.
 func tierRedetectDelay(previous time.Duration) time.Duration {
 	return min(2*previous, tierProvisionalRetryMax)
 }
@@ -173,13 +175,26 @@ func (p *ServerPool) redetectDueTiers(ctx context.Context) {
 	asks.Wait()
 }
 
-// dueTiers returns the entries whose provisional tier is due at now.
+// dueTiers returns the entries whose provisional tier is due at now, the
+// moment of a tick: those whose wait ends no later than half a tick after it,
+// so each ask falls on the tick nearest the end of its wait.
+//
+// A wait is measured from when the entry was built or last asked, which is
+// after the tick that asked it by however long GitLab took to answer, and the
+// waits are whole multiples of the tick. Compared with the tick alone, the
+// tick on which a wait ends found it a few milliseconds short of due and left
+// it to the next one, so every ask came one tick late: the first a minute or
+// two after the build, the next ones three, five and nine minutes apart where
+// the waits were two, four and eight. Half a tick of slack absorbs any answer
+// shorter than half a minute, which every ask is, since its reads are bounded
+// by entryDetectTimeout and the membership step's eight seconds.
 func (p *ServerPool) dueTiers(now time.Time) []dueTier {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	horizon := now.Add(p.tierRetry / 2)
 	var due []dueTier
 	for key, entry := range p.entries {
-		if entry.provisional != nil && !now.Before(entry.provisional.due) {
+		if entry.provisional != nil && !horizon.Before(entry.provisional.due) {
 			due = append(due, dueTier{key: key, entry: entry})
 		}
 	}
@@ -192,7 +207,8 @@ func (p *ServerPool) dueTiers(now time.Time) []dueTier {
 // The question is [gitlabclient.Client.ResolveTier], which stores nothing on
 // the client: the entry's catalog is registered for the tier its client
 // carries, and only a replacement on another shape may move that. The
-// license and namespace steps share [entryDetectTimeout], as at a build, and
+// license and namespace steps share [entryDetectTimeout] (the pool's
+// detectTimeout), as at a build, and
 // the membership step runs on its own clock measured from the sweep's
 // context, which ends at shutdown.
 func (p *ServerPool) redetectTier(ctx context.Context, key string, entry *Entry) {
@@ -201,7 +217,7 @@ func (p *ServerPool) redetectTier(ctx context.Context, key string, entry *Entry)
 	if !p.isCurrent(key, entry) {
 		return
 	}
-	askCtx, cancel := context.WithTimeout(ctx, entryDetectTimeout)
+	askCtx, cancel := context.WithTimeout(ctx, p.detectTimeout)
 	defer cancel()
 	slog.DebugContext(ctx, "server pool: asking a provisional tier again",
 		"tier", entry.serverConfig.Tier.String(),
@@ -314,9 +330,14 @@ var errNoReplacementServer = errors.New("creating MCP server for pool: factory r
 // its 401 hook is pointed at the replacement. A call the old server is still
 // running reads the new tier from the shared client, lower or higher than the
 // one that server was built for, where a handler asks whether the instance is
-// licensed, and GitLab decides what it answers. A 401 that lands on the old
-// entry between the swap and the new hook finds the old entry no longer
-// pooled and drops nothing; the next refused call reaches the replacement.
+// licensed, and GitLab decides what it answers. A 401 handed to the old
+// entry in the window around the swap, before the new hook is set or by a
+// call that loaded the old one, ends the replacement: the drop follows the
+// client to the entry that carries it ([ServerPool.holderLocked]), since a
+// 401 naming the credential reaches the client's hook only once and the
+// replacement would otherwise serve a refused credential. A verdict the
+// revalidation sweep reaches for the old entry, whose snapshot predates the
+// swap, follows the client the same way.
 func (p *ServerPool) replaceTier(ctx context.Context, key string, old *Entry, got gitlabclient.TierResolution) {
 	cfg := *old.serverConfig
 	cfg.Tier = got.Tier

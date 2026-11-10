@@ -476,6 +476,12 @@ type ServerPool struct {
 	// [unauthorizedConfirmCooldown]. A field rather than the constant read in
 	// place, so a test can put both sides of the window within reach.
 	confirmCooldown time.Duration
+	// detectTimeout bounds what one entry build, revalidation or re-detection
+	// asks GitLab under one shared context, set by [New] to
+	// [entryDetectTimeout]. A field for the reason confirmCooldown is one: a
+	// test can end that context long before the membership step's own clock,
+	// which is how it tells the two apart.
+	detectTimeout time.Duration
 	// sweepStops ends the sweeps [ServerPool.Close] ends, the tier
 	// re-detection's, and sweeps counts their goroutines, so Close can wait
 	// for them before it takes the lock their ticks take. sweepMu guards the
@@ -735,6 +741,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		probes:             make(chan struct{}, maxConcurrentCredentialProbes),
 		probeQueueTimeout:  credentialProbeQueueTimeout,
 		confirmCooldown:    unauthorizedConfirmCooldown,
+		detectTimeout:      entryDetectTimeout,
 		tierRetry:          tierProvisionalRetry,
 	}
 	for _, opt := range opts {
@@ -1220,28 +1227,41 @@ func (p *ServerPool) evictRejectedCredential(key string, entry *Entry) {
 // takes the lock first logs and the other finds nothing to drop.
 func (p *ServerPool) dropRejectedCredential(key string, entry *Entry) {
 	size, dropped := p.dropRejectedEntry(key, entry)
-	if !dropped {
+	if dropped == nil {
 		return
 	}
 	slog.Info("server pool: gitlab rejected the credential on a call, dropping the entry",
-		entryLogArgs(entry, "pool_size", size)...)
+		entryLogArgs(dropped, "pool_size", size)...)
 }
 
-// dropRejectedEntry removes entry under the lock, if it is still the one
-// under key, and reports the pool's size once it is gone.
-func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (size int, dropped bool) {
+// dropRejectedEntry removes the entry under key that carries entry's
+// credential ([ServerPool.holderLocked]), marked rejected, under the lock, and
+// reports the pool's size once it is gone and the entry it removed, which the
+// line names. The entry is nil when nothing was removed.
+//
+// A 401 naming the credential reaches the client's hook once, so a refusal
+// handed to an entry a re-detection of its tier has just replaced is the only
+// one the credential gets: dropping by identity alone would leave the
+// replacement serving, and the door admitting, a credential GitLab has
+// refused until the next revalidation. The replacement shares the client, and
+// an entry rebuilt since the refusal has a client of its own and is left
+// alone. The replacement serves another tier's shape, so the line names it
+// rather than the entry the refusal reached: whether the instance is licensed
+// is what the replacement resolved.
+func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (size int, dropped *Entry) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	current, ok := p.entries[key]
-	if !ok || current != entry {
-		return 0, false
+	current := p.holderLocked(key, entry)
+	if current == nil {
+		return 0, nil
 	}
-	if entry.element != nil {
-		p.lru.Remove(entry.element)
+	current.rejected.Store(true)
+	if current.element != nil {
+		p.lru.Remove(current.element)
 	}
 	p.metrics.RejectedCredentialEvictions.Add(1)
 	p.dropEntry(key, CauseRejectedCredential)
-	return len(p.entries), true
+	return len(p.entries), current
 }
 
 // evictBelowMinimum drops entry, if it is still the one under key, because
@@ -1258,7 +1278,7 @@ func (p *ServerPool) dropRejectedEntry(key string, entry *Entry) (size int, drop
 // removal those make.
 func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *Entry) {
 	size, dropped := p.dropBelowMinimumEntry(key, entry)
-	if !dropped {
+	if dropped == nil {
 		return
 	}
 	// Every entry the pool builds carries the hand-off; one assembled
@@ -1267,23 +1287,42 @@ func (p *ServerPool) evictBelowMinimum(ctx context.Context, key string, entry *E
 		entry.rememberBelowMinimum()
 	}
 	slog.InfoContext(ctx, "server pool: gitlab says the credential carries neither read_api nor api, dropping the entry",
-		entryLogArgs(entry, "pool_size", size)...)
+		entryLogArgs(dropped, "pool_size", size)...)
 }
 
-// dropBelowMinimumEntry removes entry under the lock, if it is still the one
-// under key, and reports the pool's size once it is gone.
-func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (size int, dropped bool) {
+// dropBelowMinimumEntry removes the entry under key that carries entry's
+// credential ([ServerPool.holderLocked]) under the lock, and reports the
+// pool's size once it is gone and the entry it removed, which the line names.
+// The entry is nil when nothing was removed. The revalidation sweep walks a
+// snapshot of the entries, so its verdict can reach an entry a re-detection of
+// the tier has replaced since; the replacement shares the client and the
+// credential, which a token's scopes are a property of, and goes in its place.
+func (p *ServerPool) dropBelowMinimumEntry(key string, entry *Entry) (size int, dropped *Entry) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if current, ok := p.entries[key]; !ok || current != entry {
-		return 0, false
+	current := p.holderLocked(key, entry)
+	if current == nil {
+		return 0, nil
 	}
 	// An entry the map holds was given its element when it was inserted, so
 	// it is removed unguarded, as evictStaleCredential removes one.
-	p.lru.Remove(entry.element)
+	p.lru.Remove(current.element)
 	p.metrics.BelowMinimumEvictions.Add(1)
 	p.dropEntry(key, CauseBelowMinimum)
-	return len(p.entries), true
+	return len(p.entries), current
+}
+
+// holderLocked returns the entry pooled under key that carries entry's
+// credential: entry itself, or the replacement on another tier's shape that
+// took its place and shares its client ([ServerPool.replaceTier]). It is nil
+// when the key holds neither, gone or rebuilt with a client of its own since,
+// whose credential was checked on its own. Callers hold p.mu.
+func (p *ServerPool) holderLocked(key string, entry *Entry) *Entry {
+	current, ok := p.entries[key]
+	if !ok || (current != entry && current.client != entry.client) {
+		return nil
+	}
+	return current
 }
 
 // resolveIdentity looks up the GitLab user behind a pooled credential, with
@@ -1710,9 +1749,13 @@ func (p *ServerPool) verifyUnderProbeBound(client *gitlabclient.Client) error {
 // ceiling on a single round trip rather than on a retry budget.
 const credentialCheckTimeout = 5 * time.Second
 
-// entryDetectTimeout bounds everything an entry build asks GitLab after the
-// credential probe: the tier, the token's own description, and for a
-// fine-grained token its grant and the instance version.
+// entryDetectTimeout bounds what an entry build asks GitLab after the
+// credential probe under one context: the token's own description, the
+// tier's license and namespace reads, and for a fine-grained token its grant
+// and the instance version. The tier's membership step runs on a clock of its
+// own (register row AUT-003's TierMembershipTimeout), so the reads before it
+// cannot spend it. It also bounds one revalidation's probe and re-reads, and
+// one re-detection's license and namespace reads of a provisional tier.
 const entryDetectTimeout = 10 * time.Second
 
 // entryProbe is what an entry build learned from GitLab beside the
@@ -1743,7 +1786,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
-	ctx, cancel := context.WithTimeout(p.lifetime(), entryDetectTimeout)
+	ctx, cancel := context.WithTimeout(p.lifetime(), p.detectTimeout)
 	defer cancel()
 
 	// The PAT self endpoint does not answer for an OAuth access token, which
@@ -2443,7 +2486,7 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 // the entry, so a slow instance lengthens the sweep and never holds anything
 // another tenant waits for.
 func (p *ServerPool) revalidateEntry(ctx context.Context, key string, entry *Entry) {
-	checkCtx, cancel := context.WithTimeout(ctx, entryDetectTimeout)
+	checkCtx, cancel := context.WithTimeout(ctx, p.detectTimeout)
 	defer cancel()
 	check := entry.client.CheckCredentialDetail(checkCtx)
 

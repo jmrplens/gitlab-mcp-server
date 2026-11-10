@@ -1402,6 +1402,13 @@ func provisionalTierServer(t *testing.T, gitlab string, stateless bool) (*httpte
 	return srv, binding, pool
 }
 
+// tierMoveBudget is how long a test waits for the re-detection to move a
+// credential to the Ultimate shape: a sweep tick, the license read and the
+// factory building the full meta catalog for that shape, which took up to two
+// seconds under the race detector on a loaded runner, the whole of waitFor's
+// budget. A wait that succeeds returns as soon as the move lands.
+const tierMoveBudget = 30 * time.Second
+
 // ultimateOnlyTool is a meta tool only the Ultimate catalog lists.
 const ultimateOnlyTool = `"name":"gitlab_vulnerability"`
 
@@ -1441,7 +1448,7 @@ func TestNewShapedServerPool_AProvisionalTierThatResolves_MovesTheCredentialToTh
 	defer stopSweep()
 	pool.StartTierRedetection(sweep)
 
-	waitFor(t, func() bool { return stream.end.Load() != nil && streamCtx.Err() != nil })
+	waitForWithin(t, tierMoveBudget, func() bool { return stream.end.Load() != nil && streamCtx.Err() != nil })
 	end := stream.end.Load()
 	if end == nil || end.reason != endCredentialReset {
 		t.Fatalf("the provisional entry's listen ended with %+v, want %q", end, endCredentialReset)
@@ -1482,7 +1489,7 @@ func TestNewShapedServerPool_AProvisionalTierThatResolves_AsksAStatefulSessionTo
 	sweep, stopSweep := context.WithCancel(t.Context())
 	defer stopSweep()
 	pool.StartTierRedetection(sweep)
-	waitFor(t, func() bool { return pool.Stats().TierResolvedEvictions == 1 })
+	waitForWithin(t, tierMoveBudget, func() bool { return pool.Stats().TierResolvedEvictions == 1 })
 
 	stale := legacyHeader("2025-11-25")
 	stale.Set(mcpSessionIDHeader, session)
