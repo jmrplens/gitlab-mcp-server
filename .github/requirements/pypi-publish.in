@@ -21,4 +21,4 @@
 # wheel for each (the script installs with --only-binary :all:, so nothing is
 # built).
 twine==7.0.0
-pypi-attestations==0.0.30
+pypi-attestations==0.0.31
