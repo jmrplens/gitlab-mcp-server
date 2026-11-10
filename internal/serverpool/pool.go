@@ -1663,7 +1663,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// Detect the tier from the instance license only when the operator did not
 	// pin it explicitly via --tier/GITLAB_MCP_TIER.
 	if !p.cfg.TierExplicit {
-		entryCfg.Tier = client.DetectTier(ctx).Tier
+		entryCfg.Tier = client.DetectTier(ctx, ctx).Tier
 	}
 
 	// What a fine-grained token may be shown, on the entry's own client, since

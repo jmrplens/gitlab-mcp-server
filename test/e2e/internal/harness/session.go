@@ -1053,7 +1053,7 @@ func sessionCredential(ctx context.Context, inst *instance, token string) (crede
 	facts := gitlabclient.DetectToken(ctx, client.GL())
 	return credentialFacts{
 		scopes:    facts.Scopes,
-		tier:      client.DetectTier(ctx).Tier,
+		tier:      client.DetectTier(ctx, ctx).Tier,
 		authority: credentialAuthority(ctx, client, facts),
 	}, nil
 }

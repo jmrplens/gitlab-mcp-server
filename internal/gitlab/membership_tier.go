@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -75,6 +77,16 @@ const (
 	membershipPageSize = tenancy.TierMembershipPageSize // register row AUT-003
 	membershipMaxPages = tenancy.TierMembershipMaxPages // register row AUT-003
 )
+
+// membershipTimeout bounds the membership step on a clock of its own,
+// measured from the membership base [Client.ResolveTier] is given rather than
+// from what the license and namespace steps left of the context they share.
+// The step is asked last, so a classic token's license and namespace reads,
+// retried with backoff, could spend the whole shared budget before it, and the
+// one step that answers a member of a paid group on GitLab.com then went
+// unread (issue 1782). It covers one page with its two retries or several
+// healthy pages.
+const membershipTimeout = tenancy.TierMembershipTimeout // register row AUT-003
 
 // membershipTierApplies reports whether the membership step is asked of c's
 // instance: GitLab.com alone, the one instance that sells its plans per
@@ -211,7 +223,10 @@ func (c *Client) membershipPage(ctx context.Context, after string) (*membershipG
 		variables["after"] = after
 	}
 	var answer membershipTierAnswer
-	if _, err := c.inner.GraphQL.Do(gl.GraphQLQuery{Query: MembershipTierQuery, Variables: variables}, &answer, gl.WithContext(ctx)); err != nil {
+	// The retry check goes after the context: WithContext replaces the
+	// request's context, which is where WithRequestRetry keeps the check.
+	if _, err := c.inner.GraphQL.Do(gl.GraphQLQuery{Query: MembershipTierQuery, Variables: variables}, &answer,
+		gl.WithContext(ctx), gl.WithRequestRetry(c.membershipRetry)); err != nil {
 		return nil, err
 	}
 	refusal := graphQLRefusal(answer.Errors)
@@ -222,6 +237,22 @@ func (c *Client) membershipPage(ctx context.Context, after string) (*membershipG
 		return nil, errNoGroupsConnection
 	}
 	return answer.Data.Groups, nil
+}
+
+// membershipRetry is the retry check of the membership query, which is a POST
+// that only reads: the client's policy ([retryOptions]) retries a 5xx only for
+// an idempotent method, so one 502 used to leave the step unread where a GET
+// would have been asked again (issue 1782). It is retryablehttp's default
+// policy, which retries a 5xx other than 501, a 429 and a failure to reach
+// GitLab, and never once ctx has ended, so the deadline that ends the step is
+// not spent on a retry. The re-sends and the wait between them are the
+// client's own (RTC-006), and a client built with retries off retries this
+// request no more than any other.
+func (c *Client) membershipRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	if c.retriesDisabled {
+		return false, nil
+	}
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 }
 
 // graphQLRefusal is the refusal a top-level errors array stands for, or nil

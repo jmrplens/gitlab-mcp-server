@@ -5,14 +5,18 @@ package gitlab
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -102,8 +106,14 @@ type fakeGitLabDotCom struct {
 	licensePlan string
 	licenseHang bool
 	// namespacesStatus, when not zero, is the status /namespaces answers in
-	// place of the list.
+	// place of the list; namespacesHang answers nothing until the request
+	// ends.
 	namespacesStatus int
+	namespacesHang   bool
+	// failFirst are the statuses the first membership requests are answered
+	// with, one each and with no body, before any page is: how a test makes
+	// GitLab fail once and then answer.
+	failFirst []int
 
 	mu       sync.Mutex
 	asked    []map[string]any // the variables of every membership request
@@ -125,7 +135,7 @@ func (g *fakeGitLabDotCom) answers() fakeGitLabDotCom {
 	return fakeGitLabDotCom{
 		namespaces: g.namespaces, pages: g.pages,
 		license: g.license, licensePlan: g.licensePlan, licenseHang: g.licenseHang,
-		namespacesStatus: g.namespacesStatus,
+		namespacesStatus: g.namespacesStatus, namespacesHang: g.namespacesHang,
 	}
 }
 
@@ -164,6 +174,10 @@ func (g *fakeGitLabDotCom) serve(t *testing.T) http.HandlerFunc {
 				w.WriteHeader(http.StatusForbidden)
 			}
 		case "/api/v4/namespaces":
+			if now.namespacesHang {
+				hangUntilTheRequestEnds(r)
+				return
+			}
 			if now.namespacesStatus != 0 {
 				w.WriteHeader(now.namespacesStatus)
 				return
@@ -213,7 +227,15 @@ func (g *fakeGitLabDotCom) membership(t *testing.T, w http.ResponseWriter, r *ht
 	g.mu.Lock()
 	g.asked = append(g.asked, request.Variables)
 	pages := g.pages
+	failure := 0
+	if len(g.failFirst) > 0 {
+		failure, g.failFirst = g.failFirst[0], g.failFirst[1:]
+	}
 	g.mu.Unlock()
+	if failure != 0 {
+		w.WriteHeader(failure)
+		return
+	}
 
 	index := 0
 	if after, ok := request.Variables["after"].(string); ok {
@@ -311,6 +333,21 @@ func (g *fakeGitLabDotCom) client(t *testing.T, selfManaged bool) *Client {
 	return client
 }
 
+// retryingClient builds a GitLab.com client against g with the production
+// retry policy and a wait ceiling short enough for a test (testRetryCeiling),
+// which is how the pool's clients are built.
+func (g *fakeGitLabDotCom) retryingClient(t *testing.T) *Client {
+	t.Helper()
+	standInForGitLabDotCom(t)
+	srv := httptest.NewServer(g.serve(t))
+	t.Cleanup(srv.Close)
+	client, err := newTokenClient(srv.URL, testValidToken, false, false, testRetryCeiling)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	return client
+}
+
 // standInForGitLabDotCom makes every client of the test a GitLab.com client,
 // since a test server cannot have GitLab.com's host.
 func standInForGitLabDotCom(t *testing.T) {
@@ -325,7 +362,7 @@ func standInForGitLabDotCom(t *testing.T) {
 func (g *fakeGitLabDotCom) detect(t *testing.T, selfManaged bool) (TierResolution, *Client) {
 	t.Helper()
 	client := g.client(t, selfManaged)
-	return client.DetectTier(t.Context()), client
+	return client.DetectTier(t.Context(), t.Context()), client
 }
 
 // freeNamespaces is what GitLab.com lists for the maintainer's account, a
@@ -733,6 +770,99 @@ func TestMembershipPage_TellsARefusalFromAPartialAnswer(t *testing.T) {
 				t.Errorf("err = %v, want none", err)
 			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
 				t.Errorf("err = %v, want one naming %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestClient_MembershipRetry_RetriesTheReadLikeAGet holds the retry check of
+// the membership query to retryablehttp's default policy, which is what a GET
+// is retried by for a 5xx: a 5xx other than 501, a 429 and a failure to reach
+// GitLab are retried, and nothing is once the context has ended or on a
+// client built with retries off (issue 1782).
+func TestClient_MembershipRetry_RetriesTheReadLikeAGet(t *testing.T) {
+	ended, cancel := context.WithCancel(t.Context())
+	cancel()
+	refused := &url.Error{Op: "Post", URL: "https://gitlab.example/api/graphql", Err: errors.New("connection refused")}
+	cases := []struct {
+		name     string
+		disabled bool
+		ctx      context.Context
+		status   int
+		err      error
+		retry    bool
+	}{
+		{name: "a 502", ctx: t.Context(), status: http.StatusBadGateway, retry: true},
+		{name: "a 500", ctx: t.Context(), status: http.StatusInternalServerError, retry: true},
+		{name: "a 504", ctx: t.Context(), status: http.StatusGatewayTimeout, retry: true},
+		{name: "a 501", ctx: t.Context(), status: http.StatusNotImplemented, retry: false},
+		{name: "a 429", ctx: t.Context(), status: http.StatusTooManyRequests, retry: true},
+		{name: "a 403", ctx: t.Context(), status: http.StatusForbidden, retry: false},
+		{name: "a 200", ctx: t.Context(), status: http.StatusOK, retry: false},
+		{name: "GitLab not reached", ctx: t.Context(), err: refused, retry: true},
+		{name: "a 502 after the context ended", ctx: ended, status: http.StatusBadGateway, retry: false},
+		{name: "a 502 on a client built with retries off", disabled: true, ctx: t.Context(), status: http.StatusBadGateway, retry: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &Client{retriesDisabled: tc.disabled}
+			var resp *http.Response
+			if tc.err == nil {
+				resp = &http.Response{StatusCode: tc.status, Status: http.StatusText(tc.status), Body: http.NoBody}
+			}
+			retry, _ := client.membershipRetry(tc.ctx, resp, tc.err)
+			if retry != tc.retry {
+				t.Errorf("membershipRetry() = %t, want %t", retry, tc.retry)
+			}
+		})
+	}
+}
+
+// TestDetectTier_Membership_IsRetriedOnTheClientsPolicy drives the retry
+// through client-go with the production policy: a page GitLab answers 502 and
+// then answers is read on the second request, a 501 or a 502 on every attempt
+// leaves the step unread after as many requests as RTC-006 allows, and a page
+// whose clock ran out is not asked again.
+func TestDetectTier_Membership_IsRetriedOnTheClientsPolicy(t *testing.T) {
+	cases := []struct {
+		name        string
+		failFirst   []int
+		pages       []fakeMembershipPage
+		base        time.Duration
+		want        edition.Tier
+		provisional bool
+		requests    int
+	}{
+		{name: "a 502, then the page", failFirst: []int{http.StatusBadGateway}, pages: ultimateGroup, want: edition.Ultimate, requests: 2},
+		{name: "a 429, then the page", failFirst: []int{http.StatusTooManyRequests}, pages: ultimateGroup, want: edition.Ultimate, requests: 2},
+		{name: "a 501", failFirst: []int{http.StatusNotImplemented}, pages: ultimateGroup, want: edition.Free, provisional: true, requests: 1},
+		{
+			name:      "a 502 every time",
+			failFirst: []int{http.StatusBadGateway, http.StatusBadGateway, http.StatusBadGateway},
+			pages:     ultimateGroup, want: edition.Free, provisional: true, requests: maxRetries + 1,
+		},
+		{
+			name:  "a page that hangs past its clock",
+			pages: []fakeMembershipPage{{hang: true}}, base: 200 * time.Millisecond,
+			want: edition.Free, provisional: true, requests: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := &fakeGitLabDotCom{namespaces: freeNamespaces, pages: tc.pages, failFirst: tc.failFirst}
+			client := server.retryingClient(t)
+			base := t.Context()
+			if tc.base > 0 {
+				var cancel context.CancelFunc
+				base, cancel = context.WithTimeout(t.Context(), tc.base)
+				defer cancel()
+			}
+			got := client.DetectTier(t.Context(), base)
+			if got.Tier != tc.want || got.Provisional != tc.provisional {
+				t.Errorf("DetectTier() = %+v, want %v, provisional %t", got, tc.want, tc.provisional)
+			}
+			if asked := server.requests(); len(asked) != tc.requests {
+				t.Errorf("membership requests = %d, want %d", len(asked), tc.requests)
 			}
 		})
 	}

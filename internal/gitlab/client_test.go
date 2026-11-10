@@ -1260,7 +1260,7 @@ func TestDetectTier_FromLicensePlan(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			got := client.DetectTier(context.Background()).Tier
+			got := client.DetectTier(context.Background(), context.Background()).Tier
 			if got != tc.want {
 				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
 			}
@@ -1279,7 +1279,7 @@ func TestDetectTier_ErrorFallsBackToFree(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() on error = %v, want free", got)
 	}
 	if client.IsEnterprise() {
@@ -1329,7 +1329,7 @@ func TestDetectTier_Unresolved_WarnsOnlyAnEnterpriseBuild(t *testing.T) {
 			client := unresolvedTierClient(t, tc.enterprise)
 			logged := captureClientLog(t)
 
-			if got := client.DetectTier(t.Context()).Tier; got != edition.Free {
+			if got := client.DetectTier(t.Context(), t.Context()).Tier; got != edition.Free {
 				t.Errorf("DetectTier() = %v, want Free", got)
 			}
 			warnings := strings.Count(logged.String(), `"level":"WARN"`)
@@ -1877,7 +1877,7 @@ func TestDetectTier_NullLicenseDocument(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() on a null license document = %v, want free", got)
 	}
 }
@@ -2407,7 +2407,7 @@ func TestDetectTier_NamespacePlan_RescuesTheNonAdminToken(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			if got := client.DetectTier(context.Background()).Tier; got != tc.want {
+			if got := client.DetectTier(context.Background(), context.Background()).Tier; got != tc.want {
 				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
 			}
 		})
@@ -2428,7 +2428,7 @@ func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() = %v, want Free: \"default\" says nothing about the instance license", got)
 	}
 }
@@ -2497,7 +2497,7 @@ func TestDetectTier_NamespacePlan_ReadsPastTheFirstPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Premium {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Premium {
 		t.Errorf("DetectTier() = %v, want Premium: the paid namespace is on the second page", got)
 	}
 	if asked != 2 {
@@ -2519,7 +2519,7 @@ func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Ultimate {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Ultimate {
 		t.Errorf("DetectTier() = %v, want Ultimate", got)
 	}
 	if asked != 1 {
@@ -2566,7 +2566,7 @@ func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	}
 	// The page that failed may have carried a higher plan, so the answer is
 	// the floor the first page set, and is provisional (issue 1782).
-	got := client.DetectTier(context.Background())
+	got := client.DetectTier(context.Background(), context.Background())
 	if got.Tier != edition.Premium || !got.Provisional || !slices.Equal(got.Unresolved, []string{"namespaces"}) {
 		t.Errorf("DetectTier() = %+v, want Premium, provisional on the namespaces: the first page answered before the second failed", got)
 	}
@@ -2605,7 +2605,7 @@ func TestDetectTier_NamespacePlan_StopsAtThePageBound(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			if got := client.DetectTier(context.Background()); got.Tier != tc.want || got.Provisional {
+			if got := client.DetectTier(context.Background(), context.Background()); got.Tier != tc.want || got.Provisional {
 				t.Errorf("DetectTier() = %+v, want %v, not provisional: the bound is policy, not a read that failed", got, tc.want)
 			}
 			if got := atomic.LoadInt32(&asked); got != namespacePlanMaxPages {
@@ -2704,7 +2704,7 @@ func TestDetectTier_LicenseWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()).Tier; got != edition.Ultimate {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Ultimate {
 		t.Errorf("DetectTier() = %v, want Ultimate from the license rather than Premium from a namespace", got)
 	}
 }
@@ -2721,7 +2721,7 @@ func TestDetectTier_NamespacesUnreadable_FallsBackToFree(t *testing.T) {
 				t.Fatalf(fmtNewClientErr, err)
 			}
 			// Both refusals are GitLab's answers, so Free is definitive.
-			if got := client.DetectTier(context.Background()); got.Tier != edition.Free || got.Answered || got.Provisional {
+			if got := client.DetectTier(context.Background(), context.Background()); got.Tier != edition.Free || got.Answered || got.Provisional {
 				t.Errorf("DetectTier() = %+v, want Free with no step answering and none unread", got)
 			}
 		})
@@ -2995,7 +2995,7 @@ func TestDetectTier_VersionRefused_ResolvesFreeWithoutCallingItCE(t *testing.T) 
 	}
 	logged := captureClientLog(t)
 
-	if got := client.DetectTier(t.Context()).Tier; got != edition.Free {
+	if got := client.DetectTier(t.Context(), t.Context()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() = %v, want Free", got)
 	}
 	if strings.Contains(logged.String(), "on a CE instance") || strings.Contains(logged.String(), `"level":"WARN"`) {

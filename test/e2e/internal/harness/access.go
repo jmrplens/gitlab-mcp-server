@@ -148,7 +148,7 @@ func (e *Env) ReprobeTier() (now, before edition.Tier) {
 	e.T.Helper()
 	ctx, cancel := context.WithTimeout(e.Ctx, probeTimeout)
 	defer cancel()
-	return e.inst.client.DetectTier(ctx).Tier, e.inst.facts.Tier
+	return e.inst.client.DetectTier(ctx, ctx).Tier, e.inst.facts.Tier
 }
 
 // exitHooks is what runs after the last test of the package and before Main

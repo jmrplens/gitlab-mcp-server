@@ -46,6 +46,13 @@ type TierResolution struct {
 	Unresolved []string
 }
 
+// membershipContext is the context the membership step runs under: its own
+// clock, membershipTimeout, measured from base, which ends the step when it
+// ends.
+func membershipContext(base context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(base, membershipTimeout)
+}
+
 // tierStep is one step's outcome.
 type tierStep struct {
 	// tier is the highest tier the step answered for, Free when none.
@@ -105,7 +112,14 @@ func (r *TierResolution) merge(name string, step tierStep) {
 // and a step that was not read lowers nothing: it is no evidence that the
 // caller holds less than it was already shown to hold. It makes the answer
 // provisional instead, unless the answer is already Ultimate.
-func (c *Client) ResolveTier(ctx context.Context) TierResolution {
+//
+// ctx bounds the license and namespace steps. The membership step runs on a
+// clock of its own measured from membershipBase, so a slow license or
+// namespace step cannot spend it: ctx does not bound the step, and
+// membershipBase ends it when it ends. The pool passes its lifetime and stdio
+// its process context, both of which end at shutdown. A caller with no base of
+// its own passes ctx, which then bounds the step as well.
+func (c *Client) ResolveTier(ctx, membershipBase context.Context) TierResolution {
 	license := c.tierFromLicense(ctx)
 	if license.answered {
 		return TierResolution{Tier: license.tier, Answered: true}
@@ -114,7 +128,9 @@ func (c *Client) ResolveTier(ctx context.Context) TierResolution {
 	resolution.merge(tierStepLicense, license)
 	resolution.merge(tierStepNamespaces, c.tierFromNamespaces(ctx))
 	if resolution.Tier < edition.Ultimate && membershipTierApplies(c) {
-		resolution.merge(tierStepMembership, c.tierFromMembership(ctx))
+		memberCtx, cancel := membershipContext(membershipBase)
+		resolution.merge(tierStepMembership, c.tierFromMembership(memberCtx))
+		cancel()
 	}
 	resolution.Provisional = len(resolution.Unresolved) > 0 && resolution.Tier < edition.Ultimate
 	return resolution
@@ -129,8 +145,11 @@ func (c *Client) ResolveTier(ctx context.Context) TierResolution {
 // of, and the two are told apart by the edition rather than guessed at: an
 // enterprise build that could not be resolved gets a warning naming the flag
 // that settles it, and a CE build stays silent because Free is the truth there.
-func (c *Client) DetectTier(ctx context.Context) TierResolution {
-	resolution := c.ResolveTier(ctx)
+//
+// ctx and membershipBase bound the steps as they bound those of
+// [Client.ResolveTier].
+func (c *Client) DetectTier(ctx, membershipBase context.Context) TierResolution {
+	resolution := c.ResolveTier(ctx, membershipBase)
 	if resolution.Provisional {
 		slog.WarnContext(ctx, "could not finish detecting the licensing tier: a step GitLab did not answer could raise it, "+
 			"so the tier detected so far is served; GITLAB_MCP_TIER (or --tier in HTTP mode) pins it",

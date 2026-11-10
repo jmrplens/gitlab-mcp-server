@@ -19,6 +19,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 )
 
 // statusError is the error client-go returns for an answer with status code.
@@ -165,7 +166,7 @@ func TestDetectTier_GitLabDotCom_UnansweredMembership_IsProvisionalUntilAskedAga
 
 			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 			defer cancel()
-			first := client.DetectTier(ctx)
+			first := client.DetectTier(ctx, ctx)
 			if first.Tier != edition.Free || !first.Provisional || !first.Answered || !slices.Equal(first.Unresolved, []string{tierStepMembership}) {
 				t.Errorf("first DetectTier() = %+v, want Free answered by the namespaces, provisional on the membership", first)
 			}
@@ -174,7 +175,7 @@ func TestDetectTier_GitLabDotCom_UnansweredMembership_IsProvisionalUntilAskedAga
 			}
 
 			server.set(func(g *fakeGitLabDotCom) { g.pages = ultimateGroup })
-			second := client.DetectTier(t.Context())
+			second := client.DetectTier(t.Context(), t.Context())
 			if second.Tier != edition.Ultimate || second.Provisional || len(second.Unresolved) != 0 {
 				t.Errorf("second DetectTier() = %+v, want Ultimate, definitive", second)
 			}
@@ -211,7 +212,7 @@ func TestDetectTier_GitLabDotCom_AnswersThatSettleTheTier_AreNotProvisional(t *t
 			server := &fakeGitLabDotCom{namespaces: tc.namespaces, pages: []fakeMembershipPage{tc.page}}
 			client := server.client(t, false)
 			for attempt := range 2 {
-				got := client.DetectTier(t.Context())
+				got := client.DetectTier(t.Context(), t.Context())
 				if got.Tier != tc.want || got.Provisional || len(got.Unresolved) != 0 {
 					t.Errorf("DetectTier() #%d = %+v, want %v, definitive", attempt+1, got, tc.want)
 				}
@@ -263,13 +264,13 @@ func TestDetectTier_SelfManagedLicense_Unanswered_IsProvisionalUntilAskedAgain(t
 
 			ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
 			defer cancel()
-			first := client.DetectTier(ctx)
+			first := client.DetectTier(ctx, ctx)
 			if first.Tier != edition.Free || !first.Provisional || first.Answered || !slices.Equal(first.Unresolved, tc.unresolved) {
 				t.Errorf("first DetectTier() = %+v, want Free, provisional on %v", first, tc.unresolved)
 			}
 
 			server.set(func(g *fakeGitLabDotCom) { g.license, g.licensePlan, g.licenseHang = http.StatusOK, "ultimate", false })
-			if second := client.DetectTier(t.Context()); second.Tier != edition.Ultimate || second.Provisional || !second.Answered {
+			if second := client.DetectTier(t.Context(), t.Context()); second.Tier != edition.Ultimate || second.Provisional || !second.Answered {
 				t.Errorf("second DetectTier() = %+v, want Ultimate from the license, definitive", second)
 			}
 		})
@@ -300,7 +301,7 @@ func TestResolveTier_Ultimate_IsNeverProvisional(t *testing.T) {
 		namespaces: []map[string]any{{"full_path": "acme", "kind": "group", "plan": "ultimate"}},
 	}
 	client := server.client(t, false)
-	got := client.ResolveTier(t.Context())
+	got := client.ResolveTier(t.Context(), t.Context())
 	if got.Tier != edition.Ultimate || got.Provisional || !slices.Equal(got.Unresolved, []string{tierStepLicense}) {
 		t.Errorf("ResolveTier() = %+v, want Ultimate, definitive, with the license named unread", got)
 	}
@@ -316,7 +317,7 @@ func TestResolveTier_EveryStepUnanswered_NamesThemInOrder(t *testing.T) {
 		pages:            []fakeMembershipPage{{status: http.StatusGatewayTimeout}},
 	}
 	client := server.client(t, false)
-	got := client.ResolveTier(t.Context())
+	got := client.ResolveTier(t.Context(), t.Context())
 	want := []string{tierStepLicense, tierStepNamespaces, tierStepMembership}
 	if got.Tier != edition.Free || got.Answered || !got.Provisional || !slices.Equal(got.Unresolved, want) {
 		t.Errorf("ResolveTier() = %+v, want Free, nothing answered, provisional on %v", got, want)
@@ -343,7 +344,7 @@ func TestResolveTier_TouchesNothingOnTheClient(t *testing.T) {
 			client.SetTier(edition.Premium)
 			logged := captureClientLog(t)
 
-			if got := client.ResolveTier(t.Context()); got.Tier != tc.want {
+			if got := client.ResolveTier(t.Context(), t.Context()); got.Tier != tc.want {
 				t.Errorf("ResolveTier() = %+v, want %v", got, tc.want)
 			}
 			if client.Tier() != edition.Premium {
@@ -356,5 +357,67 @@ func TestResolveTier_TouchesNothingOnTheClient(t *testing.T) {
 				t.Errorf("/version asked %d times, want none", asked)
 			}
 		})
+	}
+}
+
+// TestResolveTier_Membership_HasAClockOfItsOwn is the half of issue 1782 the
+// shared budget caused: the license and namespace steps, retried with backoff,
+// could spend the whole context the probe was given, and the membership step,
+// asked last, then never reached GitLab. Measured from its own base it does,
+// and answers. With the shared context as its base, that context bounds it as
+// before, which is the contrast that shows the base is what changed the answer.
+func TestResolveTier_Membership_HasAClockOfItsOwn(t *testing.T) {
+	cases := []struct {
+		name       string
+		ownBase    bool
+		want       edition.Tier
+		unresolved []string
+	}{
+		{name: "measured from its own base", ownBase: true, want: edition.Ultimate, unresolved: []string{tierStepNamespaces}},
+		{name: "bounded by the shared context", ownBase: false, want: edition.Free, unresolved: []string{tierStepNamespaces, tierStepMembership}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := &fakeGitLabDotCom{namespacesHang: true, pages: ultimateGroup}
+			client := server.client(t, false)
+			shared, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+			defer cancel()
+			base := shared
+			if tc.ownBase {
+				base = t.Context()
+			}
+			got := client.ResolveTier(shared, base)
+			if got.Tier != tc.want || !slices.Equal(got.Unresolved, tc.unresolved) {
+				t.Errorf("ResolveTier() = %+v, want %v with %v unread", got, tc.want, tc.unresolved)
+			}
+		})
+	}
+}
+
+// TestMembershipContext_FromItsBase_RunsOnTheRegistersClock checks the clock
+// the membership step runs on: it is the register's TierMembershipTimeout
+// (AUT-003), measured from now, and it ends when its base does. The helper
+// takes only the base, so it cannot show that the context the other steps
+// share does not end the step: TestResolveTier_Membership_HasAClockOfItsOwn
+// holds that end to end.
+func TestMembershipContext_FromItsBase_RunsOnTheRegistersClock(t *testing.T) {
+	base, endBase := context.WithCancel(t.Context())
+	before := time.Now()
+	member, cancel := membershipContext(base)
+	defer cancel()
+
+	deadline, ok := member.Deadline()
+	if !ok || deadline.Before(before.Add(membershipTimeout)) || deadline.After(time.Now().Add(membershipTimeout)) {
+		t.Errorf("deadline = %v (set %t), want %v from now", deadline, ok, membershipTimeout)
+	}
+	if member.Err() != nil {
+		t.Errorf("the step's context ended before its base did: %v", member.Err())
+	}
+	endBase()
+	if member.Err() == nil {
+		t.Error("the step's context outlived its base")
+	}
+	if membershipTimeout != tenancy.TierMembershipTimeout {
+		t.Errorf("membershipTimeout = %v, want the register's %v", membershipTimeout, tenancy.TierMembershipTimeout)
 	}
 }

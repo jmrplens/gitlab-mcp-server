@@ -125,9 +125,9 @@ func authorizeDecisions() []Decision {
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
 			Resource: "the licensing tier, and the namespace and top-level group pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages"},
+			Values: []string{"TierNamespacePageSize", "TierNamespaceMaxPages", "TierMembershipPageSize", "TierMembershipMaxPages", "TierMembershipTimeout"},
 			Source: Constant, Zero: ZeroNotApplicable,
-			Fixed: "the pages bound what detecting the tier costs at every entry build, and a caller past them " +
+			Fixed: "the pages and the membership step's clock bound what detecting the tier costs at every entry build, and a caller past them " +
 				"resolves lower than it should, which --tier answers, while a warning says so only when an " +
 				"enterprise instance falls back to Free: the operator's lever is the tier itself rather than the " +
 				"pages read to guess it",
@@ -165,6 +165,8 @@ func authorizeDecisions() []Decision {
 				alias(pkgGitLab, "namespacePlanMaxPages", "TierNamespaceMaxPages"),
 				alias(pkgGitLab, "membershipPageSize", "TierMembershipPageSize"),
 				alias(pkgGitLab, "membershipMaxPages", "TierMembershipMaxPages"),
+				alias(pkgGitLab, "membershipTimeout", "TierMembershipTimeout"),
+				enforce(pkgGitLab, "membershipContext"),
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgGitLab, "Client.ResolveTier"),
 				enforce(pkgGitLab, "tierReadUnresolved"),

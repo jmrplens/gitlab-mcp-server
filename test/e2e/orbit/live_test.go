@@ -991,7 +991,7 @@ func TestOrbitLiveGitLabCom_DetectTier_IsAtLeastTheFixtureGroupsPlan(t *testing.
 		t.Skipf("GitLab.com reports the plan %q of %s to this token, so it names no paid tier to hold the detection to: "+
 			"it reports a plan only to a token that administers the namespace", group.Plan, topLevel)
 	}
-	if tier := client.DetectTier(ctx).Tier; tier < plan {
+	if tier := client.DetectTier(ctx, ctx).Tier; tier < plan {
 		t.Errorf("DetectTier() = %v for a token GitLab.com reports the plan %q of %s to, want %v or higher", tier, group.Plan, topLevel, plan)
 	}
 }

@@ -271,6 +271,10 @@ func allowDecisions() []Decision {
 				enforce(pkgGitLab, "retryOptions"),
 				enforce(pkgGitLab, "retryOptionsWithCeiling"),
 				enforce(pkgGitLab, "retryBackoff.wait"),
+				// The tier probe's membership query is a POST that only
+				// reads, retried as a GET is with this row's re-sends and
+				// waits (issue 1782).
+				enforce(pkgGitLab, "Client.membershipRetry"),
 			},
 		},
 		{

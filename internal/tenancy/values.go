@@ -283,4 +283,9 @@ const (
 	// TierMembershipMaxPages is how many pages of them the probe reads at most
 	// (AUT-003).
 	TierMembershipMaxPages = 10
+	// TierMembershipTimeout bounds the membership step on a clock of its own,
+	// so the license and namespace steps before it cannot spend it (AUT-003,
+	// issue 1782). It covers one page with its two retries, or several
+	// healthy pages.
+	TierMembershipTimeout = 8 * time.Second
 )

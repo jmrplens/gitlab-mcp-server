@@ -63,6 +63,12 @@ type Client struct {
 	// only valid as Bearer), false sends PRIVATE-TOKEN (PAT clients).
 	bearerAuth bool
 
+	// retriesDisabled records that the client was built with client-go's
+	// retries off, which a request carrying a retry check of its own would
+	// otherwise bypass: client-go asks such a check alone. See
+	// [Client.membershipRetry].
+	retriesDisabled bool
+
 	// unbound marks the credential-less client from [NewUnboundClient], which
 	// refuses every request. Handlers on a shared server capture it and resolve
 	// the caller's own through [Client.For], so a handler that still holds this
@@ -272,9 +278,10 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	pools := buildDestinationPools(cfg.SkipTLSVerify)
 
 	c := &Client{
-		baseURL:   cfg.GitLabURL,
-		healthURL: strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
-		token:     cfg.GitLabToken,
+		baseURL:         cfg.GitLabURL,
+		healthURL:       strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
+		token:           cfg.GitLabToken,
+		retriesDisabled: cfg.DisableRetries,
 	}
 	c.SetTier(cfg.Tier)
 	c.maxResponse.Store(DefaultMaxResponseBytes)
@@ -334,9 +341,10 @@ func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, r
 	pools := buildDestinationPools(skipTLSVerify)
 
 	c := &Client{
-		baseURL:   baseURL,
-		healthURL: strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:     token,
+		baseURL:         baseURL,
+		healthURL:       strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:           token,
+		retriesDisabled: disableRetries,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
