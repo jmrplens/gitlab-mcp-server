@@ -137,19 +137,32 @@ func (e *Env) RepoRoot() string {
 }
 
 // ReprobeTier asks the instance what tier it is now, the way the bootstrap
-// asked, and returns the answer beside what the bootstrap found.
+// asked ([settledTier]), and returns the answer beside what the bootstrap
+// found. A step GitLab keeps leaving unanswered fails the test, naming the
+// step, rather than returning the provisional tier the probe would read.
 //
 // It exists for the one test that changes the license: adding and removing
 // one changes what every later session is served, so that test says
-// afterwards that the instance is where it was found. Nothing here updates
-// the harness's own record, on purpose: a tier that changed is a failure of
-// the test that changed it, not a new fact for the next test to be built on.
+// afterwards that the instance is where it was found. Just after that change
+// the license can answer 502 or not at all, and the Free that leaves is not
+// the instance's tier: compared with the bootstrap's, it would fail the test
+// for a license it never lost. Nothing here updates the harness's own
+// record, on purpose: a tier that changed is a failure of the test that
+// changed it, not a new fact for the next test to be built on.
 func (e *Env) ReprobeTier() (now, before edition.Tier) {
 	e.T.Helper()
-	ctx, cancel := context.WithTimeout(e.Ctx, probeTimeout)
+	ctx, cancel := context.WithTimeout(e.Ctx, reprobeBudget)
 	defer cancel()
-	return e.inst.client.DetectTier(ctx, ctx).Tier, e.inst.facts.Tier
+	now, err := settledTier(ctx, e.inst.client)
+	if err != nil {
+		e.T.Fatalf("re-reading the instance's tier: %v", err)
+	}
+	return now, e.inst.facts.Tier
 }
+
+// reprobeBudget bounds [Env.ReprobeTier]: each of the tierAttempts asks may
+// take what the one ask it replaced was given.
+const reprobeBudget = tierAttempts * probeTimeout
 
 // exitHooks is what runs after the last test of the package and before Main
 // returns.

@@ -415,6 +415,15 @@ func TestProbe_ATierLeftUnanswered_FailsTheBootstrap(t *testing.T) {
 	}
 }
 
+// shortTierRetryPause makes the pause between two asks of a provisional tier
+// a millisecond for the rest of the test.
+func shortTierRetryPause(t *testing.T) {
+	t.Helper()
+	previous := tierRetryPause
+	tierRetryPause = time.Millisecond
+	t.Cleanup(func() { tierRetryPause = previous })
+}
+
 // TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused checks how the
 // harness reads the tier it builds its expectations on: a tier every step
 // answered is taken at once, a license that answers on a later ask is asked
@@ -422,9 +431,7 @@ func TestProbe_ATierLeftUnanswered_FailsTheBootstrap(t *testing.T) {
 // time ran out, is refused with the step named rather than taken as the
 // instance's Free.
 func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
-	previous := tierRetryPause
-	tierRetryPause = time.Millisecond
-	t.Cleanup(func() { tierRetryPause = previous })
+	shortTierRetryPause(t)
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()

@@ -204,6 +204,8 @@ var fatalCases = map[string]func(t *testing.T){
 		session := inProcessSession(t, newEnv(t, offlineInstance()), newSubscriptionStub(nil, declinedURI).server)
 		session.Subscribe(declinedURI)
 	},
+	"reprobe license never answers": reprobeLicenseNeverAnswers,
+	"reprobe license hangs":         reprobeLicenseHangs,
 }
 
 // errStubCompletion is what the in-process completion stub answers every
