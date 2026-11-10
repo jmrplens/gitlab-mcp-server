@@ -178,7 +178,7 @@ var graphqlDecisions = map[string]decision{
 	"vulnerabilities.PipelineSecuritySummary":  {Decision: decisionKeep, Reason: "the pipeline security report summary is GraphQL-only; the wrapper exposes nothing pipeline-scoped"},
 	"vulnerabilities.runVulnerabilityMutation": {Decision: decisionKeep, Reason: "dismiss/confirm/resolve/revert are GraphQL mutations; the wrapper exposes only CreateVulnerability"},
 
-	// KEEP — the security wrappers return the top-level GraphQL errors array
+	// KEEP: the security wrappers return the top-level GraphQL errors array
 	// since v3.46.1, where GitLab reports a rejected mutation with HTTP 200,
 	// but three of them hand the refusal over as one that also matches
 	// ErrNotFound and the category delete selects less than the handler
