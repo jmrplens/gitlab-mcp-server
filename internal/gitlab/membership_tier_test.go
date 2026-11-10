@@ -632,7 +632,9 @@ func TestDetectTier_Membership_LowerAnswer_NeverLowersTheNamespaces(t *testing.T
 // page refused as well, which GitLab answers as null nodes beside an errors
 // array. A membership answer of Free with groups in it has answered, and
 // warns nobody. A membership read GitLab did not answer leaves the tier
-// provisional, which is warned about in its own words, naming the step.
+// provisional, which is warned about in its own words, naming the step, and
+// in place of the enterprise warning: the step that went unanswered is why
+// the tier may be wrong, whatever the build.
 func TestDetectTier_GitLabDotCom_NoStepAnswers_Warns(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -641,7 +643,7 @@ func TestDetectTier_GitLabDotCom_NoStepAnswers_Warns(t *testing.T) {
 		provisional bool
 	}{
 		{name: "a member of no group", page: fakeMembershipPage{}, warns: true},
-		{name: "a membership read that fails", page: fakeMembershipPage{status: http.StatusInternalServerError}, warns: true, provisional: true},
+		{name: "a membership read that fails", page: fakeMembershipPage{status: http.StatusInternalServerError}, warns: false, provisional: true},
 		{name: "a refused document", page: fakeMembershipPage{refused: true}, warns: true},
 		{name: "every group refused", page: fakeMembershipPage{groups: []*fakeGroup{nil, nil}, errors: []string{refusedMessage}}, warns: true},
 		{name: "free groups", page: fakeMembershipPage{groups: []*fakeGroup{{path: "hobby"}}}, warns: false},

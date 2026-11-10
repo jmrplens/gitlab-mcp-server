@@ -746,32 +746,67 @@ func (c *Client) pingDirect(ctx context.Context) error {
 // debug rather than as a failed detection: the refusal is a fact about the
 // token's grant, which cannot change. Who reports it depends on the mode. A
 // stdio start warns once, since its token is the operator's own
-// (cmd/server's warnVersionRefused, from [Client.VersionRefusal]). An HTTP
-// pool entry reaches this through [Client.DetectTier] with a caller's token,
-// and there nothing above the debug line reports it: the refusal describes
-// that caller's grant rather than the deployment, and the entry takes the
-// fallback edition.
+// (cmd/server's warnVersionRefused, from [Client.VersionRefusal]). The tier
+// probe reads the edition with [Client.readEdition], which stores nothing.
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
-	if _, refused := c.VersionRefusal(); refused {
+	answer, versionInfo, err := c.readEdition(ctx)
+	switch answer {
+	case editionUnreadable:
 		return c.editionUnreadable(ctx, fallback)
+	case editionUnknown:
+		if err != nil {
+			slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
+		} else {
+			slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
+		}
+		c.SetEnterprise(fallback)
+		return fallback
+	}
+	enterprise := answer == editionEnterprise
+	c.SetEnterprise(enterprise)
+	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", enterprise)
+	return enterprise
+}
+
+// editionAnswer is what /api/v4/version said about the instance's edition.
+type editionAnswer uint8
+
+const (
+	// editionUnknown is no answer, or an answer that named no edition.
+	editionUnknown editionAnswer = iota
+	// editionCE is a Community Edition build.
+	editionCE
+	// editionEnterprise is an Enterprise Edition build, licensed or not.
+	editionEnterprise
+	// editionUnreadable is GitLab refusing the token the endpoint for a
+	// fine-grained permission its grant lacks ([Client.VersionRefusal]).
+	editionUnreadable
+)
+
+// readEdition asks /api/v4/version which edition the instance runs and
+// returns what it said, the version answer when there was one, and why the
+// edition is unknown when the endpoint could not be read. It stores nothing
+// about the edition on the client, and a token GitLab refused the endpoint
+// for a fine-grained permission is not asked again (see
+// [Client.DetectEnterprise]).
+func (c *Client) readEdition(ctx context.Context) (editionAnswer, *gitLabVersionInfo, error) {
+	if _, refused := c.VersionRefusal(); refused {
+		return editionUnreadable, nil, nil
 	}
 	versionInfo, err := c.versionDirect(ctx)
 	if _, refused := errors.AsType[*versionRefusedError](err); refused {
-		return c.editionUnreadable(ctx, fallback)
+		return editionUnreadable, nil, nil
 	}
 	if err != nil {
-		slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
-		c.SetEnterprise(fallback)
-		return fallback
+		return editionUnknown, nil, err
 	}
 	if versionInfo.Enterprise == nil {
-		slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
-		c.SetEnterprise(fallback)
-		return fallback
+		return editionUnknown, versionInfo, nil
 	}
-	c.SetEnterprise(*versionInfo.Enterprise)
-	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
-	return *versionInfo.Enterprise
+	if *versionInfo.Enterprise {
+		return editionEnterprise, versionInfo, nil
+	}
+	return editionCE, versionInfo, nil
 }
 
 // editionUnreadable is [Client.DetectEnterprise]'s answer for a token GitLab
@@ -938,21 +973,28 @@ func namespacePlanAnswers(plan string) bool {
 // leaves the edition unknown, so neither holds: the tier is Free and the reason
 // is logged at debug. A stdio start has already said once, at warning, that
 // the edition could not be read and what settles the tier; in HTTP mode the
-// refusal is a fact about one caller's grant, and [Client.DetectEnterprise]
-// says why nothing above debug reports it there.
+// refusal is a fact about one caller's grant rather than the deployment, so
+// nothing above debug reports it there.
+//
+// An edition the endpoint did not answer is not called CE either (issue
+// 1782): the line says it could not be read, at debug, with the reason. It
+// reads the edition with [Client.readEdition], so the client keeps the tier
+// [Client.DetectTier] stores.
 func (c *Client) warnUnresolvedTier(ctx context.Context) {
-	if !c.DetectEnterprise(ctx, false) {
-		if _, refused := c.VersionRefusal(); refused {
-			slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
-			return
-		}
+	answer, _, err := c.readEdition(ctx)
+	switch answer {
+	case editionEnterprise:
+		slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
+			"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
+			"is reported only on GitLab.com. "+
+			"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
+	case editionUnreadable:
+		slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
+	case editionUnknown:
+		slog.DebugContext(ctx, "no license, no paid namespace plan, and the edition could not be read; the tier is free", "error", err)
+	default:
 		slog.DebugContext(ctx, "no license and no paid namespace plan on a CE instance; the tier is free")
-		return
 	}
-	slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
-		"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
-		"is reported only on GitLab.com. "+
-		"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
 }
 
 // gitLabVersionInfo captures the subset of /api/v4/version needed for health

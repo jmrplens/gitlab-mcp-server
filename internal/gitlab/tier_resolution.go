@@ -146,16 +146,22 @@ func (c *Client) ResolveTier(ctx, membershipBase context.Context) TierResolution
 // enterprise build that could not be resolved gets a warning naming the flag
 // that settles it, and a CE build stays silent because Free is the truth there.
 //
+// A provisional answer is warned about in its own words and asks no edition:
+// a step went unanswered, which is the reason the tier may be wrong whatever
+// the build is, and the budget that left it unanswered would be spent again
+// on /version, which is how an instance whose edition could not be read came
+// to be called CE (issue 1782).
+//
 // ctx and membershipBase bound the steps as they bound those of
 // [Client.ResolveTier].
 func (c *Client) DetectTier(ctx, membershipBase context.Context) TierResolution {
 	resolution := c.ResolveTier(ctx, membershipBase)
-	if resolution.Provisional {
+	switch {
+	case resolution.Provisional:
 		slog.WarnContext(ctx, "could not finish detecting the licensing tier: a step GitLab did not answer could raise it, "+
 			"so the tier detected so far is served; GITLAB_MCP_TIER (or --tier in HTTP mode) pins it",
 			"tier", resolution.Tier.String(), "unresolved", resolution.Unresolved)
-	}
-	if !resolution.Answered {
+	case !resolution.Answered:
 		c.warnUnresolvedTier(ctx)
 	}
 	c.SetTier(resolution.Tier)
