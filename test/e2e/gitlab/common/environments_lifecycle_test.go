@@ -14,6 +14,7 @@ package common
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/freezeperiods"
@@ -32,8 +33,9 @@ func environmentIDs(listed []environments.Output) []int64 {
 
 // TestEnvironment_Lifecycle_GetListUpdateStopDelete creates an environment
 // per surface on a shared project, reads and lists it, gives it an external
-// URL, stops it, deletes it and asserts the read afterwards is refused as
-// not found.
+// URL, asks for the project's stale environments to be stopped and finds it
+// untouched, stops it, deletes it and asserts the read afterwards is refused
+// as not found.
 //
 // Replaces: TestIndividual_Environments, TestMeta_Environments
 func TestEnvironment_Lifecycle_GetListUpdateStopDelete(t *testing.T) {
@@ -65,6 +67,19 @@ func TestEnvironment_Lifecycle_GetListUpdateStopDelete(t *testing.T) {
 		updated := harness.Do[environments.Output](s, actionEnvironmentUpdate, withParams(byID, map[string]any{"external_url": externalURL}))
 		if updated.ID != created.ID || updated.ExternalURL != externalURL {
 			e.T.Errorf("environment update answered %+v, want environment %d at %s", updated, created.ID, externalURL)
+		}
+
+		// A stale stop a week and a day back leaves an environment created
+		// minutes ago alone: GitLab accepts the time, queues the stop of
+		// what is older, and this one is still available afterwards.
+		before := time.Now().UTC().Add(-8 * 24 * time.Hour).Format(time.RFC3339)
+		stale := harness.Do[environments.StopStaleOutput](s, actionEnvironmentStopStale, withParams(params, map[string]any{"before": before}))
+		if stale.Status != "queued" || stale.Message == "" || stale.Before != before {
+			e.T.Errorf("stale environment stop answered %+v, want the request queued with GitLab's message for %s", stale, before)
+		}
+		untouched := harness.Do[environments.Output](s, actionEnvironmentGet, byID)
+		if untouched.State != "available" {
+			e.T.Errorf("environment %d is %q after a stale stop before %s, want it still available", created.ID, untouched.State, before)
 		}
 
 		// The environment has no stop job, so GitLab completes the stop in

@@ -21,7 +21,7 @@
 
 </div>
 
-**All of GitLab for your AI assistant.** Up to 1,105 actions over GitLab's REST and GraphQL APIs, from Free to Ultimate and on GitLab.com, in one self-contained binary that works with Claude, Cursor, VS Code, Codex and any other MCP client. You ask in plain language; it does the GitLab work.
+**All of GitLab for your AI assistant.** Up to 1,106 actions over GitLab's REST and GraphQL APIs, from Free to Ultimate and on GitLab.com, in one self-contained binary that works with Claude, Cursor, VS Code, Codex and any other MCP client. You ask in plain language; it does the GitLab work.
 
 <!-- START TOKEN CLAIM -->
 

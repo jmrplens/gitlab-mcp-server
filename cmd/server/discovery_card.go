@@ -71,7 +71,7 @@ const (
 	// truncate that one at the cut a reader would notice, this is the text
 	// server.json already publishes under the same cap, and
 	// TestDiscoveryCard_AgreesWithServerJSON keeps the two from drifting.
-	discoveryCardDescription = "Go MCP server for GitLab: 2 dynamic tools reach ~878 actions on Free/CE, up to ~1105 on Ultimate."
+	discoveryCardDescription = "Go MCP server for GitLab: 2 dynamic tools reach ~879 actions on Free/CE, up to ~1106 on Ultimate."
 
 	// discoveryCardRepositorySource is the hosting service identifier a
 	// registry uses to decide how to validate and reach the repository.

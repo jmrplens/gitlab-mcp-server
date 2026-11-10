@@ -355,7 +355,8 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 1095 = 1093 + group.group_upload and
+		// 1096 = 1095 + environment.stop_stale (Free, client-go v3.45.0).
+		// The 1095 was 1093 + group.group_upload and
 		// group.shared_project_delete (Free, client-go v3.42.0). The 1093
 		// was 1091 + runner.reset_token_by_token and
 		// runner.router_discovery (Free, client-go v3.18.0). The
@@ -369,7 +370,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		// 1073 was 1065 + 7 work item saved view actions (get/list/create/
 		// update/delete/subscribe/unsubscribe, Free, client-go v2.62.0)
 		// + 1 Dependency Firewall package evaluation (Premium).
-		const expectedTools = 1095
+		const expectedTools = 1096
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -385,7 +386,8 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 874 = 872 + group.group_upload and group.shared_project_delete
+		// 875 = 874 + environment.stop_stale (Free, client-go v3.45.0). The
+		// 874 was 872 + group.group_upload and group.shared_project_delete
 		// (Free, client-go v3.42.0). The 872 was 870 +
 		// runner.reset_token_by_token and runner.router_discovery (Free,
 		// client-go v3.18.0). The 870 was
@@ -401,7 +403,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 874
+		const expectedTools = 875
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -1518,6 +1520,11 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	// no route demotes it back. See milestonePromoteSpec in
 	// internal/tools/milestones/action_specs.go.
 	"milestone_promote": {},
+	// stop_stale is stop applied to every environment of a project older than
+	// a time, so it is destructive for the reason stop is, once per
+	// environment it reaches. See environmentStopStaleSpec in
+	// internal/tools/environments/action_specs.go.
+	"stop_stale": {},
 }
 
 var knownRouteDestructiveExceptions = map[string]struct{}{

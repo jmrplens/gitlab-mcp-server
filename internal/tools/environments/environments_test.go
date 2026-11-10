@@ -8,6 +8,7 @@ package environments
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"reflect"
@@ -1239,8 +1240,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := environmentSpecsByTool(t, specs)
 
-	if len(specs) != 6 {
-		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
+	if len(specs) != 7 {
+		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
@@ -1265,13 +1266,18 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if stop.Usage == "" || len(stop.Aliases) == 0 {
 		t.Fatalf("gitlab_environment_stop metadata incomplete: usage=%q aliases=%d", stop.Usage, len(stop.Aliases))
 	}
+
+	stopStale := byTool["gitlab_environment_stop_stale"]
+	if !stopStale.Destructive || stopStale.ParameterGuidance["before"].SemanticRole == "" {
+		t.Fatalf("gitlab_environment_stop_stale metadata incomplete: destructive=%v guidance(before)=%q", stopStale.Destructive, stopStale.ParameterGuidance["before"].SemanticRole)
+	}
 }
 
 // ---------------------------------------------------------------------------
-// ActionSpecs route coverage for all 6 tools
+// ActionSpecs route coverage for all 7 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes asserts that every one of the six routes runs
+// TestActionSpecs_CallAllRoutes asserts that every one of the seven routes runs
 // end to end from the arguments a catalog surface hands it: each returns a
 // result and no error against a mock serving that action's own endpoint.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
@@ -1288,6 +1294,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"update", "gitlab_environment_update", map[string]any{"project_id": "1", "environment_id": 1, "name": "updated"}},
 		{"delete", "gitlab_environment_delete", map[string]any{"project_id": "1", "environment_id": 1}},
 		{"stop", "gitlab_environment_stop", map[string]any{"project_id": "1", "environment_id": 1}},
+		{"stop_stale", "gitlab_environment_stop_stale", map[string]any{"project_id": "1", "before": "2026-01-01T00:00:00Z"}},
 	}
 
 	for _, tt := range tools {
@@ -1343,6 +1350,11 @@ func newEnvironmentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	// Stop environment
 	handler.HandleFunc("POST /api/v4/projects/1/environments/1/stop", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"production","slug":"production","state":"stopped","tier":"production"}`)
+	})
+
+	// Stop stale environments
+	handler.HandleFunc("POST /api/v4/projects/1/environments/stop_stale", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"message":"Successfully requested stop for all stale environments"}`)
 	})
 
 	client := testutil.NewTestClient(t, handler)
@@ -1773,6 +1785,7 @@ func TestActionSpecs_UpdateDeleteMetadata(t *testing.T) {
 	}{
 		{"update", "gitlab_environment_update", "Update an existing environment", []string{"Returns:", "See also:", "gitlab_environment_get"}},
 		{"delete", "gitlab_environment_delete", "Delete an environment", []string{"Returns:", "See also:", "gitlab_environment_stop"}},
+		{"stop_stale", "gitlab_environment_stop_stale", "Stop every environment of a project", []string{"Returns:", "See also:", "gitlab_environment_list"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := byTool[tt.tool]
@@ -2135,5 +2148,146 @@ func TestEnvironmentGet_DeployableWithOneIdentityField(t *testing.T) {
 				t.Errorf("Deployable id/name = %d/%q, want %d/%q", dep.ID, dep.Name, tt.wantID, tt.wantName)
 			}
 		})
+	}
+}
+
+// staleBefore is the time a stale environment stop is asked for in these
+// tests, and staleMessage what GitLab answers the request with.
+const (
+	staleBefore  = "2026-01-01T00:00:00Z"
+	staleMessage = "Successfully requested stop for all stale environments"
+)
+
+// TestEnvironmentStopStale_SendsTheTimeAndReportsTheRequest asserts that
+// StopStale posts to the project's stop_stale route with the time the caller
+// gave as before, and answers with GitLab's message, that time in UTC and the
+// queued status, since GitLab stops the environments after it answers.
+func TestEnvironmentStopStale_SendsTheTimeAndReportsTheRequest(t *testing.T) {
+	var gotMethod string
+	var body struct {
+		Before string `json:"before"`
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/environments/stop_stale" {
+			testutil.RespondJSON(w, http.StatusNotFound, msgNotFoundBody)
+			return
+		}
+		gotMethod = r.Method
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"message":"`+staleMessage+`"}`)
+	}))
+
+	const inOffset = "2026-01-01T01:00:00+01:00"
+	out, err := StopStale(context.Background(), client, StopStaleInput{ProjectID: "42", Before: inOffset})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if gotMethod != http.MethodPost || body.Before != inOffset {
+		t.Errorf("request = %s before=%q, want POST before=%q", gotMethod, body.Before, inOffset)
+	}
+	if out.Status != "queued" || out.Message != staleMessage || out.Before != staleBefore {
+		t.Errorf("StopStale = %+v, want queued with %q before %s", out, staleMessage, staleBefore)
+	}
+}
+
+// TestEnvironmentStopStale_NullAnswer_KeepsTheRequest asserts that an answer
+// of null, which client-go decodes into no result and no error, still reports
+// the request GitLab accepted, with no message, rather than failing on the
+// absent result.
+func TestEnvironmentStopStale_NullAnswer_KeepsTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	}))
+
+	out, err := StopStale(context.Background(), client, StopStaleInput{ProjectID: "42", Before: staleBefore})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Status != "queued" || out.Message != "" || out.Before != staleBefore {
+		t.Errorf("StopStale = %+v, want queued with no message before %s", out, staleBefore)
+	}
+}
+
+// TestEnvironmentStopStale_RefusedBeforeAnyRequest asserts that a call with no
+// project, no time, a time that does not parse or a canceled context is
+// refused by name without anything reaching GitLab, which the forbidding mock
+// is what checks.
+func TestEnvironmentStopStale_RefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		ctx   func(*testing.T) context.Context
+		input StopStaleInput
+		want  string
+	}{
+		{name: "no project", input: StopStaleInput{Before: staleBefore}, want: "project_id is required"},
+		{name: "no time", input: StopStaleInput{ProjectID: "42"}, want: "before is required"},
+		{name: "unparseable time", input: StopStaleInput{ProjectID: "42", Before: "last week"}, want: "before"},
+		{name: "canceled", ctx: testutil.CancelledCtx, input: StopStaleInput{ProjectID: "42", Before: staleBefore}, want: context.Canceled.Error()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			ctx := context.Background()
+			if tc.ctx != nil {
+				ctx = tc.ctx(t)
+			}
+			_, err := StopStale(ctx, client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("StopStale error = %v, want one naming %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnvironmentStopStale_TimeOutsideTheWindow_NamesTheWindow asserts that the
+// 400 GitLab answers a time outside the window it takes carries the window,
+// and that another refusal carries no such hint.
+func TestEnvironmentStopStale_TimeOutsideTheWindow_NamesTheWindow(t *testing.T) {
+	const window = "between 10 years ago and 1 week ago"
+	cases := []struct {
+		name     string
+		status   int
+		body     string
+		wantHint bool
+	}{
+		{name: "bad request", status: http.StatusBadRequest, body: `{"message":"Invalid Date"}`, wantHint: true},
+		{name: "forbidden", status: http.StatusForbidden, body: msgForbiddenBody, wantHint: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, tc.body)
+			}))
+			_, err := StopStale(context.Background(), client, StopStaleInput{ProjectID: "42", Before: staleBefore})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.HasPrefix(err.Error(), "environmentStopStale: ") {
+				t.Errorf("error %q does not open by naming the operation", err)
+			}
+			if got := strings.Contains(err.Error(), window); got != tc.wantHint {
+				t.Errorf("error %q names the window: %v, want %v", err, got, tc.wantHint)
+			}
+		})
+	}
+}
+
+// TestFormatStopStaleMarkdown pins the card of a stale environment stop: the
+// status, the time and GitLab's message, and the listing that shows what
+// GitLab stopped, since the answer names none of it.
+func TestFormatStopStaleMarkdown(t *testing.T) {
+	got := FormatStopStaleMarkdown(StopStaleOutput{Status: "queued", Message: staleMessage, Before: staleBefore})
+
+	want := "## Stale Environments: Stop Requested\n\n" +
+		"- **Status**: queued\n" +
+		"- **Before**: " + toolutil.FormatTime(staleBefore) + "\n" +
+		"- **Message**: " + staleMessage + "\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.list' to list the environments with states=stopping or states=stopped to see which ones GitLab stopped\n" +
+		"- Use action 'environment.delete' to delete a stopped environment that is no longer needed\n"
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }

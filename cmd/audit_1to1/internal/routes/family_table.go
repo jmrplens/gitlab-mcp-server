@@ -814,8 +814,6 @@ var routeFamilies = []routeFamily{
 	// The environment domain (issueEnvironmentRoutes).
 	tracked(issueEnvironmentRoutes, 1, on(http.MethodDelete), "/projects/*/environments/review_apps",
 		"schedules a project's stopped review apps for deletion"),
-	tracked(issueEnvironmentRoutes, 1, on(http.MethodPost), "/projects/*/environments/stop_stale",
-		"stops a project's environments last updated before a date"),
 	// The feature flag domain (issueFeatureFlagsRoutes).
 	tracked(issueFeatureFlagsRoutes, 2, on(), "/projects/*/feature_flags_settings",
 		"reads and updates a project's feature flag settings"),
