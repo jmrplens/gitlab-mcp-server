@@ -1045,7 +1045,7 @@ var witnessUnpaired = []string{
 	"toolutil.DeploymentApprovalOutput answers_no_struct",
 }
 
-// witnessDeclared is what the witness expects of the captures on v3.44.0:
+// witnessDeclared is what the witness expects of the captures on v3.46.1:
 // each declaration by the type and key it is written on, with its category
 // and how many keys both a capture and the client-go struct beside it read
 // it answers.

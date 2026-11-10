@@ -829,7 +829,7 @@ func TestFormatGetMarkdown_EveryCuratedKey_RendersUnderTheCategoryThatOwnsIt(t *
 // the exchange said the change had not been made, and the model reported the
 // instance reconfigured. Measured against the pinned live record (19.5.0), the
 // PUT route declares 677 top-level params and the options struct of client-go
-// v3.44.0 models 448 of them, one more than v3.30.0's and v3.40.3's.
+// v3.46.1 models 448 of them, one more than v3.30.0's and v3.40.3's.
 func TestUpdate_KeyTheClientDoesNotModel_RefusedBeforeAnythingIsSent(t *testing.T) {
 	var asked atomic.Bool
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

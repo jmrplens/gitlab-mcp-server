@@ -1221,7 +1221,7 @@ func TestSummarizeIdentifiers_EachStatus_CountsOnceAndTheFindingsAloneAreKept(t 
 }
 
 // witnessIdentifierArguments is what the witness expects of every integer a
-// handler hands a client-go parameter of type any on v3.44.0: by site,
+// handler hands a client-go parameter of type any on v3.46.1: by site,
 // method and input field, its status and the record's route and
 // placeholder, spelled as the report spells them.
 var witnessIdentifierArguments = map[string]string{
@@ -1237,7 +1237,7 @@ var witnessIdentifierArguments = map[string]string{
 	"jobtokenscope.RemoveProjectAllowlist JobTokenScope.RemoveProjectFromJobScopeAllowList jobtokenscope.RemoveProjectAllowlistInput.ProjectID": "id_only  DELETE /projects/:id/job_token_scope/allowlist/:target_project_id id id",
 }
 
-// witnessSDKNarrowed is what the witness expects client-go v3.44.0 to
+// witnessSDKNarrowed is what the witness expects client-go v3.46.1 to
 // narrow: each method and parameter that takes an int64 where the record
 // says the group's, the project's or the user's ID or path is taken, every
 // one of them called by a handler, answered by a declaration and read from an

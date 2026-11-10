@@ -103,7 +103,7 @@ func TestCollectOutputPairings_Repository_ReadsTheStructsAMergeRequestNests(t *t
 	}
 	headPipeline := pairings.Outputs[index].SDKNested["head_pipeline"]
 	if !slices.Contains(headPipeline, "name") || !slices.Contains(headPipeline, "archived") {
-		t.Errorf("the keys gl.MergeRequest nests under head_pipeline = %v, want gl.Pipeline's in v3.44.0: name and archived", headPipeline)
+		t.Errorf("the keys gl.MergeRequest nests under head_pipeline = %v, want gl.Pipeline's in v3.46.1: name and archived", headPipeline)
 	}
 }
 
