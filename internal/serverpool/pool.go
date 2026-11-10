@@ -104,6 +104,27 @@ type Entry struct {
 	// It is not the pool key, an unkeyed digest of the token and URL that is
 	// never logged.
 	credentialHash string
+	// provisional is set while the entry serves a tier its build could not
+	// finish detecting: a step of the probe GitLab did not answer could raise
+	// it. Nil for a tier read whole and for one --tier pins. It is set before
+	// the entry is published, and read and written under p.mu afterwards.
+	provisional *provisionalTier
+}
+
+// provisionalTier is what an entry serving a provisional tier carries.
+type provisionalTier struct {
+	// unresolved names the steps of the probe that were not read, in the
+	// order the probe asks them, for the lines that report the entry.
+	unresolved []string
+}
+
+// newProvisionalTier returns the mark an entry built on resolution carries,
+// nil when the resolution is not provisional.
+func newProvisionalTier(resolution gitlabclient.TierResolution) *provisionalTier {
+	if !resolution.Provisional {
+		return nil
+	}
+	return &provisionalTier{unresolved: resolution.Unresolved}
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -880,7 +901,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 	// The handle every line about this entry names it by, the fine-grained
 	// authority lines entryConfig writes before the entry exists among them.
 	handle := CredentialHash(token)
-	entryCfg, facts, err := p.entryConfig(client, gitlabURL, known, handle)
+	entryCfg, probe, err := p.entryConfig(client, gitlabURL, known, handle)
 	if err != nil {
 		return nil, err
 	}
@@ -906,12 +927,13 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		// [Entry.Owner] for why it is random rather than derived.
 		owner:          rand.Text(),
 		credentialHash: handle,
-		token:          facts,
+		token:          probe.token,
 		rememberBelowMinimum: func() {
 			if record := p.belowMinimum.Load(); record != nil {
 				(*record)(gitlabURL, token)
 			}
 		},
+		provisional: newProvisionalTier(probe.tier),
 	}
 	// Resolved once the entry exists, so the lines saying the user could not
 	// be resolved name it like every other line about it. Nothing else can
@@ -1326,12 +1348,20 @@ func (p *ServerPool) insertEntry(key string, entry *Entry) *Entry {
 		return entry
 	}
 
-	slog.Info("server pool: created new entry", entryLogArgs(entry,
+	created := []any{
 		"pool_size", len(p.entries),
 		"tier", entry.serverConfig.Tier.String(),
-		"tier_source", p.tierSource(),
+		"tier_source", p.tierSource(entry),
 		"scopes_detected", entry.serverConfig.TokenScopes != nil,
-	)...)
+	}
+	// The steps GitLab did not answer, which the operator reads beside the
+	// tier: a tier served provisionally names them, and one read whole has
+	// none to name. They are the line's own pairs, so the three that name the
+	// credential still come last, as on every other line about the entry.
+	if entry.provisional != nil {
+		created = append(created, "tier_unresolved", entry.provisional.unresolved)
+	}
+	slog.Info("server pool: created new entry", entryLogArgs(entry, created...)...)
 
 	return entry
 }
@@ -1610,20 +1640,31 @@ const credentialCheckTimeout = 5 * time.Second
 // fine-grained token its grant and the instance version.
 const entryDetectTimeout = 10 * time.Second
 
+// entryProbe is what an entry build learned from GitLab beside the
+// configuration it resolved: the token, which the entry keeps for its
+// revalidations, and how the tier was resolved, which says whether the entry
+// serves it provisionally.
+type entryProbe struct {
+	token gitlabclient.TokenFacts
+	// tier is the zero resolution under --tier, which asks nothing and is
+	// never provisional.
+	tier gitlabclient.TierResolution
+}
+
 // entryConfig builds the per-pool-entry server configuration, applying the
 // resolved GitLab URL plus optional edition and token-scope discovery, and
 // attaches what a fine-grained token may be shown to the entry's client. It
-// returns what was learned about the token, which the entry keeps for its
-// revalidations, and fails when the token's own description names scopes
-// below the admission minimum ([ErrCredentialBelowMinimum]) or when the
-// fine-grained reads found no probe slot free ([ErrCredentialProbeBusy]).
+// returns what was learned about the token and the tier ([entryProbe]), and
+// fails when the token's own description names scopes below the admission
+// minimum ([ErrCredentialBelowMinimum]) or when the fine-grained reads found
+// no probe slot free ([ErrCredentialProbeBusy]).
 //
 // The token is asked about before the tier, so a token refused for its scopes
 // costs no tier request and leaves no warning about a tier nobody will be
 // served. The handle is the credential's [CredentialHash], which the lines
 // about a fine-grained token's authority name it by, as every later line
 // about its entry does.
-func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts, handle string) (*config.ServerConfig, gitlabclient.TokenFacts, error) {
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts, handle string) (*config.ServerConfig, entryProbe, error) {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
@@ -1656,14 +1697,19 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// read_user one among them, is refused here, under --ignore-scopes too:
 	// that flag skips the scope filter and the read_api narrowing, never the
 	// minimum (issue 952). Scopes nothing answered for are not below it.
+	probe := entryProbe{token: facts}
 	if gitlabclient.BelowMinimum(facts) {
-		return nil, facts, fmt.Errorf("%w", ErrCredentialBelowMinimum)
+		return nil, probe, fmt.Errorf("%w", ErrCredentialBelowMinimum)
 	}
 
-	// Detect the tier from the instance license only when the operator did not
-	// pin it explicitly via --tier/GITLAB_MCP_TIER.
+	// Detect the tier only when the operator did not pin it explicitly via
+	// --tier/GITLAB_MCP_TIER. The membership step runs on a clock of its own
+	// measured from the pool's lifetime (register row AUT-003), so the steps
+	// before it cannot spend it, and a tier a step went unanswered for is
+	// served provisionally, which the entry carries.
 	if !p.cfg.TierExplicit {
-		entryCfg.Tier = client.DetectTier(ctx, ctx).Tier
+		probe.tier = client.DetectTier(ctx, p.lifetime())
+		entryCfg.Tier = probe.tier.Tier
 	}
 
 	// What a fine-grained token may be shown, on the entry's own client, since
@@ -1671,7 +1717,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// (register rows AUT-007 and AUT-008). A classic token gets nil.
 	authority, err := p.fineGrainedAuthority(ctx, client, facts, entryCfg, handle)
 	if err != nil {
-		return nil, facts, err
+		return nil, probe, err
 	}
 	client.SetAuthority(authority)
 	// An OAuth access token is refused by GitLab on the routes that act on the
@@ -1681,11 +1727,11 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 	// does not skip it, as it does not skip a fine-grained token's authority.
 	entryCfg.OAuthCredential = facts.OAuth
 	if p.cfg.IgnoreScopes {
-		return entryCfg, facts, nil
+		return entryCfg, probe, nil
 	}
 	entryCfg.TokenScopes = facts.Scopes
 	applyTokenScope(entryCfg)
-	return entryCfg, facts, nil
+	return entryCfg, probe, nil
 }
 
 // fineGrainedAuthority returns what a fine-grained token may be shown, judged
@@ -1839,13 +1885,19 @@ func applyTokenScope(entryCfg *config.ServerConfig) {
 	gitlabclient.NarrowToTokenScope(entryCfg)
 }
 
-// tierSource returns the label used in logs for how the licensing tier was
-// selected for new pool entries.
-func (p *ServerPool) tierSource() string {
-	if p.cfg.TierExplicit {
+// tierSource returns the label the logs give to how entry's licensing tier
+// was selected: configured by --tier, detected whole, or detected_provisional
+// when a step of the probe went unanswered. Callers hold p.mu once the entry
+// is published.
+func (p *ServerPool) tierSource(entry *Entry) string {
+	switch {
+	case p.cfg.TierExplicit:
 		return "configured"
+	case entry.provisional != nil:
+		return "detected_provisional"
+	default:
+		return "detected"
 	}
-	return "detected"
 }
 
 // Size returns the current number of entries in the pool.

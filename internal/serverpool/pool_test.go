@@ -6359,6 +6359,148 @@ func TestInsertEntry_TheCreatedEntryLine_SaysWhetherScopesWereDetected(t *testin
 	}
 }
 
+// selfManagedTierGitLab stands in for a self-managed instance whose license
+// read answers with license(), and whose other reads answer as a non-admin's
+// do: the credential probe accepts the token, the namespaces carry no plan and
+// the token's own description is not found. It counts the license reads.
+func selfManagedTierGitLab(t *testing.T, license func(w http.ResponseWriter)) (string, *atomic.Int64) {
+	t.Helper()
+	var licenseReads atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"username":"builder"}`))
+	})
+	mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+		licenseReads.Add(1)
+		license(w)
+	})
+	mux.HandleFunc("GET /api/v4/namespaces", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.6.0-ee","enterprise":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL, &licenseReads
+}
+
+// licenseAnswer writes a license read's answer: plan with a 200, or the bare
+// status when it is not 200.
+func licenseAnswer(status int, plan string) func(w http.ResponseWriter) {
+	return func(w http.ResponseWriter) {
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"plan": plan})
+	}
+}
+
+// TestInsertEntry_TheCreatedEntryLine_SaysHowTheTierWasSelected covers the
+// three values of the created-entry line's tier_source and what the entry
+// carries with each (issue 1782).
+//
+// A tier GitLab did not finish answering used to be logged detected, exactly
+// like one it answered, so the line an operator reads to learn why a credential
+// was served the Free catalog said nothing about a license read that had failed.
+// It now says detected_provisional and names the steps that went unanswered,
+// and the entry carries the mark that has it asked again; a tier read whole
+// carries neither, and one --tier pins asks GitLab nothing and is never
+// provisional, whatever GitLab would have answered.
+func TestInsertEntry_TheCreatedEntryLine_SaysHowTheTierWasSelected(t *testing.T) {
+	tests := []struct {
+		name           string
+		explicit       bool
+		license        func(w http.ResponseWriter)
+		wantSource     string
+		wantTier       edition.Tier
+		wantUnresolved []string
+		wantReads      int64
+	}{
+		{
+			name: "a pinned tier is configured, and asks nothing", explicit: true,
+			license:    licenseAnswer(http.StatusBadGateway, ""),
+			wantSource: "configured", wantTier: edition.Premium,
+		},
+		{
+			name:       "a license GitLab answered is detected whole",
+			license:    licenseAnswer(http.StatusOK, "ultimate"),
+			wantSource: "detected", wantTier: edition.Ultimate, wantReads: 1,
+		},
+		{
+			name:       "a license GitLab did not answer is detected provisionally",
+			license:    licenseAnswer(http.StatusBadGateway, ""),
+			wantSource: "detected_provisional", wantTier: edition.Free,
+			wantUnresolved: []string{"license"}, wantReads: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab, licenseReads := selfManagedTierGitLab(t, tt.license)
+			captured := captureLogs(t)
+			cfg := testConfig(gitlab)
+			cfg.Tier, cfg.TierExplicit = edition.Premium, tt.explicit
+			pool := New(cfg, testFactory())
+			t.Cleanup(pool.Close)
+
+			entry, err := pool.GetOrCreateEntry("glpat-tier-source", gitlab, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry(): %v", err)
+			}
+
+			assertCreatedTierLine(t, captured, tt.wantSource, tt.wantTier, tt.wantUnresolved)
+			assertProvisionalMark(t, pool, entry, tt.wantUnresolved)
+			if got := licenseReads.Load(); got != tt.wantReads {
+				t.Errorf("license reads = %d, want %d", got, tt.wantReads)
+			}
+		})
+	}
+}
+
+// assertCreatedTierLine holds the created-entry line to the tier it names,
+// how it was selected and the steps it says went unanswered, which only a
+// provisional tier names.
+func assertCreatedTierLine(t *testing.T, captured *capturedRecords, wantSource string, wantTier edition.Tier, wantUnresolved []string) {
+	t.Helper()
+	record, found := captured.find("server pool: created new entry")
+	if !found {
+		t.Fatal("no created-entry record was logged")
+	}
+	if source, _ := logAttr(record, "tier_source"); source.String() != wantSource {
+		t.Errorf("tier_source = %q, want %q", source.String(), wantSource)
+	}
+	if tier, _ := logAttr(record, "tier"); tier.String() != wantTier.String() {
+		t.Errorf("tier = %q, want %q", tier.String(), wantTier)
+	}
+	unresolved, named := logAttr(record, "tier_unresolved")
+	if named != (wantUnresolved != nil) {
+		t.Errorf("tier_unresolved present = %t, want %t: only a provisional tier names its unanswered steps", named, wantUnresolved != nil)
+	}
+	if got, _ := unresolved.Any().([]string); !slices.Equal(got, wantUnresolved) {
+		t.Errorf("tier_unresolved = %v, want %v", got, wantUnresolved)
+	}
+}
+
+// assertProvisionalMark holds entry to the provisional mark it should carry:
+// one naming wantUnresolved, or none when that is nil.
+func assertProvisionalMark(t *testing.T, pool *ServerPool, entry *Entry, wantUnresolved []string) {
+	t.Helper()
+	pool.mu.RLock()
+	mark := entry.provisional
+	pool.mu.RUnlock()
+	if (mark != nil) != (wantUnresolved != nil) {
+		t.Fatalf("entry marked provisional = %t, want %t", mark != nil, wantUnresolved != nil)
+	}
+	if mark != nil && !slices.Equal(mark.unresolved, wantUnresolved) {
+		t.Errorf("the mark names %v, want %v", mark.unresolved, wantUnresolved)
+	}
+}
+
 // TestGetOrCreate_FineGrainedTokenGetsAnAuthorityOnItsClient verifies an entry
 // whose token is a fine-grained one carries the authority every request of it
 // is decided by on its own client, whether the scopes were detected from the
