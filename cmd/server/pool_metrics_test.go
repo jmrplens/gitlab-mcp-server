@@ -102,8 +102,8 @@ func TestObservePoolMetrics_ExportsWhatTheSnapshotHolds(t *testing.T) {
 	}
 }
 
-// TestPoolCounts_CarriesEveryCounterToItsOwnSeries pins the nine mappings that
-// exist in exactly one place.
+// TestPoolCounts_CarriesEveryCounterToItsOwnSeries pins the eleven mappings
+// that exist in exactly one place.
 //
 // Nothing else can see them. internal/mcpotel's own tests are handed a
 // PoolCounts already built, so they cannot tell which snapshot field it came
@@ -126,9 +126,12 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 		InvalidEvictions:            8,
 		RebuildEvictions:            9,
 		BelowMinimumEvictions:       10,
+		TierResolvedEvictions:       11,
 		Evictions:                   1000,
 		Hits:                        2000,
 		Misses:                      3000,
+		// A count of asks, not of evictions: no series carries it.
+		TierRedetections: 4000,
 	}
 
 	counts := poolCounts(stats)
@@ -147,6 +150,7 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 		{name: "invalid_credential", got: counts.InvalidEvictions, want: 8},
 		{name: "rebuild", got: counts.RebuildEvictions, want: 9},
 		{name: "below_minimum", got: counts.BelowMinimumEvictions, want: 10},
+		{name: "tier_resolved", got: counts.TierResolvedEvictions, want: 11},
 	}
 	for _, field := range fields {
 		t.Run(field.name, func(t *testing.T) {
@@ -163,9 +167,16 @@ func TestPoolCounts_CarriesEveryCounterToItsOwnSeries(t *testing.T) {
 	if slices.Contains([]int64{
 		counts.Entries, counts.MaxSize, counts.SizeEvictions, counts.BusyEvictions, counts.IdleEvictions,
 		counts.StaleEvictions, counts.RejectedEvictions, counts.InvalidEvictions, counts.RebuildEvictions,
-		counts.BelowMinimumEvictions,
+		counts.BelowMinimumEvictions, counts.TierResolvedEvictions,
 	}, stats.Evictions) {
 		t.Errorf("the legacy Evictions total reached an exported series: %+v", counts)
+	}
+	if slices.Contains([]int64{
+		counts.Entries, counts.MaxSize, counts.SizeEvictions, counts.BusyEvictions, counts.IdleEvictions,
+		counts.StaleEvictions, counts.RejectedEvictions, counts.InvalidEvictions, counts.RebuildEvictions,
+		counts.BelowMinimumEvictions, counts.TierResolvedEvictions,
+	}, stats.TierRedetections) {
+		t.Errorf("the re-detection count reached an eviction series: %+v", counts)
 	}
 }
 

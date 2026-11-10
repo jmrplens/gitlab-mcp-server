@@ -3322,6 +3322,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	pool.StartRevalidation(ctx)
 	pool.StartIdleEviction(ctx)
+	// Started whatever --revalidate-interval says: an entry built on a tier
+	// GitLab did not finish answering is asked again on a clock of its own
+	// (register row AUT-010), which an open subscription and a revalidation
+	// switched off cannot hold back.
+	pool.StartTierRedetection(ctx)
 
 	// The server card is built on first request, not at startup. Building
 	// it means standing up an ephemeral MCP server with the full catalog —

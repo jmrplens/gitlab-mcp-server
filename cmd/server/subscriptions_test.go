@@ -3237,6 +3237,7 @@ func TestWatchEndForCause_TurnsAPoolEvictionIntoWhatTheClientIsTold(t *testing.T
 		{name: "the idle sweep", cause: serverpool.CauseIdle, want: endCredentialReset},
 		{name: "a credential too long unchecked", cause: serverpool.CauseStaleCredential, want: endCredentialReset},
 		{name: "a shape that has to be rebuilt", cause: serverpool.CauseRebuild, want: endCredentialReset},
+		{name: "a provisional tier resolved to another", cause: serverpool.CauseTierResolved, want: endCredentialReset},
 		{name: "GitLab refusing a call", cause: serverpool.CauseRejectedCredential, want: endCredentialRevoked},
 		{name: "revalidation finding it refused", cause: serverpool.CauseInvalidCredential, want: endCredentialRevoked},
 		{name: "a credential found below the minimum", cause: serverpool.CauseBelowMinimum, want: endCredentialInsufficient},

@@ -106,25 +106,55 @@ type Entry struct {
 	credentialHash string
 	// provisional is set while the entry serves a tier its build could not
 	// finish detecting: a step of the probe GitLab did not answer could raise
-	// it. Nil for a tier read whole and for one --tier pins. It is set before
-	// the entry is published, and read and written under p.mu afterwards.
+	// it, so the sweep asks it again (register row AUT-010). Nil for a tier
+	// read whole and for one --tier pins. It is set before the entry is
+	// published, and read and written under p.mu afterwards.
 	provisional *provisionalTier
 }
 
-// provisionalTier is what an entry serving a provisional tier carries.
-type provisionalTier struct {
-	// unresolved names the steps of the probe that were not read, in the
-	// order the probe asks them, for the lines that report the entry.
-	unresolved []string
+// entrySeed is what an entry carries for its credential rather than for the
+// shape it is served on: what a build learned, and what a replacement on
+// another tier's shape keeps ([ServerPool.replaceTier]).
+type entrySeed struct {
+	client *gitlabclient.Client
+	// identity is what a replacement keeps; a build leaves it zero and
+	// resolves it once the entry is assembled, so the lines saying the user
+	// could not be resolved name the entry ([resolveIdentity]).
+	identity             UserIdentity
+	token                gitlabclient.TokenFacts
+	credentialHash       string
+	rememberBelowMinimum func()
 }
 
-// newProvisionalTier returns the mark an entry built on resolution carries,
-// nil when the resolution is not provisional.
-func newProvisionalTier(resolution gitlabclient.TierResolution) *provisionalTier {
-	if !resolution.Provisional {
-		return nil
+// assembleEntry returns an entry serving seed's credential from server, as cfg
+// configures it, under an owner of its own. A build and a replacement both
+// assemble their entry here, so a field an entry carries for its credential is
+// set in one place and a replacement cannot leave it behind.
+func assembleEntry(seed entrySeed, server *mcp.Server, cfg *config.ServerConfig) *Entry {
+	return &Entry{
+		server:       server,
+		client:       seed.client,
+		serverConfig: cfg,
+		identity:     seed.identity,
+		// Minted before anything can observe the entry, and never again: see
+		// [Entry.Owner] for why it is random rather than derived.
+		owner:                rand.Text(),
+		credentialHash:       seed.credentialHash,
+		token:                seed.token,
+		rememberBelowMinimum: seed.rememberBelowMinimum,
 	}
-	return &provisionalTier{unresolved: resolution.Unresolved}
+}
+
+// seed returns what e carries for its credential, its token's facts read
+// under the lock they are written under.
+func (e *Entry) seed() entrySeed {
+	return entrySeed{
+		client:               e.client,
+		identity:             e.identity,
+		token:                e.tokenFacts(),
+		credentialHash:       e.credentialHash,
+		rememberBelowMinimum: e.rememberBelowMinimum,
+	}
 }
 
 // Server returns the MCP server serving this entry, which may be shared with
@@ -333,6 +363,18 @@ type Metrics struct {
 	// RevalidationsTransient: it is not an eviction, so it belongs to none of
 	// the series the eviction reason attribute splits.
 	UnauthorizedKept atomic.Int64
+	// TierResolvedEvictions counts entries replaced because the re-detection
+	// of their provisional tier resolved another one ([CauseTierResolved]):
+	// the credential is kept and served on the shape of that tier. Like the
+	// below-minimum and rejected-credential counters it is not part of the
+	// legacy Evictions total.
+	TierResolvedEvictions atomic.Int64
+	// TierRedetections counts the re-detections of provisional tiers the
+	// sweep ran (register row AUT-010), whatever they concluded. It is read in
+	// the snapshot alone, like UnauthorizedKept: it is no eviction. A figure
+	// that keeps climbing with no tier_resolved beside it is an instance whose
+	// tier probe keeps going unanswered.
+	TierRedetections atomic.Int64
 }
 
 // Snapshot is a point-in-time copy of pool [Metrics] plus current state.
@@ -369,7 +411,13 @@ type Snapshot struct {
 	// UnauthorizedKept counts 401s that named no cause after which the
 	// credential probe found the credential still accepted, and the entry was
 	// kept. See [Metrics.UnauthorizedKept].
-	UnauthorizedKept int64     `json:"unauthorized_kept"`
+	UnauthorizedKept int64 `json:"unauthorized_kept"`
+	// TierResolvedEvictions counts entries moved to the shape of the tier a
+	// re-detection resolved. See [Metrics.TierResolvedEvictions].
+	TierResolvedEvictions int64 `json:"tier_resolved_evictions"`
+	// TierRedetections counts the re-detections of provisional tiers. See
+	// [Metrics.TierRedetections].
+	TierRedetections int64     `json:"tier_redetections"`
 	CurrentSize      int       `json:"current_size"`
 	MaxSize          int       `json:"max_size"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -428,6 +476,19 @@ type ServerPool struct {
 	// [unauthorizedConfirmCooldown]. A field rather than the constant read in
 	// place, so a test can put both sides of the window within reach.
 	confirmCooldown time.Duration
+	// sweepStops ends the sweeps [ServerPool.Close] ends, the tier
+	// re-detection's, and sweeps counts their goroutines, so Close can wait
+	// for them before it takes the lock their ticks take. sweepMu guards the
+	// list.
+	sweepMu    sync.Mutex
+	sweepStops []context.CancelFunc
+	sweeps     sync.WaitGroup
+	// tierRetry is how long an entry built on a provisional tier is served
+	// before the sweep first asks it again, and how often the sweep looks for
+	// one whose wait is over, set by [New] to [tierProvisionalRetry]. A field
+	// rather than the constant read in place, so a test can put a re-detection
+	// within reach ([WithTierRetry]).
+	tierRetry time.Duration
 	// idleSweepInterval overrides the cadence derived from idleTimeout.
 	//
 	// Zero, which is what [New] leaves, means derive it: a quarter of the
@@ -475,10 +536,11 @@ type Option func(*ServerPool)
 // process ends.
 type EvictionCause string
 
-// The causes, one per call site of [ServerPool.dropEntry]. A new removal path
-// picks one of these or adds its own; what it must not do is leave the zero
-// value, which names no path and would reach the caller as an ending it cannot
-// explain.
+// The causes, one per removal path: the call sites of [ServerPool.dropEntry],
+// and [ServerPool.replaceTier], which puts a replacement in the entry's place.
+// A new removal path picks one of these or adds its own; what it must not do is
+// leave the zero value, which names no path and would reach the caller as an
+// ending it cannot explain.
 //
 //nolint:gosec // G101 fires on the identifiers containing "Credential"; these name why an entry was dropped and no credential is anywhere near them.
 const (
@@ -514,6 +576,13 @@ const (
 	// CauseRebuild is a configuration shape whose catalog registration failed,
 	// taking every credential pointing at it.
 	CauseRebuild EvictionCause = "rebuild"
+	// CauseTierResolved is the re-detection of a provisional tier resolving
+	// another one, which moves the credential to the shape of that tier
+	// (register row AUT-010). GitLab refused nothing and the credential keeps
+	// its client: the entry that replaces it serves the next request under an
+	// owner of its own, so what the old owner held ends as a rebuild's does,
+	// and its holder reconnects with the same credential.
+	CauseTierResolved EvictionCause = "tier_resolved"
 	// CausePoolClosed is the pool shutting down.
 	CausePoolClosed EvictionCause = "pool_closed"
 )
@@ -666,6 +735,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		probes:             make(chan struct{}, maxConcurrentCredentialProbes),
 		probeQueueTimeout:  credentialProbeQueueTimeout,
 		confirmCooldown:    unauthorizedConfirmCooldown,
+		tierRetry:          tierProvisionalRetry,
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -919,36 +989,38 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		return nil, errors.New("creating MCP server for pool: factory returned no server")
 	}
 
-	entry := &Entry{
-		server:       server,
-		client:       client,
-		serverConfig: entryCfg,
-		// Minted before anything can observe the entry, and never again: see
-		// [Entry.Owner] for why it is random rather than derived.
-		owner:          rand.Text(),
-		credentialHash: handle,
+	entry := assembleEntry(entrySeed{
+		client:         client,
 		token:          probe.token,
+		credentialHash: handle,
 		rememberBelowMinimum: func() {
 			if record := p.belowMinimum.Load(); record != nil {
 				(*record)(gitlabURL, token)
 			}
 		},
-		provisional: newProvisionalTier(probe.tier),
-	}
+	}, server, entryCfg)
+	entry.provisional = newProvisionalTier(probe.tier)
 	// Resolved once the entry exists, so the lines saying the user could not
 	// be resolved name it like every other line about it. Nothing else can
 	// observe the entry yet.
 	entry.identity = resolveIdentity(p.lifetime(), entry)
-	// The first data call GitLab refuses is the revocation signal. Without
-	// this, a token revoked while its entry was live kept being served until
-	// the periodic re-check, up to an hour, and every call in between was
-	// relayed and refused one by one. See [ServerPool.handleUnauthorized] for
-	// why not every 401 is one.
-	key := sessionKey(token, gitlabURL)
-	client.SetOnUnauthorized(func(answer gitlabclient.UnauthorizedAnswer) {
+	p.watchUnauthorized(sessionKey(token, gitlabURL), entry)
+	return entry, nil
+}
+
+// watchUnauthorized points the 401 hook of entry's client at entry, pooled
+// under key.
+//
+// The first data call GitLab refuses is the revocation signal. Without this, a
+// token revoked while its entry was live kept being served until the periodic
+// re-check, up to an hour, and every call in between was relayed and refused
+// one by one. See [ServerPool.handleUnauthorized] for why not every 401 is
+// one. A build points it at the entry it built, and a replacement on another
+// tier's shape, which keeps the client, points it at the replacement.
+func (p *ServerPool) watchUnauthorized(key string, entry *Entry) {
+	entry.client.SetOnUnauthorized(func(answer gitlabclient.UnauthorizedAnswer) {
 		p.handleUnauthorized(key, entry, answer)
 	})
-	return entry, nil
 }
 
 // unauthorizedConfirmCooldown is how long after one confirmation of a 401 that
@@ -1337,6 +1409,9 @@ func (p *ServerPool) insertEntry(key string, entry *Entry) *Entry {
 	entry.createdAt = now
 	entry.lastValidated = now
 	entry.lastUsed = now
+	if entry.provisional != nil {
+		entry.provisional.askAfter(now, p.tierRetry)
+	}
 	p.entries[key] = entry
 
 	// After the entry is reachable by key, so a callback that starts work
@@ -1806,7 +1881,7 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *Entry) {
 	facts := entry.tokenFacts()
 	if facts.KindUnknown {
-		if redetectKind(ctx, entry) {
+		if p.redetectKind(ctx, key, entry) {
 			p.evictBelowMinimum(ctx, key, entry)
 		}
 		return
@@ -1846,7 +1921,12 @@ func (p *ServerPool) refreshAuthority(ctx context.Context, key string, entry *En
 // it was admitted because nothing said what its scopes were, and the minimum
 // holds whenever that is learned (issue 952). The entry's facts are left as
 // they were, since the entry is about to go.
-func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
+//
+// What is learned is kept by the entry that carries entry's client when the
+// answer arrives ([ServerPool.learnTokenFacts]), which is entry itself unless a
+// re-detection of its tier replaced it meanwhile, since a replacement keeps
+// the client and copies the facts it found.
+func (p *ServerPool) redetectKind(ctx context.Context, key string, entry *Entry) (belowMinimum bool) {
 	detected := gitlabclient.RedetectToken(ctx, entry.client.GL())
 	if detected.KindUnknown {
 		return false
@@ -1854,7 +1934,7 @@ func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
 	if gitlabclient.BelowMinimum(detected) {
 		return true
 	}
-	entry.setTokenFacts(detected)
+	p.learnTokenFacts(key, entry, detected)
 	if !detected.FineGrained {
 		return false
 	}
@@ -1863,6 +1943,27 @@ func redetectKind(ctx context.Context, entry *Entry) (belowMinimum bool) {
 		entryLogArgs(entry, authority.LogArgs()...)...)
 	entry.client.SetAuthority(authority)
 	return false
+}
+
+// learnTokenFacts records what the self endpoint said of the token of entry,
+// pooled under key, on the entry that carries entry's client now: the entry
+// under key when it shares that client, which a replacement on another tier's
+// shape does ([ServerPool.replaceTier]), and entry itself otherwise.
+//
+// The write is made holding the pool's read lock, which the replacement's write
+// lock excludes, and the replacement copies the facts under that write lock:
+// so the answer lands either before the copy, which carries it across, or on
+// the replacement. Written to entry alone, an answer arriving while the tier was
+// being replaced stayed on the entry that had just left, and the replacement
+// asked the self endpoint the same question again at its next revalidation.
+func (p *ServerPool) learnTokenFacts(key string, entry *Entry, facts gitlabclient.TokenFacts) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	holder := entry
+	if current, ok := p.entries[key]; ok && current.client == entry.client {
+		holder = current
+	}
+	holder.setTokenFacts(facts)
 }
 
 // applyTokenScope narrows an entry to what its token reaches when the token
@@ -1890,14 +1991,13 @@ func applyTokenScope(entryCfg *config.ServerConfig) {
 // when a step of the probe went unanswered. Callers hold p.mu once the entry
 // is published.
 func (p *ServerPool) tierSource(entry *Entry) string {
-	switch {
-	case p.cfg.TierExplicit:
+	if p.cfg.TierExplicit {
 		return "configured"
-	case entry.provisional != nil:
-		return "detected_provisional"
-	default:
-		return "detected"
 	}
+	if entry.provisional != nil {
+		return "detected_provisional"
+	}
+	return "detected"
 }
 
 // Size returns the current number of entries in the pool.
@@ -1929,6 +2029,8 @@ func (p *ServerPool) Stats() Snapshot {
 		RejectedCredentialEvictions: p.metrics.RejectedCredentialEvictions.Load(),
 		BelowMinimumEvictions:       p.metrics.BelowMinimumEvictions.Load(),
 		UnauthorizedKept:            p.metrics.UnauthorizedKept.Load(),
+		TierResolvedEvictions:       p.metrics.TierResolvedEvictions.Load(),
+		TierRedetections:            p.metrics.TierRedetections.Load(),
 		CurrentSize:                 size,
 		MaxSize:                     p.maxSize,
 		CreatedAt:                   p.createdAt,
@@ -1938,7 +2040,13 @@ func (p *ServerPool) Stats() Snapshot {
 // Close removes all entries from the pool. Active MCP sessions for evicted
 // servers are not forcefully terminated — they will expire naturally via
 // [StreamableHTTPOptions.SessionTimeout].
+//
+// It ends the tier re-detection sweep first and waits for it, so nothing the
+// sweep asks GitLab or writes to the log outlives the pool: the sweep runs
+// whatever the configuration says, and a server whose listener never came up
+// closes its pool while the context the sweep was started with is still live.
 func (p *ServerPool) Close() {
+	p.stopSweeps()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for key := range p.entries {
@@ -1948,10 +2056,26 @@ func (p *ServerPool) Close() {
 	slog.Info("server pool: closed all entries")
 }
 
+// stopSweeps ends the sweeps Close ends and waits for their goroutines, an ask
+// in flight included, since its context is the one ended. It runs without
+// p.mu, which a tick takes.
+func (p *ServerPool) stopSweeps() {
+	p.sweepMu.Lock()
+	stops := p.sweepStops
+	p.sweepStops = nil
+	p.sweepMu.Unlock()
+	for _, stop := range stops {
+		stop()
+	}
+	p.sweeps.Wait()
+}
+
 // dropEntry removes one entry and notifies the eviction callback with the cause
-// that removed it. It is the only place an entry leaves p.entries, so a new
-// removal path cannot silently skip the notification, and taking the cause as
-// an argument is what stops one being added without saying what it is. Must be
+// that removed it. It is the only place an entry leaves p.entries with nothing
+// in its place, so a new removal path cannot silently skip the notification,
+// and taking the cause as an argument is what stops one being added without
+// saying what it is; [ServerPool.replaceTier], the one place an entry is
+// replaced under its key, notifies the callback with its own cause. Must be
 // called with the write lock held; the caller remains responsible for the LRU
 // list, which differs per path.
 func (p *ServerPool) dropEntry(key string, cause EvictionCause) *Entry {

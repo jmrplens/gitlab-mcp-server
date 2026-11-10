@@ -773,10 +773,14 @@ func admitDecisions() []Decision {
 			Refusals: []Refusal{
 				gateRefusal(503, CodeUnavailable, "Could not initialize a GitLab session for this token.", RetryLater, gateClassify),
 			},
+			// Issue 1782: the re-detection of a provisional tier (AUT-010)
+			// takes a slot without waiting, as a confirmation of a 401 does,
+			// and asks on the next tick when none is free.
 			Sites: []Site{
 				alias(pkgPool, "maxConcurrentCredentialProbes", "CredentialProbes"),
 				alias(pkgPool, "credentialProbeQueueTimeout", "CredentialProbeWait"),
 				enforce(pkgPool, "New"),
+				enforce(pkgPool, "ServerPool.redetectDueTiers"),
 				gateClassify,
 			},
 		},

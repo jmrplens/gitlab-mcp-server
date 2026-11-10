@@ -10282,12 +10282,14 @@ func TestServeHTTP_CacheHints_ToolsListPrivate(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction covers the two
+// TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction covers the three
 // loops serveHTTPOn starts on the credential pool. Revalidation is what drops
 // a pooled credential GitLab has since revoked, so it is held by what it
 // does: with a short interval, the credential that was admitted is asked
-// about again. Idle eviction sweeps no faster than once a minute, so it is
-// held by the line the pool writes when the loop starts.
+// about again. Idle eviction sweeps no faster than once a minute, and the
+// re-detection of a provisional tier first asks a minute after a build (issue
+// 1782), so both are held by the line the pool writes when the loop starts;
+// the re-detection's runs with no --tier, which is what this configuration is.
 func TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction(t *testing.T) {
 	logged := captureLogMessages(t)
 	var probes atomic.Int64
@@ -10323,6 +10325,9 @@ func TestServeHTTP_StartsThePoolsRevalidationAndIdleEviction(t *testing.T) {
 	}
 	if !logged("server pool: starting idle eviction") {
 		t.Error("the pool's idle eviction was never started")
+	}
+	if !logged("server pool: starting tier re-detection") {
+		t.Error("the pool's re-detection of provisional tiers was never started")
 	}
 }
 

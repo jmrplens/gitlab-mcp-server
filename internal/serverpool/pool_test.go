@@ -80,14 +80,18 @@ func testConfig(baseURL string) *config.Config {
 var stubGitLabBase string
 
 // TestMain starts the loopback GitLab stub stubGitLabBase names before any
-// test runs, and closes it once all of them have.
+// test runs, and the stand-in every request to the GitLab.com host is routed
+// to ([routeGitLabDotComTo]), and closes both once every test has run.
 func TestMain(m *testing.M) {
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("{}"))
 	}))
 	stubGitLabBase = stub.URL
+	dotCom := httptest.NewServer(http.HandlerFunc(serveAsGitLabDotCom))
+	routeGitLabDotComTo(dotCom.URL)
 	code := m.Run()
+	dotCom.Close()
 	stub.Close()
 	os.Exit(code)
 }
@@ -2997,6 +3001,14 @@ func TestEvictionCounters_EachRemovalPathMovesOnlyItsOwn(t *testing.T) {
 			counter: "rejected_credential",
 		},
 		{
+			name: "a provisional tier resolved to another moves TierResolvedEvictions",
+			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, key string) {
+				t.Helper()
+				resolveTierOf(t, pool, key)
+			},
+			counter: "tier_resolved",
+		},
+		{
 			name: "size pressure on a quiet pool moves SizeEvictions",
 			evict: func(t *testing.T, pool *ServerPool, _ *mcp.Server, _ string) {
 				t.Helper()
@@ -3073,10 +3085,29 @@ var evictionCounters = map[string]func(Snapshot) int64{
 	"rejected_credential": func(s Snapshot) int64 { return s.RejectedCredentialEvictions },
 	"invalid_credential":  func(s Snapshot) int64 { return s.InvalidEvictions },
 	"rebuild":             func(s Snapshot) int64 { return s.RebuildEvictions },
+	"tier_resolved":       func(s Snapshot) int64 { return s.TierResolvedEvictions },
+}
+
+// resolveTierOf replaces the entry under key as the re-detection of a
+// provisional tier that resolved Ultimate replaces it, marking it provisional
+// first, since only a provisional entry is ever asked again.
+func resolveTierOf(t *testing.T, pool *ServerPool, key string) {
+	t.Helper()
+	pool.mu.Lock()
+	entry := pool.entries[key]
+	if entry == nil {
+		pool.mu.Unlock()
+		t.Fatal("the entry was gone before its tier could be resolved")
+	}
+	entry.provisional = &provisionalTier{wait: time.Minute}
+	pool.mu.Unlock()
+	pool.replaceTier(t.Context(), key, entry, gitlabclient.TierResolution{Tier: edition.Ultimate, Answered: true})
 }
 
 // TestOnEvict_EachRemovalPathNamesItsOwnCause pins the vocabulary the callback
-// is handed, one case per call site of [ServerPool.dropEntry].
+// is handed, one case per removal path: the call sites of
+// [ServerPool.dropEntry], and the replacement of an entry whose provisional
+// tier resolved to another.
 //
 // The cause is not decoration: cmd/server turns it into the sentence an evicted
 // subscriber is given, and the seven paths do not deserve the same sentence. A
@@ -3150,6 +3181,14 @@ func TestOnEvict_EachRemovalPathNamesItsOwnCause(t *testing.T) {
 				}
 			},
 			want: CauseRebuild,
+		},
+		{
+			name: "a provisional tier resolving to another",
+			evict: func(t *testing.T, pool *ServerPool, _ *Entry, key string) {
+				t.Helper()
+				resolveTierOf(t, pool, key)
+			},
+			want: CauseTierResolved,
 		},
 		{
 			name: "the pool shutting down",
@@ -5718,8 +5757,8 @@ func TestSweepCadences_ResolveTheirDefaults(t *testing.T) {
 	})
 }
 
-// TestBackgroundSweeps_StopWhenTheirContextIsDone verifies that both sweeps
-// are bound to the context they were started with.
+// TestBackgroundSweeps_StopWhenTheirContextIsDone verifies that every sweep
+// is bound to the context it was started with.
 //
 // The pool outlives a request but not the server, and these goroutines are
 // how it holds credentials open. A sweep that ignored its context would keep
@@ -5743,6 +5782,11 @@ func TestBackgroundSweeps_StopWhenTheirContextIsDone(t *testing.T) {
 			start: (*ServerPool).StartRevalidation,
 			want:  "revalidation stopped",
 		},
+		{
+			name:  "tier re-detection",
+			start: (*ServerPool).StartTierRedetection,
+			want:  "tier re-detection stopped",
+		},
 	}
 
 	for _, tt := range tests {
@@ -5752,7 +5796,11 @@ func TestBackgroundSweeps_StopWhenTheirContextIsDone(t *testing.T) {
 			slog.SetDefault(slog.New(slog.NewTextHandler(logged, nil)))
 			t.Cleanup(func() { slog.SetDefault(previous) })
 
-			pool := New(testConfig(stubGitLabBase), testFactory(),
+			// A detected tier, so the re-detection sweep starts: under --tier
+			// nothing is ever provisional and it is not started at all.
+			cfg := testConfig(stubGitLabBase)
+			cfg.TierExplicit = false
+			pool := New(cfg, testFactory(),
 				WithIdleTimeout(time.Hour),
 				WithRevalidateInterval(time.Hour))
 			// Already done, so the goroutine's very first select must take
@@ -6069,6 +6117,50 @@ func TestBackgroundSweeps_SurviveAPanickingCallback(t *testing.T) {
 			"revalidation never evicted a refused entry",
 			"revalidation evicted once and stopped: the panic took the ticker with it, so no credential is ever re-checked again")
 	})
+
+	t.Run("tier re-detection", surviveAPanickingTierSweep)
+}
+
+// surviveAPanickingTierSweep is the tier re-detection's case of
+// TestBackgroundSweeps_SurviveAPanickingCallback.
+//
+// A replacement hands the old entry to the eviction callback on a goroutine of
+// the tick's own, which the tick's recovery does not reach, so each ask
+// recovers by itself. One entry is due per tick, and the second only once the
+// first has been replaced, so the second signal is the second tick's and says
+// the ticker survived.
+func surviveAPanickingTierSweep(t *testing.T) {
+	panicked := make(chan struct{}, 2)
+	g := newTierGitLab(t, licenseAnswer(http.StatusBadGateway, ""), "")
+	cfg := testConfig(g.url)
+	cfg.TierExplicit = false
+	var second *Entry
+	pool := New(cfg, testFactory(),
+		WithTierRetry(10*time.Millisecond),
+		WithOnEvict(func(*Entry, EvictionCause) {
+			// Under the pool's write lock, which guards the mark.
+			second.provisional.due = time.Now()
+			select {
+			case panicked <- struct{}{}:
+			default:
+			}
+			panic("evict callback blew up")
+		}))
+	first, _ := buildTierEntry(t, pool, g, "glpat-tier-panic-1")
+	second, _ = buildTierEntry(t, pool, g, "glpat-tier-panic-2")
+	pool.mu.Lock()
+	first.provisional.due = time.Now()
+	second.provisional.due = time.Now().Add(time.Hour)
+	pool.mu.Unlock()
+	g.set(licenseAnswer(http.StatusOK, "ultimate"), "")
+
+	sweepCtx, stopSweep := context.WithCancel(t.Context())
+	defer stopSweep()
+	pool.StartTierRedetection(sweepCtx)
+
+	awaitSweepTicks(t, panicked,
+		"the tier sweep never replaced an entry",
+		"the tier sweep replaced once and stopped: the panic took the ticker with it, so no provisional tier is ever asked again")
 }
 
 // TestGetOrCreateEntry_NoCredentialAgeCeiling_NeverCallsAnEntryStale verifies

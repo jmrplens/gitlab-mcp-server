@@ -328,7 +328,7 @@ var notADecision = map[string]exemption{
 	"internal/gitlab:maxRedirects":               {categoryRoundTrip, "the redirects one request to GitLab may follow"},
 	"internal/oauth:maxVerificationRedirects":    {categoryRoundTrip, "the redirects one token verification may follow"},
 	"internal/serverpool:credentialCheckTimeout": {categoryRoundTrip, "one credential probe's round trip, which does not retry"},
-	"internal/serverpool:entryDetectTimeout":     {categoryRoundTrip, "how long one entry build's tier, token and grant reads, and one revalidation's probe and re-reads, take together"},
+	"internal/serverpool:entryDetectTimeout":     {categoryRoundTrip, "how long one entry build's tier, token and grant reads, one revalidation's probe and re-reads, and one re-detection's license and namespace reads of a provisional tier, take together"},
 	"cmd/server:stdioRereadTimeout":              {categoryRoundTrip, "one stdio re-read of a fine-grained token's grant and the instance version"},
 
 	// Refusals about the process rather than a caller.

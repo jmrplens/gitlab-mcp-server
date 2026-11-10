@@ -118,11 +118,13 @@ func authorizeDecisions() []Decision {
 			// are not: such a step lowers nothing (the asymmetry INV-008 records)
 			// and leaves the tier provisional, the best known so far, which
 			// the build warns about, unless it is already Ultimate. The tier
-			// is asked when an entry is built and kept while the entry lives
-			// (POL-007), as a namespace plan always was, so a plan or a
-			// membership that changes reaches a caller when the entry is next
-			// built, after it goes unused (POL-004) or is evicted, and a stdio
-			// process at its next start.
+			// is asked when an entry is built; a provisional one is asked
+			// again until a probe answers it whole (AUT-010), and one answered
+			// whole is kept while the entry lives (POL-007), as a namespace
+			// plan always was, so a plan or a membership that changes reaches
+			// a caller when the entry is next built, after it goes unused
+			// (POL-004) or is evicted. A stdio process keeps what it detected
+			// at start, a provisional tier included, and warns about it.
 			ID: "AUT-003", Question: Authorize, Kind: Rule, Class: ClassE, Disposition: Valued,
 			Resource: "the licensing tier, and the namespace and top-level group pages read to detect it",
 			Key:      KeyEntry, StdioKey: KeyProcess,
@@ -357,7 +359,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.RefreshAuthority"),
 				enforce(pkgPool, "ServerPool.fineGrainedAuthority"),
 				enforce(pkgPool, "ServerPool.refreshAuthority"),
-				enforce(pkgPool, "redetectKind"),
+				enforce(pkgPool, "ServerPool.redetectKind"),
 				enforce(pkgServer, "stdioAuthority"),
 				enforce(pkgServer, "refreshStdioAuthority"),
 				enforce(pkgServer, "redetectStdioToken"),
@@ -412,12 +414,69 @@ func authorizeDecisions() []Decision {
 			},
 		},
 		{
+			// Issue 1782: a tier one step of the probe could not read is
+			// provisional (AUT-003), the highest tier any step answered, which
+			// a later probe may raise and a transient failure must not keep
+			// (INV-008). A pool entry built on one is asked again by a sweep of
+			// its own, after TierProvisionalRetry and then twice as long each
+			// time up to TierProvisionalRetryMax, so neither a request, the
+			// revalidation sweep nor an open subscription decides when: an
+			// entry serving nothing but a subscriptions/listen made no request
+			// through the pool, and --revalidate-interval 0 switched the
+			// revalidation off, which were the two ways a wrong tier used to
+			// be kept for the entry's life. The asks take a credential probe
+			// slot without waiting (POL-006) and wait for the next tick when
+			// none is free. The same tier answered whole clears the mark; a
+			// higher tier, or another one answered whole, replaces the entry on
+			// the shape of that tier, with its client, identity and credential
+			// age, under an owner of its own, so its listens are told
+			// credential_reset and its stateful sessions get ADM-007's 404; a
+			// provisional answer no higher than the entry's keeps it, so an
+			// entry changes at most twice. An instance that keeps failing the
+			// probe costs GitLab at most one probe per provisional entry per
+			// wait, and the pool bounds the entries. Stdio warns at start and
+			// keeps its tier for the process (AUT-003), so the row has no
+			// stdio key.
+			ID: "AUT-010", Question: Authorize, Kind: Lifetime, Class: ClassE, Disposition: Valued,
+			Resource: "how long a pool entry serves a provisional tier before it is asked again",
+			Key:      KeyEntry, StdioKey: KeyNone,
+			Values: []string{"TierProvisionalRetry", "TierProvisionalRetryMax"},
+			Source: OptionOnly, Zero: ZeroSelectsDefault,
+			Fixed: "the operator's lever is the tier itself, --tier, and these bound what an instance that keeps " +
+				"failing the probe costs it rather than what a caller is served; only the tests set the pool's " +
+				"option, and no operator reaches it",
+			// A zero reaches the value only as an option a test passes, which
+			// selects the default rather than asking on every tick: off would
+			// leave a provisional tier served for the entry's life, which is
+			// what the row exists to end.
+			ZeroBy:  "issue 1782",
+			Decided: []string{"issue 1782"},
+			Refusals: []Refusal{
+				listenEnd("credential_reset", StartOver, refuse(pkgServer, "endOfCredentialReset")),
+			},
+			Sites: []Site{
+				alias(pkgPool, "tierProvisionalRetry", "TierProvisionalRetry"),
+				alias(pkgPool, "tierProvisionalRetryMax", "TierProvisionalRetryMax"),
+				enforce(pkgPool, "WithTierRetry"),
+				enforce(pkgPool, "tierRedetectDelay"),
+				enforce(pkgPool, "ServerPool.StartTierRedetection"),
+				enforce(pkgPool, "ServerPool.redetectDueTiers"),
+				enforce(pkgPool, "ServerPool.settleTier"),
+				enforce(pkgPool, "ServerPool.replaceTier"),
+				enforce(pkgServer, "watchEndForCause"),
+			},
+		},
+		{
 			ID: "POL-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			// The scope half is class C, the tier half class E (spec:
 			// Alignment classes); the row carries the stricter of the two.
-			Resource: "tier and scopes, detected per entry with its own credential",
+			Resource: "tier and scopes, detected per entry with its own credential; a provisional tier is asked again (AUT-010)",
 			Key:      KeyEntry, StdioKey: KeyProcess,
-			Sites: []Site{enforce(pkgPool, "ServerPool.entryConfig")},
+			// Issue 1782: an entry whose provisional tier resolves to another
+			// is replaced on the shape of that tier rather than kept, which is
+			// the one change of an entry's tier after its build.
+			Decided: []string{"issue 1782"},
+			Sites:   []Site{enforce(pkgPool, "ServerPool.entryConfig"), enforce(pkgPool, "ServerPool.replaceTier")},
 		},
 		{
 			ID: "DST-003", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,

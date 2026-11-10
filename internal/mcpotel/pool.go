@@ -44,6 +44,9 @@ type PoolCounts struct {
 	// BelowMinimumEvictions counts entries whose credential GitLab said was
 	// genuine and below the admission minimum once the entry was serving.
 	BelowMinimumEvictions int64
+	// TierResolvedEvictions counts entries replaced on another tier's shape
+	// because the re-detection of their provisional tier resolved that tier.
+	TierResolvedEvictions int64
 }
 
 // AttrPoolEvictionReason says why the pool dropped an entry.
@@ -70,6 +73,7 @@ const (
 	poolEvictionInvalidCredential  = "invalid_credential"
 	poolEvictionRebuild            = "rebuild"
 	poolEvictionBelowMinimum       = "below_minimum"
+	poolEvictionTierResolved       = "tier_resolved"
 )
 
 // The instrument names, written out once so the callback and its documentation
@@ -154,6 +158,7 @@ func observePool(meter metric.Meter, read func() PoolCounts) (metric.Registratio
 		{poolEvictionInvalidCredential, func(c PoolCounts) int64 { return c.InvalidEvictions }},
 		{poolEvictionRebuild, func(c PoolCounts) int64 { return c.RebuildEvictions }},
 		{poolEvictionBelowMinimum, func(c PoolCounts) int64 { return c.BelowMinimumEvictions }},
+		{poolEvictionTierResolved, func(c PoolCounts) int64 { return c.TierResolvedEvictions }},
 	}
 	sets := make([]metric.MeasurementOption, len(reasons))
 	for i, reason := range reasons {
@@ -166,7 +171,7 @@ func observePool(meter metric.Meter, read func() PoolCounts) (metric.Registratio
 		observer.ObserveInt64(capacity, counts.MaxSize)
 		// Every reason on every collection, zeros included. A counter that
 		// appears only after its first eviction cannot be alerted on before it
-		// matters, and the vocabulary is closed at eight values, so the whole
+		// matters, and the vocabulary is closed at nine values, so the whole
 		// series set costs less than one method dimension of the request
 		// instrument.
 		for i, reason := range reasons {
