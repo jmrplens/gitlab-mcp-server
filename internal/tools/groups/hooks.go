@@ -50,6 +50,7 @@ type HookInput struct {
 	ProjectEvents             *bool                   `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
 	CustomWebhookTemplate     *string                 `json:"custom_webhook_template,omitempty"      jsonschema:"Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched"`
 	CustomHeaders             []HookCustomHeaderInput `json:"custom_headers,omitempty"  jsonschema:"Custom HTTP headers added to webhook requests"`
+	URLVariables              []HookURLVariableInput  `json:"url_variables,omitempty"   jsonschema:"Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept"`
 }
 
 // HookCustomHeaderInput is a single custom HTTP header sent with webhook
@@ -57,6 +58,14 @@ type HookInput struct {
 type HookCustomHeaderInput struct {
 	Key   string `json:"key"   jsonschema:"Header name,required"`
 	Value string `json:"value,omitempty" jsonschema:"Header value (write-only. Masked on read)"`
+}
+
+// HookURLVariableInput is one value of a webhook URL's {name} placeholders,
+// which GitLab substitutes when it delivers. It mirrors gl.HookURLVariable on
+// add and edit.
+type HookURLVariableInput struct {
+	Key   string `json:"key"   jsonschema:"Variable name, as the placeholder in the URL spells it,required"`
+	Value string `json:"value" jsonschema:"Variable value (write-only. Masked on read),required"`
 }
 
 // ListHooksInput defines parameters for listing group hooks.
@@ -339,6 +348,9 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if headers := customHeaderOptions(input.CustomHeaders); headers != nil {
 		opts.CustomHeaders = headers
 	}
+	for _, v := range input.URLVariables {
+		opts.URLVariables = append(opts.URLVariables, gl.HookURLVariable{Key: v.Key, Value: v.Value})
+	}
 }
 
 // customHeaderOptions converts HookCustomHeaderInput values into the SDK
@@ -430,6 +442,7 @@ func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHook
 		SigningToken:              opts.SigningToken,
 		CustomWebhookTemplate:     opts.CustomWebhookTemplate,
 		CustomHeaders:             opts.CustomHeaders,
+		URLVariables:              opts.URLVariables,
 	}
 }
 

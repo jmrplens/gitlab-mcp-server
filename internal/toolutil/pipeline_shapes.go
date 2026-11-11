@@ -124,6 +124,7 @@ type PipelineOutput struct {
 	SHA            string                        `json:"sha"`
 	BeforeSHA      string                        `json:"before_sha"`
 	Tag            bool                          `json:"tag"`
+	Archived       bool                          `json:"archived"`
 	YamlErrors     string                        `json:"yaml_errors"`
 	User           *BasicUserOutput              `json:"user,omitempty"`
 	UpdatedAt      string                        `json:"updated_at,omitempty"`
@@ -165,6 +166,7 @@ func NewPipelineOutput(p *gl.Pipeline, measures *PipelineMeasures) *PipelineOutp
 		SHA:            p.SHA,
 		BeforeSHA:      p.BeforeSHA,
 		Tag:            p.Tag,
+		Archived:       p.Archived,
 		YamlErrors:     p.YamlErrors,
 		User:           NewBasicUserOutput(p.User),
 		UpdatedAt:      FormatTimePtr(p.UpdatedAt),

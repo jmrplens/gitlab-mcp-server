@@ -2476,12 +2476,21 @@ type HookOptionsInput struct {
 	EnableSSLVerification     *bool   `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
 
 	CustomHeaders []HookCustomHeaderInput `json:"custom_headers,omitempty" jsonschema:"Custom HTTP headers sent with each webhook request (key/value pairs)"`
+	URLVariables  []HookURLVariableInput  `json:"url_variables,omitempty" jsonschema:"Values for the {name} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept"`
 }
 
 // HookCustomHeaderInput represents a single custom HTTP header for a webhook.
 type HookCustomHeaderInput struct {
 	Key   string `json:"key"   jsonschema:"Header name,required"`
 	Value string `json:"value" jsonschema:"Header value (write-only. Not returned by the API),required"`
+}
+
+// HookURLVariableInput is one value of a webhook URL's {name} placeholders,
+// which GitLab substitutes when it delivers. It mirrors gl.HookURLVariable on
+// add and edit.
+type HookURLVariableInput struct {
+	Key   string `json:"key"   jsonschema:"Variable name, as the placeholder in the URL spells it,required"`
+	Value string `json:"value" jsonschema:"Variable value (write-only. Masked on read),required"`
 }
 
 // AddHookInput defines parameters for adding a webhook to a project.
@@ -2542,6 +2551,9 @@ func applyProjectHookOptions(url string, input HookOptionsInput, opts *gl.AddPro
 			headers = append(headers, &gl.HookCustomHeader{Key: h.Key, Value: h.Value})
 		}
 		opts.CustomHeaders = &headers
+	}
+	for _, v := range input.URLVariables {
+		opts.URLVariables = append(opts.URLVariables, gl.HookURLVariable{Key: v.Key, Value: v.Value})
 	}
 	applyProjectHookEventOptions(input, opts)
 }

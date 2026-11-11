@@ -9410,9 +9410,14 @@ func TestProjectAddHook_EachEventFlagIsSentUnderItsOwnKey(t *testing.T) {
 
 // TestProjectAddHook_EverySettingIsSentUnderItsOwnKey adds a webhook with
 // every scalar setting carrying its own key as its value, plus a custom
-// header, and holds the body to exactly the document the caller sent.
+// header and two URL variables, and holds the body to exactly the document
+// the caller sent.
 func TestProjectAddHook_EverySettingIsSentUnderItsOwnKey(t *testing.T) {
-	sent := map[string]any{"url": testHookURL, "custom_headers": []map[string]string{{"key": "X-Trace", "value": "trace-1"}}}
+	sent := map[string]any{
+		"url":            testHookURL,
+		"custom_headers": []map[string]string{{"key": "X-Trace", "value": "trace-1"}},
+		"url_variables":  []map[string]string{{"key": "env", "value": "prod"}, {"key": "region", "value": "eu-west"}},
+	}
 	typ := reflect.TypeFor[HookOptionsInput]()
 	for f := range typ.Fields() {
 		if f.Type.Kind() == reflect.String {
@@ -9434,6 +9439,22 @@ func TestProjectAddHook_EverySettingIsSentUnderItsOwnKey(t *testing.T) {
 func TestProjectEditHook_SendsOnlyWhatTheCallerSet(t *testing.T) {
 	client := bodyAssertingClient(t, http.MethodPut, pathProject42Hook1, `{"note_events":true}`, http.StatusOK, `{"id":1}`)
 	input := EditHookInput{ProjectID: "42", HookID: 1, NoteEvents: new(true)}
+	if _, err := EditHook(t.Context(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectEditHook_URLVariables_ReachTheRequest holds an edit that names
+// two URL variables to a body of those two, each under its own key and value.
+// GitLab merges the variables an edit names into the hook's own, so an edit
+// that dropped them would leave the caller believing a value was set.
+func TestProjectEditHook_URLVariables_ReachTheRequest(t *testing.T) {
+	client := bodyAssertingClient(t, http.MethodPut, pathProject42Hook1,
+		`{"url_variables":[{"key":"env","value":"prod"},{"key":"region","value":"eu-west"}]}`, http.StatusOK, `{"id":1}`)
+	input := EditHookInput{
+		ProjectID: "42", HookID: 1,
+		URLVariables: []HookURLVariableInput{{Key: "env", Value: "prod"}, {Key: "region", Value: "eu-west"}},
+	}
 	if _, err := EditHook(t.Context(), client, input); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}

@@ -845,51 +845,8 @@ func TestRetrieveForSnippet_Ordering(t *testing.T) {
 	}
 }
 
-// TestSnippetStorageMoves_UnreadableCapturedErrorMessage verifies that every
-// snippet storage move handler returns an error rather than a half-filled move
-// when GitLab sends error_message as something that is not a string. The SDK
-// ignores the key its own SnippetRepositoryStorageMove does not model, so the
-// read of the captured response is the only thing that can notice, and a failed
-// move published without its message reads as one that failed for no reason.
-func TestSnippetStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
-	// A retrieve answers with an array and the rest with an object, so each
-	// case drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "retrieve_all", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveAll(context.Background(), client, ListInput{})
-			return err
-		}},
-		{Name: "retrieve_for_snippet", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveForSnippet(context.Background(), client, ListForSnippetInput{SnippetID: 3})
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := Get(context.Background(), client, IDInput{ID: 1})
-			return err
-		}},
-		{Name: "get_for_snippet", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := GetForSnippet(context.Background(), client, SnippetMoveInput{SnippetID: 3, ID: 1})
-			return err
-		}},
-		{Name: "schedule", Call: func() error {
-			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
-			_, err := Schedule(context.Background(), client, ScheduleInput{SnippetID: 3})
-			return err
-		}},
-	})
-}
-
 // ---------------------------------------------------------------------------
-// The captured error message, and what a schedule actually sends
+// The error message, and what a schedule actually sends
 // ---------------------------------------------------------------------------
 
 // failedSnippetMovesJSON is a page of two failed moves whose error messages
@@ -903,12 +860,12 @@ const failedSnippetMovesJSON = `[
 // that each move on a page reaches the caller with the error_message GitLab
 // sent for that move.
 //
-// client-go's SnippetRepositoryStorageMove does not model the field, so the
-// captured response is the only source and the extras are matched to the moves
-// by position (ADR-0021). Nothing asserted either half: dropping the
-// assignment, or reading extras[0] for every move, left the whole suite green,
-// and a failed move published without its message reads as one that failed for
-// no reason.
+// client-go's SnippetRepositoryStorageMove models the field from v3.31.0, and
+// before that it was read off the captured response and matched to the moves
+// by position. Nothing asserted either half then: dropping the assignment, or
+// reading the first move's message for every move, left the whole suite green,
+// and a failed move published without its message reads as one that failed
+// for no reason.
 func TestSnippetStorageMoves_ErrorMessage_IsCarriedPerMoveOnEveryListing(t *testing.T) {
 	cases := []struct {
 		name string

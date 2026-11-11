@@ -301,12 +301,13 @@ func TestPackage_ProtectionRules_Lifecycle(t *testing.T) {
 		if !slices.ContainsFunc(listed.Rules, func(rule protectedpackages.Output) bool { return rule.ID == created.ID }) {
 			e.T.Errorf("the package protection rule listing does not hold %d: %d listed", created.ID, len(listed.Rules))
 		}
-		// The package type goes with every update: GitLab validates the rule
-		// as a whole and answers 422 "Package type can't be blank" for a
-		// change that names only the pattern.
+		// The update names the pattern alone, and the rule keeps its type:
+		// client-go leaves an unnamed field out of the request from v3.38.0,
+		// where it once sent it as null, which GitLab read as blank and
+		// answered 422 "Package type can't be blank" (register row 52).
 		updatedPattern := "e2e-" + string(surface) + "-updated-*"
 		updated := harness.Do[protectedpackages.Output](s, actionPackageProtectionRuleUpdate, withParams(byRule, map[string]any{
-			"package_name_pattern": updatedPattern, "package_type": "generic",
+			"package_name_pattern": updatedPattern,
 		}))
 		if updated.ID != created.ID || updated.PackageNamePattern != updatedPattern || updated.PackageType != "generic" {
 			e.T.Errorf("package protection rule update answered %+v, want rule %d on %q", updated, created.ID, updatedPattern)

@@ -7,9 +7,14 @@
 package features
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/google/jsonschema-go/jsonschema"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
@@ -74,6 +79,55 @@ func TestSetRoute_Handler_SetsTheFlag(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("Handler() returned nil")
+	}
+}
+
+// TestSetInputSchemaMap_ADerivationOrEncodingThatFails_Panics verifies that
+// each of the three steps the set route's schema is built through panics with
+// a message naming the step, rather than handing the catalog a schema it could
+// not build. None of them can fail for the fixed SetInput the route reflects,
+// so each is reached through a seam: the derivation failing, the encoding
+// failing, and an encoding that is not JSON, which the decode back refuses.
+func TestSetInputSchemaMap_ADerivationOrEncodingThatFails_Panics(t *testing.T) {
+	forced := errors.New("forced failure")
+	cases := []struct {
+		name    string
+		derive  func(*jsonschema.ForOptions) (*jsonschema.Schema, error)
+		marshal func(any) ([]byte, error)
+		want    string
+	}{
+		{
+			name:    "the derivation",
+			derive:  func(*jsonschema.ForOptions) (*jsonschema.Schema, error) { return nil, forced },
+			marshal: json.Marshal,
+			want:    "build feature set input schema: forced failure",
+		},
+		{
+			name:    "the encoding",
+			derive:  jsonschema.For[SetInput],
+			marshal: func(any) ([]byte, error) { return nil, forced },
+			want:    "marshal feature set input schema: forced failure",
+		},
+		{
+			name:    "the decode back",
+			derive:  jsonschema.For[SetInput],
+			marshal: func(any) ([]byte, error) { return []byte("{"), nil },
+			want:    "unmarshal feature set input schema: ",
+		},
+	}
+	original, originalMarshal := setSchemaFor, marshalSetInputSchema
+	t.Cleanup(func() { setSchemaFor, marshalSetInputSchema = original, originalMarshal })
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setSchemaFor, marshalSetInputSchema = tc.derive, tc.marshal
+			defer func() {
+				message, _ := recover().(string)
+				if !strings.HasPrefix(message, tc.want) {
+					t.Errorf("panic = %q, want it to open with %q", message, tc.want)
+				}
+			}()
+			setInputSchemaMap()
+		})
 	}
 }
 

@@ -992,6 +992,46 @@ func TestHook_AuditCustomFields(t *testing.T) {
 	}
 }
 
+// TestHooks_URLVariables_ReachTheAddAndTheEdit verifies that the URL variables
+// a caller names reach both the add and the edit, each under its own key and
+// value. The edit's options are copied field by field from the add's, so a
+// copy that left them out would drop them from every edit while the add kept
+// sending them; GitLab merges the variables an edit names into the hook's own,
+// so the caller would be told a value was set that never was.
+func TestHooks_URLVariables_ReachTheAddAndTheEdit(t *testing.T) {
+	const want = `[{"key":"env","value":"prod"},{"key":"region","value":"eu-west"}]`
+	variables := []HookURLVariableInput{{Key: "env", Value: "prod"}, {Key: "region", Value: "eu-west"}}
+	sent := map[string]string{}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			URLVariables json.RawMessage `json:"url_variables"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the %s body: %v", r.Method, err)
+		}
+		sent[r.Method] = string(body.URLVariables)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"url":"https://example.com/hook","group_id":99}`)
+	}))
+
+	if _, err := AddHook(context.Background(), client, AddHookInput{
+		GroupID: "99", URL: "https://example.com/hook", URLVariables: variables,
+	}); err != nil {
+		t.Fatalf("AddHook() unexpected error: %v", err)
+	}
+	if _, err := EditHook(context.Background(), client, EditHookInput{
+		GroupID: "99", HookID: 10, URLVariables: variables,
+	}); err != nil {
+		t.Fatalf("EditHook() unexpected error: %v", err)
+	}
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		t.Run(method, func(t *testing.T) {
+			if sent[method] != want {
+				t.Errorf("%s url_variables = %s, want %s", method, sent[method], want)
+			}
+		})
+	}
+}
+
 // TestHookToOutput_NilCustomHeaderElement verifies hookToOutput skips nil
 // custom-header pointers without panicking.
 func TestHookToOutput_NilCustomHeaderElement(t *testing.T) {

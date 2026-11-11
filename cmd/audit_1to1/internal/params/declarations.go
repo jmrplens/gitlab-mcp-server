@@ -177,11 +177,9 @@ func paramDeclarations() []paramDeclaration {
 			"the create and the edit alone), so either one raises, the restore fails and the import with it"
 		reasonMirrorWebhook = "ee/lib/api/project_mirror.rb declares action and the pull_request.* keys for the GitHub " +
 			"pull request event a webhook posts to the route (ProcessGithubEventService), which no caller of an action writes"
-		reasonPlanLimits    = "ChangePlanLimitOptions models eight of the twenty-nine limits PUT /application/plan_limits takes"
-		reasonRow133Groups  = "UpdateGroupOptions and CreateGroupOptions lack the group params GitLab 19.5 added"
-		reasonRow133Duo     = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
-		reasonRow133Account = "CreateServiceAccountUserOptions and UpdateServiceAccountOptions lack external"
-		reasonRow133Search  = "SearchOptions lacks the merge request filters the group and project search routes take"
+		reasonRow133Groups = "UpdateGroupOptions and CreateGroupOptions lack the group params GitLab 19.5 added"
+		reasonRow133Duo    = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
+		reasonRow133Search = "SearchOptions lacks the merge request filters the group and project search routes take"
 	)
 	declared := []paramDeclaration{
 		{Route: "PUT /application/settings", Param: anyParam, Category: categoryMapInput, Reason: reasonSettingsMap},
@@ -238,16 +236,6 @@ func paramDeclarations() []paramDeclaration {
 	} {
 		declared = append(declared, paramDeclaration{Route: "POST /projects/:id/mirror/pull", Param: param, Category: categoryWebhookPayload, Reason: reasonMirrorWebhook})
 	}
-	for _, param := range []string{
-		"cargo_max_file_size", "ci_active_jobs", "ci_instance_level_variables", "ci_needs_size_limit",
-		"ci_pipeline_schedules", "ci_pipeline_size", "ci_project_subscriptions", "ci_registered_group_runners",
-		"ci_registered_project_runners", "dotenv_size", "dotenv_variables", "enforcement_limit",
-		"max_pipelines_per_merge_train", "notification_limit", "pipeline_hierarchy_size",
-		"service_desk_outbound_emails_per_day", "service_desk_outbound_emails_per_hour", "storage_size_limit",
-		"web_hook_calls", "web_hook_calls_low", "web_hook_calls_mid",
-	} {
-		declared = append(declared, paramDeclaration{Route: "PUT /application/plan_limits", Param: param, Category: categoryUpstream, Reason: reasonPlanLimits, Row: 59})
-	}
 	upstream133 := func(route, reason string, params ...string) {
 		for _, param := range params {
 			declared = append(declared, paramDeclaration{Route: route, Param: param, Category: categoryUpstream, Reason: reason, Row: 133})
@@ -258,8 +246,6 @@ func paramDeclarations() []paramDeclaration {
 	for _, route := range []string{"POST /projects", "POST /projects/user/:user_id", "PUT /projects/:id"} {
 		upstream133(route, reasonRow133Duo, "duo_code_review_decisions_enabled")
 	}
-	upstream133("POST /service_accounts", reasonRow133Account, "external")
-	upstream133("PATCH /service_accounts/:user_id", reasonRow133Account, "external")
 	for _, route := range []string{"GET /groups/:id/(-/)search", "GET /projects/:id/(-/)search"} {
 		// The negations stand as the one container they sit under.
 		upstream133(route, reasonRow133Search, "author_username", "label_name", "not", "source_branch", "target_branch")

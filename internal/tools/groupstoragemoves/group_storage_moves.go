@@ -151,20 +151,15 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	if in.Sort != "" {
 		opts.Sort = in.Sort
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().GroupRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve all group storage moves", err, http.StatusForbidden,
 			"requires administrator access + Premium/Ultimate; self-managed only; group wiki storage moves between Gitaly nodes")
 	}
 
-	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("retrieve all group storage moves", err)
-	}
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for i, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m, extras[i]))
+	for _, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -188,20 +183,15 @@ func RetrieveForGroup(ctx context.Context, client *gitlabclient.Client, in ListF
 	if in.Sort != "" {
 		opts.Sort = in.Sort
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().GroupRepositoryStorageMove.RetrieveAllStorageMovesForGroup(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(opRetrieveForGroup, err, http.StatusNotFound,
 			"requires admin + Premium/Ultimate; verify group_id exists; only storage moves for the given group are returned")
 	}
 
-	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr(opRetrieveForGroup, err)
-	}
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for i, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m, extras[i]))
+	for _, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -216,17 +206,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group storage move", err, http.StatusNotFound,
 			"requires admin + Premium/Ultimate; verify id with storage_move.retrieve_all_group")
 	}
-	extra, err := toolutil.CapturedStorageMove(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("get group storage move", err)
-	}
-	return toOutput(move, extra), nil
+	return toOutput(move), nil
 }
 
 // GetForGroup retrieves a single storage move for a specific group.
@@ -242,17 +227,12 @@ func GetForGroup(ctx context.Context, client *gitlabclient.Client, in GroupMoveI
 		return Output{}, err
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMoveForGroup(groupID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(opGetForGroup, err, http.StatusNotFound,
 			"requires admin + Premium/Ultimate; verify the group_id + id pair with storage_move.retrieve_group, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion")
 	}
-	extra, err := toolutil.CapturedStorageMove(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr(opGetForGroup, err)
-	}
-	return toOutput(move, extra), nil
+	return toOutput(move), nil
 }
 
 // Schedule schedules a repository storage move for a group.
@@ -268,17 +248,12 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	opts := gl.ScheduleStorageMoveForGroupOptions{
 		DestinationStorageName: in.DestinationStorageName,
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().GroupRepositoryStorageMove.ScheduleStorageMoveForGroup(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(opSchedule, err, http.StatusBadRequest,
 			"requires admin + Premium/Ultimate; destination_storage_name must reference an existing Gitaly shard; cannot move to the same shard")
 	}
-	extra, err := toolutil.CapturedStorageMove(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr(opSchedule, err)
-	}
-	return toOutput(move, extra), nil
+	return toOutput(move), nil
 }
 
 // ScheduleAll schedules storage moves for all groups on a storage shard.
@@ -299,13 +274,13 @@ func ScheduleAll(ctx context.Context, client *gitlabclient.Client, in ScheduleAl
 	return ScheduleAllOutput{Message: "All group repository storage moves have been scheduled"}, nil
 }
 
-func toOutput(m *gl.GroupRepositoryStorageMove, extra toolutil.StorageMoveExtra) Output {
+func toOutput(m *gl.GroupRepositoryStorageMove) Output {
 	o := Output{
 		ID:                     m.ID,
 		State:                  m.State,
 		SourceStorageName:      m.SourceStorageName,
 		DestinationStorageName: m.DestinationStorageName,
-		ErrorMessage:           extra.ErrorMessage,
+		ErrorMessage:           m.ErrorMessage,
 	}
 	if m.CreatedAt != nil {
 		o.CreatedAt = *m.CreatedAt

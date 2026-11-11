@@ -1389,61 +1389,65 @@ func TestWalkGuards_WhatTheTreeCannotProduce_FindNothing(t *testing.T) {
 // plain JSON so that it decodes a report with no such section too.
 type witnessReport struct {
 	UpstreamWaits *struct {
-		Entries     []witnessEntry
+		Entries []struct {
+			Row int
+		}
 		Workarounds []struct {
-			Form       string
-			Site       string
-			AnsweredBy []string `json:"answered_by"`
+			Form string
+			Site string
 		}
 	} `json:"upstream_waits"`
 }
 
-// witnessEntry is one entry of the section as the witness reads it.
-type witnessEntry struct {
-	Row        int
-	Sites      []string
-	Unseen     []string
-	Status     string
-	Predicates []struct {
-		Predicate string
-		Holds     bool
+// retiredAtV3381 are the predicates of the two entries the bump to client-go
+// v3.38.1 retired, as the waits table spelled them: the eight scope fields
+// SetFeatureFlagOptions tagged without omitempty (row 6) and the pattern and
+// type of UpdatePackageProtectionRulesOptions (row 52).
+func retiredAtV3381() map[int][]waits.Predicate {
+	retired := map[int][]waits.Predicate{}
+	for _, field := range []string{"Key", "FeatureGroup", "User", "Group", "Namespace", "Project", "Repository", "Force"} {
+		retired[6] = append(retired[6], waits.WritesAlways{Type: "SetFeatureFlagOptions", Field: field, Encoder: waits.EncoderJSON})
 	}
+	for _, field := range []string{"PackageNamePattern", "PackageType"} {
+		retired[52] = append(retired[52], waits.WritesAlways{Type: "UpdatePackageProtectionRulesOptions", Field: field, Encoder: waits.EncoderJSON})
+	}
+	return retired
 }
 
-// checkWitnessEntry holds one entry to the predicates and sites the witness
-// expects, every predicate holding.
-func checkWitnessEntry(t *testing.T, entry witnessEntry, predicates, sites []string) {
-	t.Helper()
-	var got []string
-	for _, verdict := range entry.Predicates {
-		if !verdict.Holds {
-			t.Errorf("%s does not hold on the pinned client-go", verdict.Predicate)
-		}
-		got = append(got, verdict.Predicate)
-	}
-	if !slices.Equal(got, predicates) {
-		t.Errorf("predicates = %q, want %q", got, predicates)
-	}
-	if listed := slices.Concat(entry.Sites, entry.Unseen); !slices.Equal(listed, sites) || entry.Status != waitHolds {
-		t.Errorf("sites %q and status %q, want %q and holds", listed, entry.Status, sites)
-	}
-}
-
-// TestRun_Repository_HoldsRowSixAndRowFiftyTwoToWhatClientGoV3300Does is
-// the witness on the real tree. client-go's SetFeatureFlagOptions gained
-// omitempty on its scope fields in v3.34.0, and internal/tools/features.Set
-// and the e2e fixture's setFeature went on posting the body by hand with
-// nothing to say so; UpdatePackageProtectionRulesOptions gained it on its
-// pattern and type, and the protected package update went on answering a
-// 422 with a hint to send both. On v3.30.0 every predicate of the two rows
-// holds; the bump stack is where they stop holding and the entries retire.
+// TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381 is the
+// witness on the real tree of the two entries the first bump step retires.
+// client-go's SetFeatureFlagOptions tags its scope fields omitempty from
+// v3.34.0, which internal/tools/features.Set and the e2e fixture's setFeature
+// went on posting the body by hand for, and UpdatePackageProtectionRulesOptions
+// its pattern and type from v3.38.0, which the protected package update went
+// on answering a 422 for with a hint to send both. On v3.30.0 every predicate
+// of the two rows held. On the v3.38.1 pin none does, so both entries are
+// gone with the workarounds they held: no entry names either row and no
+// workaround stands at any of their sites, since the three now call the SDK.
 //
 // It reads the report as plain JSON, so it says the same thing on a tree
 // that has no such section: there it fails, which is the point.
-func TestRun_Repository_HoldsRowSixAndRowFiftyTwoToWhatClientGoV3300Does(t *testing.T) {
+func TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
+	}
+	pkgs, err := shared.LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("load the tool packages: %v", err)
+	}
+	clientGo, err := shared.ClientGoTypes(pkgs)
+	if err != nil {
+		t.Fatalf("find the pinned client-go: %v", err)
+	}
+	for row, predicates := range retiredAtV3381() {
+		t.Run("row "+strconv.Itoa(row)+" predicates", func(t *testing.T) {
+			for _, predicate := range predicates {
+				if verdict := waits.Evaluate(predicate, waits.SDK{Types: clientGo}); verdict.Holds || verdict.Error != "" {
+					t.Errorf("%s = %+v on the pinned client-go, want it read and no longer holding", predicate, verdict)
+				}
+			}
+		})
 	}
 	content, _, err := Run(root, false)
 	if err != nil {
@@ -1456,39 +1460,16 @@ func TestRun_Repository_HoldsRowSixAndRowFiftyTwoToWhatClientGoV3300Does(t *test
 	if rep.UpstreamWaits == nil {
 		t.Fatal("the sdk report has no upstream_waits section: nothing holds a workaround that waits on client-go to the SDK it is pinned to")
 	}
-	wantPredicates := map[int][]string{
-		6: {
-			"WritesAlways{SetFeatureFlagOptions.Key, json}", "WritesAlways{SetFeatureFlagOptions.FeatureGroup, json}",
-			"WritesAlways{SetFeatureFlagOptions.User, json}", "WritesAlways{SetFeatureFlagOptions.Group, json}",
-			"WritesAlways{SetFeatureFlagOptions.Namespace, json}", "WritesAlways{SetFeatureFlagOptions.Project, json}",
-			"WritesAlways{SetFeatureFlagOptions.Repository, json}", "WritesAlways{SetFeatureFlagOptions.Force, json}",
-		},
-		52: {"WritesAlways{UpdatePackageProtectionRulesOptions.PackageNamePattern, json}", "WritesAlways{UpdatePackageProtectionRulesOptions.PackageType, json}"},
-	}
-	wantSites := map[int][]string{6: {"features.Set", "fixture.setFeature"}, 52: {"protectedpackages.Update"}}
 	for _, entry := range rep.UpstreamWaits.Entries {
-		predicates, watched := wantPredicates[entry.Row]
-		if !watched {
-			continue
+		if entry.Row == 6 || entry.Row == 52 {
+			t.Errorf("the waits table still holds an entry for row %d", entry.Row)
 		}
-		delete(wantPredicates, entry.Row)
-		t.Run("row "+strconv.Itoa(entry.Row), func(t *testing.T) {
-			checkWitnessEntry(t, entry, predicates, wantSites[entry.Row])
-		})
 	}
-	if len(wantPredicates) != 0 {
-		t.Errorf("no entry for rows %v", wantPredicates)
-	}
-	answered := map[string][]string{}
+	retiredSites := []string{"features.Set", "fixture.setFeature", "protectedpackages.Update"}
 	for _, found := range rep.UpstreamWaits.Workarounds {
-		answered[found.Form+" "+found.Site] = found.AnsweredBy
-	}
-	for _, key := range []string{"raw-request features.Set", "fixture-raw-request fixture.setFeature"} {
-		t.Run(key, func(t *testing.T) {
-			if !slices.Equal(answered[key], []string{"row 6"}) {
-				t.Errorf("%s answered by %q, want row 6", key, answered[key])
-			}
-		})
+		if slices.Contains(retiredSites, found.Site) {
+			t.Errorf("%s %s is still a workaround, want the site calling client-go", found.Form, found.Site)
+		}
 	}
 }
 
@@ -1626,7 +1607,7 @@ func TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds(t *testing.T
 				found.Form, found.Site, found.AnsweredBy, found.UnansweredKeys, found.UnansweredNeeds, found.UnansweredMethods, found.KeysUnread)
 		}
 	}
-	want := map[string]int{formRawRequest: 28, formRequestOption: 13, formBodyEdit: 9, formFixtureRawRequest: 5, formScenarioRawRequest: 1}
+	want := map[string]int{formRawRequest: 27, formRequestOption: 13, formBodyEdit: 9, formFixtureRawRequest: 4, formScenarioRawRequest: 1}
 	if !reflect.DeepEqual(forms, want) {
 		t.Errorf("forms = %v, want %v", forms, want)
 	}

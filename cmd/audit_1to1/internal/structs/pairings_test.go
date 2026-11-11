@@ -82,8 +82,8 @@ func TestCollectOutputPairings_Repository_NamesTheSDKStructBehindEachOutput(t *t
 // TestCollectOutputPairings_Repository_ReadsTheStructsAMergeRequestNests
 // verifies the nested half of a pairing on the pairing it was built for: a
 // merge request's head_pipeline is a gl.Pipeline, read to its own keys, which
-// in client-go v3.30.0 carry name and no archived. The bump to a client-go
-// that models archived is what this witness is meant to notice.
+// carried name and no archived in client-go v3.30.0 and carry both from
+// v3.36.0, the bump this witness was meant to notice.
 func TestCollectOutputPairings_Repository_ReadsTheStructsAMergeRequestNests(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
@@ -102,8 +102,8 @@ func TestCollectOutputPairings_Repository_ReadsTheStructsAMergeRequestNests(t *t
 		t.Fatal("no pairing of mergerequests.Output with gl.MergeRequest")
 	}
 	headPipeline := pairings.Outputs[index].SDKNested["head_pipeline"]
-	if !slices.Contains(headPipeline, "name") || slices.Contains(headPipeline, "archived") {
-		t.Errorf("the keys gl.MergeRequest nests under head_pipeline = %v, want gl.Pipeline's in v3.30.0: name and no archived", headPipeline)
+	if !slices.Contains(headPipeline, "name") || !slices.Contains(headPipeline, "archived") {
+		t.Errorf("the keys gl.MergeRequest nests under head_pipeline = %v, want gl.Pipeline's in v3.38.1: name and archived", headPipeline)
 	}
 }
 

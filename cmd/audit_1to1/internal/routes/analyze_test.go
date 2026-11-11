@@ -877,27 +877,36 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // change is the evidence the scope was run again.
 //
 // On v3.30.0, GET /pipelines and the two placeholder reassignment routes of
-// a group are answered by tracked family rows, and no client-go method sends
-// them: their fix started upstream, which v3.38.0 delivers
-// (Pipelines.ListUserPipelines, GroupPlaceholderReassignments). The route
-// Workhorse authorizes the reassignment's CSV upload at skips the
-// fine-grained check for workhorse_pre_authorization and is no route a
-// caller sends. When the bump declares GroupPlaceholderReassignments
-// UNWRAPPED_TRACKED, the two placeholder routes are inherited and their row
-// answers nothing, so the bump removes it; GET /pipelines stays tracked until
-// an action lists the user's pipelines, ListUserPipelines being decided by
-// nothing.
+// a group were answered by tracked family rows, and no client-go method sent
+// them. v3.37.0 delivered both upstream: Pipelines.ListUserPipelines and the
+// GroupPlaceholderReassignments service. On the v3.38.1 pin the service is
+// declared UNWRAPPED_TRACKED, so the two placeholder routes inherit that
+// decision with the issue it names and the family row that answered them is
+// gone, while GET /pipelines stays tracked until an action lists the user's
+// pipelines, ListUserPipelines being decided by nothing. The route Workhorse
+// authorizes the reassignment's CSV upload at skips the fine-grained check
+// for workhorse_pre_authorization and is no route a caller sends.
 func TestRun_Repository_HoldsTheRoutesClientGoLaterModels(t *testing.T) {
 	report := repositoryReport(t)
 	byRoute := map[string]Route{}
 	for _, route := range slices.Concat(report.Findings, report.Answered) {
 		byRoute[route.Route] = route
 	}
-	for _, name := range []string{"GET /pipelines", "GET /groups/:id/placeholder_reassignments", "POST /groups/:id/placeholder_reassignments"} {
+	t.Run("GET /pipelines", func(t *testing.T) {
+		route := byRoute["GET /pipelines"]
+		if route.Class != ClassDeclared || route.Category != categoryTracked || route.Issue == 0 || !slices.Equal(route.SDKMethods, []string{"Pipelines.ListUserPipelines"}) {
+			t.Errorf("GET /pipelines = %+v, want it tracked by a family row and sent by Pipelines.ListUserPipelines", route)
+		}
+	})
+	for name, method := range map[string]string{
+		"GET /groups/:id/placeholder_reassignments":  "GroupPlaceholderReassignments.DownloadPendingReassignments",
+		"POST /groups/:id/placeholder_reassignments": "GroupPlaceholderReassignments.ReassignPlaceholders",
+	} {
 		t.Run(name, func(t *testing.T) {
 			route := byRoute[name]
-			if route.Class != ClassDeclared || route.Category != categoryTracked || route.Issue == 0 || len(route.SDKMethods) != 0 {
-				t.Errorf("%s = %+v, want it tracked by a family row and sent by no client-go method", name, route)
+			if route.Class != ClassInherited || route.Family != "" || !slices.Equal(route.SDKMethods, []string{method}) ||
+				len(route.Adjudications) != 1 || route.Adjudications[0].Category != adjudicationUnwrapped || !strings.Contains(route.Adjudications[0].Reason, "issues/1605") {
+				t.Errorf("%s = %+v, want it inherited from the UNWRAPPED_TRACKED decision on %s, which names issue 1605", name, route, method)
 			}
 		})
 	}
@@ -1075,7 +1084,9 @@ var protocolDownloads = map[string]string{
 
 // TestRun_Repository_AdjudicatesEveryRouteNoActionReaches fixes the triage of
 // the routes no action reaches on the pinned record (19.5.0) and client-go
-// v3.30.0. No route is left a finding: a REST route whose operation an
+// v3.38.1, where the two placeholder reassignment routes left the tracked
+// count, inherited from the decision on the service v3.37.0 added for them.
+// No route is left a finding: a REST route whose operation an
 // action does over GraphQL is covered-by-graphql, a package manager's or
 // MLflow's protocol is client-protocol, and the rest is tracked by the issue
 // of its domain, an administrator's, a GitLab.com and a tier's route among
@@ -1111,7 +1122,7 @@ func TestRun_Repository_AdjudicatesEveryRouteNoActionReaches(t *testing.T) {
 			mislabeled = append(mislabeled, route.Route)
 		}
 	}
-	want := map[string]int{categoryTracked: 538, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
+	want := map[string]int{categoryTracked: 536, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
 	if !reflect.DeepEqual(categories, want) || len(issues) != 32 || !issues[issueVirtualRegistryRoutes] || !issues[issueDuoRoutes] {
 		t.Errorf("declared %v under %d issues; want %v under one issue for each of 30 catalog domains and of the virtual registries and GitLab Duo, which it does not hold yet", categories, len(issues), want)
 	}

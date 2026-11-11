@@ -53,8 +53,8 @@ func TestCapturedReaders_ReadWhatTheSDKDoesNotModel(t *testing.T) {
 		{
 			name: "pipeline",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedPipeline(c) },
-			body: `{"id":1,"archived":true}`,
-			want: func(v any) bool { p, _ := v.(PipelineExtra); return p.Archived },
+			body: `{"id":1,"archived":true,"duration":60}`,
+			want: func(v any) bool { p, _ := v.(PipelineExtra); return p.Duration != nil && *p.Duration == 60 },
 		},
 	}
 	for _, testCase := range cases {
@@ -429,15 +429,6 @@ func tailReaderCases() []capturedReaderCase {
 			},
 		},
 		{
-			name: "registry repository",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedRegistryRepository(c) },
-			body: `{"id":1,"size":1024,"delete_api_path":"/api/v4/registry/repositories/1"}`,
-			want: func(v any) bool {
-				e, _ := v.(RegistryRepositoryExtra)
-				return e.Size == 1024 && e.DeleteAPIPath == "/api/v4/registry/repositories/1"
-			},
-		},
-		{
 			name: "wiki page",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedWiki(c) },
 			body: `{"slug":"home","wiki_page_meta_id":11,"front_matter":{"title":"Home"}}`,
@@ -445,12 +436,6 @@ func tailReaderCases() []capturedReaderCase {
 				e, _ := v.(WikiExtra)
 				return e.WikiPageMetaID == 11 && e.FrontMatter["title"] == "Home"
 			},
-		},
-		{
-			name: "storage move",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedStorageMove(c) },
-			body: `{"id":1,"error_message":"disk full"}`,
-			want: func(v any) bool { e, _ := v.(StorageMoveExtra); return e.ErrorMessage == "disk full" },
 		},
 		{
 			name: "service account",
@@ -732,16 +717,8 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 			x, e := CapturedCIVariables(c, n)
 			return len(x), e
 		}},
-		{"registry repositories", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedRegistryRepositories(c, n)
-			return len(x), e
-		}},
 		{"wiki pages", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedWikis(c, n)
-			return len(x), e
-		}},
-		{"storage moves", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedStorageMoves(c, n)
 			return len(x), e
 		}},
 		{"service accounts", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

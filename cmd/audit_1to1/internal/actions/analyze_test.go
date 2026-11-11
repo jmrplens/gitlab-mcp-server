@@ -473,7 +473,8 @@ func TestIsAcceptedMissingMethod_Keys_MatchServiceAndMethod(t *testing.T) {
 	}{
 		{name: "adjudicated_variant", service: "DraftNotes", method: "PublishAllDraftNotes", want: true},
 		{name: "adjudicated_graphql_epic", service: "Epics", method: "GetEpic", want: true},
-		{name: "replaced_by_a_waits_entry", service: "Features", method: "SetFeatureFlag", want: true},
+		{name: "replaced_by_a_waits_entry", service: "Projects", method: "CreateProjectForkRelation", want: true},
+		{name: "no_longer_replaced_once_its_entry_retires", service: "Features", method: "SetFeatureFlag", want: false},
 		{name: "replaced_by_a_kept_graphql_operation", service: "TerraformStates", method: "List", want: true},
 		{name: "unlisted_method", service: "DraftNotes", method: "ListDraftNotes", want: false},
 		{name: "service_suffix_is_not_part_of_the_key", service: "DraftNotesServiceInterface", method: "PublishAllDraftNotes", want: false},

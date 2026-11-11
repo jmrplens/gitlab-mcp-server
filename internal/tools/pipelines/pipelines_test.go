@@ -64,9 +64,9 @@ func TestPipelineGet_ReadsEachIdentifierFromItsOwnKey(t *testing.T) {
 	}
 }
 
-// TestPipelineGet_ReadsArchived verifies a pipeline carries, beside what
-// client-go decoded, the archived flag lib/api/entities/ci/pipeline.rb sends
-// on every pipeline rendered whole and gl.Pipeline does not.
+// TestPipelineGet_ReadsArchived verifies a pipeline carries the archived flag
+// lib/api/entities/ci/pipeline.rb sends on every pipeline rendered whole,
+// which gl.Pipeline models since client-go v3.36.0.
 func TestPipelineGet_ReadsArchived(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"iid":10,"project_id":42,"status":"success","ref":"main","sha":"abc","archived":true}`)
@@ -77,7 +77,7 @@ func TestPipelineGet_ReadsArchived(t *testing.T) {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
 	if !out.Archived {
-		t.Errorf("Get() = %+v, want archived read off the captured answer", out)
+		t.Errorf("Get() = %+v, want the archived GitLab sent", out)
 	}
 }
 
@@ -169,12 +169,18 @@ func TestCapturedOutput_Durations_AreWhatGitLabMeasured(t *testing.T) {
 	}
 }
 
-// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// TestHandlers_AnAnswerTheCaptureCannotRead_IsReported verifies the one
 // failure the captured response adds to every handler that presents a
-// pipeline whole: GitLab's answer decodes for the SDK and not for the field
-// read beside it, and the handler reports it rather than swallowing it,
-// the latest-pipeline fallback and the wait's poll included.
-func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+// pipeline whole: GitLab's answer decodes for the SDK and not for the
+// durations read beside it, and the handler reports it rather than
+// publishing a pipeline without them, the latest-pipeline fallback and the
+// wait's poll included.
+//
+// client-go's Pipeline models every key the capture reads since v3.36.0, so no
+// value of a well-formed answer fails the capture alone. An answer carrying a
+// second JSON value after the pipeline still does: the SDK's decoder reads the
+// first value and stops, and the capture reads the body whole.
+func TestHandlers_AnAnswerTheCaptureCannotRead_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/pipelines/latest"):
@@ -184,7 +190,7 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		case r.URL.Path == "/api/v4/projects/42/repository/commits/main":
 			testutil.RespondJSON(w, http.StatusOK, `{"id":"head123"}`)
 		default:
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":"not-a-bool"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":true} {"id":11}`)
 		}
 	}))
 	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{

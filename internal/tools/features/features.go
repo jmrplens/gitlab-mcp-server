@@ -181,50 +181,25 @@ func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDef
 	return ListDefinitionsOutput{Definitions: items}, nil
 }
 
-// Set creates or updates a feature flag.
-// Uses a raw HTTP request to work around upstream client-go issue where
-// SetFeatureFlagOptions fields lack omitempty, causing GitLab to reject
-// the request with "mutually exclusive" errors for empty string fields.
-// Reported upstream in the joint client-go merge request, which carries the
-// fix; docs/development/upstream-bugs.md (row 6) tracks it and says when this
-// workaround retires.
+// Set creates or updates a feature flag. A scope the caller left empty is
+// left out of the request, which client-go's SetFeatureFlagOptions does from
+// v3.34.0 (register row 6): GitLab counts a scope that is present as given,
+// and refuses two of them together as mutually exclusive.
 func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetOutput, error) {
-	body := map[string]any{"value": input.Value}
-	if input.Force {
-		body["force"] = true
-	}
-	if input.Key != "" {
-		body["key"] = input.Key
-	}
-	if input.FeatureGroup != "" {
-		body["feature_group"] = input.FeatureGroup
-	}
-	if input.User != "" {
-		body["user"] = input.User
-	}
-	if input.Group != "" {
-		body["group"] = input.Group
-	}
-	if input.Namespace != "" {
-		body["namespace"] = input.Namespace
-	}
-	if input.Project != "" {
-		body["project"] = input.Project
-	}
-	if input.Repository != "" {
-		body["repository"] = input.Repository
-	}
-
-	path := "features/" + gl.PathEscape(input.Name)
-	req, err := client.GL().NewRequest("POST", path, body, nil)
-	if err != nil {
-		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
+	opts := &gl.SetFeatureFlagOptions{
+		Value:        input.Value,
+		Key:          input.Key,
+		FeatureGroup: input.FeatureGroup,
+		User:         input.User,
+		Group:        input.Group,
+		Namespace:    input.Namespace,
+		Project:      input.Project,
+		Repository:   input.Repository,
+		Force:        input.Force,
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	req = req.WithContext(ctx)
-
-	var feature gl.Feature
-	if _, err = client.GL().Do(req, &feature); err != nil {
+	feature, _, err := client.GL().Features.SetFeatureFlag(input.Name, opts, gl.WithContext(ctx))
+	if err != nil {
 		return SetOutput{}, toolutil.WrapErrWithStatusHint("feature_set", err, http.StatusBadRequest,
 			"requires administrator access; value can be 0/1, true/false, or 0-100 percentage; feature_group/user/group/project/repository scope mutually exclusive with global value")
 	}
@@ -232,7 +207,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 	if err != nil {
 		return SetOutput{}, toolutil.WrapErr("feature_set", err)
 	}
-	return SetOutput{Feature: toFeatureItem(&feature, extra)}, nil
+	return SetOutput{Feature: toFeatureItem(feature, extra)}, nil
 }
 
 // Delete removes a feature flag.

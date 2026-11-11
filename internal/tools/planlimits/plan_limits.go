@@ -13,53 +13,59 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// PlanLimitItem represents GitLab plan limits.
-//
-// The eight package file sizes at the top are what client-go's PlanLimit
-// models. The block after them is what lib/api/entities/plan_limit.rb sends
-// beside those and client-go declares on no field, read from the captured
-// response beside the SDK's decode (ADR-0021) and described on [limitExtra].
-// The entity exposes every one of them with no condition, so both plan limit
-// routes answer with all of them, and each stays nil when the instance sent no
-// key for it.
+// PlanLimitItem represents GitLab plan limits: every limit
+// lib/api/entities/plan_limit.rb exposes, and the change history, which the
+// entity exposes with no condition, so both plan limit routes answer with all
+// of them. client-go's PlanLimit models each of them from v3.35.0, as a number
+// that is not a pointer, so an instance older than a limit, which sends no key
+// for it, reads it as 0.
 type PlanLimitItem struct {
-	ConanMaxFileSize           int64 `json:"conan_max_file_size"`
-	GenericPackagesMaxFileSize int64 `json:"generic_packages_max_file_size"`
-	HelmMaxFileSize            int64 `json:"helm_max_file_size"`
-	MavenMaxFileSize           int64 `json:"maven_max_file_size"`
-	NPMMaxFileSize             int64 `json:"npm_max_file_size"`
-	NugetMaxFileSize           int64 `json:"nuget_max_file_size"`
-	PyPiMaxFileSize            int64 `json:"pypi_max_file_size"`
-	TerraformModuleMaxFileSize int64 `json:"terraform_module_max_file_size"`
+	ConanMaxFileSize                 int64         `json:"conan_max_file_size"`
+	GenericPackagesMaxFileSize       int64         `json:"generic_packages_max_file_size"`
+	HelmMaxFileSize                  int64         `json:"helm_max_file_size"`
+	MavenMaxFileSize                 int64         `json:"maven_max_file_size"`
+	NPMMaxFileSize                   int64         `json:"npm_max_file_size"`
+	NugetMaxFileSize                 int64         `json:"nuget_max_file_size"`
+	PyPiMaxFileSize                  int64         `json:"pypi_max_file_size"`
+	TerraformModuleMaxFileSize       int64         `json:"terraform_module_max_file_size"`
+	CargoMaxFileSize                 int64         `json:"cargo_max_file_size"`
+	CIInstanceLevelVariables         int64         `json:"ci_instance_level_variables"`
+	CIPipelineSize                   int64         `json:"ci_pipeline_size"`
+	CIActiveJobs                     int64         `json:"ci_active_jobs"`
+	CIProjectSubscriptions           int64         `json:"ci_project_subscriptions"`
+	CIPipelineSchedules              int64         `json:"ci_pipeline_schedules"`
+	CINeedsSizeLimit                 int64         `json:"ci_needs_size_limit"`
+	CIRegisteredGroupRunners         int64         `json:"ci_registered_group_runners"`
+	CIRegisteredProjectRunners       int64         `json:"ci_registered_project_runners"`
+	DotenvVariables                  int64         `json:"dotenv_variables"`
+	DotenvSize                       int64         `json:"dotenv_size"`
+	EnforcementLimit                 int64         `json:"enforcement_limit"`
+	NotificationLimit                int64         `json:"notification_limit"`
+	StorageSizeLimit                 int64         `json:"storage_size_limit"`
+	PipelineHierarchySize            int64         `json:"pipeline_hierarchy_size"`
+	MaxPipelinesPerMergeTrain        int64         `json:"max_pipelines_per_merge_train"`
+	ServiceDeskOutboundEmailsPerHour int64         `json:"service_desk_outbound_emails_per_hour"`
+	ServiceDeskOutboundEmailsPerDay  int64         `json:"service_desk_outbound_emails_per_day"`
+	WebHookCalls                     int64         `json:"web_hook_calls"`
+	WebHookCallsLow                  int64         `json:"web_hook_calls_low"`
+	WebHookCallsMid                  int64         `json:"web_hook_calls_mid"`
+	LimitsHistory                    LimitsHistory `json:"limits_history,omitzero"`
+}
 
-	CargoMaxFileSize                 *int64                   `json:"cargo_max_file_size,omitempty"`
-	CIInstanceLevelVariables         *int64                   `json:"ci_instance_level_variables,omitempty"`
-	CIPipelineSize                   *int64                   `json:"ci_pipeline_size,omitempty"`
-	CIActiveJobs                     *int64                   `json:"ci_active_jobs,omitempty"`
-	CIProjectSubscriptions           *int64                   `json:"ci_project_subscriptions,omitempty"`
-	CIPipelineSchedules              *int64                   `json:"ci_pipeline_schedules,omitempty"`
-	CINeedsSizeLimit                 *int64                   `json:"ci_needs_size_limit,omitempty"`
-	CIRegisteredGroupRunners         *int64                   `json:"ci_registered_group_runners,omitempty"`
-	CIRegisteredProjectRunners       *int64                   `json:"ci_registered_project_runners,omitempty"`
-	DotenvVariables                  *int64                   `json:"dotenv_variables,omitempty"`
-	DotenvSize                       *int64                   `json:"dotenv_size,omitempty"`
-	EnforcementLimit                 *int64                   `json:"enforcement_limit,omitempty"`
-	NotificationLimit                *int64                   `json:"notification_limit,omitempty"`
-	StorageSizeLimit                 *int64                   `json:"storage_size_limit,omitempty"`
-	PipelineHierarchySize            *int64                   `json:"pipeline_hierarchy_size,omitempty"`
-	MaxPipelinesPerMergeTrain        *int64                   `json:"max_pipelines_per_merge_train,omitempty"`
-	ServiceDeskOutboundEmailsPerHour *int64                   `json:"service_desk_outbound_emails_per_hour,omitempty"`
-	ServiceDeskOutboundEmailsPerDay  *int64                   `json:"service_desk_outbound_emails_per_day,omitempty"`
-	WebHookCalls                     *int64                   `json:"web_hook_calls,omitempty"`
-	WebHookCallsLow                  *int64                   `json:"web_hook_calls_low,omitempty"`
-	WebHookCallsMid                  *int64                   `json:"web_hook_calls_mid,omitempty"`
-	LimitsHistory                    map[string][]LimitChange `json:"limits_history,omitempty"`
+// LimitsHistory is the change history GitLab keeps for four of a plan's
+// limits, each oldest first: the three namespace storage limits, and the date
+// the storage dashboard limit was enabled. It mirrors client-go's
+// PlanLimitsHistory, and a limit with no recorded change is left out.
+type LimitsHistory struct {
+	EnforcementLimit        []LimitChange `json:"enforcement_limit,omitempty"`
+	NotificationLimit       []LimitChange `json:"notification_limit,omitempty"`
+	StorageSizeLimit        []LimitChange `json:"storage_size_limit,omitempty"`
+	DashboardLimitEnabledAt []LimitChange `json:"dashboard_limit_enabled_at,omitempty"`
 }
 
 // LimitChange is one entry of a limit's change history: who set it to which
-// value, and when, as a Unix timestamp in seconds. GitLab keeps it for the
-// three namespace storage limits and the date the storage dashboard limit was
-// enabled, keyed by the limit's name.
+// value, and when, as a Unix timestamp in seconds. It mirrors client-go's
+// PlanLimitHistoryEntry.
 type LimitChange struct {
 	UserID    int64  `json:"user_id"`
 	Username  string `json:"username"`
@@ -89,17 +95,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		opts.PlanName = new(input.PlanName)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	limits, _, err := client.GL().PlanLimits.GetCurrentPlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_plan_limits", err, http.StatusForbidden, "plan limits require administrator access")
 	}
-	extra, err := capturedLimits(captured)
-	if err != nil {
-		return GetOutput{}, toolutil.WrapErr("get_plan_limits", err)
-	}
 	return GetOutput{
-		PlanLimitItem: convertPlanLimit(limits, extra),
+		PlanLimitItem: convertPlanLimit(limits),
 	}, nil
 }
 
@@ -140,17 +141,12 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 		TerraformModuleMaxFileSize: input.TerraformModuleMaxFileSize,
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	limits, _, err := client.GL().PlanLimits.ChangePlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ChangeOutput{}, toolutil.WrapErrWithStatusHint("change_plan_limits", err, http.StatusForbidden, "changing plan limits requires administrator access")
 	}
-	extra, err := capturedLimits(captured)
-	if err != nil {
-		return ChangeOutput{}, toolutil.WrapErr("change_plan_limits", err)
-	}
 	return ChangeOutput{
-		PlanLimitItem: convertPlanLimit(limits, extra),
+		PlanLimitItem: convertPlanLimit(limits),
 	}, nil
 }
 
@@ -158,42 +154,58 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// convertPlanLimit maps GitLab plan limit settings into MCP output: the eight
-// file sizes the SDK decoded, and the rest from what the capture read.
-func convertPlanLimit(l *gl.PlanLimit, extra limitExtra) PlanLimitItem {
+// convertPlanLimit maps GitLab plan limit settings into MCP output.
+func convertPlanLimit(l *gl.PlanLimit) PlanLimitItem {
 	return PlanLimitItem{
-		ConanMaxFileSize:           l.ConanMaxFileSize,
-		GenericPackagesMaxFileSize: l.GenericPackagesMaxFileSize,
-		HelmMaxFileSize:            l.HelmMaxFileSize,
-		MavenMaxFileSize:           l.MavenMaxFileSize,
-		NPMMaxFileSize:             l.NPMMaxFileSize,
-		NugetMaxFileSize:           l.NugetMaxFileSize,
-		PyPiMaxFileSize:            l.PyPiMaxFileSize,
-		TerraformModuleMaxFileSize: l.TerraformModuleMaxFileSize,
-
-		CargoMaxFileSize:                 extra.CargoMaxFileSize,
-		CIInstanceLevelVariables:         extra.CIInstanceLevelVariables,
-		CIPipelineSize:                   extra.CIPipelineSize,
-		CIActiveJobs:                     extra.CIActiveJobs,
-		CIProjectSubscriptions:           extra.CIProjectSubscriptions,
-		CIPipelineSchedules:              extra.CIPipelineSchedules,
-		CINeedsSizeLimit:                 extra.CINeedsSizeLimit,
-		CIRegisteredGroupRunners:         extra.CIRegisteredGroupRunners,
-		CIRegisteredProjectRunners:       extra.CIRegisteredProjectRunners,
-		DotenvVariables:                  extra.DotenvVariables,
-		DotenvSize:                       extra.DotenvSize,
-		EnforcementLimit:                 extra.EnforcementLimit,
-		NotificationLimit:                extra.NotificationLimit,
-		StorageSizeLimit:                 extra.StorageSizeLimit,
-		PipelineHierarchySize:            extra.PipelineHierarchySize,
-		MaxPipelinesPerMergeTrain:        extra.MaxPipelinesPerMergeTrain,
-		ServiceDeskOutboundEmailsPerHour: extra.ServiceDeskOutboundEmailsPerHour,
-		ServiceDeskOutboundEmailsPerDay:  extra.ServiceDeskOutboundEmailsPerDay,
-		WebHookCalls:                     extra.WebHookCalls,
-		WebHookCallsLow:                  extra.WebHookCallsLow,
-		WebHookCallsMid:                  extra.WebHookCallsMid,
-		LimitsHistory:                    extra.LimitsHistory,
+		ConanMaxFileSize:                 l.ConanMaxFileSize,
+		GenericPackagesMaxFileSize:       l.GenericPackagesMaxFileSize,
+		HelmMaxFileSize:                  l.HelmMaxFileSize,
+		MavenMaxFileSize:                 l.MavenMaxFileSize,
+		NPMMaxFileSize:                   l.NPMMaxFileSize,
+		NugetMaxFileSize:                 l.NugetMaxFileSize,
+		PyPiMaxFileSize:                  l.PyPiMaxFileSize,
+		TerraformModuleMaxFileSize:       l.TerraformModuleMaxFileSize,
+		CargoMaxFileSize:                 l.CargoMaxFileSize,
+		CIInstanceLevelVariables:         l.CIInstanceLevelVariables,
+		CIPipelineSize:                   l.CIPipelineSize,
+		CIActiveJobs:                     l.CIActiveJobs,
+		CIProjectSubscriptions:           l.CIProjectSubscriptions,
+		CIPipelineSchedules:              l.CIPipelineSchedules,
+		CINeedsSizeLimit:                 l.CINeedsSizeLimit,
+		CIRegisteredGroupRunners:         l.CIRegisteredGroupRunners,
+		CIRegisteredProjectRunners:       l.CIRegisteredProjectRunners,
+		DotenvVariables:                  l.DotenvVariables,
+		DotenvSize:                       l.DotenvSize,
+		EnforcementLimit:                 l.EnforcementLimit,
+		NotificationLimit:                l.NotificationLimit,
+		StorageSizeLimit:                 l.StorageSizeLimit,
+		PipelineHierarchySize:            l.PipelineHierarchySize,
+		MaxPipelinesPerMergeTrain:        l.MaxPipelinesPerMergeTrain,
+		ServiceDeskOutboundEmailsPerHour: l.ServiceDeskOutboundEmailsPerHour,
+		ServiceDeskOutboundEmailsPerDay:  l.ServiceDeskOutboundEmailsPerDay,
+		WebHookCalls:                     l.WebHookCalls,
+		WebHookCallsLow:                  l.WebHookCallsLow,
+		WebHookCallsMid:                  l.WebHookCallsMid,
+		LimitsHistory: LimitsHistory{
+			EnforcementLimit:        limitChanges(l.LimitsHistory.EnforcementLimit),
+			NotificationLimit:       limitChanges(l.LimitsHistory.NotificationLimit),
+			StorageSizeLimit:        limitChanges(l.LimitsHistory.StorageSizeLimit),
+			DashboardLimitEnabledAt: limitChanges(l.LimitsHistory.DashboardLimitEnabledAt),
+		},
 	}
+}
+
+// limitChanges maps one limit's change history, or nil when GitLab recorded
+// none.
+func limitChanges(entries []gl.PlanLimitHistoryEntry) []LimitChange {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]LimitChange, len(entries))
+	for i, entry := range entries {
+		out[i] = LimitChange(entry)
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------

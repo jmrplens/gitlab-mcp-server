@@ -220,9 +220,8 @@ type GetInput struct {
 }
 
 // DetailOutput represents a single pipeline with full details: what
-// [gl.Pipeline] decodes, plus whether it is archived, which
-// lib/api/entities/ci/pipeline.rb sends on every pipeline rendered whole and
-// the SDK does not carry, read from the captured response (ADR-0021).
+// [gl.Pipeline] decodes, with the two durations read from the captured
+// response (ADR-0021), where a null is kept apart from a measured 0.
 //
 // Name is omitted when empty: the single GET, the latest pipeline and the
 // metadata update present PipelineWithMetadata, which sends it, while
@@ -286,7 +285,7 @@ func capturedDetail(op string, p *gl.Pipeline, captured *gitlabclient.ResponseCa
 }
 
 // DetailToOutput converts a GitLab API [gl.Pipeline] to MCP output, and
-// takes the field the capture read beside the SDK.
+// takes the durations the capture read beside the SDK.
 func DetailToOutput(p *gl.Pipeline, extra toolutil.PipelineExtra) DetailOutput {
 	out := DetailOutput{
 		ID:             p.ID,
@@ -299,7 +298,7 @@ func DetailToOutput(p *gl.Pipeline, extra toolutil.PipelineExtra) DetailOutput {
 		BeforeSHA:      p.BeforeSHA,
 		Name:           p.Name,
 		Tag:            p.Tag,
-		Archived:       extra.Archived,
+		Archived:       p.Archived,
 		YamlErrors:     p.YamlErrors,
 		Duration:       extra.Duration,
 		QueuedDuration: extra.QueuedDuration,

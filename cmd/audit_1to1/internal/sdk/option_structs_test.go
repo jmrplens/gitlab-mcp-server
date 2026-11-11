@@ -828,14 +828,17 @@ func TestServiceMethod_ASelectorTheTypeCheckerDidNotResolve_NamesNoMethod(t *tes
 
 // TestRun_Repository_HoldsEveryOptionStructAHandlerSends is the witness of
 // the option structs section on the tree as it stands. The group hook edit is
-// a field-by-field copy of the add options, complete over the thirty fields
-// the two share in v3.30.0, and is paired with the edit input that reaches it
-// through that copy; the project and system hook edits are conversions; the
-// structs a helper builds out of scalars are each paired with the input of
-// the handler that hands the helper its fields; the settings struct a map is
-// decoded into and the integrations list every call sends as nil are
-// declared; and a nested struct is paired with the input element it is built
-// from, the group access level built per integer declared.
+// a field-by-field copy of the add options, complete over the thirty-one
+// fields the two share in v3.38.1, and is paired with the edit input that
+// reaches it through that copy; the project and system hook edits are
+// conversions; the structs a helper builds out of scalars are each paired
+// with the input of the handler that hands the helper its fields; the
+// settings struct a map is decoded into and the integrations list every call
+// sends as nil are declared; and a nested struct is paired with the input
+// element it is built from, the group access level built per integer
+// declared. The URL variable a hook's add and edit options carry from
+// v3.38.0 is paired with the element of the group's input and of the
+// project's.
 func TestRun_Repository_HoldsEveryOptionStructAHandlerSends(t *testing.T) {
 	section := readRepositorySection(t)
 	byType := section.byType
@@ -847,6 +850,7 @@ func TestRun_Repository_HoldsEveryOptionStructAHandlerSends(t *testing.T) {
 		{"the settings map", byType["UpdateSettingsOptions"], "received declared  map-input settings.Update  "},
 		{"the integrations sent as nil", byType["ListActiveIntegrationsOptions"], "received declared  sdk-models-unused integrations.ListGroupIntegrations  nil-only"},
 		{"a branch permission", byType["BranchPermissionOptions"], "nested paired    branches.BranchPermissionInput (nested) "},
+		{"a hook URL variable", byType["HookURLVariable"], "nested paired    groups.HookURLVariableInput (nested),projects.HookURLVariableInput (nested) "},
 		{"a group access level", byType["GroupAccessLevel"], "nested declared  scalar-list   "},
 	}
 	for _, tc := range cases {
@@ -867,7 +871,7 @@ func TestRun_Repository_HoldsEveryOptionStructAHandlerSends(t *testing.T) {
 		})
 	}
 	t.Run("the copy and the conversions", func(t *testing.T) {
-		copied := witnessCopy{From: "AddGroupHookOptions", To: "EditGroupHookOptions", Site: "groups.groupEditHookOptionsFromAdd", Shared: 30, Copied: 30}
+		copied := witnessCopy{From: "AddGroupHookOptions", To: "EditGroupHookOptions", Site: "groups.groupEditHookOptionsFromAdd", Shared: 31, Copied: 31}
 		if !slices.Contains(section.copies, copied) {
 			t.Errorf("copies = %+v, want %+v among them", section.copies, copied)
 		}

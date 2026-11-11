@@ -148,14 +148,12 @@ const (
 var routeFamilies = []routeFamily{
 	// The pipeline domain (issuePipelineRoutes).
 	tracked(issuePipelineRoutes, 1, on(http.MethodGet), "/pipelines",
-		"lists the pipelines the authenticated user triggered, across every project; client-go v3.30.0 has no method for it and no action lists them"),
+		"lists the pipelines the authenticated user triggered, across every project; client-go sends it from v3.37.0 (Pipelines.ListUserPipelines), and no action lists them"),
 	tracked(issuePipelineRoutes, 1, on(http.MethodPost), "/projects/*/create_ci_config",
 		"opens a merge request that adds a CI/CD configuration to a project"),
 	tracked(issuePipelineRoutes, 1, on(http.MethodGet), "/projects/*/pipeline_schedules/*/variables/*",
 		"reads one variable of a pipeline schedule, which pipeline.schedule_create_variable, pipeline.schedule_edit_variable and pipeline.schedule_delete_variable write"),
 	// The group domain (issueGroupRoutes).
-	tracked(issueGroupRoutes, 2, on(http.MethodGet, http.MethodPost), "/groups/*/placeholder_reassignments",
-		"a group owner reads the placeholder users an import left to reassign and reassigns them from a CSV file; client-go v3.30.0 has no method for either and no action reaches them"),
 	tracked(issueGroupRoutes, 3, on(), "/groups/*/approval_rules/**",
 		"lists, creates and updates a group's merge request approval rules; project.approval_rule_* manage a project's"),
 	tracked(issueGroupRoutes, 1, on(http.MethodGet), "/groups/*/billable_members/*/indirect",

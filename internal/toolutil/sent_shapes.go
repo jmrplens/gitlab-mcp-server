@@ -203,13 +203,13 @@ type PipelineMeasures struct {
 	QueuedDuration *int64 `json:"queued_duration"`
 }
 
-// PipelineExtra is what lib/api/entities/ci/pipeline.rb sends on a pipeline
-// that client-go's Pipeline does not carry: whether it is archived, sent on
-// every pipeline rendered whole, and the two durations as GitLab measured
-// them.
+// PipelineExtra is what a pipeline rendered whole by
+// lib/api/entities/ci/pipeline.rb carries that client-go's Pipeline reads
+// differently: the two durations as GitLab measured them. Whether the
+// pipeline is archived, the other key once read here, client-go's Pipeline
+// models since v3.36.0.
 type PipelineExtra struct {
 	PipelineMeasures
-	Archived bool `json:"archived"`
 }
 
 // JobMeasures is how long a job ran and queued and the coverage it reported,
@@ -237,7 +237,7 @@ func CapturedJobs(capture *gitlabclient.ResponseCapture, decoded int) ([]JobMeas
 }
 
 // CapturedPipeline reads, off the captured answer to a request for one
-// pipeline, the field client-go's Pipeline does not model.
+// pipeline, the measures client-go's Pipeline reads a null of as 0.
 func CapturedPipeline(capture *gitlabclient.ResponseCapture) (PipelineExtra, error) {
 	return capturedOne[PipelineExtra](capture)
 }
@@ -742,26 +742,6 @@ func CapturedCIVariables(capture *gitlabclient.ResponseCapture, decoded int) ([]
 	return capturedList[CIVariableExtra](capture, decoded, "CI variables")
 }
 
-// RegistryRepositoryExtra is what GitLab's container registry repository
-// entity sends beside the name and the path: the size, when the caller asked
-// for it, and the path a caller allowed to administer images deletes through.
-type RegistryRepositoryExtra struct {
-	Size          int64  `json:"size"`
-	DeleteAPIPath string `json:"delete_api_path"`
-}
-
-// CapturedRegistryRepository reads them off the captured answer to a request
-// for one repository.
-func CapturedRegistryRepository(capture *gitlabclient.ResponseCapture) (RegistryRepositoryExtra, error) {
-	return capturedOne[RegistryRepositoryExtra](capture)
-}
-
-// CapturedRegistryRepositories reads the same off a list answer, one extra per
-// repository in order, the count held to what the SDK decoded.
-func CapturedRegistryRepositories(capture *gitlabclient.ResponseCapture, decoded int) ([]RegistryRepositoryExtra, error) {
-	return capturedList[RegistryRepositoryExtra](capture, decoded, "registry repositories")
-}
-
 // WikiExtra is what GitLab's wiki page entity sends beside the title and the
 // content: the identifier of the page's metadata record, and the YAML front
 // matter parsed out of the page, which is a map of whatever keys the author
@@ -781,25 +761,6 @@ func CapturedWiki(capture *gitlabclient.ResponseCapture) (WikiExtra, error) {
 // the count held to what the SDK decoded.
 func CapturedWikis(capture *gitlabclient.ResponseCapture, decoded int) ([]WikiExtra, error) {
 	return capturedList[WikiExtra](capture, decoded, "wiki pages")
-}
-
-// StorageMoveExtra is why a repository storage move failed, exposed under no
-// condition by the group, project and snippet storage move entities alike and
-// empty on a move that did not fail.
-type StorageMoveExtra struct {
-	ErrorMessage string `json:"error_message"`
-}
-
-// CapturedStorageMove reads it off the captured answer to a request for one
-// storage move.
-func CapturedStorageMove(capture *gitlabclient.ResponseCapture) (StorageMoveExtra, error) {
-	return capturedOne[StorageMoveExtra](capture)
-}
-
-// CapturedStorageMoves reads the same off a list answer, one extra per move in
-// order, the count held to what the SDK decoded.
-func CapturedStorageMoves(capture *gitlabclient.ResponseCapture, decoded int) ([]StorageMoveExtra, error) {
-	return capturedList[StorageMoveExtra](capture, decoded, "storage moves")
 }
 
 // ServiceAccountExtra is what GitLab's service account entity sends beside the
@@ -1437,11 +1398,14 @@ func CapturedIssues(capture *gitlabclient.ResponseCapture, decoded int) ([]Issue
 }
 
 // ProjectExtra is what lib/api/entities/project.rb and its EE override send
-// that client-go's Project does not model. Every field is a pointer because
-// none of them is unconditional in practice: the first four are absent
-// whenever the caller asked for the simple form, which renders
-// BasicProjectDetails instead, and the rest are gated on a licensed feature,
-// on an ability, or on GitLab.com.
+// that client-go's Project does not model, or models as a value that is not a
+// pointer. Every field is a pointer because none of them is unconditional in
+// practice: the first four are absent whenever the caller asked for the
+// simple form, which renders BasicProjectDetails instead, and the rest are
+// gated on a licensed feature, on an ability, or on GitLab.com. Three of the
+// Duo flags client-go's Project models from v3.36.0 as plain booleans, which
+// read the key a lower-tier answer leaves out as false, so they stay here to
+// keep an absent flag apart from one switched off.
 //
 // The tiers here are read from the licensed feature each lambda names rather
 // than from the audit's resolved tier, because gen_api_live captures a

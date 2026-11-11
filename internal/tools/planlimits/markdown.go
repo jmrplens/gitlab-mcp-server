@@ -4,8 +4,6 @@
 package planlimits
 
 import (
-	"maps"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,8 +34,7 @@ func FormatChangeMarkdown(out ChangeOutput) string {
 // by the label otherwise, then the change history when GitLab kept one.
 //
 // The rows used to print the number alone, so "5368709120" said neither what
-// it counted nor how big it is. A limit the instance sent no key for writes no
-// row, since it is one the instance does not have rather than one set to zero.
+// it counted nor how big it is.
 //
 // Zero means two opposite things across these limits, and each row says which.
 // Most are enforced through PlanLimits#exceeded? or limit_for
@@ -57,7 +54,7 @@ func FormatChangeMarkdown(out ChangeOutput) string {
 func formatPlanLimitsMarkdown(title string, limits PlanLimitItem, hint string) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, title)
-	c.Field("Cargo Max File Size", optionalSizeLimit(limits.CargoMaxFileSize))
+	c.Field("Cargo Max File Size", sizeLimit(limits.CargoMaxFileSize))
 	c.Field("Conan Max File Size", sizeLimit(limits.ConanMaxFileSize))
 	c.Field("Generic Packages Max File Size", sizeLimit(limits.GenericPackagesMaxFileSize))
 	c.Field("Helm Max File Size", sizeLimit(limits.HelmMaxFileSize))
@@ -77,7 +74,7 @@ func formatPlanLimitsMarkdown(title string, limits PlanLimitItem, hint string) s
 	c.Field("Pipeline Hierarchy Size (downstream pipelines)", unlimitedAtZero(limits.PipelineHierarchySize))
 	c.Field("Max Pipelines per Merge Train", amount(limits.MaxPipelinesPerMergeTrain))
 	c.Field("Dotenv Variables (per artifact)", amount(limits.DotenvVariables))
-	c.Field("Dotenv Size", optionalFileSize(limits.DotenvSize))
+	c.Field("Dotenv Size", fileSize(limits.DotenvSize))
 	c.Field("Storage Size Limit (MiB)", unlimitedAtZero(limits.StorageSizeLimit))
 	c.Field("Enforcement Limit (MiB)", unlimitedAtZero(limits.EnforcementLimit))
 	c.Field("Notification Limit (MiB)", unlimitedAtZero(limits.NotificationLimit))
@@ -95,17 +92,30 @@ func formatPlanLimitsMarkdown(title string, limits PlanLimitItem, hint string) s
 // zero, keeping the value it was sent.
 const unlimitedZero = "unlimited (0)"
 
+// limitHistory is one limit's recorded changes, under the name GitLab keys
+// them by.
+type limitHistory struct {
+	name    string
+	changes []LimitChange
+}
+
 // writeLimitsHistory writes every recorded change, one row each, the limits in
 // name order and each limit's changes in the order GitLab kept them.
-func writeLimitsHistory(c *toolutil.Card, history map[string][]LimitChange) {
-	if len(history) == 0 {
-		return
+func writeLimitsHistory(c *toolutil.Card, history LimitsHistory) {
+	limits := []limitHistory{
+		{"dashboard_limit_enabled_at", history.DashboardLimitEnabledAt},
+		{"enforcement_limit", history.EnforcementLimit},
+		{"notification_limit", history.NotificationLimit},
+		{"storage_size_limit", history.StorageSizeLimit},
 	}
-	t := c.Table("Limits History", "Limit", "Value", "Changed By", "Changed At")
-	for _, name := range slices.Sorted(maps.Keys(history)) {
-		for _, change := range history[name] {
+	var t *toolutil.CardTable
+	for _, limit := range limits {
+		for _, change := range limit.changes {
+			if t == nil {
+				t = c.Table("Limits History", "Limit", "Value", "Changed By", "Changed At")
+			}
 			t.Row(
-				toolutil.EscapeMdTableCell(name),
+				toolutil.EscapeMdTableCell(limit.name),
 				strconv.FormatInt(change.Value, 10),
 				toolutil.EscapeMdTableCell(change.Username),
 				toolutil.FormatTimeValue(time.Unix(change.Timestamp, 0)),
@@ -115,18 +125,15 @@ func writeLimitsHistory(c *toolutil.Card, history map[string][]LimitChange) {
 }
 
 // amount renders a limit that counts something, whose unit its row's label
-// names, or nothing when the instance sent no key for it.
-func amount(v *int64) string {
-	if v == nil {
-		return ""
-	}
-	return strconv.FormatInt(*v, 10)
+// names.
+func amount(v int64) string {
+	return strconv.FormatInt(v, 10)
 }
 
 // unlimitedAtZero renders a limit GitLab reads as no limit at zero, and says
 // so: a bare zero would otherwise read as nothing allowed.
-func unlimitedAtZero(v *int64) string {
-	if v != nil && *v == 0 {
+func unlimitedAtZero(v int64) string {
+	if v == 0 {
 		return unlimitedZero
 	}
 	return amount(v)
@@ -141,24 +148,6 @@ func sizeLimit(bytes int64) string {
 		return unlimitedZero
 	}
 	return fileSize(bytes)
-}
-
-// optionalSizeLimit renders a package file size limit the way [sizeLimit]
-// does, or nothing when the instance sent no key for it.
-func optionalSizeLimit(v *int64) string {
-	if v == nil {
-		return ""
-	}
-	return sizeLimit(*v)
-}
-
-// optionalFileSize renders a byte limit the way [fileSize] does, zero
-// included, or nothing when the instance sent no key for it.
-func optionalFileSize(v *int64) string {
-	if v == nil {
-		return ""
-	}
-	return fileSize(*v)
 }
 
 // fileSize renders a byte count as the row shows it: the exact number of bytes

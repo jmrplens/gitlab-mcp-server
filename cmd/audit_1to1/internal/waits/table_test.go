@@ -38,13 +38,14 @@ func TestEntries_Table_IsWrittenAsTheTableRequires(t *testing.T) {
 // TestCoveredRaw_Table_ReplacesWhatRActionAndTheServiceRuleDeclaredBefore
 // pins what moved into the table: the 72 methods acceptedMissingMethods
 // declared COVERED_RAW (22 with a reason of their own and the 50 generic
-// integration methods) and the three services declaredServices did. A
-// change here is a method or a service that stopped or started being
-// replaced, which the entry that changed says why.
+// integration methods) and the three services declaredServices did, less
+// Features.SetFeatureFlag, which features.Set calls again since client-go
+// v3.34.0 (register row 6). A change here is a method or a service that
+// stopped or started being replaced, which the entry that changed says why.
 func TestCoveredRaw_Table_ReplacesWhatRActionAndTheServiceRuleDeclaredBefore(t *testing.T) {
 	entries := Entries()
-	if got := len(CoveredRawMethods(entries)); got != 72 {
-		t.Errorf("the table replaces %d methods, want 72", got)
+	if got := len(CoveredRawMethods(entries)); got != 71 {
+		t.Errorf("the table replaces %d methods, want 71", got)
 	}
 	services := CoveredRawServices(entries)
 	for _, service := range []string{"ApplicationStatistics", "Epics", "GroupEpicBoards"} {

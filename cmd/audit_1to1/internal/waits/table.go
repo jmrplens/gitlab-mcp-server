@@ -20,10 +20,6 @@ var epicKeysUnmodeled = []string{
 	"text_color", "web_edit_url", "work_item_id",
 }
 
-// featureFlagScopes are the eight SetFeatureFlagOptions fields tagged without
-// omitempty that the flag's scope is chosen among.
-var featureFlagScopes = []string{"Key", "FeatureGroup", "User", "Group", "Namespace", "Project", "Repository", "Force"}
-
 // jobKeysUnmodeled are the keys a job answers with that client-go's Job, and
 // the JobRunner it holds, do not model, which jobs.jobAPI decodes beside it.
 var jobKeysUnmodeled = []string{
@@ -75,13 +71,6 @@ const (
 // upstreamWaits are the workarounds that wait on client-go, grouped by the
 // register row each waits on.
 var upstreamWaits = []Entry{
-	{
-		Row: 6, Category: CategoryUpstream,
-		Sites:      []string{"features.Set", "fixture.setFeature"},
-		Replaces:   []string{"Features.SetFeatureFlag"},
-		Predicates: writesAlwaysJSON("SetFeatureFlagOptions", featureFlagScopes...),
-		Reason:     "SetFeatureFlagOptions tags none of the flag's scope fields omitempty, so SetFeatureFlag sends key, feature_group and user as empty strings and GitLab refuses every call as naming mutually exclusive scopes; features.Set and the e2e fixture post the body themselves",
-	},
 	{
 		Row: 7, Category: CategoryUpstream,
 		Sites:      []string{"appstatistics.fetchStatistics"},
@@ -147,12 +136,6 @@ var upstreamWaits = []Entry{
 		Sites:      []string{"mergerequests.postCancelAutoMerge"},
 		Predicates: []Predicate{NoMethodFor{Route: "POST /projects/:/merge_requests/:/cancel_auto_merge"}},
 		Reason:     "client-go has no method for cancel_auto_merge, the route GitLab 19.5 added (gitlab-org/api/client-go!3101 adds MergeRequests.CancelAutoMerge), so the cancel posts to it itself on an instance that serves it",
-	},
-	{
-		Row: 52, Category: CategoryUpstream,
-		Unseen:     []string{"protectedpackages.Update"},
-		Predicates: writesAlwaysJSON("UpdatePackageProtectionRulesOptions", "PackageNamePattern", "PackageType"),
-		Reason:     "UpdatePackageProtectionRulesOptions tags PackageNamePattern and PackageType without omitempty, so a field the caller did not name reaches GitLab as null and is read as blank; the update's 422 hint tells the caller to send both",
 	},
 	{
 		Row: 58, Category: CategoryUpstream,

@@ -171,10 +171,9 @@ func TestRetrieveAll(t *testing.T) {
 			},
 		},
 		{
-			// The captured error_message is read off a second decode of the
-			// same body, so it is paired with its move by position alone. On a
-			// one-move page every index agrees; two moves whose messages differ
-			// are what says the pairing follows the list rather than its head.
+			// On a one-move page every index agrees; two moves whose messages
+			// differ are what says each move carries its own message rather
+			// than the head's.
 			name:  "pairs each move with its own error message",
 			input: ListInput{},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
@@ -330,7 +329,7 @@ func TestRetrieveForProject(t *testing.T) {
 	}{
 		{
 			// The project-scoped listing publishes a pagination block and pairs
-			// each move with its own captured message exactly as the
+			// each move with its own error message exactly as the
 			// instance-wide one does; both are asserted here because each is
 			// filled by a statement of this handler's own.
 			name:  "returns moves for project with pagination",
@@ -930,49 +929,6 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		"- **Result**: All project repository storage moves have been scheduled\n"+
 		"\n---\n💡 **Next steps:**\n"+
 		"- Use action 'storage_move.retrieve_all_project' to watch the scheduled moves progress\n")
-}
-
-// TestProjectStorageMoves_UnreadableCapturedErrorMessage verifies that every
-// project storage move handler returns an error rather than a half-filled move
-// when GitLab sends error_message as something that is not a string. The SDK
-// ignores the key its own ProjectRepositoryStorageMove does not model, so the
-// read of the captured response is the only thing that can notice, and a failed
-// move published without its message reads as one that failed for no reason.
-func TestProjectStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
-	// A retrieve answers with an array and the rest with an object, so each
-	// case drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "retrieve_all", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveAll(context.Background(), client, ListInput{})
-			return err
-		}},
-		{Name: "retrieve_for_project", Call: func() error {
-			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
-			_, err := RetrieveForProject(context.Background(), client, ListForProjectInput{ProjectID: "42"})
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := Get(context.Background(), client, IDInput{ID: 1})
-			return err
-		}},
-		{Name: "get_for_project", Call: func() error {
-			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
-			_, err := GetForProject(context.Background(), client, ProjectMoveInput{ProjectID: "42", ID: 1})
-			return err
-		}},
-		{Name: "schedule", Call: func() error {
-			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
-			_, err := Schedule(context.Background(), client, ScheduleInput{ProjectID: "42"})
-			return err
-		}},
-	})
 }
 
 func mustParseTime(s string) time.Time {

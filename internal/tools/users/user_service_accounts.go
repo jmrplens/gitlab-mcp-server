@@ -21,7 +21,9 @@ import (
 // lib/api/entities/service_account.rb sends. PublicEmail comes from the
 // UserSafe that entity inherits and External from the entity itself, which
 // sends it on every account from GitLab 19.5; both are read off the captured
-// response, since client-go's ServiceAccount has no field for either.
+// response, the first since client-go's ServiceAccount has no field for it
+// and the second since the plain bool it models from v3.32.0 reads the key an
+// older instance leaves out as false.
 type ServiceAccountOutput struct {
 	ID               int64  `json:"id"`
 	Username         string `json:"username"`
@@ -35,9 +37,11 @@ type ServiceAccountOutput struct {
 	External *bool `json:"external,omitempty"`
 }
 
-// serviceAccountExtra is what lib/api/entities/service_account.rb sends that
-// client-go's ServiceAccount does not model: the public email of the
-// lib/api/entities/user_safe.rb it inherits, and its own external flag.
+// serviceAccountExtra is what this server reads of
+// lib/api/entities/service_account.rb off the captured response: the public
+// email of the lib/api/entities/user_safe.rb it inherits, which client-go's
+// ServiceAccount does not model, and its own external flag, which it models
+// as a plain bool that cannot tell a key left out from one sent as false.
 type serviceAccountExtra struct {
 	PublicEmail string `json:"public_email"`
 	External    *bool  `json:"external"`
