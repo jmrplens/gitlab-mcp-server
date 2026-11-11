@@ -45,7 +45,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		userReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_users"),
 		// gitlab_get_user — fetch a single user by numeric ID (returns a structured not-found result on 404).
 		userReadSpec("get", userGetRoute(client), "gitlab_get_user"),
-		// gitlab_get_user_status — fetch a user's status (emoji, message, availability).
+		// gitlab_get_user_status: fetch a user's status (emoji, message, availability), by ID or username.
 		userReadSpec("get_status", toolutil.RouteAction(client, GetStatus), "gitlab_get_user_status"),
 		// gitlab_set_user_status — update the current user's status.
 		userUpdateSpec("set_status", toolutil.RouteAction(client, SetStatus), "gitlab_set_user_status"),
@@ -53,7 +53,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		userReadSpec("ssh_keys", toolutil.RouteAction(client, ListSSHKeys), "gitlab_list_ssh_keys"),
 		// gitlab_list_emails — list the current user's email addresses.
 		userReadSpec("emails", toolutil.RouteAction(client, ListEmails), "gitlab_list_emails"),
-		// gitlab_list_user_contribution_events — list the authenticated user's recent contribution events.
+		// gitlab_list_user_contribution_events: list a user's recent contribution events, by ID or username.
 		userReadSpec("contribution_events", toolutil.RouteAction(client, ListContributionEvents), "gitlab_list_user_contribution_events"),
 		// gitlab_get_user_associations_count — return the user's count of groups/projects owned.
 		userReadSpec("associations_count", toolutil.RouteAction(client, GetAssociationsCount), "gitlab_get_user_associations_count"),
@@ -81,7 +81,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		userUpdateSpec("modify", toolutil.RouteAction(client, Modify), "gitlab_modify_user"),
 		// gitlab_delete_user — delete a user account (destructive, admin-only).
 		userDeleteSpec("delete", toolutil.DestructiveAction(client, Delete), "gitlab_delete_user"),
-		// gitlab_list_ssh_keys_for_user — list SSH keys for a specific user.
+		// gitlab_list_ssh_keys_for_user: list SSH keys for a specific user, by ID or username.
 		userReadSpec("ssh_keys_for_user", toolutil.RouteAction(client, ListSSHKeysForUser), "gitlab_list_ssh_keys_for_user"),
 		// gitlab_get_ssh_key — fetch the current user's SSH key by ID.
 		userReadSpec("get_ssh_key", toolutil.RouteAction(client, GetSSHKey), "gitlab_get_ssh_key"),
@@ -163,10 +163,10 @@ type userToolMeta struct {
 // metadata-completeness audit (R-META) reports no gaps for the users package.
 var userToolMetadata = map[string]userToolMeta{
 	"gitlab_get_user_status": {
-		usage:          "Get a user's status (emoji, message, availability, clear-at time) by numeric user_id. Use when the prompt asks whether someone is busy or what their status message says.",
+		usage:          "Get a user's status (emoji, message, availability, clear-at time) by user_id, the user's ID or username. Use when the prompt asks whether someone is busy or what their status message says.",
 		aliases:        []string{"get user status", "show user availability", "user status"},
 		relatedActions: []string{actionUserGet, actionUserCurrentStatus, "user.set_status"},
-		description:    "Get a user's status by ID. Returns: emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_set_user_status, gitlab_get_user.",
+		description:    "Get a user's status by ID or username. Returns: emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_set_user_status, gitlab_get_user.",
 	},
 	"gitlab_set_user_status": {
 		usage:          "Set the authenticated user's status with emoji, message, availability, and an optional auto-clear duration. Use when the prompt asks to update your own status.",
@@ -205,10 +205,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Delete one of the current user's SSH keys. Returns: confirmation with the deleted key ID. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_add_ssh_key.",
 	},
 	"gitlab_list_ssh_keys_for_user": {
-		usage:          "List SSH keys belonging to a specific user by user_id with pagination. Use when the prompt asks which keys another user has registered.",
+		usage:          "List SSH keys belonging to a specific user by user_id, the user's ID or username, with pagination. Use when the prompt asks which keys another user has registered.",
 		aliases:        []string{"list ssh keys for user", "user ssh keys", "show another user's keys"},
 		relatedActions: []string{actionUserGetSSHKeyForUser, actionUserAddSSHKeyForUser, actionUserDelSSHKeyForUser},
-		description:    "List a specific user's SSH keys. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
+		description:    "List a specific user's SSH keys by ID or username. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_get_ssh_key_for_user": {
 		usage:          "Get a specific SSH key for a specific user by user_id and key_id. Use when the prompt references one of another user's keys.",
@@ -235,10 +235,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "List the current user's email addresses. Returns: email entries with ID, address, and confirmation time, with pagination metadata. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_list_user_contribution_events": {
-		usage:          "List a user's recent contribution events (pushes, comments, merges) filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.",
+		usage:          "List a user's recent contribution events (pushes, comments, merges) by user_id, the user's ID or username, filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.",
 		aliases:        []string{"list contribution events", "user activity feed", "recent contributions"},
 		relatedActions: []string{actionUserGet, "user.activities", actionUserAssociations},
-		description:    "List a user's contribution events. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
+		description:    "List a user's contribution events by ID or username. Returns: event entries with action, target type/title and link, project, author, timestamp, the push, note or wiki page the event concerns, and its import origin. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
 	},
 	"gitlab_get_user_associations_count": {
 		usage:          "Get a user's association counts (groups, projects, issues, merge requests) by user_id. Use when the prompt asks how much a user owns or is involved in before deletion.",

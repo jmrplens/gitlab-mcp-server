@@ -41,6 +41,49 @@ func TestActionSpecs_CreateAndModify_OfferNoParamGitLabIgnores(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_UserIdentifiers_TakeAnIDOrAUsername verifies the schema of
+// user_id on the three actions whose route GitLab resolves by the ID or the
+// username of a user: it takes a string or an integer, stays required, and its
+// description says it takes either. It took an integer alone, which the sdk
+// scope of the 1:1 audit declared tracked until the widening (issue 1602).
+func TestActionSpecs_UserIdentifiers_TakeAnIDOrAUsername(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))
+	for _, tool := range []string{"gitlab_get_user_status", "gitlab_list_user_contribution_events", "gitlab_list_ssh_keys_for_user"} {
+		t.Run(tool, func(t *testing.T) {
+			schema := byTool[tool].Route.InputSchema
+			props, _ := schema["properties"].(map[string]any)
+			userID, _ := props["user_id"].(map[string]any)
+			if types := schemaStrings(userID["type"]); !slices.Equal(types, []string{"string", "integer"}) {
+				t.Errorf("user_id type = %v, want [string integer]", userID["type"])
+			}
+			if description, _ := userID["description"].(string); !strings.Contains(description, "ID or username") {
+				t.Errorf("user_id description = %q, want it to say the field takes an ID or username", description)
+			}
+			if required := schemaStrings(schema["required"]); !slices.Contains(required, "user_id") {
+				t.Errorf("required = %v, want user_id in it", schema["required"])
+			}
+		})
+	}
+}
+
+// schemaStrings returns the strings a schema keyword lists, whichever of the
+// two slice types the schema keeps them in, and nil for anything else.
+func schemaStrings(value any) []string {
+	switch list := value.(type) {
+	case []string:
+		return list
+	case []any:
+		names := make([]string, 0, len(list))
+		for _, raw := range list {
+			if name, ok := raw.(string); ok {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
+}
+
 // TestActionSpecs_CallRoutes exercises user actions through their canonical routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t)))

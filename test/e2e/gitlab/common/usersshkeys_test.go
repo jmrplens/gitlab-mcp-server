@@ -153,7 +153,8 @@ func addOwnSSHKey(e *harness.Env, s *harness.Session) (users.SSHKeyOutput, strin
 
 // TestUserSSHKeys_ForUser_AddGetListDelete gives one fixture user a key per
 // surface, as an administrator: adds it, reads it by ID, finds it in the
-// user's listing, deletes it and checks the listing no longer holds it.
+// user's listing by user ID and by username, deletes it and checks the
+// listing no longer holds it.
 //
 // Replaces: TestMeta_UserAdmin
 func TestUserSSHKeys_ForUser_AddGetListDelete(t *testing.T) {
@@ -180,6 +181,10 @@ func TestUserSSHKeys_ForUser_AddGetListDelete(t *testing.T) {
 		listed := harness.Do[users.SSHKeyListOutput](s, actionUserSSHKeysForUser, owner)
 		if !containsID(userSSHKeyIDs(listed.Keys), added.ID) {
 			e.T.Errorf("the keys of user %d do not hold the added key %d: %+v", user.ID, added.ID, listed.Keys)
+		}
+		byName := harness.Do[users.SSHKeyListOutput](s, actionUserSSHKeysForUser, map[string]any{"user_id": user.Username})
+		if !containsID(userSSHKeyIDs(byName.Keys), added.ID) {
+			e.T.Errorf("the keys of user %q do not hold the added key %d: %+v", user.Username, added.ID, byName.Keys)
 		}
 
 		deleted := harness.Do[users.DeleteSSHKeyOutput](s, actionUserDeleteSSHKeyForUser, key)

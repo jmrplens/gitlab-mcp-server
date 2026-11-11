@@ -322,10 +322,12 @@ func TestGitHubToken_TheWorkflowsTokenFirst(t *testing.T) {
 // the repository's own routes and sdk reports against a stand-in GitHub that
 // answers every issue open, and holds it to asking about each issue the
 // tracked rows name, once: the domain issues of R-ROUTE's family rows
-// (#1209, and #1604 to #1634) and the identifier issue of the sdk scope
-// (#1602). A report field the check reads under another name would leave
-// those rows unasked, which is what this catches. A change that tracks a row
-// under a new issue, or retires the last row of one, changes the list here.
+// (#1209, and #1604 to #1634). The identifier issue of the sdk scope (#1602)
+// left the list when the three user inputs it tracked were widened, which
+// retired the last of its rows. A report field the check reads under another
+// name would leave those rows unasked, which is what this catches. A change
+// that tracks a row under a new issue, or retires the last row of one,
+// changes the list here.
 func TestCheckTrackedIssues_TheTree_AsksAboutEveryTrackedIssue(t *testing.T) {
 	github := serveStandInGitHub(t, open)
 	// No token of the environment the suite runs in goes to the stand-in.
@@ -336,7 +338,7 @@ func TestCheckTrackedIssues_TheTree_AsksAboutEveryTrackedIssue(t *testing.T) {
 	if err := checkTrackedIssues(context.Background(), output); err != nil {
 		t.Fatalf("checkTrackedIssues on the tree: %v", err)
 	}
-	want := []int{1209, 1602}
+	want := []int{1209}
 	for number := 1604; number <= 1634; number++ {
 		want = append(want, number)
 	}

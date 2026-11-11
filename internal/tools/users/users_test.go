@@ -16,6 +16,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -671,7 +672,7 @@ func TestGet_UserStatusSuccess(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: 42})
+	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf("GetStatus() unexpected error: %v", err)
 	}
@@ -686,16 +687,71 @@ func TestGet_UserStatusSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_UserStatusValidation verifies Get when user status validation.
+// TestGet_UserStatusValidation verifies that GetStatus refuses an empty
+// user_id before any request.
 func TestGet_UserStatusValidation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetStatus(context.Background(), client, GetStatusInput{})
-	if err == nil {
-		t.Fatal("expected validation error, got nil")
+	if err == nil || !strings.Contains(err.Error(), "user_id is required") {
+		t.Fatalf("error = %v, want the refusal of a missing user_id", err)
 	}
+}
+
+// userIdentifierCases are the spellings of one user that user_id takes on the
+// three routes GitLab resolves by the ID or the username of a user (GET
+// /users/:id/events, /users/:user_id/status and /users/:user_id/keys), each
+// with the path segment GitLab receives for it: a JSON number decodes to the
+// ID, client-go's UserID drops the @ GitLab shows before a username, and a dot
+// client-go escapes as %2E arrives as a dot, which the client's transport
+// restores because some proxies refuse the escaped form.
+var userIdentifierCases = []struct {
+	name    string
+	userID  any
+	segment string
+}{
+	{name: "a JSON number", userID: 42, segment: "42"},
+	{name: "an ID as a string", userID: "42", segment: "42"},
+	{name: "a username", userID: "jdoe", segment: "jdoe"},
+	{name: "a username after an @", userID: "@jdoe", segment: "jdoe"},
+	{name: "a username with a dot", userID: "jane.doe", segment: "jane.doe"},
+}
+
+// assertUserIdentifierReachesThePath decodes each of userIdentifierCases as a
+// call's arguments are decoded, hands it to handler, and compares the escaped
+// path the mock received with the user's route ending in suffix. user_id was
+// an integer alone on all three routes, so a caller who knew only the username
+// had to look the ID up first (issue 1602); a handler that reads it as a
+// number again fails the decode of the username, and one that hands client-go
+// anything but what the caller wrote names another user.
+func assertUserIdentifierReachesThePath[In, Out any](t *testing.T, handler func(context.Context, *gitlabclient.Client, In) (Out, error), suffix, answer string) {
+	t.Helper()
+	for _, tc := range userIdentifierCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var path string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				path = r.URL.EscapedPath()
+				testutil.RespondJSON(w, http.StatusOK, answer)
+			}))
+			input, err := toolutil.UnmarshalParams[In](map[string]any{"user_id": tc.userID})
+			if err != nil {
+				t.Fatalf("decode user_id %v: %v", tc.userID, err)
+			}
+			if _, err = handler(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if want := "/api/v4/users/" + tc.segment + suffix; path != want {
+				t.Errorf("user_id %#v reached path %q, want %q", tc.userID, path, want)
+			}
+		})
+	}
+}
+
+// TestGetStatus_IDOrUsername_NamesTheUserInThePath verifies that user_id
+// takes the ID or the username of the user, as GET /users/:user_id/status
+// does, and reaches the path as the caller wrote it.
+func TestGetStatus_IDOrUsername_NamesTheUserInThePath(t *testing.T) {
+	assertUserIdentifierReachesThePath(t, GetStatus, "/status", `{"emoji":"coffee"}`)
 }
 
 // Set User Status.
@@ -878,7 +934,7 @@ func TestListContributionEvents_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf("ListContributionEvents() unexpected error: %v", err)
 	}
@@ -890,16 +946,22 @@ func TestListContributionEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_Validation verifies ListContributionEvents when validation.
+// TestListContributionEvents_Validation verifies that ListContributionEvents
+// refuses an empty user_id before any request.
 func TestListContributionEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{})
-	if err == nil {
-		t.Fatal("expected validation error, got nil")
+	if err == nil || !strings.Contains(err.Error(), "user_id is required") {
+		t.Fatalf("error = %v, want the refusal of a missing user_id", err)
 	}
+}
+
+// TestListContributionEvents_IDOrUsername_NamesTheUserInThePath verifies that
+// user_id takes the ID or the username of the user, as GET /users/:id/events
+// does, and reaches the path as the caller wrote it.
+func TestListContributionEvents_IDOrUsername_NamesTheUserInThePath(t *testing.T) {
+	assertUserIdentifierReachesThePath(t, ListContributionEvents, "/events", `[]`)
 }
 
 // TestListContributionEvents_UnknownAction_RefusedBeforeTheRequest verifies
@@ -910,7 +972,7 @@ func TestListContributionEvents_Validation(t *testing.T) {
 func TestListContributionEvents_UnknownAction_RefusedBeforeTheRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
-	_, err := ListContributionEvents(t.Context(), client, ListContributionEventsInput{UserID: 42, Action: "approve"})
+	_, err := ListContributionEvents(t.Context(), client, ListContributionEventsInput{UserID: "42", Action: "approve"})
 	if err == nil {
 		t.Fatal("error = nil, want the refusal of action approve")
 	}
@@ -929,7 +991,7 @@ func TestListContributionEvents_APIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
-	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 999})
+	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: "999"})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
 	}
@@ -1261,7 +1323,7 @@ func TestGet_UserStatusAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	}))
 
-	_, err := GetStatus(context.Background(), client, GetStatusInput{UserID: 42})
+	_, err := GetStatus(context.Background(), client, GetStatusInput{UserID: "42"})
 	if err == nil {
 		t.Fatal("expected error for API failure, got nil")
 	}
@@ -1275,7 +1337,7 @@ func TestGet_UserStatusCancelledContext(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := GetStatus(ctx, client, GetStatusInput{UserID: 42})
+	_, err := GetStatus(ctx, client, GetStatusInput{UserID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
 	}
@@ -1297,7 +1359,7 @@ func TestGet_UserStatusWithClearAt(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: 42})
+	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1490,7 +1552,7 @@ func TestListContributionEvents_CancelledContext(t *testing.T) {
 
 	ctx := testutil.CancelledCtx(t)
 
-	_, err := ListContributionEvents(ctx, client, ListContributionEventsInput{UserID: 42})
+	_, err := ListContributionEvents(ctx, client, ListContributionEventsInput{UserID: "42"})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
 	}
@@ -1514,7 +1576,7 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}))
 
 	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:     42,
+		UserID:     "42",
 		Action:     "created",
 		TargetType: "Issue",
 		Before:     "2026-12-31",
@@ -1545,7 +1607,7 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 func TestListContributionEvents_InvalidDate_IsRefused(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID: 42,
+		UserID: "42",
 		After:  "also-invalid",
 	})
 	if err == nil || !strings.Contains(err.Error(), "after must be a date") {
@@ -1580,7 +1642,7 @@ func TestListContributionEvents_EachFilterReachesTheQuery(t *testing.T) {
 			client := testutil.NewTestClient(t, recordRequest(t, pathContribEvents, &got, http.StatusOK, `[]`))
 
 			input := tt.input
-			input.UserID = 42
+			input.UserID = "42"
 			if _, err := ListContributionEvents(context.Background(), client, input); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
@@ -1615,7 +1677,7 @@ func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
 		}
 	}))
 
-	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1663,7 +1725,7 @@ func TestListContributionEvents_AnEventWithoutACreatedAtLeavesItEmpty(t *testing
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1725,7 +1787,7 @@ func TestListContributionEvents_Empty(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -2234,7 +2296,7 @@ func TestGetStatus_NilResponse(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: 42})
+	out, err := GetStatus(context.Background(), client, GetStatusInput{UserID: "42"})
 	if err != nil {
 		t.Fatalf("expected no error for null, got: %v", err)
 	}
@@ -2493,7 +2555,7 @@ func TestListContributionEvents_ScopeAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:  42,
+		UserID:  "42",
 		Scope:   "all",
 		OrderBy: "id",
 	})
