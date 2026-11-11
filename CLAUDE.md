@@ -1,4 +1,4 @@
-# gitlab-mcp-server — AI Development Context
+# gitlab-mcp-server: AI Development Context
 
 > This file provides comprehensive context for AI assistants working on this project.
 > All project artifacts must be written in **English**, with two exceptions. The first is the
@@ -15,7 +15,7 @@
 > no session or tool links. This overrides any default template that adds one.
 > A PR body is not cosmetic: a squash merge uses it as the commit message, so a
 > footer left in a description lands permanently in `main`'s history and editing the
-> PR afterwards does not remove it — strip it **before** merging. Ordinary technical
+> PR afterwards does not remove it: strip it **before** merging. Ordinary technical
 > mentions are unaffected: model IDs in evaluator config and `https://claude.ai` as a
 > client origin in CORS examples are content, not attribution.
 >
@@ -40,7 +40,7 @@
 
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
-| Language      | Go 1.27.3                                           |
+| Language      | Go 1.27.4                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.30.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
@@ -54,7 +54,7 @@
 | MCP Tools (individual)    | By instance tier: ~872 Free/CE; ~1027 Premium; ~1093 Ultimate (self-managed) / ~1099 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 29 Free/CE; 35 Premium; 46 Ultimate                                                       |
 | Meta-mode tools           | 34 base (Free/CE) / 40 Premium / 51 self-managed Ultimate / 52 GitLab.com Ultimate (Orbit); `gitlab_server` is served on every one of them and is counted here |
-| Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
+| Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`); see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument names | 18                                                                                                           |
@@ -214,7 +214,7 @@ says which files carry them and where.
 ### Adding a New MCP Tool
 
 1. Create `internal/tools/{domain}/` sub-package directory, with a `doc.go` holding the package comment (every package keeps it there; `make check-godocs` fails on one anywhere else)
-2. Create `{domain}.go` with typed input/output structs (no domain prefix — package provides namespace). A multi-word name separates its words with underscores in the **file** only: `merge_requests.go` in `package mergerequests`, since Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in package identifiers and directories follow the package
+2. Create `{domain}.go` with typed input/output structs (no domain prefix: the package provides the namespace). A multi-word name separates its words with underscores in the **file** only: `merge_requests.go` in `package mergerequests`, since Go's convention and the `stylecheck`/`revive` naming rules refuse underscores in package identifiers and directories follow the package
 3. Create `{domain}_test.go` with table-driven tests using `testutil.NewTestClient` and `httptest`; the test file carries the module's name, underscores included (`merge_requests_test.go`)
 4. Add or update domain-local `ActionSpecs` so the action has one canonical route, owner package, metadata, compatibility policy, individual projection metadata, and tests.
 5. If the domain is new, update the generated/audited catalog aggregation path rather than adding ad hoc root registration calls.
@@ -224,7 +224,7 @@ says which files carry them and where.
 9. Next steps need no extra work on any surface: `toolutil.FinishToolResult`, applied by the meta, dynamic, individual and standalone dispatchers alike, copies the hints the Markdown carries (the ones `WriteHints` wrote) onto the typed output's `next_steps` when the output type embeds `toolutil.HintableOutput`. A type that does not embed it carries its hints in the Markdown alone, since the individual surface validates structured output against the schema the type declares
 10. Run `make gen-tool-reference` to regenerate the site's per-domain tool reference (`site/src/content/docs/reference/tools/` and its `es/` twin), which is generated from the catalog and never edited by hand; a new catalog group also needs its overview and sample questions, in English and Spanish, in `cmd/gen_tool_reference/domains.json`, or generation stops. Then run `make gen-site-stats` (the action count in `site/src/data/stats.json`) and `make gen-action-grants` (the fine-grained table holds one row per action), or `make update-all`, which runs all three
 11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
-12. Write an end-to-end scenario for the action under `test/e2e/gitlab/`, and declare its ID as a typed `harness.ActionID` constant in that package's `actions_test.go` — `common` for an action any instance serves, `ce` for one only an unlicensed instance does, `ee` for Premium or Ultimate. **This is a gate, not a suggestion**: `make check-e2e-static` (`cmd/audit_e2e_coverage -static`, run by `make analyze` and by CI's compile job) fails on a catalog action no scenario names. An action nothing on a Docker instance can run is declared in `cmd/audit_e2e_coverage/exemptions.go` with a category and a reason, and a declaration that stops describing the tree is itself a finding. A string literal at the call site is invisible to the gate, which reads typed constants out of the type checker's record
+12. Write an end-to-end scenario for the action under `test/e2e/gitlab/`, and declare its ID as a typed `harness.ActionID` constant in that package's `actions_test.go`: `common` for an action any instance serves, `ce` for one only an unlicensed instance does, `ee` for Premium or Ultimate. **This is a gate, not a suggestion**: `make check-e2e-static` (`cmd/audit_e2e_coverage -static`, run by `make analyze` and by CI's compile job) fails on a catalog action no scenario names. An action nothing on a Docker instance can run is declared in `cmd/audit_e2e_coverage/exemptions.go` with a category and a reason, and a declaration that stops describing the tree is itself a finding. A string literal at the call site is invisible to the gate, which reads typed constants out of the type checker's record
 
 See the [output format reference](https://docs.jmrp.io/gitlab-mcp-server/reference/output-format/) for the complete response format specification.
 
@@ -234,11 +234,11 @@ See the [output format reference](https://docs.jmrp.io/gitlab-mcp-server/referen
 
 ### Tool naming convention
 
-A tool's runtime name depends on the surface, and on the individual surface it is **declared**, not derived — `IndividualTool.Name` in the domain's `ActionSpec` — so never infer one from a formula.
+A tool's runtime name depends on the surface, and on the individual surface it is **declared**, not derived (`IndividualTool.Name` in the domain's `ActionSpec`), so never infer one from a formula.
 
-- **Individual surface** (`GITLAB_MCP_TOOL_SURFACE=individual`): the prevailing form is domain-first `gitlab_{domain}_{action}` — `issue.list` is `gitlab_issue_list`, `project.get` is `gitlab_project_get`, `branch.create` is `gitlab_branch_create`. A large legacy set is verb-first instead (`gitlab_list_issue_discussions`, `gitlab_get_issue_statistics`, `gitlab_add_ssh_key`), and both forms are real. New actions take the domain-first form.
-- **Meta surface** (`GITLAB_MCP_TOOL_SURFACE=meta`): mostly the bare domain — `gitlab_issue`, `gitlab_project`, `gitlab_group` — with the operation in the `action` argument, alongside a few standalone tools (`gitlab_discover_project`, `gitlab_server`, the `gitlab_interactive_*` elicitation flows). A domain **without** a meta-tool of its own is a set of routes on a base one, not a tool: epics, labels, milestones, boards, members, wikis and releases at group scope are actions on `gitlab_group`; issue discussions and statistics are actions on `gitlab_issue`; todos are actions on `gitlab_user`.
-- **Dynamic surface** (the default): only `gitlab_find_action` and `gitlab_execute_action`, which take the canonical catalog ID directly — `{"action": "issue.list", "params": {…}}`. This is the portable form for an example, because it does not depend on `GITLAB_MCP_TOOL_SURFACE`.
+- **Individual surface** (`GITLAB_MCP_TOOL_SURFACE=individual`): the prevailing form is domain-first `gitlab_{domain}_{action}`: `issue.list` is `gitlab_issue_list`, `project.get` is `gitlab_project_get`, `branch.create` is `gitlab_branch_create`. A large legacy set is verb-first instead (`gitlab_list_issue_discussions`, `gitlab_get_issue_statistics`, `gitlab_add_ssh_key`), and both forms are real. New actions take the domain-first form.
+- **Meta surface** (`GITLAB_MCP_TOOL_SURFACE=meta`): mostly the bare domain (`gitlab_issue`, `gitlab_project`, `gitlab_group`), with the operation in the `action` argument, alongside a few standalone tools (`gitlab_discover_project`, `gitlab_server`, the `gitlab_interactive_*` elicitation flows). A domain **without** a meta-tool of its own is a set of routes on a base one, not a tool: epics, labels, milestones, boards, members, wikis and releases at group scope are actions on `gitlab_group`; issue discussions and statistics are actions on `gitlab_issue`; todos are actions on `gitlab_user`.
+- **Dynamic surface** (the default): only `gitlab_find_action` and `gitlab_execute_action`, which take the canonical catalog ID directly: `{"action": "issue.list", "params": {…}}`. This is the portable form for an example, because it does not depend on `GITLAB_MCP_TOOL_SURFACE`.
 
 Every documentation example must name a tool the surface it shows actually registers, and say which surface that is: an individual-tool example without `GITLAB_MCP_TOOL_SURFACE=individual` is wrong twice over, since the default surface registers neither. `go run ./cmd/audit_doc_tool_names/` checks every `gitlab_*` mention and every `domain.action` ID across `docs/`, `site/src/content/docs/`, `README.md`, `llms-install.md`, `npm/gitlab-mcp-server/README.md` and this file against the names the server registers and the catalog it builds; `--check` makes it a gate. The same demand holds inside the server's own output: `make check-action-ids` fails when a `RelatedActions` entry, a `toolutil.HintAction` argument or a dotted ID in a `Usage` line is not a canonical catalog ID, an alias included, and when any sentence the server serves (an error hint or message, a refusal, a next step, parameter guidance, a schema description in a `jsonschema` tag or a schema map, a `Usage` line, or an individual tool `Description`) names a `gitlab_*` tool. Two places may name one: `internal/tools/dynamic`, its own two tools, and the `See also:` clause of a domain action's individual tool `Description`, the one part `gitlab://tools` rewrites into each surface's names; the rest of a constant `Description` is read like a `Usage` line, and one assembled at run time is held to the same by `TestToolManifest_ServedDescriptions_NameNoToolOutsideTheirSeeAlsoClause` in `internal/resources`, since `gitlab://tools` serves a domain action's `Description` verbatim on the dynamic and meta surfaces as well. A standalone surface tool's description is not one of them: the guided flows and `discover_project.resolve` are registered on meta and individual and served as their `Usage` on dynamic, so each writes its one text as its `Usage` as well, where the rule reads it. The rule's limits are stated in `docs/development/cmd-utilities.md` (The rule over served prose): it does not read the operation label a `WrapErr*` or `ErrRequired*` call prefixes an error with, which is sometimes spelled as a tool name, a value a format reports, a bare meta action name (`Use action 'list'`), or `internal/prompts` and `internal/resources`, which are outside its load.
 
@@ -246,10 +246,10 @@ Every documentation example must name a tool the surface it shows actually regis
 
 Four error wrapping functions in `internal/toolutil/errors.go`, used across the 181 sub-packages under `internal/tools/`:
 
-- `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
-- `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
+- `WrapErr(op, err)`: read-only operations (list, get, search). Generic classification only.
+- `WrapErrWithMessage(op, err)`: mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
 - `WrapErrWithHint(op, err, hint)`: when a specific corrective action is known (e.g., "use branch.unprotect first", naming the action by its canonical ID). Includes detail + actionable suggestion.
-- `WrapErrWithStatusHint(op, err, code, hint)` — combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
+- `WrapErrWithStatusHint(op, err, code, hint)`: combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
 - `NotFoundResult(resource, identifier, hints...)`: for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Used by the get handlers of 22 domains, each through a helper in its `markdown.go`, whose route is wrapped with `ActionRoute.WrapNotFound`, which hands the output's builder the arguments with the documented aliases resolved as the handler read them, and names the identifier through `toolutil.ParamText` so a numeric id reads as the caller wrote it. Defined in `internal/toolutil/not_found.go`.
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. A hint that names a role, a license or an owner is keyed on `IsPermissionRefusal(err)` instead of a status: GitLab refuses a missing permission with 401 at the routes of [entry 55](docs/development/upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403), so a hint scoped to 403 is never shown there, and a hint keyed on 401 alone would follow the verdict that the token itself was refused. The predicate is true for a REST 401 or 403 whose body carries no RFC 6750 error code and does not refuse the account itself, as the API guard's plain 403 for a blocked or deactivated account does (`gitlabclient.RefusalMayBePermission`), and a route whose 403 means something else pairs it with `IsHTTPStatus`. A refusal of a fine-grained token's grant is neither: `ClassifyError` describes it with the permission GitLab names, `IsPermissionRefusal` is false for it, and `WrapErrWithHint` drops the handler's hint from it, so a 403-keyed hint never follows it either. A hint keyed on the 405 of a request other than a GET (HEAD included) that names a project by `:id` checks `IsMovedProjectRefusal(err)` first and wraps with `WrapErrWithMessage`, since GitLab refuses most non-GET requests naming a moved project by its old path with 405 before the route looks at the merge request, token or file the hint is about ([the contributor page](docs/development/error-handling.md#why-a-405-can-name-the-projects-path)). A GraphQL mutation handler decodes its payload as a pointer beside the top-level `errors`, because a refused mutation answers with the payload `null` and its reason there, and returns `GraphQLTopLevelError` when the payload is absent. The opposite answer, a write GitLab ran and answered without the object it returns (it checks a fine-grained token against the payload's object only after the write, issue 1103), goes through `toolutil.UnconfirmedWrite` or, in a handler that decodes the payload itself, `client.Authority().UnconfirmedWrite`: a fine-grained session is told the write was probably committed, and a classic session, whose client carries no authority, keeps the handler's own error. Which writes the fine-grained table says can answer so is held by `TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered` in `internal/tools/actiongrants`, which fails on one a regeneration adds until its handler is looked at and declared. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md), [the contributor page](docs/development/error-handling.md) and [Error Handling](https://docs.jmrp.io/gitlab-mcp-server/operations/error-handling/).
@@ -293,11 +293,11 @@ A field GitLab sends that client-go's struct does not carry is read from the **c
 Two modules start the **real binary** and drive it the way a client does, both
 without GitLab or credentials, and both run on every CI push:
 
-- `test/e2e/http` (`httpe2e`) — the HTTP handler chain: cross-origin decisions,
+- `test/e2e/http` (`httpe2e`) covers the HTTP handler chain: cross-origin decisions,
   preflight, authentication modes, rate limiting, the JSON-RPC shape of a
   rejection, and the flags that restrict them; with Docker, the proxies and
   balancers the documentation prints, read from the pages.
-- `test/e2e/stdio` (`stdioe2e`) — the stdio transport: pipes, process lifetime,
+- `test/e2e/stdio` (`stdioe2e`) covers the stdio transport: pipes, process lifetime,
   stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
   variables stdio configuration actually uses.
 
@@ -314,7 +314,7 @@ Both drive the binary; only these three are about the binary.
 stdio is the primary transport and nothing drove it until `test/e2e/stdio`
 existed. Two defects shipped through that gap: a nil dereference that killed the
 process on an ordinary eliciting tool call, and a keepalive ping that closed the
-session of any client speaking 2026-07-28 after 45 idle seconds — the second
+session of any client speaking 2026-07-28 after 45 idle seconds, the second
 held in place by a unit test asserting the ping ought to be there. Both were
 found by hand against a binary, which is what these modules automate.
 
@@ -422,11 +422,11 @@ The whole workflow, channel by channel, is in [Release Process](docs/development
 After making changes, run targeted verification on the **changed files/packages only** (not the entire project):
 
 ```bash
-# Go files — run on affected packages
+# Go files: run on affected packages
 go test ./internal/tools/branches/ -count=1    # tests on changed package
 golangci-lint run --build-tags e2e ./internal/tools/branches/ # lint changed package
 
-# Markdown files — run on specific changed files
+# Markdown files: run on specific changed files
 npx markdownlint-cli2 docs/development/cmd-utilities.md README.md  # lint specific .md files
 npx markdownlint-cli2 --fix docs/development/cmd-utilities.md      # auto-fix specific .md files
 
@@ -444,7 +444,7 @@ node scripts/check-doc-links.mjs   # from the root: tracked local links and site
 make inspector                             # compile + launch Inspector via stdio
 make inspector-stop                        # stop Inspector and clean up
 
-# Full project analysis (use sparingly — for pre-commit or CI)
+# Full project analysis (use sparingly, for pre-commit or CI)
 make analyze                               # all analysis gates, full project
 make analyze-fix                           # auto-fix what can be fixed
 make analyze-report                        # generate LLM-consumable report
@@ -567,22 +567,22 @@ The 18 skills in `.github/skills/` are task templates any agent can invoke:
 
 ### Increasing test coverage
 
-1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/development/testing/testing.md` with `go run ./cmd/gen_testing_docs/` at the end of the test phase
+1. Use `@Test Expert` agent: it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/development/testing/testing.md` with `go run ./cmd/gen_testing_docs/` at the end of the test phase
 2. Or use `increase-test-coverage` skill for the same workflow invoked from any agent
 
 ### Reviewing code quality
 
-1. Use `review-and-refactor` skill — reads all `.github/instructions/` files, reviews against them, then refactors
+1. Use `review-and-refactor` skill: it reads all `.github/instructions/` files, reviews against them, then refactors
 2. For security or architecture review: Use `@SE: Reviewer` agent (specify "review security" or "review architecture")
 
 ### Debugging a failing test or unexpected behavior
 
-1. Use `@Debug Mode` agent — systematic 4-phase investigation
+1. Use `@Debug Mode` agent for a systematic 4-phase investigation
 2. Provide the error message, test name, or failing behavior
 
 ### Checking library documentation
 
-1. Use `@Go MCP Server Expert` agent — has Context7 integration, resolves library ID, fetches current docs
+1. Use `@Go MCP Server Expert` agent: it has Context7 integration, resolves library ID, fetches current docs
 2. Useful for MCP SDK, GitLab client, or any Go dependency questions
 
 ### Updating documentation after changes
@@ -705,7 +705,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "A
 - **Meta-tools disabled**: `GITLAB_MCP_TOOL_SURFACE` decides; unset it for the default dynamic surface, set `individual` for one tool per action, or `meta` when meta-tools are what you want. The `META_TOOLS` boolean it replaced was removed in 3.0.0
 - **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `GITLAB_MCP_TOOL_SURFACE=meta` to use meta-tools.
 - **Pagination missing**: Ensure the list handler applies `toolutil.ApplyListOptions` to the request and fills its output with `toolutil.PaginationFromResponse` (plus `AdjustPagination` on a route that sends no totals, which is GitLab's search API: it numbers the page and derives `has_more`, and fills the totals only on a lone page, since nothing on any other page counts the result), and that a list GitLab pages by keyset passes `toolutil.KeysetContinuation` on its SDK call, or the `next_page_token` its pages publish cannot be followed
-- **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler
+- **Test mocking**: All tests use `httptest.NewServer`, so check URL routing in mock handler
 
 ### Running specific test domains
 

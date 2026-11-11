@@ -707,7 +707,7 @@ test:
     - uses: actions/checkout@v7
     - uses: actions/setup-go@v7
       with:
-        go-version: '1.27.3'
+        go-version: '1.27.4'
 
     - name: Run tests
       run: go test -race -coverprofile=coverage.out ./...
@@ -817,7 +817,7 @@ func TestUserEqual(t *testing.T) {
 ## Assertions off the test goroutine (MANDATORY)
 
 Never call `t.Fatal`/`t.Fatalf`/`t.FailNow` inside an `httptest` handler, a
-`go` statement, an errgroup task, or an MCP tool handler — it kills only that
+`go` statement, an errgroup task, or an MCP tool handler: it kills only that
 goroutine and truncates the response. Follow the six-rule contract in
 `.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
 return, or record with atomics and assert on the test goroutine). Verify with

@@ -1,12 +1,12 @@
-# gitlab-mcp-server — GitLab MCP Server in Go
+# gitlab-mcp-server: GitLab MCP Server in Go
 
 ## Project Overview
 
-This project implements a **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools. It is written in **Go** using the official `github.com/modelcontextprotocol/go-sdk` package and communicates with the **GitLab REST API v4** (primary) and **GraphQL API** (for domains without REST coverage — see ADR-0006).
+This project implements a **Model Context Protocol (MCP) server** that exposes GitLab operations as MCP tools. It is written in **Go** using the official `github.com/modelcontextprotocol/go-sdk` package and communicates with the **GitLab REST API v4** (primary) and **GraphQL API** (for domains without REST coverage; see ADR-0006).
 
 ## Architecture
 
-- **Language**: Go 1.27.3
+- **Language**: Go 1.27.4
 - **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0
 - **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v3.30.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
@@ -84,7 +84,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 181 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from
-│   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
+│   │   ├── register.go     # RegisterAll(): projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterMetaStandaloneTools(): the standalone utilities (gitlab_discover_project, the gitlab_interactive_* flows) on the meta and individual surfaces; the catalog groups are registered by RegisterMetaCatalog (meta_catalog.go)
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
@@ -167,7 +167,7 @@ gitlab-mcp-server/
 After implementing changes, run targeted analysis on the **changed files/packages only**:
 
 ```bash
-# Go files — run on affected packages (replace path with changed package)
+# Go files: run on affected packages (replace path with changed package)
 go test ./internal/tools/{domain}/ -count=1
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 
@@ -258,7 +258,7 @@ GOOS=darwin GOARCH=arm64 go build -o dist/gitlab-mcp-server-darwin-arm64 ./cmd/s
 When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
-2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
+2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.sigstore.json`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)`: the Homebrew formula, winget, the installers and `scripts/fetch-release-assets.sh` look assets up by exact name and will not find a decorated one
 3. The full chain (draft-then-publish, `.mcpb` bundle, npm, PyPI and NuGet trusted publishers, Homebrew tap, winget, `server.json` stamping, and how to rehearse it with `gh workflow run release.yml --ref <branch>`) is documented in `docs/development/release-process.md`
 
 ### Git Workflow
@@ -281,9 +281,9 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a preview card naming the action and echoing its arguments (`toolutil.FormatSafeModePreviewMarkdown`) | `false` (default)  |
 | `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license`, then from the plans of the namespaces the token administers (`GET /namespaces`), then, on GitLab.com, from the plans of the top-level groups the token is a member of (a paged GraphQL read, one query per page of 100), falling back to `free`. Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `GITLAB_MCP_LANGUAGE`        | Language of the texts a client shows a person directly (elicitation questions, form field titles, progress messages): `en` or `es`, per process, both transports (also `--language`); what the model reads and the four listings stay English. The message catalog is `internal/i18n`, see `docs/development/i18n.md` | `en` (default) |
-| `MODELEVAL_MODELS`       | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs to ask; `fake:perfect` replays the corpus key with no provider call | —                  |
+| `MODELEVAL_MODELS`       | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs to ask; `fake:perfect` replays the corpus key with no provider call | _(none)_           |
 | `MODELEVAL_SPEND`        | `test/e2e/modeleval`: consent to call a real provider (`yes`, `true`, `1`) | `no` (default)     |
-| `MODELEVAL_BUDGET_USD`   | `test/e2e/modeleval`: ceiling in US dollars a run stops at | —                  |
+| `MODELEVAL_BUDGET_USD`   | `test/e2e/modeleval`: ceiling in US dollars a run stops at | _(none)_           |
 | `MODELEVAL_SURFACES`     | `test/e2e/modeleval`: surfaces to measure; individual is left out by cost | `dynamic,meta`     |
 | `MODELEVAL_CASES`        | `test/e2e/modeleval`: comma-separated case IDs; empty asks every case | _(all)_            |
 | `GITLAB_MCP_MAX_HTTP_CLIENTS`       | Maximum unique (token, GitLab URL) server entries kept in the HTTP pool; bounds pooled entries, not sessions (also `--max-http-clients` flag) | `100` (default)    |
@@ -338,5 +338,5 @@ Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, 
 Conversations with the developer may be in any language, but **every file committed to this repository must be in English**, with the two exceptions the table names: the Spanish half of the user documentation, which translates the English page it sits beside and changes with it, and the Spanish message catalog, which translates the English catalog (`internal/i18n/catalog_en.go`) key by key and is what `GITLAB_MCP_LANGUAGE=es` shows a person (issue 1547). Its comments and the names around it stay English like any other Go file.
 
 - **Tests with HTTP mocks or goroutines**: never `t.Fatal` inside handler
-  literals or `go` statements — follow
+  literals or `go` statements; follow
   `.github/instructions/test-goroutines.instructions.md`.

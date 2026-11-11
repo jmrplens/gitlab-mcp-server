@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to report this bug!
 
-        > For **security vulnerabilities**, do NOT use this form — please use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) instead.
+        > For **security vulnerabilities**, do NOT use this form; please use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new) instead.
 
   - type: checkboxes
     id: prereqs
@@ -86,7 +86,7 @@ body:
     id: go-version
     attributes:
       label: Go version (only if building from source)
-      placeholder: "e.g., 1.27.3"
+      placeholder: "e.g., 1.27.4"
 
   - type: dropdown
     id: mcp-client

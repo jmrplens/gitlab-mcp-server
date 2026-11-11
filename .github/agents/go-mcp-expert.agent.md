@@ -177,19 +177,19 @@ Always write idiomatic Go code that follows the official SDK patterns and Go com
 ## MCP Go SDK v1.7.0 Key Knowledge
 
 - **Protocol version**: 2026-07-28 (default; served over HTTP only in stateless mode, the server default). Legacy stateful HTTP (`--stateless=false`) negotiates 2025-11-25 or older
-- **Project Go requirement**: 1.27.3
-- **OAuth**: Stabilized — no build tag needed, `auth/` and `auth/extauth/` packages
+- **Project Go requirement**: 1.27.4
+- **OAuth**: Stabilized, with no build tag needed; `auth/` and `auth/extauth/` packages
 - **DNS rebinding protection**: Built-in for HTTP transport (localhost binding)
 - **Cross-origin protection**: `http.CrossOriginProtection` middleware applied automatically
-- **Case-sensitive JSON**: Uses `segmentio/encoding` instead of `encoding/json` — field names are case-sensitive
-- **Schema caching**: `SchemaFor[T]()` caches JSON schemas per type for performance — call at init time
-- **Extensions field**: `mcp.Extensions` map for MCP Apps (SEP-2133) — forward-compatible metadata
+- **Case-sensitive JSON**: Uses `segmentio/encoding` instead of `encoding/json`, so field names are case-sensitive
+- **Schema caching**: `SchemaFor[T]()` caches JSON schemas per type for performance; call at init time
+- **Extensions field**: `mcp.Extensions` map for MCP Apps (SEP-2133): forward-compatible metadata
 - **MCPGODEBUG**: Environment variable for behavior change compatibility (`MCPGODEBUG=x=1,y=2`)
 - **Input validation errors**: Return as tool results (not JSON-RPC errors) so LLMs can self-correct
-- **Tool name validation**: `/^[a-zA-Z0-9_-]+$/` — no dots, spaces, or special chars
-- **Icons**: icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973) — this project ships an SVG entry plus `Theme`-tagged light/dark WebP fallbacks per icon (`internal/toolutil/icons.go`, `cmd/gen_icon_webp`) for clients that reject SVG
+- **Tool name validation**: `/^[a-zA-Z0-9_-]+$/`: no dots, spaces, or special chars
+- **Icons**: icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973); this project ships an SVG entry plus `Theme`-tagged light/dark WebP fallbacks per icon (`internal/toolutil/icons.go`, `cmd/gen_icon_webp`) for clients that reject SVG
 - **Elicitation**: URL mode for OAuth flows (SEP-1036), enum improvements (SEP-1330)
-- **SSE polling**: Server-Sent Events polling transport (SEP-1699) — avoid in favor of streamable HTTP
+- **SSE polling**: Server-Sent Events polling transport (SEP-1699); avoid in favor of streamable HTTP
 
 ## GitLab API Expertise
 
@@ -217,13 +217,13 @@ Use REST v4 when:
 - **Max nodes**: 100 per page (`first: 100`)
 - **Query size**: 10,000 character limit
 - **Timeout**: 30 seconds
-- **Null handling**: `null` means unauthorized (not "empty") — `{ nodes: [] }` means empty
+- **Null handling**: `null` means unauthorized (not "empty"), while `{ nodes: [] }` means empty
 - **Deprecation**: Fields deprecated for 6 releases + next major version, then removed
 
 ### REST v4 Patterns
 
 - **Pagination**: Offset (`page`/`per_page`, max 100) or keyset (`id_after`/`id_before` with `order_by`/`sort`)
-- **Keyset pagination**: Preferred for large collections (>10k items) — more efficient than offset
+- **Keyset pagination**: Preferred for large collections (>10k items), as it is more efficient than offset
 - **Rate limiting**: Retry on 429 with `Retry-After` header
 - **Testing deprecation**: Use `remove_deprecated=true` param to test against future breaking changes
 - **Encoding**: URL-encode project paths with `/` → `%2F` (e.g., `group%2Fproject`)

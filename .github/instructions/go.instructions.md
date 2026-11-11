@@ -76,7 +76,7 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
 
 ### Formatting
 
-- Always use the repository's configured Go formatters — `goimports`, `gofumpt`, and `gci` via `golangci-lint fmt`
+- Always use the repository's configured Go formatters: `goimports`, `gofumpt`, and `gci` via `golangci-lint fmt`
 - Use `goimports` for import cleanup, `gofumpt` for stricter gofmt-compatible formatting, and `gci` for deterministic import sections
 - Before committing, run `make analyze-fix` to apply supported Go and Markdown fixes
 - Keep line length reasonable (no hard limit, but consider readability)
@@ -263,7 +263,7 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
   - Always close the writer; use `CloseWithError(err)` on failures
   - `io.Pipe` is for streaming, not rewinding or making readers reusable
 
-- **Warning:** When using `io.Pipe` (especially with multipart writers), all writes must be performed in strict, sequential order. Do not write concurrently or out of order—multipart boundaries and chunk order must be preserved. Out-of-order or parallel writes can corrupt the stream and result in errors.
+- **Warning:** When using `io.Pipe` (especially with multipart writers), all writes must be performed in strict, sequential order. Do not write concurrently or out of order: multipart boundaries and chunk order must be preserved. Out-of-order or parallel writes can corrupt the stream and result in errors.
 
 - Streaming multipart/form-data with `io.Pipe`:
   - `pr, pw := io.Pipe()`; `mw := multipart.NewWriter(pw)`; use `pr` as the HTTP request body
@@ -408,7 +408,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 
 ## Go 1.27 Project Modern Features
 
-This project declares `1.27.3`; prefer these modern patterns when they simplify code without reducing clarity:
+This project declares `1.27.4`; prefer these modern patterns when they simplify code without reducing clarity:
 
 ### Promoted Fields in Composite Literals (Go 1.27+)
 
