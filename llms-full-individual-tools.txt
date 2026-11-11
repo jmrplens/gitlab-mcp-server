@@ -3218,7 +3218,7 @@ Update an existing epic. Supports close/reopen via state_event. Returns: the upd
 - `start_date` (string): Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched
 - `state_event` (string): State event: CLOSE or REOPEN
 - `title` (string): Updated epic title
-- `weight` (integer): Weight of the epic
+- `weight` (integer): Weight of the epic, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -7209,7 +7209,7 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 - `state_event` (string): State transition. Set to close or reopen when changing issue state.
 - `title` (string): New title
 - `updated_at` (string): Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)
-- `weight` (integer): Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched
+- `weight` (integer): Issue weight, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -15641,7 +15641,7 @@ Update an existing work item by namespace path and IID. Returns: the updated wor
 - `state_event` (string): State event: CLOSE or REOPEN
 - `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string): New title
-- `weight` (integer): Weight of the work item
+- `weight` (integer): Weight of the work item, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched
 - `work_item_iid` (integer) (required): Work item IID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

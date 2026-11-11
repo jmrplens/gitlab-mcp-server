@@ -16112,7 +16112,7 @@
               "type": "string"
             },
             "weight": {
-              "description": "Weight of the epic",
+              "description": "Weight of the epic, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched",
               "type": [
                 "null",
                 "integer"
@@ -25207,7 +25207,10 @@
           "type": "string"
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -31369,7 +31372,7 @@
               "type": "string"
             },
             "weight": {
-              "description": "Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched",
+              "description": "Issue weight, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched",
               "type": [
                 "null",
                 "integer"
@@ -33666,7 +33669,7 @@
               "type": "string"
             },
             "weight": {
-              "description": "Weight of the work item",
+              "description": "Weight of the work item, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched",
               "type": [
                 "null",
                 "integer"

@@ -1795,7 +1795,7 @@ func TestUpdate_AllOptions(t *testing.T) {
 		RemoveLabelIDs: []int64{40},
 		StartDate:      new("2026-06-01"),
 		DueDate:        new("2026-06-30"),
-		Weight:         &weight,
+		Weight:         toolutil.NullableOf(weight),
 		HealthStatus:   new("needsAttention"),
 		IterationID:    &iteration,
 		Color:          "#00ff00",
@@ -3402,7 +3402,8 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 		{UpdateInput{RemoveLabelIDs: []int64{12}}, wireCase{name: "remove_label_ids", widget: "labelsWidget", field: "removeLabelIds", want: []any{"gid://gitlab/Label/12"}}},
 		{UpdateInput{StartDate: new("2026-06-01")}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: "2026-06-01"}},
 		{UpdateInput{DueDate: new("2026-06-30")}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: "2026-06-30"}},
-		{UpdateInput{Weight: &weight}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: float64(3)}},
+		{UpdateInput{Weight: toolutil.NullableOf(weight)}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: float64(3)}},
+		{UpdateInput{Weight: toolutil.NullableOf[int64](0)}, wireCase{name: "weight zero", widget: "weightWidget", field: "weight", want: float64(0)}},
 		{UpdateInput{HealthStatus: new("needsAttention")}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: "needsAttention"}},
 		{UpdateInput{IterationID: &iteration}, wireCase{name: "iteration_id", widget: "iterationWidget", field: "iterationId", want: "gid://gitlab/Iteration/7"}},
 		{UpdateInput{Color: "#00ff00"}, wireCase{name: "color", widget: "colorWidget", field: "color", want: "#00ff00"}},
@@ -3444,6 +3445,9 @@ func TestUpdate_Removals_ReachTheWire(t *testing.T) {
 		{UpdateInput{DueDate: &empty}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: nil}},
 		{UpdateInput{HealthStatus: &empty}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: nil}},
 		{UpdateInput{Description: &empty}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: ""}},
+		// A weight is removed by null and only by null: 0 is a weight, and
+		// GitLab refuses a weight widget without the key (issue 1390).
+		{UpdateInput{Weight: toolutil.NullableNull[int64]()}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: nil}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -3462,6 +3466,32 @@ func TestUpdate_Removals_ReachTheWire(t *testing.T) {
 				t.Errorf("%s.%s = %#v (present %v), want %#v", testCase.widget, testCase.field, value, present, testCase.want)
 			}
 		})
+	}
+}
+
+// TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire drives a null
+// weight through toolutil.UnmarshalParams, the decoder every surface's
+// arguments go through, and asserts the mutation removes the weight: a
+// pointer read the null as a weight left out, and the update went out with no
+// weight widget at all (issue 1390).
+func TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
+		"full_path": testFullPath, "work_item_iid": 42, "weight": nil,
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+	if _, err = Update(t.Context(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	widget, ok := mutationInput(t, got)["weightWidget"].(map[string]any)
+	if !ok {
+		t.Fatalf("mutation input carries no weightWidget: %v", mutationInput(t, got))
+	}
+	if value, present := widget["weight"]; !present || value != nil {
+		t.Errorf("weightWidget.weight = %#v (present %v), want null", value, present)
 	}
 }
 

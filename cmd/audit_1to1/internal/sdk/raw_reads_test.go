@@ -80,6 +80,25 @@ func Held(c *gl.Client, held *pending) error {
 	_, err = c.Do(held.request(), &archived)
 	return err
 }
+
+func Stored(c *gl.Client, held *pending) error {
+	var err error
+	held.req, err = c.NewRequest("GET", "widgets/3", nil, nil)
+	if err != nil {
+		return err
+	}
+	del, err := c.NewRequest("DELETE", "widgets/3", nil, nil)
+	if err != nil {
+		return err
+	}
+	del = del
+	var archived widgetAPI
+	if _, err := c.Do(held.request(), &archived); err != nil {
+		return err
+	}
+	_, err = c.Do(del, nil)
+	return err
+}
 `
 
 // TestWalkToolWorkarounds_TheRequestADoCallSends_IsToldOnlyThroughVariables
@@ -92,7 +111,10 @@ func Held(c *gl.Client, held *pending) error {
 // is in no variable the walk follows, so a call of Do that reads it back
 // through a method cannot be told and its decode is counted against both:
 // storing the request in a field is not read as handing it to a variable,
-// and the name of the method Do reads it through is not read as one.
+// and the name of the method Do reads it through is not read as one. A
+// request built straight into a field binds no variable either, so the
+// method that reads it back is not told it, and a variable assigned itself
+// keeps the one request it holds.
 func TestWalkToolWorkarounds_TheRequestADoCallSends_IsToldOnlyThroughVariables(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/told/told.go": strings.ReplaceAll(toldTool, "~", "`")})
 
@@ -123,6 +145,10 @@ func TestWalkToolWorkarounds_TheRequestADoCallSends_IsToldOnlyThroughVariables(t
 		{
 			name: "a request read back from a field", site: "told.Held",
 			want: []workaround{request("told.Held", "GET", decode), request("told.Held", "DELETE", decode)},
+		},
+		{
+			name: "a request built straight into a field", site: "told.Stored",
+			want: []workaround{request("told.Stored", "GET", decode), request("told.Stored", "DELETE", decode)},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

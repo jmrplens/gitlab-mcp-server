@@ -712,11 +712,13 @@ type UpdateInput struct {
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
 	StartDate      *string `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD). Pass an empty string to remove the start date. Omit the field to leave it untouched"`
 	DueDate        *string `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched"`
-	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
-	HealthStatus   *string `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
-	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration. Pass 0 to remove the work item from its iteration. Omit the field to leave it untouched"`
-	Color          string  `json:"color,omitempty" tier:"premium" jsonschema:"Color hex code (e.g. #fefefe)"`
-	Status         string  `json:"status,omitempty" tier:"premium" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
+	// Weight tells null from absence, which a pointer cannot: null removes
+	// the weight, 0 is a weight of its own (issue 1390).
+	Weight       toolutil.Nullable[int64] `json:"weight,omitzero" tier:"premium" jsonschema:"Weight of the work item, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched"`
+	HealthStatus *string                  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
+	IterationID  *int64                   `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration. Pass 0 to remove the work item from its iteration. Omit the field to leave it untouched"`
+	Color        string                   `json:"color,omitempty" tier:"premium" jsonschema:"Color hex code (e.g. #fefefe)"`
+	Status       string                   `json:"status,omitempty" tier:"premium" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the handler reads
@@ -751,10 +753,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // request option that sends the removals the input asks for, nil when it asks
 // for none.
 //
-// The milestone, parent, iteration, dates and health status follow the
-// clearing convention of [toolutil.WorkItemWidgetInputs]: 0 removes a
-// reference and "" removes a date or the health status, which client-go cannot
-// send by itself (register row 119). An empty description is sent as one,
+// The milestone, parent, iteration, dates, health status and weight follow
+// the clearing convention of [toolutil.WorkItemWidgetInputs]: 0 removes a
+// reference, "" removes a date or the health status and null removes the
+// weight, which client-go cannot send by itself (register row 119). An empty description is sent as one,
 // since the description widget takes "" and client-go sends whatever pointer
 // it is handed.
 func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.RequestOptionFunc, error) {
@@ -784,12 +786,10 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.Reques
 		StartDate:    input.StartDate,
 		DueDate:      input.DueDate,
 		HealthStatus: input.HealthStatus,
+		Weight:       input.Weight,
 	})
 	if err != nil {
 		return nil, nil, err
-	}
-	if input.Weight != nil {
-		opts.Weight = input.Weight
 	}
 	if input.Color != "" {
 		opts.Color = &input.Color

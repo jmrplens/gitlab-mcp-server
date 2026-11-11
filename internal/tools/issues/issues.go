@@ -76,21 +76,24 @@ type BasicOutput struct {
 	// Milestone is the full milestone object mirrored from the SDK.
 	Milestone *toolutil.MRMilestoneOutput `json:"milestone,omitempty"`
 	// ClosedBy is the full closer object mirrored from the SDK.
-	ClosedBy          *toolutil.IssueUserOutput `json:"closed_by,omitempty"`
-	WebURL            string                    `json:"web_url"`
-	CreatedAt         string                    `json:"created_at"`
-	UpdatedAt         string                    `json:"updated_at"`
-	ClosedAt          string                    `json:"closed_at"`
-	DueDate           string                    `json:"due_date"`
-	Confidential      bool                      `json:"confidential"`
-	DiscussionLocked  bool                      `json:"discussion_locked"`
-	ProjectID         int64                     `json:"project_id"`
-	Weight            int64                     `json:"weight,omitempty" tier:"premium"`
-	IssueType         string                    `json:"issue_type,omitempty"`
-	MergeRequestCount int64                     `json:"merge_requests_count,omitempty"`
-	UserNotesCount    int64                     `json:"user_notes_count,omitempty"`
-	Upvotes           int64                     `json:"upvotes,omitempty"`
-	Downvotes         int64                     `json:"downvotes,omitempty"`
+	ClosedBy         *toolutil.IssueUserOutput `json:"closed_by,omitempty"`
+	WebURL           string                    `json:"web_url"`
+	CreatedAt        string                    `json:"created_at"`
+	UpdatedAt        string                    `json:"updated_at"`
+	ClosedAt         string                    `json:"closed_at"`
+	DueDate          string                    `json:"due_date"`
+	Confidential     bool                      `json:"confidential"`
+	DiscussionLocked bool                      `json:"discussion_locked"`
+	ProjectID        int64                     `json:"project_id"`
+	// Weight is read off the captured answer as a pointer, since client-go
+	// decodes it into an int64 and so reads GitLab's null, an issue with no
+	// weight, as the weight 0, which is a weight of its own (issue 1390).
+	Weight            *int64 `json:"weight,omitempty" tier:"premium"`
+	IssueType         string `json:"issue_type,omitempty"`
+	MergeRequestCount int64  `json:"merge_requests_count,omitempty"`
+	UserNotesCount    int64  `json:"user_notes_count,omitempty"`
+	Upvotes           int64  `json:"upvotes,omitempty"`
+	Downvotes         int64  `json:"downvotes,omitempty"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed). Two of client-go's keys are not among
 	// them. external_id is filled only from the string id of an external
@@ -198,27 +201,30 @@ type ListOutput struct {
 
 // UpdateInput defines parameters for updating an existing issue.
 type UpdateInput struct {
-	ProjectID        toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	IssueIID         int64                `json:"issue_iid"               jsonschema:"Issue IID (project-scoped internal ID, not 'issue_id'),required"`
-	Title            string               `json:"title,omitempty"         jsonschema:"New title"`
-	Description      *string              `json:"description,omitempty"   jsonschema:"New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
-	StateEvent       string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
-	AssigneeID       *int64               `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
-	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched"`
-	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched"`
-	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
-	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
-	EpicID           *int64               `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate. Pass 0 to take the issue out of its epic. Omit the field to leave it untouched"`
-	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged). Mutually exclusive with milestone"`
-	Milestone        string               `json:"milestone,omitempty"     jsonschema:"Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id"`
-	DueDate          *string              `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched"`
-	StartDate        *string              `json:"start_date,omitempty"    jsonschema:"New start date in YYYY-MM-DD format. Pass an empty string to remove the start date. Omit the field to leave it untouched. GitLab reads it from 19.1"`
-	Severity         string               `json:"severity,omitempty"      jsonschema:"New severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only"`
-	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
-	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
-	Weight           *int64               `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher. 0 is a weight of its own. Omit the field to leave it untouched"`
-	DiscussionLocked *bool                `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
-	UpdatedAt        string               `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
+	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
+	IssueIID     int64                `json:"issue_iid"               jsonschema:"Issue IID (project-scoped internal ID, not 'issue_id'),required"`
+	Title        string               `json:"title,omitempty"         jsonschema:"New title"`
+	Description  *string              `json:"description,omitempty"   jsonschema:"New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched"`
+	StateEvent   string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
+	AssigneeID   *int64               `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
+	AssigneeIDs  []int64              `json:"assignee_ids,omitempty"  jsonschema:"User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	Labels       []string             `json:"labels,omitempty"        jsonschema:"Label names that replace all labels on the issue. Pass [] to remove every label. Omit the field to leave them untouched"`
+	AddLabels    []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
+	RemoveLabels []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
+	EpicID       *int64               `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate. Pass 0 to take the issue out of its epic. Omit the field to leave it untouched"`
+	MilestoneID  *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged). Mutually exclusive with milestone"`
+	Milestone    string               `json:"milestone,omitempty"     jsonschema:"Title of a project or ancestor-group milestone to assign, matched exactly (case-sensitive). GitLab leaves the milestone unchanged when no milestone has that title. Use milestone_id 0 to unset. Mutually exclusive with milestone_id"`
+	DueDate      *string              `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched"`
+	StartDate    *string              `json:"start_date,omitempty"    jsonschema:"New start date in YYYY-MM-DD format. Pass an empty string to remove the start date. Omit the field to leave it untouched. GitLab reads it from 19.1"`
+	Severity     string               `json:"severity,omitempty"      jsonschema:"New severity of an incident (unknown, low, medium, high, critical). GitLab applies it to incidents only"`
+	Confidential *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
+	IssueType    string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
+	// Weight tells null from absence, which a pointer cannot: null removes
+	// the weight, 0 is a weight of its own, and a key left out leaves the
+	// weight as it is (issue 1390).
+	Weight           toolutil.Nullable[int64] `json:"weight,omitzero"         tier:"premium" jsonschema:"Issue weight, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched"`
+	DiscussionLocked *bool                    `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
+	UpdatedAt        string                   `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
 }
 
 // DeleteInput defines parameters for deleting an issue.
@@ -314,7 +320,7 @@ func ToBasicOutput(issue *gl.Issue, extra toolutil.IssueBasicExtra) BasicOutput 
 	out.Confidential = issue.Confidential
 	out.DiscussionLocked = issue.DiscussionLocked
 	out.ProjectID = issue.ProjectID
-	out.Weight = issue.Weight
+	out.Weight = extra.Weight
 	out.MergeRequestCount = issue.MergeRequestCount
 	if issue.IssueType != nil {
 		out.IssueType = *issue.IssueType
@@ -648,11 +654,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // empties each one reaches GitLab (issue 1297): a description of "" is sent
 // as "", a due date or start date of "" as null through client-go's
 // ResetDueDate and ResetStartDate, an empty assignee list as [], an empty
-// label list as "", and a weight of 0 as 0. Returns an error if due_date or
-// start_date does not parse, the weight is negative, or the milestone is named
-// both by title and by ID.
+// label list as "", a weight of 0 as 0 and a null weight as null through
+// client-go's ResetWeight. Returns an error if due_date or start_date does not
+// parse, the weight is negative, or the milestone is named both by title and
+// by ID.
 func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
-	if err := checkWeight("issueUpdate", input.Weight); err != nil {
+	if err := checkWeight("issueUpdate", input.Weight.Ptr()); err != nil {
 		return nil, err
 	}
 	if err := checkMilestoneChoice("issueUpdate", input.Milestone, input.MilestoneID != nil); err != nil {
@@ -716,7 +723,10 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if input.Severity != "" {
 		opts.Severity = new(input.Severity)
 	}
-	opts.Weight = input.Weight
+	// GitLab removes a weight when it is sent null, which ResetWeight writes;
+	// 0 is a weight and goes out as one.
+	opts.Weight = input.Weight.Ptr()
+	opts.ResetWeight = input.Weight.IsNull()
 	opts.EpicID = input.EpicID
 	if input.DiscussionLocked != nil {
 		opts.DiscussionLocked = input.DiscussionLocked

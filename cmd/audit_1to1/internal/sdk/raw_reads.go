@@ -154,9 +154,11 @@ func (s bodyScan) requestsOf(body *ast.BlockStmt, site string, first int) bodyRe
 }
 
 // bind maps the variable the first of lhs names to the place of the raw
-// request rhs builds, when rhs is the one call that builds one.
+// request rhs builds, when rhs is the one call that builds one. An
+// assignment and a declaration both name at least one target, so lhs is
+// never empty.
 func (b bodyRequests) bind(info *types.Info, lhs, rhs []ast.Expr) {
-	if len(lhs) == 0 || len(rhs) != 1 {
+	if len(rhs) != 1 {
 		return
 	}
 	call, _ := ast.Unparen(rhs[0]).(*ast.CallExpr)
@@ -177,7 +179,9 @@ func (b bodyRequests) assign(variable *types.Var, place int) {
 }
 
 // variableAliases returns each variable of lhs assigned the variable rhs
-// names in its place, one value to each target.
+// names in its place, one value to each target. A variable assigned itself
+// is kept: following it gives the variable the place it already holds,
+// which [bodyRequests.assign] leaves as it is.
 func variableAliases(info *types.Info, lhs, rhs []ast.Expr) []requestAlias {
 	if len(lhs) != len(rhs) {
 		return nil
@@ -189,7 +193,7 @@ func variableAliases(info *types.Info, lhs, rhs []ast.Expr) []requestAlias {
 			continue
 		}
 		to, from := assignedVar(info, target), identVar(info, source)
-		if to != nil && from != nil && to != from {
+		if to != nil && from != nil {
 			out = append(out, requestAlias{to: to, from: from})
 		}
 	}

@@ -212,7 +212,7 @@ type IssueRefOutput struct {
 	WebURL               string                      `json:"web_url"`
 	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
 	Confidential         bool                        `json:"confidential"`
-	Weight               int64                       `json:"weight,omitempty" tier:"premium"`
+	Weight               *int64                      `json:"weight,omitempty" tier:"premium"`
 	DiscussionLocked     bool                        `json:"discussion_locked"`
 	IssueType            string                      `json:"issue_type,omitempty"`
 	UserNotesCount       int64                       `json:"user_notes_count,omitempty"`
@@ -251,7 +251,7 @@ func issueRefOutput(i *gitlab.Issue, extra toolutil.IssueBasicExtra) *IssueRefOu
 		WebURL:               i.WebURL,
 		TimeStats:            timeStatsOutput(i.TimeStats),
 		Confidential:         i.Confidential,
-		Weight:               i.Weight,
+		Weight:               extra.Weight,
 		DiscussionLocked:     i.DiscussionLocked,
 		UserNotesCount:       i.UserNotesCount,
 		MergeRequestCount:    i.MergeRequestCount,

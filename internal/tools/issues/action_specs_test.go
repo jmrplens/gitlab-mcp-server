@@ -18,6 +18,38 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestActionIDs_AreTheDomainPlusTheSpecName holds each action ID this
+// package names to the domain and the spec name it is registered under, the
+// property the IDs kept by being concatenated from the two before they were
+// written out.
+func TestActionIDs_AreTheDomainPlusTheSpecName(t *testing.T) {
+	for _, tc := range []struct{ id, spec string }{
+		{actionIssueCreate, specCreate},
+		{actionIssueGet, specGet},
+		{actionIssueList, specList},
+		{actionIssueListGroup, specListGroup},
+		{actionIssueUpdate, specUpdate},
+		{actionIssueDelete, specDelete},
+		{actionIssueSubscribe, specSubscribe},
+		{actionIssueUnsubscribe, specUnsubscribe},
+		{actionIssueTimeEstSet, specTimeEstimateSet},
+		{actionIssueTimeEstReset, specTimeEstimateReset},
+		{actionIssueSpentTimeAdd, specSpentTimeAdd},
+		{actionIssueSpentTimeReset, specSpentTimeReset},
+		{actionIssueTimeStatsGet, specTimeStatsGet},
+		{actionIssueMRsClosing, specMRsClosing},
+		{actionIssueMRsRelated, specMRsRelated},
+		{actionIssueNoteList, "note_list"},
+		{actionIssueNoteCreate, "note_create"},
+	} {
+		t.Run(tc.spec, func(t *testing.T) {
+			if want := domainIssue + tc.spec; tc.id != want {
+				t.Errorf("action ID = %q, want %q, the domain plus the spec name", tc.id, want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallRoutes exercises issue actions through their canonical routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))

@@ -8,14 +8,19 @@ package todos
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -317,7 +322,7 @@ func TestTodoList_AllFilters(t *testing.T) {
 // TestToOutput_NilTargetProjectAuthorCreatedAt verifies ToOutput when nil target project author created at.
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
-	out := toOutput(&todo)
+	out := toOutput(&todo, todoExtra{})
 	if out.Target != nil {
 		t.Errorf("expected nil Target, got %+v", out.Target)
 	}
@@ -550,7 +555,9 @@ func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
 				HumanTimeEstimate: "2h", HumanTotalTimeSpent: "45m",
 				TimeEstimate: 7200, TotalTimeSpent: 2700,
 			},
-			Weight:                    8,
+			// The captured 0, not the SDK's 8: the SDK's int64 cannot tell a
+			// weight of 0 from the null of an issue without one.
+			Weight:                    new(int64(0)),
 			MergedAt:                  "2026-01-08T08:00:00Z",
 			ApprovalsBeforeMerge:      9,
 			ForceRemoveSourceBranch:   true,
@@ -583,7 +590,9 @@ func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
 		},
 	}
 
-	if got := toOutput(todo); !reflect.DeepEqual(got, want) {
+	var extra todoExtra
+	extra.Target.Weight = new(int64(0))
+	if got := toOutput(todo, extra); !reflect.DeepEqual(got, want) {
 		t.Errorf("toOutput():\n got %+v\nwant %+v", got, want)
 	}
 }
@@ -614,7 +623,7 @@ func TestTodoTargetOut_EachFlag_ComesFromItsOwnField(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var target gl.TodoTarget
 			tc.set(&target)
-			got := todoTargetOut(&target)
+			got := todoTargetOut(&target, nil)
 			if got == nil {
 				t.Fatal("todoTargetOut() = nil, want a target")
 			}
@@ -630,7 +639,7 @@ func TestTodoTargetOut_EachFlag_ComesFromItsOwnField(t *testing.T) {
 func TestMilestoneOut_NilDates(t *testing.T) {
 	out := toOutput(&gl.Todo{
 		Target: &gl.TodoTarget{Milestone: &gl.Milestone{ID: 1, Title: "M"}},
-	})
+	}, todoExtra{})
 	if out.Target == nil || out.Target.Milestone == nil {
 		t.Fatal("expected milestone")
 	}
@@ -858,6 +867,86 @@ func TestList_UnreadableGroup(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// TestList_TargetWeight_IsPublishedAsGitLabSendsIt holds each to-do's target
+// weight to what GitLab sent at that to-do's position: 0 is a weight and is
+// published as 0, null is an issue without one and publishes no key, and a
+// merge request target, which has no weight, publishes none. client-go reads
+// null as the weight 0, and the output tagged it omitempty, so a weight of 0
+// vanished (issue 1390).
+func TestList_TargetWeight_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"target_type":"Issue","target":{"id":11,"weight":0}},
+			{"id":2,"target_type":"Issue","target":{"id":12,"weight":null}},
+			{"id":3,"target_type":"MergeRequest","target":{"id":13}},
+			{"id":4,"target_type":"Issue","target":{"id":14,"weight":2}}
+		]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	var published struct {
+		Todos []struct {
+			Target map[string]any `json:"target"`
+		} `json:"todos"`
+	}
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("decode the published output: %v", err)
+	}
+	if len(published.Todos) != 4 {
+		t.Fatalf("published %d to-dos, want 4", len(published.Todos))
+	}
+	for i, want := range []any{float64(0), nil, nil, float64(2)} {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			got, present := published.Todos[i].Target["weight"]
+			if want == nil && present {
+				t.Errorf("to-do %d target publishes weight %v, want none", i, got)
+			}
+			if want != nil && got != want {
+				t.Errorf("to-do %d target publishes weight %v, want %v", i, got, want)
+			}
+		})
+	}
+}
+
+// TestCapturedTodos_RefusesWhatItCannotPair verifies the reader refuses a
+// captured answer it cannot decode and one holding a different number of
+// to-dos than the SDK decoded, rather than pairing weights with the wrong
+// rows. GitLab cannot send either while the SDK decodes the page, since the
+// two read the same bytes, so the capture is built by hand.
+func TestCapturedTodos_RefusesWhatItCannotPair(t *testing.T) {
+	if _, err := capturedTodos(gitlabclient.CapturedBody([]byte(`{"not":"a list"}`)), 0); err == nil {
+		t.Error("capturedTodos(an object) error = nil, want a decode failure")
+	}
+	_, err := capturedTodos(gitlabclient.CapturedBody([]byte(`[{"id":1},{"id":2}]`)), 1)
+	if err == nil || !strings.Contains(err.Error(), "2 to-dos and the SDK decoded 1") {
+		t.Errorf("capturedTodos(two for one) error = %v, want the count mismatch", err)
+	}
+}
+
+// TestList_CaptureUnreadable_IsTheOperationsError verifies a captured page
+// the weight reader refuses fails the list, naming the operation, rather than
+// publishing targets with their weights silently missing. The reader is
+// replaced because no answer the SDK decodes can fail it.
+func TestList_CaptureUnreadable_IsTheOperationsError(t *testing.T) {
+	refusal := errors.New("unreadable capture")
+	original := readCapturedTodos
+	readCapturedTodos = func(*gitlabclient.ResponseCapture, int) ([]todoExtra, error) { return nil, refusal }
+	t.Cleanup(func() { readCapturedTodos = original })
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"target_type":"Issue","target":{"id":11,"weight":0}}]`)
+	}))
+	_, err := List(context.Background(), client, ListInput{})
+	if !errors.Is(err, refusal) || !strings.Contains(err.Error(), "todoList") {
+		t.Fatalf("List() error = %v, want the reader's refusal under todoList", err)
+	}
 }
 
 // TestList_UpdatedAtAndGroup_ArePairedWithTheirOwnTodo verifies that a list

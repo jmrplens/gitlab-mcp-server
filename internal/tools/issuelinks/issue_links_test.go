@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -351,6 +352,66 @@ func TestIssueLinkGet_PublishesWhatIssueBasicRendersAndNothingElse(t *testing.T)
 			}
 		})
 	}
+}
+
+// TestIssueLinkGetAndList_Weight_IsPublishedAsGitLabSendsIt holds the weight
+// of both issues of a link, and of a related issue, to what GitLab sent: 0 is
+// a weight and is published as 0, null is an issue without one and publishes
+// no key. client-go's int64 reads both as 0, and the output tagged it
+// omitempty, so a weight of 0 used to vanish (issue 1390).
+func TestIssueLinkGetAndList_Weight_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case testPathIssueLinks + "/1":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"link_type":"relates_to",
+				"source_issue":{"id":50,"iid":5,"weight":0},"target_issue":{"id":51,"iid":6,"weight":null}}`)
+		case testPathIssueLinks:
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":52,"iid":7,"weight":0,"issue_link_id":1,"link_type":"relates_to"},
+				{"id":53,"iid":8,"weight":null,"issue_link_id":2,"link_type":"relates_to"},
+				{"id":54,"iid":9,"weight":3,"issue_link_id":3,"link_type":"relates_to"}]`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	link, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got := publishedWeight(t, link.SourceIssue); got != "0" {
+		t.Errorf("source issue publishes weight %q, want 0", got)
+	}
+	if got := publishedWeight(t, link.TargetIssue); got != "" {
+		t.Errorf("target issue publishes weight %q, want none", got)
+	}
+	related, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, IssueIID: 5})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(related.Relations) != 3 {
+		t.Fatalf("List() = %d relations, want 3", len(related.Relations))
+	}
+	for i, want := range []string{"0", "", "3"} {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			if got := publishedWeight(t, related.Relations[i]); got != want {
+				t.Errorf("relation %d publishes weight %q, want %q", i, got, want)
+			}
+		})
+	}
+}
+
+// publishedWeight marshals one output as a client receives it and returns its
+// weight's JSON, or "" when no weight is published.
+func publishedWeight(t *testing.T, output any) string {
+	t.Helper()
+	raw, err := json.Marshal(output)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	var published map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("decode the published output: %v", err)
+	}
+	return string(published["weight"])
 }
 
 // TestIssueLinkGet_CaptureUnreadable verifies the handler reports a body the

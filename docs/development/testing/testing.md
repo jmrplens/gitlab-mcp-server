@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,687 |
-| Unit test functions                                   | 21,936 |
-| E2E test functions                                    |  1,751 |
+| Total test functions                                  | 23,712 |
+| Unit test functions                                   | 21,958 |
+| E2E test functions                                    |  1,754 |
 | cmd test functions                                    |  5,890 |
-| Test files (internal/)                                |    760 |
+| Test files (internal/)                                |    761 |
 | Test files (cmd/)                                     |    480 |
 | Test files (test/e2e/)                                |    450 |
 | Tool sub-packages tested                              |    181 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,740 | 58.0% |
+| `TestFunc_Scenario` (2-part)           | 13,745 | 58.0% |
 | `TestFunc` (no underscore)             |    899 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,048 | 38.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,068 | 38.2% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,261 |        263 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,269 |        264 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,332 |        480 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,751 |        450 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (181) |         11,346 |        480 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,754 |        450 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,890 |        480 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,687** |  **1,690** |                                                                                                 |
+| **Total**               |     **23,712** |  **1,691** |                                                                                                 |
 
 ### Core Packages
 
@@ -93,8 +93,8 @@
 | testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,399 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,261** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,407 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,269** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -104,7 +104,7 @@
 | mergerequests     |   350 |   100.0% |    30 |
 | groups            |   331 |   100.0% |    38 |
 | dynamic           |   328 |   100.0% |     2 |
-| issues            |   300 |   100.0% |    21 |
+| issues            |   304 |   100.0% |    21 |
 | users             |   281 |   100.0% |    38 |
 | jobs              |   185 |   100.0% |    17 |
 | packages          |   179 |   100.0% |    10 |
@@ -112,19 +112,19 @@
 | commits           |   153 |   100.0% |    13 |
 | pipelines         |   151 |   100.0% |    12 |
 | runners           |   143 |   100.0% |    21 |
-| workitems         |   141 |   100.0% |     6 |
+| workitems         |   142 |   100.0% |     6 |
 | resourceevents    |   131 |   100.0% |    17 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   124 |   100.0% |    16 |
 | snippets          |   118 |   100.0% |    15 |
 | branches          |   114 |   100.0% |    10 |
+| groupmilestones   |   111 |   100.0% |     8 |
 | pipelineschedules |   111 |   100.0% |    11 |
 | accesstokens      |   110 |   100.0% |    18 |
 | mrapprovals       |   110 |   100.0% |     7 |
-| groupmilestones   |   109 |   100.0% |     8 |
 | groupmembers      |   108 |   100.0% |    10 |
 | files             |   101 |   100.0% |     8 |
-| milestones        |    98 |   100.0% |     9 |
+| milestones        |   100 |   100.0% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -183,7 +183,7 @@
 | epicdiscussions         |         35 |          2 |   100.0% |         6 |
 | epicissues              |         27 |          2 |   100.0% |         4 |
 | epicnotes               |         26 |          2 |   100.0% |         5 |
-| epics                   |         89 |          3 |   100.0% |         6 |
+| epics                   |         90 |          3 |   100.0% |         6 |
 | epicworkitems           |         14 |          1 |   100.0% |         0 |
 | errortracking           |         23 |          2 |   100.0% |         5 |
 | events                  |         67 |          2 |   100.0% |         2 |
@@ -205,7 +205,7 @@
 | groupldap               |         23 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |         39 |          4 |   100.0% |         4 |
 | groupmembers            |        108 |          5 |   100.0% |        10 |
-| groupmilestones         |        109 |          3 |   100.0% |         8 |
+| groupmilestones         |        111 |          3 |   100.0% |         8 |
 | groupprotectedbranches  |         24 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |         36 |          3 |   100.0% |         5 |
 | grouprelationsexport    |         30 |          3 |   100.0% |         2 |
@@ -225,9 +225,9 @@
 | integrations            |         89 |          6 |   100.0% |        12 |
 | invites                 |         59 |          2 |   100.0% |         4 |
 | issuediscussions        |         35 |          2 |   100.0% |         6 |
-| issuelinks              |         77 |          4 |   100.0% |         4 |
+| issuelinks              |         78 |          4 |   100.0% |         4 |
 | issuenotes              |         55 |          2 |   100.0% |         5 |
-| issues                  |        300 |          4 |   100.0% |        21 |
+| issues                  |        304 |          4 |   100.0% |        21 |
 | issuestatistics         |         55 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
 | jobs                    |        185 |          8 |   100.0% |        17 |
@@ -243,7 +243,7 @@
 | mergerequests           |        350 |          5 |   100.0% |        30 |
 | mergetrains             |         27 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
-| milestones              |         98 |          2 |   100.0% |         9 |
+| milestones              |        100 |          2 |   100.0% |         9 |
 | modelregistry           |         16 |          3 |   100.0% |         1 |
 | mrapprovals             |        110 |          3 |   100.0% |         7 |
 | mrapprovalsettings      |         14 |          4 |   100.0% |         4 |
@@ -301,7 +301,7 @@
 | systemhooks             |         48 |          2 |   100.0% |         8 |
 | tags                    |         84 |          2 |   100.0% |         9 |
 | terraformstates         |         51 |          1 |   100.0% |         6 |
-| todos                   |         48 |          4 |   100.0% |         3 |
+| todos                   |         51 |          4 |   100.0% |         3 |
 | toolvisibility          |         31 |          4 |   100.0% |         0 |
 | topics                  |         30 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
@@ -312,9 +312,9 @@
 | vulnerabilities         |         97 |          3 |   100.0% |         8 |
 | waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
-| workitems               |        141 |          6 |   100.0% |         6 |
+| workitems               |        142 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,332** |    **480** |          | **1,198** |
+| **Total**               | **11,346** |    **480** |          | **1,198** |
 
 </details>
 

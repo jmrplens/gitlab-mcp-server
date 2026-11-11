@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -1616,7 +1617,7 @@ func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
 		if action.ReadOnly || !updateActionName.MatchString(action.Name) {
 			continue
 		}
-		base, fields := clearingProbeInput(action.Route.InputSchema)
+		base, fields := clearingProbeInput(action.Route.InputSchema, action.Route.InputType)
 		for _, field := range fields {
 			key := string(action.ID) + "." + field.name
 			judged[key] = true
@@ -1656,6 +1657,7 @@ func TestClearingWrite_CarriesEmpty_HoldsTheValueAndThePlace(t *testing.T) {
 	text := clearingField{name: "description", empty: ""}
 	list := clearingField{name: "labels", empty: []any{}}
 	number := clearingField{name: "assignee_id", empty: 0}
+	nullable := clearingField{name: "weight", empty: nil}
 	for _, tc := range []struct {
 		name  string
 		write clearingWrite
@@ -1678,6 +1680,10 @@ func TestClearingWrite_CarriesEmpty_HoldsTheValueAndThePlace(t *testing.T) {
 		{"the stored value in GraphQL variables", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"input": map[string]any{"description": "kept"}}}}, text, false},
 		{"a list of inputs in GraphQL variables", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"inputs": []any{map[string]any{"labels": []any{}}}}}}, list, true},
 		{"a GraphQL member outside the variables", clearingWrite{graphQL: true, body: map[string]any{"description": ""}}, text, false},
+		{"null for a field whose zero is a value", clearingWrite{body: map[string]any{"weight": nil}}, nullable, true},
+		{"zero for a field whose zero is a value", clearingWrite{body: map[string]any{"weight": float64(0)}}, nullable, false},
+		{"null in GraphQL variables for such a field", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"input": map[string]any{"weightWidget": map[string]any{"weight": nil}}}}}, nullable, true},
+		{"zero in GraphQL variables for such a field", clearingWrite{graphQL: true, body: map[string]any{"variables": map[string]any{"input": map[string]any{"weightWidget": map[string]any{"weight": float64(0)}}}}}, nullable, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.write.carriesEmpty(tc.field); got != tc.want {
@@ -1716,7 +1722,14 @@ func (o clearingOutcome) String() string {
 // the action carries (its required fields and the first set of any
 // alternative identifiers, filled) and the optional fields to empty one at a
 // time: the text and integer fields with no enumeration, and the lists.
-func clearingProbeInput(schema map[string]any) (map[string]any, []clearingField) {
+//
+// A field whose Go type is a toolutil.Nullable is probed with null rather
+// than 0: the type is the per-field marker that the field's zero is a value
+// of its own and null is what removes it, as an issue's weight of 0 is a
+// weight (issue 1390). Probing such a field with 0 would count the value it
+// sends as a clear, and the null that does clear it would go unexamined.
+func clearingProbeInput(schema map[string]any, input reflect.Type) (map[string]any, []clearingField) {
+	nullable := nullableFieldNames(input)
 	properties := asMap(schema["properties"])
 	required := schemaNames(schema["required"])
 	identifiers := map[string]bool{}
@@ -1756,12 +1769,39 @@ func clearingProbeInput(schema map[string]any) (map[string]any, []clearingField)
 		case "array":
 			fields = append(fields, clearingField{name: name, empty: []any{}})
 		case "integer":
-			if property["enum"] == nil {
+			switch {
+			case nullable[name]:
+				fields = append(fields, clearingField{name: name, empty: nil})
+			case property["enum"] == nil:
 				fields = append(fields, clearingField{name: name, empty: 0})
 			}
 		}
 	}
 	return base, fields
+}
+
+// nullableFieldNames returns the JSON names of the fields of an input struct,
+// its embedded structs included, whose type is a toolutil.Nullable.
+func nullableFieldNames(input reflect.Type) map[string]bool {
+	names := map[string]bool{}
+	for input != nil && input.Kind() == reflect.Pointer {
+		input = input.Elem()
+	}
+	if input == nil || input.Kind() != reflect.Struct {
+		return names
+	}
+	nullablePkg := reflect.TypeFor[toolutil.Nullable[int64]]().PkgPath()
+	for field := range input.Fields() {
+		if field.Anonymous {
+			maps.Copy(names, nullableFieldNames(field.Type))
+			continue
+		}
+		if field.Type.PkgPath() == nullablePkg && strings.HasPrefix(field.Type.Name(), "Nullable[") {
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			names[name] = true
+		}
+	}
+	return names
 }
 
 // schemaNames reads a schema keyword holding a list of names, in either of the
@@ -1884,12 +1924,15 @@ func variablesCarryEmpty(node any, field clearingField) bool {
 
 // emptyJSONValue reports whether a decoded JSON value is null or the empty
 // value the probe sent: "" for a text, 0 for an integer, and for a list [] or
-// the "" client-go writes for an empty comma-separated one.
+// the "" client-go writes for an empty comma-separated one. A null probe,
+// sent to a field whose zero is a value, is answered by null alone.
 func emptyJSONValue(got, probe any) bool {
 	if got == nil {
 		return true
 	}
 	switch probe.(type) {
+	case nil:
+		return false
 	case string:
 		return got == ""
 	case int:

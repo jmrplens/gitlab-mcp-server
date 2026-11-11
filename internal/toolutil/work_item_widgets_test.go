@@ -141,6 +141,7 @@ func TestApplyWorkItemWidgets_Removals_ReachGitLabAsNull(t *testing.T) {
 		{"start_date", WorkItemWidgetInputs{StartDate: &empty}, "startAndDueDateWidget", "startDate"},
 		{"due_date", WorkItemWidgetInputs{DueDate: &empty}, "startAndDueDateWidget", "dueDate"},
 		{"health_status", WorkItemWidgetInputs{HealthStatus: &empty}, "healthStatusWidget", "healthStatus"},
+		{"weight", WorkItemWidgetInputs{Weight: NullableNull[int64]()}, "weightWidget", "weight"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,6 +152,9 @@ func TestApplyWorkItemWidgets_Removals_ReachGitLabAsNull(t *testing.T) {
 			}
 			if removals == nil {
 				t.Fatal("no request option for a removal")
+			}
+			if opts.Weight != nil {
+				t.Errorf("weight = %d, want no weight set beside a removal", *opts.Weight)
 			}
 			widget := widgetOf(t, sendWorkItemUpdate(t, &opts, removals), tc.widget)
 			value, present := widget[tc.field]
@@ -183,6 +187,56 @@ func TestApplyWorkItemWidgets_RemovalBesideAValue_KeepsBoth(t *testing.T) {
 	}
 	if input["id"] != "gid://gitlab/WorkItem/42" || input["title"] != "Kept" {
 		t.Errorf("id, title = %#v, %#v, want the work item's ID and the title set beside the removal", input["id"], input["title"])
+	}
+}
+
+// TestApplyWorkItemWidgets_Weight_ZeroIsAWeightAndNullRemovesIt verifies the
+// weight's three answers reach the mutation as GitLab reads them: 0 and 3 are
+// weights and are sent as such in the weight widget, with no removal option;
+// null is a removal and is sent as weightWidget {weight: null}, the only body
+// GitLab removes a weight with (a widget without the key is refused, which is
+// what client-go's omitempty makes of a nil weight); and a weight left out
+// sends no widget at all (issue 1390).
+func TestApplyWorkItemWidgets_Weight_ZeroIsAWeightAndNullRemovesIt(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		weight int64
+	}{{"zero", 0}, {"three", 3}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var opts gl.UpdateWorkItemOptions
+			removals, err := ApplyWorkItemWidgets(&opts, WorkItemWidgetInputs{Weight: NullableOf(tc.weight)})
+			if err != nil || removals != nil {
+				t.Fatalf("ApplyWorkItemWidgets(weight %d) = %v, %v, want no removal and no error", tc.weight, removals != nil, err)
+			}
+			got := widgetOf(t, sendWorkItemUpdate(t, &opts, removals), "weightWidget")
+			if got["weight"] != float64(tc.weight) {
+				t.Errorf("weightWidget.weight = %#v, want %d", got["weight"], tc.weight)
+			}
+		})
+	}
+	t.Run("absent", func(t *testing.T) {
+		opts := gl.UpdateWorkItemOptions{Title: new("T")}
+		removals, err := ApplyWorkItemWidgets(&opts, WorkItemWidgetInputs{})
+		if err != nil || removals != nil {
+			t.Fatalf("ApplyWorkItemWidgets(no weight) = %v, %v, want nothing", removals != nil, err)
+		}
+		if widget, present := sendWorkItemUpdate(t, &opts, removals)["weightWidget"]; present {
+			t.Errorf("weightWidget = %#v, want none for a weight left out", widget)
+		}
+	})
+}
+
+// TestApplyWorkItemWidgets_NegativeWeight_IsRefused verifies a weight below 0
+// is refused before any request, quoting the value, as issue.update refuses
+// one.
+func TestApplyWorkItemWidgets_NegativeWeight_IsRefused(t *testing.T) {
+	var opts gl.UpdateWorkItemOptions
+	removals, err := ApplyWorkItemWidgets(&opts, WorkItemWidgetInputs{Weight: NullableOf[int64](-1)})
+	if err == nil || removals != nil || opts.Weight != nil {
+		t.Fatalf("ApplyWorkItemWidgets(weight -1) = %v, %v, weight %v, want a refusal", removals != nil, err, opts.Weight)
+	}
+	if !strings.Contains(err.Error(), "weight") || !strings.Contains(err.Error(), "-1") {
+		t.Errorf("error %q does not name the weight and quote the value", err)
 	}
 }
 

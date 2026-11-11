@@ -98,7 +98,7 @@ type RelationOutput struct {
 	DueDate        string            `json:"due_date,omitempty"`
 	WebURL         string            `json:"web_url"`
 	References     *ReferencesOutput `json:"references,omitempty"`
-	Weight         int64             `json:"weight,omitempty" tier:"premium"`
+	Weight         *int64            `json:"weight,omitempty" tier:"premium"`
 	UserNotesCount int64             `json:"user_notes_count,omitempty"`
 	IssueLinkID    int               `json:"issue_link_id"`
 	LinkType       string            `json:"link_type"`
@@ -189,7 +189,7 @@ func toRelationOutput(r *gitlab.IssueRelation, extra relationExtra) RelationOutp
 		DueDate:        toolutil.FormatISOTimePtr(r.DueDate),
 		WebURL:         r.WebURL,
 		References:     referencesOutput(r.References),
-		Weight:         r.Weight,
+		Weight:         extra.Weight,
 		UserNotesCount: r.UserNotesCount,
 		IssueLinkID:    int(r.IssueLinkID),
 		LinkType:       r.LinkType,

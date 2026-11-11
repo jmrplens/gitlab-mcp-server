@@ -137,6 +137,9 @@ const (
 // capture.
 const measureReason = "GitLab sends null for a measure that was never taken, which client-go decodes as 0, a measure of zero (register row 116)"
 
+// issueWeightReason is why an issue's weight is read off the capture.
+const issueWeightReason = "GitLab sends null for an issue without a weight, which client-go decodes as the weight 0, a weight of its own (register row 116, issue 1390)"
+
 // nullCapture declares a key kept for its null, with a FieldKind per field
 // client-go models it with.
 func nullCapture(typeName, key, reason string, kinds ...waits.FieldKind) captureDeclaration {
@@ -161,6 +164,12 @@ var nullCaptures = []captureDeclaration{
 		waits.FieldKind{Type: "IssueBoard", Field: "Weight", Kind: "int64"}),
 	nullCapture("toolutil.GroupBoardExtra", "weight", "GitLab sends null for a group board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
 		waits.FieldKind{Type: "GroupIssueBoard", Field: "Weight", Kind: "int64"}),
+	nullCapture("toolutil.IssueBasicExtra", "weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
+	nullCapture("toolutil.IssueExtra", "weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
+	nullCapture("issuelinks.linkExtra", "source_issue.weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
+	nullCapture("issuelinks.linkExtra", "target_issue.weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
+	nullCapture("issuelinks.relationExtra", "weight", issueWeightReason, waits.FieldKind{Type: "IssueRelation", Field: "Weight", Kind: "int64"}),
+	nullCapture("todos.todoExtra", "target.weight", issueWeightReason, waits.FieldKind{Type: "TodoTarget", Field: "Weight", Kind: "int64"}),
 	nullCapture(capturedBridgeExtra, "coverage", measureReason,
 		waits.FieldKind{Type: "Bridge", Field: "Coverage", Kind: "float64"}, waits.FieldKind{Type: "TriggerJob", Field: "Coverage", Kind: "float64"}),
 	nullCapture(capturedBridgeExtra, "duration", measureReason,

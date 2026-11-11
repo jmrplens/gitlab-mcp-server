@@ -451,6 +451,66 @@ func TestGetIssues_Success(t *testing.T) {
 	}
 }
 
+// TestGetIssues_Weight_IsPublishedAsGitLabSendsIt holds each row's weight to
+// what GitLab sent: 0 is a weight and is published as 0, null is an issue
+// without one and publishes no key. client-go reads both as the weight 0, and
+// the row tagged it omitempty, so a weight of 0 vanished (issue 1390).
+func TestGetIssues_Weight_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroupMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"iid":1,"weight":0},{"id":11,"iid":2,"weight":null},{"id":12,"iid":3,"weight":5}]`)
+	}))
+	out, err := GetIssues(context.Background(), client, GetIssuesInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err != nil {
+		t.Fatalf("GetIssues() unexpected error: %v", err)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	var published struct {
+		Issues []map[string]any `json:"issues"`
+	}
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("decode the published output: %v", err)
+	}
+	if len(published.Issues) != 3 {
+		t.Fatalf("published %d issues, want 3", len(published.Issues))
+	}
+	for i, want := range []any{float64(0), nil, float64(5)} {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			got, present := published.Issues[i]["weight"]
+			if want == nil && present {
+				t.Errorf("issue %d publishes weight %v, want none", i, got)
+			}
+			if want != nil && got != want {
+				t.Errorf("issue %d publishes weight %v, want %v", i, got, want)
+			}
+		})
+	}
+}
+
+// TestGetIssues_CaptureUnreadable verifies a page the weight reader cannot
+// hold is the operation's error rather than a page of rows with their
+// weights silently missing. GitLab cannot send this; the SDK ignores the
+// mistyped key the reader is handed.
+func TestGetIssues_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroupMilestones {
+			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"iid":1,"start_date":7}]`)
+	}))
+	_, err := GetIssues(context.Background(), client, GetIssuesInput{GroupID: testGroupID, MilestoneIID: 1})
+	if err == nil || !strings.Contains(err.Error(), "groupMilestoneGetIssues") {
+		t.Fatalf("GetIssues() error = %v, want the operation's error", err)
+	}
+}
+
 // TestGetIssues_MissingMilestoneIID verifies that GetIssues_MissingMilestoneIID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -2303,7 +2363,7 @@ func TestGetIssues_ARow_CarriesWhatTheCompactRowKeeps(t *testing.T) {
 		ID: 100, IID: 5, ProjectID: 7, Title: "Fix bug", State: "closed", Labels: []string{"bug"},
 		Author:       &toolutil.IssueUserOutput{ID: 3, Username: "alice", Name: "Alice", State: "active", AvatarURL: "https://a/3.png", WebURL: "https://gitlab.example.com/alice"},
 		Assignees:    []*toolutil.IssueUserOutput{{ID: 4, Username: "bob", Name: "Bob", State: "active", AvatarURL: "https://a/4.png", WebURL: "https://gitlab.example.com/bob"}},
-		Confidential: true, Weight: 2, DueDate: "2026-03-01",
+		Confidential: true, Weight: new(int64(2)), DueDate: "2026-03-01",
 		WebURL:    "https://gitlab.example.com/g/p/-/issues/5",
 		CreatedAt: "2026-01-10T00:00:00Z", UpdatedAt: "2026-01-11T00:00:00Z", ClosedAt: "2026-01-12T00:00:00Z",
 	}

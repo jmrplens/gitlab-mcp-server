@@ -17,6 +17,7 @@
 package ee
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -114,15 +115,92 @@ func TestIssue_Update_WeightZeroIsAWeight(t *testing.T) {
 		params := map[string]any{"project_id": project.IDParam(), "issue_iid": issue.IID}
 
 		set := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": 3}))
-		if set.Weight != 3 {
-			e.T.Fatalf("issue update answered weight %d, want 3 before the zero", set.Weight)
+		if !weightIs(set.Weight, 3) {
+			e.T.Fatalf("issue update answered weight %s, want 3 before the zero", weightText(set.Weight))
 		}
+		// The answer publishes 0 as a weight: the output used to read GitLab's
+		// 0 as no weight at all and leave the key out (issue 1390).
 		zeroed := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": 0}))
 		read := harness.Do[issues.Output](s, actionIssueGet, params)
-		if zeroed.Weight != 0 || read.Weight != 0 {
-			e.T.Errorf("after a weight of 0 the update answered %d and the read %d, want 0", zeroed.Weight, read.Weight)
+		if !weightIs(zeroed.Weight, 0) || !weightIs(read.Weight, 0) {
+			e.T.Errorf("after a weight of 0 the update answered %s and the read %s, want 0",
+				weightText(zeroed.Weight), weightText(read.Weight))
 		}
 	})
+}
+
+// TestIssue_Update_WeightNullRemovesTheWeight gives an issue of its own on
+// every surface a weight of 3, then sends the weight as null, as the schema
+// has always offered, and reads back an issue with no weight, on the answer
+// and on a fresh read. The handler read null as a weight left out, so the
+// update went out without it and the weight stayed (issue 1390); GitLab
+// removes a weight only for {"weight": null} (measured on 19.5.0-ee).
+func TestIssue_Update_WeightNullRemovesTheWeight(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("weightnull"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		issue := fixture.NewIssue(e, project, e.Name("weightnull"))
+		params := map[string]any{"project_id": project.IDParam(), "issue_iid": issue.IID}
+
+		set := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": 3}))
+		if !weightIs(set.Weight, 3) {
+			e.T.Fatalf("issue update answered weight %s, want 3 before the removal", weightText(set.Weight))
+		}
+		removed := harness.Do[issues.Output](s, actionIssueUpdate, withParams(params, map[string]any{"weight": nil}))
+		read := harness.Do[issues.Output](s, actionIssueGet, params)
+		if removed.Weight != nil || read.Weight != nil {
+			e.T.Errorf("after a null weight the update answered %s and the read %s, want no weight",
+				weightText(removed.Weight), weightText(read.Weight))
+		}
+	})
+}
+
+// TestWorkItems_Update_WeightNullRemovesTheWeight gives an issue of its own
+// on every surface a weight of 4 through the work item update, sends 0 and
+// reads a weight of 0, then sends null and reads no weight. client-go's
+// weight widget drops a nil weight, and GitLab refuses a widget without the
+// key, so null reaches GitLab only through the request option that writes
+// weightWidget {weight: null} (issue 1390).
+func TestWorkItems_Update_WeightNullRemovesTheWeight(t *testing.T) {
+	e := harness.New(t)
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Project {
+		return fixture.NewProject(e, fixture.WithNamePrefix("wiweight"))
+	}, func(e *harness.Env, surface harness.Surface, project fixture.Project) {
+		s := e.On(surface)
+		issue := fixture.NewIssue(e, project, e.Name("wiweight"))
+		item := map[string]any{"full_path": project.Path, "work_item_iid": issue.IID}
+
+		set := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate, withParams(item, map[string]any{"weight": 4}))
+		if !weightIs(set.WorkItem.Weight, 4) {
+			e.T.Fatalf("work_item_update answered weight %s, want 4", weightText(set.WorkItem.Weight))
+		}
+		zeroed := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate, withParams(item, map[string]any{"weight": 0}))
+		if !weightIs(zeroed.WorkItem.Weight, 0) {
+			e.T.Errorf("work_item_update answered weight %s for 0, want the weight 0", weightText(zeroed.WorkItem.Weight))
+		}
+		removed := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate, withParams(item, map[string]any{"weight": nil}))
+		if removed.WorkItem.Weight != nil {
+			e.T.Errorf("work_item_update answered weight %s for null, want no weight", weightText(removed.WorkItem.Weight))
+		}
+	})
+}
+
+// weightIs reports whether a published weight is present and equal to want.
+func weightIs(weight *int64, want int64) bool {
+	return weight != nil && *weight == want
+}
+
+// weightText renders a published weight for a failure message, telling no
+// weight from a weight of 0.
+func weightText(weight *int64) string {
+	if weight == nil {
+		return "none"
+	}
+	return strconv.FormatInt(*weight, 10)
 }
 
 // iterationFixture is a group with one iteration, a project in the group,

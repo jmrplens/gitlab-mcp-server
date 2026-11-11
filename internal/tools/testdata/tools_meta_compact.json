@@ -14801,7 +14801,10 @@
           "type": "string"
         },
         "weight": {
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [

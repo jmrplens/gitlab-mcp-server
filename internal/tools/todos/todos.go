@@ -76,15 +76,16 @@ type MarkAllDoneOutput struct {
 	Message string `json:"message"`
 }
 
-// toOutput converts a GitLab API [gl.Todo] to MCP output format.
-func toOutput(t *gl.Todo) Output {
+// toOutput converts a GitLab API [gl.Todo] to MCP output format, the
+// target's weight taken from what the capture read at the to-do's position.
+func toOutput(t *gl.Todo, extra todoExtra) Output {
 	out := Output{
 		ID:         t.ID,
 		Project:    basicProjectOut(t.Project),
 		Author:     basicUserOut(t.Author),
 		ActionName: t.ActionName,
 		TargetType: t.TargetType,
-		Target:     todoTargetOut(t.Target),
+		Target:     todoTargetOut(t.Target, extra.Target.Weight),
 		TargetURL:  t.TargetURL,
 		Body:       t.Body,
 		State:      t.State,
@@ -95,6 +96,39 @@ func toOutput(t *gl.Todo) Output {
 		out.CreatedAt = t.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 	}
 	return out
+}
+
+// todoExtra is what a to-do's target carries that client-go's TodoTarget
+// reads in a way the output cannot use, read off the captured answer
+// (ADR-0021). The weight is modeled as an int64, which reads GitLab's null,
+// an issue without a weight, as the weight 0, a weight of its own (issue
+// 1390), for the reason of register row 116 ("A measure GitLab sends as null
+// decodes as 0").
+type todoExtra struct {
+	Target struct {
+		Weight *int64 `json:"weight"`
+	} `json:"target"`
+}
+
+// readCapturedTodos is the reader [List] calls, a seam because no answer the
+// SDK decodes can fail it: the one key it reads is one the SDK reads too, so
+// a body that fails one fails both, and the refusal is reached only by a
+// test that replaces it.
+var readCapturedTodos = capturedTodos
+
+// capturedTodos reads [todoExtra] off the answer to the to-do list, one per
+// to-do in the list's order. The count is held to what the SDK decoded: the
+// two read the same bytes, so a difference is a fault in this reader rather
+// than in the answer.
+func capturedTodos(capture *gitlabclient.ResponseCapture, decoded int) ([]todoExtra, error) {
+	var extras []todoExtra
+	if err := capture.Decode(&extras); err != nil {
+		return nil, err
+	}
+	if len(extras) != decoded {
+		return nil, fmt.Errorf("the captured answer holds %d to-dos and the SDK decoded %d", len(extras), decoded)
+	}
+	return extras, nil
 }
 
 // namespaceBasicOut converts the group a to-do raised in a group carries, the
@@ -150,14 +184,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Type = new(input.Type)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	todos, resp, err := client.GL().Todos.ListTodos(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("todoList", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
+	extras, err := readCapturedTodos(captured, len(todos))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("todoList", err)
+	}
 
 	out := make([]Output, len(todos))
 	for i, t := range todos {
-		out[i] = toOutput(t)
+		out[i] = toOutput(t, extras[i])
 	}
 	return ListOutput{
 		Todos:      out,

@@ -1294,8 +1294,15 @@ func CapturedGroups(capture *gitlabclient.ResponseCapture, decoded int) ([]Group
 // The count is a pointer because ee/lib/ee/api/entities/issue_basic.rb gates
 // it on the blocked-issues licensed feature, and zero blockers is not the same
 // answer as an instance that does not count them.
+//
+// The weight is one client-go models, as an int64, and is read here as a
+// pointer for the reason of register row 116 ("A measure GitLab sends as null
+// decodes as 0"): GitLab sends null for an issue without a weight, which
+// client-go decodes as the weight 0, and 0 is a weight of its own (issue
+// 1390).
 type IssueBasicExtra struct {
 	BlockingIssuesCount *int64 `json:"blocking_issues_count"`
+	Weight              *int64 `json:"weight"`
 	StartDate           string `json:"start_date"`
 	// Type is the issue type upcased. GitLab exposes the same attribute twice,
 	// as issue_type through the plain expose and as type through one carrying

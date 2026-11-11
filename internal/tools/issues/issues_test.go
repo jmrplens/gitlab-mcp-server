@@ -1877,6 +1877,27 @@ func TestFormatMarkdown_LinkedMRCount(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown_Weight_ShowsAZeroWeight checks the card shows the weight
+// GitLab sent, 0 included, since 0 is a weight of its own, and shows no weight
+// row for an issue without one (issue 1390).
+func TestFormatMarkdown_Weight_ShowsAZeroWeight(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		weight *int64
+		want   string
+	}{
+		{"zero", new(int64(0)), "- **Weight**: 0\n"},
+		{"three", new(int64(3)), "- **Weight**: 3\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			want := "## ❓ Issue #10: Weighed\n\n" + tt.want + issueCardHints
+			if got := FormatMarkdown(Output{IID: 10, Title: "Weighed", Weight: tt.weight}); got != want {
+				t.Errorf("FormatMarkdown(weight %d)\n got %q\nwant %q", *tt.weight, got, want)
+			}
+		})
+	}
+}
+
 // TestFormatMarkdown_Empty checks that an issue with nothing in it renders the
 // heading and the guidance section alone: an absent value writes nothing, so no
 // label stands with nothing after it and no "@" stands with no handle.
@@ -2539,7 +2560,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		DueDate:          new("2026-12-31"),
 		Confidential:     &conf,
 		IssueType:        "incident",
-		Weight:           new(int64(3)),
+		Weight:           toolutil.NullableOf[int64](3),
 		EpicID:           new(int64(4)),
 		DiscussionLocked: &locked,
 	})
@@ -2745,7 +2766,9 @@ func TestToOutput_Populated(t *testing.T) {
 		Subscribed:           true,
 		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800},
 	}
-	out := ToOutput(issue, toolutil.IssueExtra{})
+	// The weight is the captured one, not the SDK's: the SDK's int64 reads
+	// GitLab's null as 0, so a different value here shows which is read.
+	out := ToOutput(issue, toolutil.IssueExtra{Weight: new(int64(6))})
 	assertPopulatedObjects(t, out)
 	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.CompletedCount != 2 || out.TaskCompletionStatus.Count != 5 {
 		t.Errorf("TaskCompletionStatus = %+v, want 2/5", out.TaskCompletionStatus)
@@ -2765,8 +2788,8 @@ func TestToOutput_Populated(t *testing.T) {
 	if !out.DiscussionLocked {
 		t.Error("DiscussionLocked = false, want true")
 	}
-	if out.Weight != 5 {
-		t.Errorf("Weight = %d, want 5", out.Weight)
+	if out.Weight == nil || *out.Weight != 6 {
+		t.Errorf("Weight = %v, want the captured 6", out.Weight)
 	}
 }
 
@@ -4685,7 +4708,7 @@ func TestUpdate_ExtraBranches(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID, IssueIID: 10,
 		AddLabels: []string{"new-label"}, RemoveLabels: []string{"old-label"},
-		Confidential: &conf, IssueType: "incident", Weight: new(int64(5)),
+		Confidential: &conf, IssueType: "incident", Weight: toolutil.NullableOf[int64](5),
 		EpicID: new(int64(42)), DiscussionLocked: &locked,
 	})
 	if err != nil {
@@ -5977,8 +6000,9 @@ func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
 		input UpdateInput
 		want  map[string]string
 	}{
-		{"weight 0", UpdateInput{Weight: new(int64(0))}, map[string]string{"weight": "0"}},
-		{"weight 3", UpdateInput{Weight: new(int64(3))}, map[string]string{"weight": "3"}},
+		{"weight 0", UpdateInput{Weight: toolutil.NullableOf[int64](0)}, map[string]string{"weight": "0"}},
+		{"weight 3", UpdateInput{Weight: toolutil.NullableOf[int64](3)}, map[string]string{"weight": "3"}},
+		{"weight null", UpdateInput{Weight: toolutil.NullableNull[int64]()}, map[string]string{"weight": "null"}},
 		{"description empty", UpdateInput{Description: new("")}, map[string]string{"description": `""`}},
 		{"due_date empty", UpdateInput{DueDate: new("")}, map[string]string{"due_date": "null"}},
 		{"start_date empty", UpdateInput{StartDate: new("")}, map[string]string{"start_date": "null"}},
@@ -6061,6 +6085,49 @@ func TestUpdate_ZeroReferences_ReachTheBody(t *testing.T) {
 	}
 }
 
+// TestUpdate_WeightNull_RemovesTheWeight holds the three answers a caller can
+// give the weight to what reaches GitLab, through toolutil.UnmarshalParams as
+// every surface's arguments go: null removes the weight and is sent as null,
+// which is how GitLab removes one (client-go's ResetWeight writes it), 0 is a
+// weight of its own and is sent as 0, and a weight left out sends no key. The
+// schema has always offered null, and the handler read it as the field left
+// out, so the update went out without it and the weight stayed (issue 1390).
+func TestUpdate_WeightNull_RemovesTheWeight(t *testing.T) {
+	tests := []struct {
+		name   string
+		params map[string]any
+		want   map[string]string
+	}{
+		{"null alone", map[string]any{"weight": nil}, map[string]string{"weight": "null"}},
+		{"null beside a title", map[string]any{"weight": nil, "title": "t"}, map[string]string{"weight": "null", "title": `"t"`}},
+		{"zero", map[string]any{"weight": 0}, map[string]string{"weight": "0"}},
+		{"a numeric string", map[string]any{"weight": "4"}, map[string]string{"weight": "4"}},
+		{"left out", map[string]any{"title": "t"}, map[string]string{"title": `"t"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := map[string]any{"project_id": testProjectID, "issue_iid": 10}
+			maps.Copy(params, tt.params)
+			input, err := toolutil.UnmarshalParams[UpdateInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, body := captureBody(t, http.MethodPut, pathIssue10, http.StatusOK, issueJSONMinimal)
+			if _, err = Update(context.Background(), client, input); err != nil {
+				t.Fatalf(fmtIssueUpdateErr, err)
+			}
+			if len(body) != len(tt.want) {
+				t.Errorf("update body = %v, want exactly the keys %v", body, tt.want)
+			}
+			for key, want := range tt.want {
+				if got := encodedBodyValue(t, body, key); got != want {
+					t.Errorf("update body %q = %s, want %s", key, got, want)
+				}
+			}
+		})
+	}
+}
+
 // TestCreateAndUpdate_NegativeWeight_IsRefusedBeforeAnyRequest holds a weight
 // below 0 to a refusal naming the field, on create and on update, before any
 // request is made: GitLab refuses it as well, and saying so here costs no
@@ -6068,7 +6135,7 @@ func TestUpdate_ZeroReferences_ReachTheBody(t *testing.T) {
 func TestCreateAndUpdate_NegativeWeight_IsRefusedBeforeAnyRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, createErr := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, Title: testIssueTitle, Weight: new(int64(-1))})
-	_, updateErr := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Weight: new(int64(-1))})
+	_, updateErr := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Weight: toolutil.NullableOf[int64](-1)})
 	for name, err := range map[string]error{"create": createErr, "update": updateErr} {
 		t.Run(name, func(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "weight") || !strings.Contains(err.Error(), "-1") {
@@ -6149,6 +6216,74 @@ func TestSetTimeEstimate_Duration_ReachesTheBody(t *testing.T) {
 	}
 }
 
+// TestGetAndList_Weight_IsPublishedAsGitLabSendsIt holds the weight an issue
+// is answered with to the weight the output publishes, on a read of one issue
+// and of a page: GitLab's 0 is a weight and publishes as 0, its null is an
+// issue without one and publishes no key, and 3 publishes as 3. client-go
+// decodes the weight into an int64, so 0 and null both read as 0, and the
+// output tagged it omitempty, so a weight of 0 vanished from every answer and
+// read as no weight at all (issue 1390). The weight is read off the captured
+// answer instead, as a pointer.
+func TestGetAndList_Weight_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	tests := []struct {
+		name string
+		sent string
+		want string
+	}{
+		{"zero", `"weight":0,`, "0"},
+		{"null", `"weight":null,`, ""},
+		{"absent", ``, ""},
+		{"three", `"weight":3,`, "3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue := `{"id":1,"iid":10,"title":"t",` + tt.sent + `"labels":[],"assignees":[]}`
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case pathIssue10:
+					testutil.RespondJSON(w, http.StatusOK, issue)
+				case pathIssues:
+					testutil.RespondJSON(w, http.StatusOK, "["+issue+"]")
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			got, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+			if err != nil {
+				t.Fatalf(fmtIssueGetErr, err)
+			}
+			if weight := publishedKey(t, got, "weight"); weight != tt.want {
+				t.Errorf("get publishes weight %q, want %q", weight, tt.want)
+			}
+			page, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+			if err != nil {
+				t.Fatalf("List() error: %v", err)
+			}
+			if len(page.Issues) != 1 {
+				t.Fatalf("List() = %d issues, want 1", len(page.Issues))
+			}
+			if weight := publishedKey(t, page.Issues[0], "weight"); weight != tt.want {
+				t.Errorf("list publishes weight %q, want %q", weight, tt.want)
+			}
+		})
+	}
+}
+
+// publishedKey marshals an output as a client receives it and returns one
+// key's JSON, or "" when the key is not published.
+func publishedKey(t *testing.T, output any, key string) string {
+	t.Helper()
+	raw, err := json.Marshal(output)
+	if err != nil {
+		t.Fatalf("marshal the output: %v", err)
+	}
+	var published map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &published); err != nil {
+		t.Fatalf("decode the published output: %v", err)
+	}
+	return string(published[key])
+}
+
 // ---------------------------------------------------------------------------
 // The scalars a converter copies
 // ---------------------------------------------------------------------------.
@@ -6201,7 +6336,7 @@ func TestGet_EveryScalar_LandsOnItsOwnField(t *testing.T) {
 		{"upvotes", out.Upvotes, int64(107)},
 		{"downvotes", out.Downvotes, int64(108)},
 		{"web_url", out.WebURL, "https://gitlab.example.com/i/109"},
-		{"weight", out.Weight, int64(110)},
+		{"weight", *out.Weight, int64(110)},
 		{"issue_type", out.IssueType, "incident"},
 		{"user_notes_count", out.UserNotesCount, int64(111)},
 		{"merge_requests_count", out.MergeRequestCount, int64(112)},

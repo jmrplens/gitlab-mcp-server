@@ -1748,7 +1748,10 @@ func coerceValueForTargetType(name string, value any, target reflect.Type) (coer
 	for target.Kind() == reflect.Pointer {
 		target = target.Elem()
 	}
-	switch target.Kind() {
+	// A Nullable is coerced as the type it holds, as a pointer to that type
+	// is, so a weight a model sends as "3" still arrives as 3. A null is not
+	// a string and passes through untouched, which is what keeps it a removal.
+	switch nullableElemType(target).Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return coerceSignedIntegerValue(name, value)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -2509,12 +2512,12 @@ func addMetaTool(server *mcp.Server, name, description string, annotations *mcp.
 		handler = func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
 			// A param the action's tier left out is not in the definition
 			// either, so it is answered with its tier before the definition
-			// refuses it as unknown (issue 1239).
-			if route, routed := routes[input.Action]; routed {
-				if refusal := metaTierRefusal(ctx, name, route, &input); refusal != nil {
-					LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
-					return refusal, nil, nil
-				}
+			// refuses it as unknown (issue 1239). An action no route serves
+			// is refused by the envelope's action enum before the handler
+			// runs, and the zero route it would read prunes nothing.
+			if refusal := metaTierRefusal(ctx, name, routes[input.Action], &input); refusal != nil {
+				LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
+				return refusal, nil, nil
 			}
 			if refusal := guard(input); refusal != nil {
 				LogToolRefusal(ctx, req, metaCallName(name, input.Action), RefusalInvalidParams)
