@@ -104,6 +104,46 @@ func TestSessionCredential_ATierLeftUnanswered_IsRefused(t *testing.T) {
 	}
 }
 
+// TestSessionConn_ClientOptions_DeliverWhatANotificationNames checks the two
+// notification handlers a session's client is built with: a resource-updated
+// notification wakes the watchers of the URI it names and a progress
+// notification is filed under its token, while one that arrives with no params,
+// or as no request at all, is dropped rather than read. The SDK calls both on
+// its own goroutine, where reading the params of either would take the whole
+// run down instead of failing one test.
+func TestSessionConn_ClientOptions_DeliverWhatANotificationNames(t *testing.T) {
+	const uri = "gitlab://project/1"
+	const token = "harness-progress"
+	conn := &sessionConn{cfg: ServerConfig{}.normalized(), notifier: newUpdateNotifier(), progress: newProgressCollector()}
+	options := conn.clientOptions()
+	updates := conn.notifier.watch(uri)
+	conn.progress.expect(token)
+
+	options.ResourceUpdatedHandler(t.Context(), nil)
+	options.ResourceUpdatedHandler(t.Context(), &mcp.ResourceUpdatedNotificationRequest{})
+	options.ProgressNotificationHandler(t.Context(), nil)
+	options.ProgressNotificationHandler(t.Context(), &mcp.ProgressNotificationClientRequest{})
+
+	if len(updates) != 0 {
+		t.Errorf("watchers woken = %d by notifications without params, want 0", len(updates))
+	}
+
+	options.ResourceUpdatedHandler(t.Context(), &mcp.ResourceUpdatedNotificationRequest{
+		Params: &mcp.ResourceUpdatedNotificationParams{URI: uri},
+	})
+	options.ProgressNotificationHandler(t.Context(), &mcp.ProgressNotificationClientRequest{
+		Params: &mcp.ProgressNotificationParams{ProgressToken: token, Progress: 1, Total: 2},
+	})
+
+	if len(updates) != 1 {
+		t.Errorf("watchers woken = %d by a notification naming %s, want 1", len(updates), uri)
+	}
+	notes := conn.progress.collect(token)
+	if len(notes) != 1 || notes[0].Progress != 1 || notes[0].Total != 2 {
+		t.Errorf("progress collected = %+v, want the one note the full notification carried", notes)
+	}
+}
+
 // TestServerConfig_EmptyFields_TakeTheBinarysOwnDefaults checks that a
 // configuration nobody filled in describes the server a client gets with
 // nothing set.

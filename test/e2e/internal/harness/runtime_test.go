@@ -24,6 +24,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2erelease"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actiongrants"
 )
 
@@ -481,6 +482,50 @@ func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
 			}
 			if reads.Load() != tc.wantReads {
 				t.Errorf("license reads = %d, want %d", reads.Load(), tc.wantReads)
+			}
+		})
+	}
+}
+
+// TestInstanceIsEnterprise_TheVersionsFlag_IsTakenOnlyWhenTheInstanceSaysIt
+// checks the edition the probe reads off GET /api/v4/version with the run's
+// token: an instance that reports enterprise true is an enterprise build, and
+// every other answer (enterprise false, the field left out as older releases
+// leave it, a body that does not decode, a status other than 200, an address
+// nothing answers, a URL no request can be built from) is Community, since the
+// flag only widens what a refusal message says and must not claim what the
+// instance never said.
+func TestInstanceIsEnterprise_TheVersionsFlag_IsTakenOnlyWhenTheInstanceSaysIt(t *testing.T) {
+	answering := func(status int, body string) string {
+		stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/api/v4/version" || r.Header.Get("PRIVATE-TOKEN") != stubToken {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(body))
+		}))
+		t.Cleanup(stub.Close)
+		// The trailing slash is trimmed before the path is appended.
+		return stub.URL + "/"
+	}
+	cases := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{name: "enterprise reported", url: answering(http.StatusOK, `{"version":"18.0.0","enterprise":true}`), want: true},
+		{name: "community reported", url: answering(http.StatusOK, `{"version":"18.0.0","enterprise":false}`)},
+		{name: "the field left out", url: answering(http.StatusOK, `{"version":"18.0.0"}`)},
+		{name: "a body that does not decode", url: answering(http.StatusOK, `{"enterprise":`)},
+		{name: "a status other than 200", url: answering(http.StatusForbidden, `{"enterprise":true}`)},
+		{name: "an address nothing answers", url: netfixture.DeadEndpoint(t)},
+		{name: "a URL no request can be built from", url: "http://[::1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := instanceIsEnterprise(t.Context(), tc.url, stubToken, false); got != tc.want {
+				t.Errorf("instanceIsEnterprise() = %t, want %t", got, tc.want)
 			}
 		})
 	}
