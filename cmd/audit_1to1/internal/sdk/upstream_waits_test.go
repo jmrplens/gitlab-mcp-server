@@ -978,6 +978,15 @@ func Seeded(c *gl.Client) error {
 	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(toolutil.BodyEdit{Set: nulls}))
 	return err
 }
+
+func Listed(c *gl.Client) error {
+	edit := toolutil.BodyEdit{Set: map[string]any{"label": nil}}
+	edit.Drop = listed("hue", "tone")
+	_, _, err := c.Widgets.UpdateWidget(1, nil, toolutil.EditJSONBody(edit))
+	return err
+}
+
+func listed(keys ...string) []string { return keys }
 `
 
 // TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead verifies the
@@ -989,7 +998,9 @@ func Seeded(c *gl.Client) error {
 // through another variable sets the keys the map was filled with. A key
 // that is no constant adds nothing, and neither does a name written over an
 // element of the Drop or one a call other than append is handed beside a
-// list or a map the edit takes, a call of another builtin included.
+// list or a map the edit takes, a call of another builtin included. A Drop
+// a function of the package's own returns names nothing the walk reads, so
+// the strings handed to that function are not taken for the keys it drops.
 func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/editors/editors.go": editorsTool})
 
@@ -1005,6 +1016,7 @@ func TestWalkToolWorkarounds_KeysABodyEditIsAssigned_AreEachRead(t *testing.T) {
 		"editors.Built":    {"hue", "shade"},
 		"editors.Clear":    {"name", "tags", "title"},
 		"editors.Extended": {"name", "title"},
+		"editors.Listed":   {"label"},
 		"editors.Seeded":   {"tint"},
 	}
 	if !reflect.DeepEqual(got, want) {
