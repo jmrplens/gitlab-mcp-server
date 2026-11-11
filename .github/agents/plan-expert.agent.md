@@ -35,7 +35,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 
 | Component          | Technology                                              |
 | ------------------ | ------------------------------------------------------- |
-| Language           | Go 1.27.3                                               |
+| Language           | Go 1.27.4                                               |
 | MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0    |
 | GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v3` v3.30.0 (check `go.mod`, it moves with every dependency bump) |
 | Transport          | stdio (primary), HTTP (optional)                        |

@@ -707,7 +707,7 @@ test:
     - uses: actions/checkout@v7
     - uses: actions/setup-go@v7
       with:
-        go-version: '1.27.3'
+        go-version: '1.27.4'
 
     - name: Run tests
       run: go test -race -coverprofile=coverage.out ./...
