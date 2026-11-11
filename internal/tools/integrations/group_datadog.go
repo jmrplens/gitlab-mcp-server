@@ -169,16 +169,21 @@ func GetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input Get
 // ancestor's settings with UseInheritedSettings=true included; every other
 // setting is optional.
 type SetGroupDatadogInput struct {
-	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	APIKey               string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update,required"`
-	APIURL               string               `json:"api_url,omitempty" jsonschema:"Datadog API URL (e.g. https://api.datadoghq.com)"`
-	DatadogEnv           string               `json:"datadog_env,omitempty" jsonschema:"Datadog env tag forwarded with every log/metric"`
-	DatadogService       string               `json:"datadog_service,omitempty" jsonschema:"Datadog service tag forwarded with every log/metric"`
-	DatadogSite          string               `json:"datadog_site,omitempty" jsonschema:"Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)"`
-	DatadogTags          string               `json:"datadog_tags,omitempty" jsonschema:"Comma-separated Datadog tags forwarded with every log/metric"`
-	DatadogCIVisibility  *bool                `json:"datadog_ci_visibility,omitempty" jsonschema:"Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility"`
-	ArchiveTraceEvents   *bool                `json:"archive_trace_events,omitempty" jsonschema:"Forward CI job trace events to Datadog"`
-	UseInheritedSettings *bool                `json:"use_inherited_settings,omitempty" jsonschema:"Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)"`
+	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	APIKey  string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update,required"`
+	// The URL, the site and the three tags are pointers so the empty string
+	// that removes one reaches GitLab. Integrations::Datadog validates the
+	// tags not at all and the URL and the site allow_blank, requiring one of
+	// the two, which it answers itself (app/models/integrations/datadog.rb,
+	// issue 1306).
+	APIURL               *string `json:"api_url,omitempty" jsonschema:"Datadog API URL (e.g. https://api.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while datadog_site is set. Omit the field to leave it untouched"`
+	DatadogEnv           *string `json:"datadog_env,omitempty" jsonschema:"Datadog env tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	DatadogService       *string `json:"datadog_service,omitempty" jsonschema:"Datadog service tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	DatadogSite          *string `json:"datadog_site,omitempty" jsonschema:"Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while api_url is set. Omit the field to leave it untouched"`
+	DatadogTags          *string `json:"datadog_tags,omitempty" jsonschema:"Comma-separated Datadog tags forwarded with every log/metric. Pass an empty string to remove them. Omit the field to leave them untouched"`
+	DatadogCIVisibility  *bool   `json:"datadog_ci_visibility,omitempty" jsonschema:"Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility"`
+	ArchiveTraceEvents   *bool   `json:"archive_trace_events,omitempty" jsonschema:"Forward CI job trace events to Datadog"`
+	UseInheritedSettings *bool   `json:"use_inherited_settings,omitempty" jsonschema:"Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)"`
 }
 
 // SetGroupDatadogOutput is the output of [SetGroupDatadog].
@@ -189,24 +194,17 @@ type SetGroupDatadogOutput struct {
 
 // buildGroupDatadogOptions maps the tool input onto the SDK options struct.
 // The API key, which SetGroupDatadog has already required, is always sent;
-// every other field only when the caller set it (empty strings and nil
-// pointers are omitted so unset fields are never overwritten server-side).
+// every other field only when the caller set it, a nil pointer left out so an
+// unset field is never overwritten server-side, and an empty text sent as the
+// value that removes it (issue 1306).
 func buildGroupDatadogOptions(input SetGroupDatadogInput) *gl.GroupDatadogIntegrationOptions {
-	opts := &gl.GroupDatadogIntegrationOptions{APIKey: new(input.APIKey)}
-	if input.APIURL != "" {
-		opts.APIURL = new(input.APIURL)
-	}
-	if input.DatadogEnv != "" {
-		opts.DatadogEnv = new(input.DatadogEnv)
-	}
-	if input.DatadogService != "" {
-		opts.DatadogService = new(input.DatadogService)
-	}
-	if input.DatadogSite != "" {
-		opts.DatadogSite = new(input.DatadogSite)
-	}
-	if input.DatadogTags != "" {
-		opts.DatadogTags = new(input.DatadogTags)
+	opts := &gl.GroupDatadogIntegrationOptions{
+		APIKey:         new(input.APIKey),
+		APIURL:         input.APIURL,
+		DatadogEnv:     input.DatadogEnv,
+		DatadogService: input.DatadogService,
+		DatadogSite:    input.DatadogSite,
+		DatadogTags:    input.DatadogTags,
 	}
 	if input.DatadogCIVisibility != nil {
 		opts.DatadogCIVisibility = input.DatadogCIVisibility

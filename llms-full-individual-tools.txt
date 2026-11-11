@@ -2782,7 +2782,7 @@ Edit a group badge's name, link_url, or image_url. Returns: the updated badge wi
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `image_url` (string): New badge image URL
 - `link_url` (string): New badge link URL
-- `name` (string): New badge name. Use name, not new_name
+- `name` (string): New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -2795,7 +2795,7 @@ Edit a project badge's name, link_url, or image_url. Returns: the updated badge 
 - `badge_id` (integer) (required): Badge ID
 - `image_url` (string): New badge image URL
 - `link_url` (string): New badge link URL
-- `name` (string): New badge name. Use name, not new_name
+- `name` (string): New badge name. Use name, not new_name. Pass an empty string to remove it. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -2808,9 +2808,9 @@ Update a push mirror's attributes (enabled, branch filtering, divergent refs, au
 
 - `auth_method` (string): Authentication method (password or ssh_public_key)
 - `enabled` (boolean): Whether the mirror is enabled
-- `host_keys` (array of strings): SSH host keys for the remote mirror
+- `host_keys` (array of strings): SSH host keys for the remote mirror. Pass [] to remove every host key. Omit the field to leave them untouched
 - `keep_divergent_refs` (boolean): Keep divergent refs on the remote
-- `mirror_branch_regex` (string): Regex pattern for branches to mirror
+- `mirror_branch_regex` (string): Regex pattern for branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched
 - `mirror_id` (integer) (required): Remote mirror ID
 - `only_protected_branches` (boolean): Mirror only protected branches
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -2962,8 +2962,8 @@ Update an existing environment in a project. Returns: the updated environment wi
 - `description` (string): Updated description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `environment_id` (integer) (required): Environment ID
 - `external_url` (string): Updated external URL. Pass an empty string to remove it. Omit the field to leave it untouched
-- `flux_resource_path` (string): Flux resource path used to track the environment's deployment status
-- `kubernetes_namespace` (string): Kubernetes namespace for the cluster agent
+- `flux_resource_path` (string): Flux resource path used to track the environment's deployment status. Pass an empty string to remove it. Omit the field to leave it untouched
+- `kubernetes_namespace` (string): Kubernetes namespace for the cluster agent. Pass an empty string to remove it, together with flux_resource_path as an empty string when the environment has a Flux path, since GitLab keeps no Flux path without a namespace. Omit the field to leave it untouched
 - `name` (string): New environment name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `tier` (string): Updated tier: production, staging, testing, development, other
@@ -3353,7 +3353,7 @@ Update a feature flag user list's name or user_xids by its user_list_iid. Return
 - `name` (string): New user list name
 - `project_id` (string or integer) (required): Project ID or path
 - `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create. Do not use the user list name
-- `user_xids` (string): Comma-separated list of user external IDs
+- `user_xids` (string): Comma-separated list of user external IDs. Pass an empty string to take every user off the list. Omit the field to leave it untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -6096,11 +6096,11 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 
 - `allow_merge_on_skipped_pipeline` (boolean): Allow merging when the pipeline is skipped
 - `allow_personal_snippets` (boolean): Allow members to create personal snippets
-- `allowed_email_domains_list` (string): Comma-separated list of email domains allowed for members (Premium/Ultimate)
+- `allowed_email_domains_list` (string): Comma-separated list of email domains allowed for members (Premium/Ultimate). Pass an empty string to allow every domain again. Omit the field to leave it untouched
 - `auto_ban_user_on_excessive_projects_download` (boolean): Automatically ban users who exceed the unique project download limit (Ultimate)
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for projects in this group
 - `crm_enabled` (boolean): Enable Customer Relations Management (CRM) for the group
-- `default_branch` (string): Default branch name
+- `default_branch` (string): Default branch name for new projects. Pass an empty string to remove it, so new projects fall back to the instance default. Omit the field to leave it untouched
 - `default_branch_protection` (integer): Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults
 - `default_branch_protection_defaults` (object): Default branch protection settings object
 - `description` (string): Group description. Pass an empty string to remove it. Omit the field to leave it untouched
@@ -6113,7 +6113,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `extra_shared_runners_minutes_limit` (integer): Extra shared runner compute-minutes (administrators only)
 - `file_template_project_id` (integer): Project ID providing file templates for this group (Premium/Ultimate)
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
-- `ip_restriction_ranges` (string): Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only
+- `ip_restriction_ranges` (string): Comma-separated list of IP addresses or subnet masks allowed to access the group. Premium and Ultimate only. Pass an empty string to remove the restriction. Omit the field to leave it untouched
 - `lfs_enabled` (boolean): Enable Git LFS
 - `lock_duo_features_enabled` (boolean): Prevent subgroups from changing the Duo features setting. GitLab Duo needs Premium or Ultimate, or GitLab Credits on a Free namespace, and elsewhere the setting has no effect
 - `lock_math_rendering_limits_enabled` (boolean): Prevent subgroups from changing the math rendering limits setting
@@ -6138,8 +6138,8 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `subgroup_creation_level` (string): Who can create subgroups (owner, maintainer)
 - `two_factor_grace_period` (integer): Grace period in hours before two-factor authentication is enforced
 - `unique_project_download_limit` (integer): Max number of unique projects a user can download before being banned (Ultimate)
-- `unique_project_download_limit_alertlist` (array of integers): User IDs notified when the unique project download limit is exceeded (Ultimate)
-- `unique_project_download_limit_allowlist` (array of strings): Usernames excluded from the unique project download limit (Ultimate)
+- `unique_project_download_limit_alertlist` (array of integers): User IDs notified when the unique project download limit is exceeded (Ultimate). Pass [] to empty the list, after which GitLab notifies the group's owners. Omit the field to leave the list untouched
+- `unique_project_download_limit_allowlist` (array of strings): Usernames excluded from the unique project download limit (Ultimate). Pass [] to exclude nobody. Omit the field to leave the list untouched
 - `unique_project_download_limit_interval_in_seconds` (integer): Time window in seconds for the unique project download limit (Ultimate)
 - `visibility` (string): Visibility level (private, internal, public)
 - `web_based_commit_signing_enabled` (boolean): Enable web-based commit signing for projects in this group
@@ -6270,7 +6270,7 @@ Update an existing group wiki page by slug. Returns: the updated page with title
 
 **Parameters:**
 
-- `content` (string): New content
+- `content` (string): New content. Pass an empty string to empty the page. Omit the field to leave it untouched
 - `format` (string): Content format: markdown, rdoc, asciidoc, or org
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `slug` (string) (required): Slug of the wiki page to edit as group.wiki_list returns it (e.g. 'dir/page')
@@ -9014,23 +9014,23 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `avatar` (object): New avatar image to upload for the user, from a local file or base64 content
 - `bio` (string): New bio text. Pass an empty string to remove it. Omit the field to leave it untouched
 - `can_create_group` (boolean): Allow user to create groups
-- `commit_email` (string): Email used for commits
+- `commit_email` (string): Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched
 - `email` (string): New email address
 - `extern_uid` (string): External UID for the provider
 - `external` (boolean): Mark or unmark as external
-- `linkedin` (string): LinkedIn account
-- `location` (string): New location
+- `linkedin` (string): LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched
+- `location` (string): New location. Pass an empty string to remove it. Omit the field to leave it untouched
 - `name` (string): New display name
-- `note` (string): New admin note
+- `note` (string): New admin note. Pass an empty string to remove it. Omit the field to leave it untouched
 - `organization` (string): New organization. Pass an empty string to remove it. Omit the field to leave it untouched
 - `password` (string): New password
 - `private_profile` (boolean): Set profile as private
 - `projects_limit` (integer): New maximum projects limit
 - `provider` (string): External provider name (use with extern_uid)
-- `public_email` (string): Publicly visible email address
+- `public_email` (string): Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched
 - `skip_reconfirmation` (boolean): Skip reconfirmation on email change
 - `theme_id` (integer): GitLab theme ID for the user's UI
-- `twitter` (string): Twitter/X account
+- `twitter` (string): Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched
 - `user_id` (integer) (required): The ID of the user to modify
 - `username` (string): New username
 - `view_diffs_file_by_file` (boolean): Show whitespace changes in diffs file by file
@@ -9113,11 +9113,11 @@ Update an approval rule on a merge request. Returns: the updated rule with its t
 
 - `approval_rule_id` (integer) (required): Approval rule ID
 - `approvals_required` (integer): Number of approvals required
-- `group_ids` (array of integers): Group IDs eligible to approve
+- `group_ids` (array of integers): Group IDs eligible to approve. Pass [] to take every group off the rule. Omit the field to leave them untouched
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `name` (string): Rule name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `user_ids` (array of integers): User IDs eligible to approve
+- `user_ids` (array of integers): User IDs eligible to approve. Pass [] to take every user off the rule. Omit the field to leave them untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -10277,7 +10277,7 @@ Update the authenticated user's global notification settings. Returns: the updat
 - `new_issue` (boolean): Notify on new issue
 - `new_merge_request` (boolean): Notify on new MR
 - `new_note` (boolean): Notify on new note
-- `notification_email` (string): Email address for notifications
+- `notification_email` (string): Email address for notifications. Pass an empty string to remove it, so notifications go to the primary email, which GitLab then reports here. Omit the field to leave it untouched
 - `push_to_merge_request` (boolean): Notify on push to MR
 - `reassign_issue` (boolean): Notify on issue reassign
 - `reassign_merge_request` (boolean): Notify on MR reassign
@@ -10637,9 +10637,9 @@ Update an existing Pages custom domain's auto-SSL flag or certificate. Returns: 
 **Parameters:**
 
 - `auto_ssl_enabled` (boolean): Enable automatic SSL certificate provisioning
-- `certificate` (string): PEM-encoded SSL certificate
+- `certificate` (string): PEM-encoded SSL certificate. Pass an empty string, together with key as an empty string, to remove the custom certificate. Omit the field to leave it untouched
 - `domain` (string) (required): The Pages domain name to update
-- `key` (string): PEM-encoded private key for the certificate
+- `key` (string): PEM-encoded private key for the certificate. Pass an empty string, together with certificate as an empty string, to remove the custom certificate. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -11393,13 +11393,13 @@ Update a project approval rule. Returns: the updated rule with name, approvals_r
 
 - `applies_to_all_protected_branches` (boolean): Apply this rule to all protected branches
 - `approvals_required` (integer): Updated number of approvals required
-- `group_ids` (array of integers): Updated group IDs to assign as approvers
+- `group_ids` (array of integers): Updated group IDs to assign as approvers. Pass [] to take every group off the rule. Omit the field to leave them untouched
 - `name` (string): Updated rule name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `protected_branch_ids` (array of integers): Updated protected branch IDs
+- `protected_branch_ids` (array of integers): Updated protected branch IDs. Pass [] to scope the rule to no protected branch. Omit the field to leave them untouched
 - `rule_id` (integer) (required): Approval rule ID
-- `user_ids` (array of integers): Updated user IDs to assign as approvers
-- `usernames` (array of strings): Updated usernames to assign as approvers
+- `user_ids` (array of integers): Updated user IDs to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched
+- `usernames` (array of strings): Updated usernames to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -12389,11 +12389,11 @@ Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches re
 
 **Parameters:**
 
-- `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
-- `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
+- `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors. Pass an empty string to remove it. Omit the field to leave it untouched
+- `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched
 - `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `enabled` (boolean): Enable or disable pull mirroring
-- `mirror_branch_regex` (string): Regex to filter branches to mirror
+- `mirror_branch_regex` (string): Regex to filter branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched
 - `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
@@ -12773,7 +12773,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `issue_branch_template` (string): Template for branch names created from issues. Pass an empty string to go back to the default template. Omit the field to leave it untouched
 - `issues_access_level` (string): Issues access level (disabled, private, enabled)
 - `issues_enabled` (boolean): Enable/disable issues feature (use 'issues_enabled' not 'issues_access_level')
-- `issues_template` (string): Default issue description template
+- `issues_template` (string): Default issue description template. Pass an empty string to remove it. Omit the field to leave it untouched
 - `jobs_enabled` (boolean): Enable CI/CD jobs
 - `keep_latest_artifact` (boolean): Keep the latest artifact for each pipeline
 - `lfs_enabled` (boolean): Enable Git LFS
@@ -12785,12 +12785,12 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex. Pass an empty string to remove it. Omit the field to leave it untouched
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature
-- `merge_requests_template` (string): Default merge request description template
+- `merge_requests_template` (string): Default merge request description template. Pass an empty string to remove it. Omit the field to leave it untouched
 - `merge_train_enforcement` (string): Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled
 - `merge_trains_enabled` (boolean): Enable merge trains
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
 - `mirror` (boolean): Enable pull mirroring from import_url
-- `mirror_branch_regex` (string): Only mirror branches matching this regex
+- `mirror_branch_regex` (string): Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched
 - `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
 - `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
 - `mirror_user_id` (integer): User ID used to run mirror updates (admin only)
@@ -14275,7 +14275,7 @@ Update a runner's configuration (description, pause state, tags, locked, access 
 - `paused` (boolean): Pause/unpause the runner
 - `run_untagged` (boolean): Whether to run untagged jobs
 - `runner_id` (integer) (required): Runner ID
-- `tag_list` (array of strings): List of runner tags
+- `tag_list` (array of strings): List of runner tags. Pass [] to remove every tag. Omit the field to leave them untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -14594,13 +14594,13 @@ Create or update the Datadog integration on a group. Requires Owner role and Git
 **Parameters:**
 
 - `api_key` (string) (required): Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update
-- `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com)
+- `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while datadog_site is set. Omit the field to leave it untouched
 - `archive_trace_events` (boolean): Forward CI job trace events to Datadog
 - `datadog_ci_visibility` (boolean): Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility
-- `datadog_env` (string): Datadog env tag forwarded with every log/metric
-- `datadog_service` (string): Datadog service tag forwarded with every log/metric
-- `datadog_site` (string): Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)
-- `datadog_tags` (string): Comma-separated Datadog tags forwarded with every log/metric
+- `datadog_env` (string): Datadog env tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched
+- `datadog_service` (string): Datadog service tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched
+- `datadog_site` (string): Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while api_url is set. Omit the field to leave it untouched
+- `datadog_tags` (string): Comma-separated Datadog tags forwarded with every log/metric. Pass an empty string to remove them. Omit the field to leave them untouched
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `use_inherited_settings` (boolean): Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)
 
@@ -14637,29 +14637,29 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 **Parameters:**
 
 - `active` (boolean): Enable or disable the integration
-- `api_url` (string): Jira API URL (overrides base URL)
+- `api_url` (string): Jira API URL (overrides base URL). Pass an empty string to remove it. Omit the field to leave it untouched
 - `comment_on_event_enabled` (boolean): Add comments on Jira issues for events
 - `commit_events` (boolean): Trigger on commit events
 - `customize_jira_issue_enabled` (boolean): Customize the Jira issue created for vulnerabilities
 - `issues_enabled` (boolean): Enable Jira issues integration
-- `jira_allowed_statuses_as_string` (string): Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled)
+- `jira_allowed_statuses_as_string` (string): Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled). Pass an empty string to remove them. Omit the field to leave them untouched
 - `jira_assignee_check_enabled` (boolean): Require the referenced Jira issue to have an assignee
 - `jira_auth_type` (integer): Jira auth type (0=basic, 1=token)
 - `jira_check_enabled` (boolean): Require commits/MRs to reference a Jira issue
 - `jira_exists_check_enabled` (boolean): Require that the referenced Jira issue exists
-- `jira_issue_prefix` (string): Jira issue key prefix
-- `jira_issue_regex` (string): Custom regex for Jira issue keys
+- `jira_issue_prefix` (string): Jira issue key prefix. Pass an empty string to remove it. Omit the field to leave it untouched
+- `jira_issue_regex` (string): Custom regex for Jira issue keys. Pass an empty string to remove it. Omit the field to leave it untouched
 - `jira_issue_transition_automatic` (boolean): Auto-transition Jira issues
-- `jira_issue_transition_id` (string): Jira transition ID
+- `jira_issue_transition_id` (string): Jira transition ID. Pass an empty string to remove it. Omit the field to leave it untouched
 - `jira_status_check_enabled` (boolean): Require the referenced Jira issue to be in an allowed status
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `password` (string) (required): Jira password or API token. GitLab requires it on every update
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `project_key` (string): Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)
-- `project_keys` (array of strings): Jira project keys to restrict (used when issues_enabled is true)
+- `project_key` (string): Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true). Pass an empty string to remove it. Omit the field to leave it untouched
+- `project_keys` (array of strings): Jira project keys whose issues GitLab shows and links (used when issues_enabled is true). Pass [] to remove the restriction, so the issues of every Jira project are shown. Omit the field to leave them untouched
 - `url` (string) (required): Jira instance base URL
 - `use_inherited_settings` (boolean): Use inherited settings from group
-- `username` (string): Jira username
+- `username` (string): Jira username. Pass an empty string to remove it, which GitLab refuses under basic authentication. Omit the field to leave it untouched
 - `vulnerabilities_enabled` (boolean): Create Jira issues for vulnerabilities
 - `vulnerabilities_issuetype` (integer): Jira issue type ID used for vulnerability tickets (when vulnerabilities_enabled is true)
 
@@ -14699,8 +14699,8 @@ Set the current user's status. Returns: the updated emoji, message, availability
 
 - `availability` (string): User availability: not_set (clear busy state) or busy.
 - `clear_status_after` (string): Duration after which the status auto-clears: 30_minutes, 3_hours, 8_hours, 1_day, 3_days, 7_days, or 30_days.
-- `emoji` (string): The emoji to set for the status (e.g. coffee or speech_balloon)
-- `message` (string): The status message text
+- `emoji` (string): The emoji to set for the status (e.g. coffee or speech_balloon). This action replaces the whole status: an empty or omitted emoji gets GitLab's default speech_balloon while a message or a busy availability remains, and an empty emoji and message with availability not_set remove the status
+- `message` (string): The status message text. This action replaces the whole status: pass an empty string, or leave it out, for no message. An empty message and emoji with availability not_set remove the status
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -15490,7 +15490,7 @@ Update a project external status check service. Returns: the updated check with 
 - `external_url` (string): Updated external URL
 - `name` (string): Updated name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `protected_branch_ids` (array of integers): Updated protected branch IDs
+- `protected_branch_ids` (array of integers): Updated protected branch IDs. Pass [] to scope the check to every branch again. Omit the field to leave them untouched
 - `shared_secret` (string): Updated shared secret for HMAC verification
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -15768,7 +15768,7 @@ Update an existing wiki page by slug. Returns: the updated page with title, slug
 
 **Parameters:**
 
-- `content` (string): New content for the wiki page
+- `content` (string): New content for the wiki page. Pass an empty string to empty the page. Omit the field to leave it untouched
 - `format` (string): Content format: markdown, rdoc, asciidoc, or org
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `slug` (string) (required): Slug of the wiki page to update as wiki.list returns it (e.g. 'dir/page')
@@ -15870,7 +15870,7 @@ Update a work item saved view by numeric ID. Returns: the updated view with id, 
 
 **Parameters:**
 
-- `description` (string): New description for the saved view
+- `description` (string): New description for the saved view. Pass an empty string to remove it. Omit the field to leave it untouched
 - `display_settings` (object): Replacement display settings, with the camelCase keys GitLab accepts: viewMode (list, board, or table), hiddenMetadataKeys, collapsedGroups, visibleGroups, groupOrder. Omit to leave the existing settings unchanged
 - `filters` (object): Replacement filters. Omit to leave the existing filters unchanged
 - `is_private` (boolean): Whether the view is private to the user who created it

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -1753,8 +1754,8 @@ func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
 		ProjectID:           "42",
 		EnvironmentID:       7,
 		ClusterAgentID:      &agentID,
-		KubernetesNamespace: "prod-ns",
-		FluxResourcePath:    "flux/prod",
+		KubernetesNamespace: new("prod-ns"),
+		FluxResourcePath:    new("flux/prod"),
 		AutoStopSetting:     "with_action",
 	})
 	if err != nil {
@@ -1764,6 +1765,144 @@ func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(*body, want) {
 				t.Errorf("request body %q missing %q", *body, want)
+			}
+		})
+	}
+}
+
+// storedFluxHandler answers the read of environment 7 of project 42 with
+// readStatus and an environment whose stored Flux path is storedFlux, and
+// the update of it with envFullJSON, recording the update's body and how
+// many updates arrived. Anything else is answered 404.
+func storedFluxHandler(t *testing.T, readStatus int, storedFlux string) (handler http.Handler, body *string, updates *int) {
+	t.Helper()
+	const envPath = "/api/v4/projects/42/environments/7"
+	update, recorded := recordingHandler(t, http.MethodPut, envPath, http.StatusOK, envFullJSON)
+	count := 0
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == envPath:
+			testutil.RespondJSON(w, readStatus, `{"id":7,"name":"production","kubernetes_namespace":"prod-ns","flux_resource_path":"`+storedFlux+`"}`)
+		case r.Method == http.MethodPut:
+			count++
+			update.ServeHTTP(w, r)
+		default:
+			testutil.RespondJSON(w, http.StatusNotFound, msgNotFoundBody)
+		}
+	}), recorded, &count
+}
+
+// TestEnvironmentUpdate_ClearNamespaceAndFluxPath_ReachTheBody holds the
+// empty namespace and the empty Flux path, given through
+// toolutil.UnmarshalParams as every surface's arguments go, to the body as
+// the empty strings that clear them, each alone and the two together. Both
+// sat behind a non-empty guard, so neither could be removed; GitLab empties
+// both for "" (measured on 19.5.0-ee, issue 1306). The namespace emptied
+// alone is sent once the environment is read to keep no Flux path.
+func TestEnvironmentUpdate_ClearNamespaceAndFluxPath_ReachTheBody(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+		want   []string
+	}{
+		{"namespace", map[string]any{"kubernetes_namespace": ""}, []string{`"kubernetes_namespace":""`}},
+		{"flux path", map[string]any{"flux_resource_path": ""}, []string{`"flux_resource_path":""`}},
+		{"both", map[string]any{"kubernetes_namespace": "", "flux_resource_path": ""}, []string{`"kubernetes_namespace":""`, `"flux_resource_path":""`}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"project_id": "42", "environment_id": 7}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[UpdateInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			handler, body, updates := storedFluxHandler(t, http.StatusOK, "")
+			if _, err = Update(context.Background(), testutil.NewTestClient(t, handler), input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if *updates != 1 {
+				t.Fatalf("Update() sent %d updates, want 1", *updates)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(*body, want) {
+					t.Errorf("request body %q missing %q", *body, want)
+				}
+			}
+		})
+	}
+}
+
+// TestEnvironmentUpdate_NamespaceRemovedWhileTheStoredFluxPathStays_IsRefusedBeforeTheUpdate
+// verifies an update that empties the namespace and leaves the Flux path
+// alone reads the environment first and, when it keeps a Flux path, is
+// refused before the update with the stored path and both fields named:
+// GitLab answers that update with 400 "flux_resource_path cannot be set
+// without a kubernetes namespace" (measured on 19.5.0-ee).
+func TestEnvironmentUpdate_NamespaceRemovedWhileTheStoredFluxPathStays_IsRefusedBeforeTheUpdate(t *testing.T) {
+	handler, _, updates := storedFluxHandler(t, http.StatusOK, "flux/prod")
+	_, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{
+		ProjectID: "42", EnvironmentID: 7, KubernetesNamespace: new(""),
+	})
+	if err == nil {
+		t.Fatal("Update() error = nil, want a refusal before the update")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "kubernetes_namespace") || !strings.Contains(msg, "flux_resource_path") || !strings.Contains(msg, `"flux/prod"`) {
+		t.Errorf("Update() error = %v, want it to name kubernetes_namespace, flux_resource_path and the stored path", err)
+	}
+	if *updates != 0 {
+		t.Errorf("Update() sent %d updates, want none", *updates)
+	}
+}
+
+// TestEnvironmentUpdate_NamespaceRemovedOnAnEnvironmentNotRead_ReturnsTheReadsError
+// verifies that when the read the namespace check makes is refused, the
+// update returns that refusal, with the hint that names environment.list for
+// a 404, and sends no update.
+func TestEnvironmentUpdate_NamespaceRemovedOnAnEnvironmentNotRead_ReturnsTheReadsError(t *testing.T) {
+	handler, _, updates := storedFluxHandler(t, http.StatusNotFound, "")
+	_, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{
+		ProjectID: "42", EnvironmentID: 7, KubernetesNamespace: new(""),
+	})
+	if err == nil || !strings.Contains(err.Error(), "environmentUpdate") || !strings.Contains(err.Error(), "environment.list") {
+		t.Fatalf("Update() error = %v, want the read's 404 with the environment.list hint", err)
+	}
+	if *updates != 0 {
+		t.Errorf("Update() sent %d updates, want none", *updates)
+	}
+}
+
+// TestEnvironmentUpdate_NamespaceRemovedBesideAFluxPath_IsRefused verifies an
+// update that removes the namespace and sets a Flux path in one call is
+// refused before any request, naming both fields: GitLab keeps no Flux path
+// without a namespace and answers that call with a 400 (measured on
+// 19.5.0-ee).
+func TestEnvironmentUpdate_NamespaceRemovedBesideAFluxPath_IsRefused(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42", EnvironmentID: 7, KubernetesNamespace: new(""), FluxResourcePath: new("flux/prod"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "kubernetes_namespace") || !strings.Contains(err.Error(), "flux_resource_path") {
+		t.Fatalf("Update() error = %v, want a refusal naming both fields", err)
+	}
+}
+
+// TestEnvironmentUpdate_NamespaceSetOrLeftAlone_ReadsNothing verifies the
+// namespace check reads the environment only for an emptied namespace: one
+// set, or left out, goes straight to the update.
+func TestEnvironmentUpdate_NamespaceSetOrLeftAlone_ReadsNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		namespace *string
+	}{
+		{"namespace set", new("ns")},
+		{"namespace left out", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, _ := recordingHandler(t, http.MethodPut, "/api/v4/projects/42/environments/7", http.StatusOK, envFullJSON)
+			if _, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{
+				ProjectID: "42", EnvironmentID: 7, KubernetesNamespace: tc.namespace, Name: "env",
+			}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
 			}
 		})
 	}

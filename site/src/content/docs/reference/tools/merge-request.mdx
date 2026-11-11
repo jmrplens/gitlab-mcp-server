@@ -182,15 +182,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Merge Request Approval Rule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_request))
 - **Behavior**: writes, idempotent
 
-| Parameter            | Type             | Mandatory | Description                    |
-| -------------------- | ---------------- | --------- | ------------------------------ |
-| `approval_rule_id`   | `integer`        | yes       | Approval rule ID               |
-| `merge_request_iid`  | `integer`        | yes       | Merge request internal ID      |
-| `project_id`         | `string/integer` | yes       | Project ID or URL-encoded path |
-| `approvals_required` | `integer`        | no        | Number of approvals required   |
-| `group_ids`          | `integer[]`      | no        | Group IDs eligible to approve  |
-| `name`               | `string`         | no        | Rule name                      |
-| `user_ids`           | `integer[]`      | no        | User IDs eligible to approve   |
+| Parameter            | Type             | Mandatory | Description                                                                                                       |
+| -------------------- | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `approval_rule_id`   | `integer`        | yes       | Approval rule ID                                                                                                  |
+| `merge_request_iid`  | `integer`        | yes       | Merge request internal ID                                                                                         |
+| `project_id`         | `string/integer` | yes       | Project ID or URL-encoded path                                                                                    |
+| `approvals_required` | `integer`        | no        | Number of approvals required                                                                                      |
+| `group_ids`          | `integer[]`      | no        | Group IDs eligible to approve. Pass \[\] to take every group off the rule. Omit the field to leave them untouched |
+| `name`               | `string`         | no        | Rule name                                                                                                         |
+| `user_ids`           | `integer[]`      | no        | User IDs eligible to approve. Pass \[\] to take every user off the rule. Omit the field to leave them untouched   |
 
 ### `merge_request.approval_rules`
 

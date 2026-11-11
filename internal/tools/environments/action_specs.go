@@ -31,9 +31,14 @@ const (
 // protected environment and freeze period packages join the same group, which
 // is why a deployment action's ID reads "environment.deployment_list" and
 // there is no deployment domain for it to live in.
+//
+// The IDs here and below are written out rather than concatenated, which
+// mutation testing reports as uncovered arithmetic;
+// TestCanonicalIDs_AreTheSpecNamesUnderTheCatalogDomain holds each to the
+// domain plus its spec name.
 const (
 	catalogDomain = "environment"
-	domainPrefix  = catalogDomain + "."
+	domainPrefix  = "environment."
 )
 
 // The canonical IDs of this package's own actions, and of the sibling
@@ -46,17 +51,17 @@ const (
 // A deployment belongs to the environment group, so its IDs are qualified the
 // same way. A CI variable and a feature flag are domains of their own.
 const (
-	actionEnvironmentList   = domainPrefix + actionNameList
-	actionEnvironmentGet    = domainPrefix + actionNameGet
-	actionEnvironmentCreate = domainPrefix + actionNameCreate
-	actionEnvironmentUpdate = domainPrefix + actionNameUpdate
-	actionEnvironmentDelete = domainPrefix + actionNameDelete
-	actionEnvironmentStop   = domainPrefix + actionNameStop
+	actionEnvironmentList   = "environment.list"
+	actionEnvironmentGet    = "environment.get"
+	actionEnvironmentCreate = "environment.create"
+	actionEnvironmentUpdate = "environment.update"
+	actionEnvironmentDelete = "environment.delete"
+	actionEnvironmentStop   = "environment.stop"
 
-	actionEnvironmentStopStale = domainPrefix + actionNameStopStale
+	actionEnvironmentStopStale = "environment.stop_stale"
 
-	actionDeploymentList   = domainPrefix + "deployment_list"
-	actionDeploymentCreate = domainPrefix + "deployment_create"
+	actionDeploymentList   = "environment.deployment_list"
+	actionDeploymentCreate = "environment.deployment_create"
 
 	actionCIVariableList  = "ci_variable.list"
 	actionFeatureFlagList = "feature_flags.feature_flag_list"

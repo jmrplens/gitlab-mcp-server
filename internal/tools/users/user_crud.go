@@ -141,18 +141,18 @@ type ModifyInput struct {
 	External            *bool   `json:"external,omitempty" jsonschema:"Mark or unmark as external"`
 	SkipReconfirmation  *bool   `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
 	Bio                 *string `json:"bio,omitempty" jsonschema:"New bio text. Pass an empty string to remove it. Omit the field to leave it untouched"`
-	Location            string  `json:"location,omitempty" jsonschema:"New location"`
+	Location            *string `json:"location,omitempty" jsonschema:"New location. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Organization        *string `json:"organization,omitempty" jsonschema:"New organization. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	ProjectsLimit       *int64  `json:"projects_limit,omitempty" jsonschema:"New maximum projects limit"`
-	Note                string  `json:"note,omitempty" jsonschema:"New admin note"`
+	Note                *string `json:"note,omitempty" jsonschema:"New admin note. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	PrivateProfile      *bool   `json:"private_profile,omitempty" jsonschema:"Set profile as private"`
 	CanCreateGroup      *bool   `json:"can_create_group,omitempty" jsonschema:"Allow user to create groups"`
 	ViewDiffsFileByFile *bool   `json:"view_diffs_file_by_file,omitempty" jsonschema:"Show whitespace changes in diffs file by file"`
-	CommitEmail         string  `json:"commit_email,omitempty" jsonschema:"Email used for commits"`
-	PublicEmail         string  `json:"public_email,omitempty" jsonschema:"Publicly visible email address"`
+	CommitEmail         *string `json:"commit_email,omitempty" jsonschema:"Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched"`
+	PublicEmail         *string `json:"public_email,omitempty" jsonschema:"Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	WebsiteURL          *string `json:"website_url,omitempty" jsonschema:"User website URL. Pass an empty string to remove it. Omit the field to leave it untouched"`
-	Linkedin            string  `json:"linkedin,omitempty" jsonschema:"LinkedIn account"`
-	Twitter             string  `json:"twitter,omitempty" jsonschema:"Twitter/X account"`
+	Linkedin            *string `json:"linkedin,omitempty" jsonschema:"LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Twitter             *string `json:"twitter,omitempty" jsonschema:"Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Provider            string  `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
 	ExternUID           string  `json:"extern_uid,omitempty" jsonschema:"External UID for the provider"`
 	ThemeID             *int64  `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
@@ -296,23 +296,24 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		Auditor:            input.Auditor,
 		External:           input.External,
 		SkipReconfirmation: input.SkipReconfirmation,
-		// Bio, WebsiteURL and Organization go through as given: an empty one
-		// is the caller removing it (issue 1306), which the users route's own
-		// description of organization says ("Empty string or nil clears the
-		// field").
+		// The profile texts go through as given: an empty one is the caller
+		// removing it (issue 1306), which the users route's own description
+		// of organization says ("Empty string or nil clears the field") and
+		// GitLab stores for the location, note, emails and accounts
+		// (measured on 19.5.0-ee).
 		Bio:                 input.Bio,
-		Location:            strPtr(input.Location),
+		Location:            input.Location,
 		Organization:        input.Organization,
 		ProjectsLimit:       input.ProjectsLimit,
-		Note:                strPtr(input.Note),
+		Note:                input.Note,
 		PrivateProfile:      input.PrivateProfile,
 		CanCreateGroup:      input.CanCreateGroup,
 		ViewDiffsFileByFile: input.ViewDiffsFileByFile,
-		CommitEmail:         strPtr(input.CommitEmail),
-		PublicEmail:         strPtr(input.PublicEmail),
+		CommitEmail:         input.CommitEmail,
+		PublicEmail:         input.PublicEmail,
 		WebsiteURL:          input.WebsiteURL,
-		Linkedin:            strPtr(input.Linkedin),
-		Twitter:             strPtr(input.Twitter),
+		Linkedin:            input.Linkedin,
+		Twitter:             input.Twitter,
 		Provider:            strPtr(input.Provider),
 		ExternUID:           strPtr(input.ExternUID),
 		ThemeID:             input.ThemeID,

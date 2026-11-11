@@ -207,6 +207,12 @@ var upstreamWaits = []Entry{
 	},
 	{
 		Row: 122, Category: CategoryUpstream,
+		Sites:      []string{"ffuserlists.UpdateUserList"},
+		Predicates: []Predicate{NoEmptyText{Type: "UpdateFeatureFlagUserListOptions", Field: "UserXIDs"}},
+		Reason:     "UpdateFeatureFlagUserListOptions tags user_xids omitempty on a string, so the feature flag user list update writes the empty string that takes every user off the list into the body",
+	},
+	{
+		Row: 122, Category: CategoryUpstream,
 		Sites:      []string{"mergerequests.Update"},
 		Predicates: []Predicate{NotNullable{Type: "UpdateMergeRequestOptions", Field: "MergeAfter"}},
 		Reason:     "UpdateMergeRequestOptions tags merge_after omitempty, so the merge request update writes the null that clears it into the body",

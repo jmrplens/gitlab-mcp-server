@@ -515,7 +515,7 @@ func TestGroupWrites_OptionalSettingsReachTheRequestOnlyWhenGiven(t *testing.T) 
 			full: func(client *gitlabclient.Client) error {
 				_, err := Update(context.Background(), client, UpdateInput{
 					GroupID: "9", Name: "Team", Path: "team", Description: new("the team"), Visibility: "private",
-					RequestAccessEnabled: new(true), LFSEnabled: new(true), DefaultBranch: "main",
+					RequestAccessEnabled: new(true), LFSEnabled: new(true), DefaultBranch: new("main"),
 					UniqueProjectDownloadLimitAllowlist: []string{"alice"},
 					UniqueProjectDownloadLimitAlertlist: []int64{7},
 				})
@@ -1855,7 +1855,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		Visibility:           "public",
 		RequestAccessEnabled: &boolTrue,
 		LFSEnabled:           &boolFalse,
-		DefaultBranch:        "main",
+		DefaultBranch:        new("main"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -3358,7 +3358,7 @@ func TestUpdate_AuditFields(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{
 		GroupID:                                     "99",
 		AllowMergeOnSkippedPipeline:                 new(true),
-		AllowedEmailDomainsList:                     "example.com",
+		AllowedEmailDomainsList:                     new("example.com"),
 		AutoBanUserOnExcessiveProjectsDownload:      new(true),
 		AutoDevopsEnabled:                           new(true),
 		DefaultBranchProtection:                     new(int64(2)),
@@ -3370,7 +3370,7 @@ func TestUpdate_AuditFields(t *testing.T) {
 		ExperimentFeaturesEnabled:                   new(true),
 		ExtraSharedRunnersMinutesLimit:              new(int64(50)),
 		FileTemplateProjectID:                       new(int64(7)),
-		IPRestrictionRanges:                         "10.0.0.0/8",
+		IPRestrictionRanges:                         new("10.0.0.0/8"),
 		LockDuoFeaturesEnabled:                      new(true),
 		LockMathRenderingLimitsEnabled:              new(true),
 		MaxArtifactsSize:                            new(int64(500)),
@@ -4460,7 +4460,7 @@ func groupWriteSettings() []groupWriteSetting {
 		{"path", "path", "team", CreateInput{Path: "team"}, UpdateInput{Path: "team"}},
 		{"description", "description", "the team", CreateInput{Description: "the team"}, UpdateInput{Description: new("the team")}},
 		{"visibility", "visibility", "internal", CreateInput{Visibility: "internal"}, UpdateInput{Visibility: "internal"}},
-		{"default_branch", "default_branch", "trunk", CreateInput{DefaultBranch: "trunk"}, UpdateInput{DefaultBranch: "trunk"}},
+		{"default_branch", "default_branch", "trunk", CreateInput{DefaultBranch: "trunk"}, UpdateInput{DefaultBranch: new("trunk")}},
 		{"duo_availability", "duo_availability", "default_off", CreateInput{DuoAvailability: "default_off"}, UpdateInput{DuoAvailability: "default_off"}},
 		{"enabled_git_access_protocol", "enabled_git_access_protocol", "ssh", CreateInput{EnabledGitAccessProtocol: "ssh"}, UpdateInput{EnabledGitAccessProtocol: "ssh"}},
 		{"project_creation_level", "project_creation_level", "maintainer", CreateInput{ProjectCreationLevel: "maintainer"}, UpdateInput{ProjectCreationLevel: "maintainer"}},
@@ -4525,8 +4525,8 @@ func groupWriteSettings() []groupWriteSetting {
 		{"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_all_discussions_are_resolved", true, CreateInput{}, UpdateInput{OnlyAllowMergeIfAllDiscussionsAreResolved: new(true)}},
 		{"file_template_project_id", "file_template_project_id", float64(17), CreateInput{}, UpdateInput{FileTemplateProjectID: new(int64(17))}},
 		{"max_artifacts_size", "max_artifacts_size", float64(128), CreateInput{}, UpdateInput{MaxArtifactsSize: new(int64(128))}},
-		{"ip_restriction_ranges", "ip_restriction_ranges", "192.168.0.0/16", CreateInput{}, UpdateInput{IPRestrictionRanges: "192.168.0.0/16"}},
-		{"allowed_email_domains_list", "allowed_email_domains_list", "acme.example", CreateInput{}, UpdateInput{AllowedEmailDomainsList: "acme.example"}},
+		{"ip_restriction_ranges", "ip_restriction_ranges", "192.168.0.0/16", CreateInput{}, UpdateInput{IPRestrictionRanges: new("192.168.0.0/16")}},
+		{"allowed_email_domains_list", "allowed_email_domains_list", "acme.example", CreateInput{}, UpdateInput{AllowedEmailDomainsList: new("acme.example")}},
 		{"step_up_auth_required_oauth_provider", "step_up_auth_required_oauth_provider", "okta", CreateInput{}, UpdateInput{StepUpAuthRequiredOAuthProvider: new("okta")}},
 		{"shared_runners_setting", "shared_runners_setting", "disabled_and_overridable", CreateInput{}, UpdateInput{SharedRunnersSetting: "disabled_and_overridable"}},
 	}

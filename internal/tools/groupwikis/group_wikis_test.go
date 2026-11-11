@@ -289,7 +289,7 @@ func TestEdit_Success(t *testing.T) {
 		GroupID: "mygroup",
 		Slug:    "home",
 		Title:   "Updated",
-		Content: "Updated content",
+		Content: new("Updated content"),
 	})
 	if err != nil {
 		t.Fatalf("Edit() unexpected error: %v", err)
@@ -550,7 +550,7 @@ func TestEdit_WithFormat(t *testing.T) {
 	out, err := Edit(context.Background(), client, EditInput{
 		GroupID: "mygroup",
 		Slug:    "home",
-		Content: "= Title",
+		Content: new("= Title"),
 		Format:  "asciidoc",
 	})
 	if err != nil {
@@ -654,7 +654,7 @@ func TestGroupWikis_UnreadableCapturedMetaID(t *testing.T) {
 		}},
 		{name: "edit", operation: "editGroupWikiPage", call: func() error {
 			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
-			_, err := Edit(context.Background(), client, EditInput{GroupID: "42", Slug: "home", Content: "hello again"})
+			_, err := Edit(context.Background(), client, EditInput{GroupID: "42", Slug: "home", Content: new("hello again")})
 			return err
 		}},
 	}
@@ -782,17 +782,24 @@ func TestEdit_OnlyTheNamedFieldsAreSent(t *testing.T) {
 		},
 		{
 			name:  "new content sends the content alone",
-			input: EditInput{GroupID: "mygroup", Slug: "home", Content: "# Rewritten"},
+			input: EditInput{GroupID: "mygroup", Slug: "home", Content: new("# Rewritten")},
 			want:  map[string]any{"content": "# Rewritten"},
 		},
 		{
 			name:  "a format change travels with its content",
-			input: EditInput{GroupID: "mygroup", Slug: "home", Content: "= Rewritten", Format: "asciidoc"},
+			input: EditInput{GroupID: "mygroup", Slug: "home", Content: new("= Rewritten"), Format: "asciidoc"},
 			want:  map[string]any{"content": "= Rewritten", "format": "asciidoc"},
 		},
 		{
+			// An empty content is the caller emptying the page, which GitLab
+			// stores (measured on 19.5.0-ee, issue 1306).
+			name:  "an emptied content",
+			input: EditInput{GroupID: "mygroup", Slug: "home", Content: new("")},
+			want:  map[string]any{"content": ""},
+		},
+		{
 			name:  "all three named are all three sent",
-			input: EditInput{GroupID: "mygroup", Slug: "home", Title: "Renamed", Content: "= Rewritten", Format: "asciidoc"},
+			input: EditInput{GroupID: "mygroup", Slug: "home", Title: "Renamed", Content: new("= Rewritten"), Format: "asciidoc"},
 			want:  map[string]any{"title": "Renamed", "content": "= Rewritten", "format": "asciidoc"},
 		},
 	}

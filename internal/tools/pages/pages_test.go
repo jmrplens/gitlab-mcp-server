@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -886,8 +887,8 @@ func TestUpdateDomain_WithCert(t *testing.T) {
 	out, err := UpdateDomain(context.Background(), client, UpdateDomainInput{
 		ProjectID:   "42",
 		Domain:      testDomain,
-		Certificate: "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----",
-		Key:         "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
+		Certificate: new("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----"),
+		Key:         new("-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----"),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -919,8 +920,8 @@ func TestUpdateDomain_OptionalFieldsReachTheRequestBody(t *testing.T) {
 				ProjectID:      "42",
 				Domain:         testDomain,
 				AutoSslEnabled: &autoSSL,
-				Certificate:    "-----BEGIN CERTIFICATE-----\nupdated cert\n-----END CERTIFICATE-----",
-				Key:            "-----BEGIN PRIVATE KEY-----\nupdated key\n-----END PRIVATE KEY-----",
+				Certificate:    new("-----BEGIN CERTIFICATE-----\nupdated cert\n-----END CERTIFICATE-----"),
+				Key:            new("-----BEGIN PRIVATE KEY-----\nupdated key\n-----END PRIVATE KEY-----"),
 			},
 			want: map[string]any{
 				"auto_ssl_enabled": true,
@@ -933,6 +934,13 @@ func TestUpdateDomain_OptionalFieldsReachTheRequestBody(t *testing.T) {
 			input:  UpdateDomainInput{ProjectID: "42", Domain: testDomain},
 			absent: []string{"auto_ssl_enabled", "certificate", "key"},
 		},
+		{
+			// GitLab removes the custom certificate when both are sent empty
+			// (measured on 19.5.0-ee, issue 1306).
+			name:  "certificate and key removed together",
+			input: UpdateDomainInput{ProjectID: "42", Domain: testDomain, Certificate: new(""), Key: new("")},
+			want:  map[string]any{"certificate": "", "key": ""},
+		},
 	}
 
 	for _, tt := range tests {
@@ -943,6 +951,33 @@ func TestUpdateDomain_OptionalFieldsReachTheRequestBody(t *testing.T) {
 			}))
 			if _, err := UpdateDomain(context.Background(), client, tt.input); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestUpdateDomain_OneCredentialEmptiedAlone_IsRefused verifies an update
+// that empties the certificate or the key without emptying the other is
+// refused before any request, naming the other field. GitLab validates the
+// key against the certificate and answers either removed alone with 400 "key
+// doesn't match the certificate" (measured on 19.5.0-ee, issue 1306); the
+// pair is removed only when both are sent empty.
+func TestUpdateDomain_OneCredentialEmptiedAlone_IsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input UpdateDomainInput
+		want  string
+	}{
+		{"certificate alone", UpdateDomainInput{Certificate: new("")}, "send key as an empty string too"},
+		{"certificate beside a key", UpdateDomainInput{Certificate: new(""), Key: new("k")}, "send key as an empty string too"},
+		{"key alone", UpdateDomainInput{Key: new("")}, "send certificate as an empty string too"},
+		{"key beside a certificate", UpdateDomainInput{Key: new(""), Certificate: new("c")}, "send certificate as an empty string too"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.input.ProjectID, tc.input.Domain = "42", testDomain
+			_, err := UpdateDomain(context.Background(), testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("UpdateDomain() error = %v, want a refusal saying to %q", err, tc.want)
 			}
 		})
 	}

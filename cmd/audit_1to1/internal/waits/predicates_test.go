@@ -65,6 +65,7 @@ type Options struct {
 	Hidden      []string                ~json:"-"~
 	PtrList     *[]string               ~json:"ptr_list,omitempty"~
 	Bare        []string                ~json:"bare"~
+	Text        string                  ~json:"text,omitempty"~
 	Nested      []*Inner                ~json:"nested"~
 	ByName      map[string]Inner        ~json:"by_name"~
 	Fixed       [2]Inner                ~json:"fixed"~
@@ -335,6 +336,23 @@ func TestNoEmptyList_StandInFields_HoldWhileTheFieldCannotSendAnEmptyList(t *tes
 	})
 }
 
+// TestNoEmptyText_StandInFields_HoldWhileTheFieldCannotSendAnEmptyText
+// verifies the predicate behind every "" a body edit writes: a string tagged
+// omitempty cannot send one, a string without it and a pointer to a string
+// can, and a field that is not a text is an error.
+func TestNoEmptyText_StandInFields_HoldWhileTheFieldCannotSendAnEmptyText(t *testing.T) {
+	runPredicateCases(t, standInSDK(t), []predicateCase{
+		{name: "string with omitempty", predicate: NoEmptyText{"Options", "Text"}, want: true},
+		{name: "skipped pointer to a string", predicate: NoEmptyText{"Options", "Skipped"}, want: true},
+		{name: "string without omitempty", predicate: NoEmptyText{"Options", "Always"}},
+		{name: "pointer to a string", predicate: NoEmptyText{"Options", "Omitted"}},
+		{name: "pointer to no string", predicate: NoEmptyText{"Options", "Both"}, wantErr: "is not a text"},
+		{name: "list", predicate: NoEmptyText{"Options", "List"}, wantErr: "is not a text"},
+		{name: "scalar", predicate: NoEmptyText{"Options", "Scalar"}, wantErr: "is not a text"},
+		{name: "unknown field", predicate: NoEmptyText{"Options", "Gone"}, wantErr: "has no field Gone"},
+	})
+}
+
 // TestPredicateString_EachKind_SpellsWhatItNames verifies the spelling a
 // report prints, one per kind, so two predicates on one entry read apart.
 func TestPredicateString_EachKind_SpellsWhatItNames(t *testing.T) {
@@ -351,6 +369,7 @@ func TestPredicateString_EachKind_SpellsWhatItNames(t *testing.T) {
 		{TagName{"T", "F", EncoderQuery, "k"}, "TagName{T.F, url not k}"},
 		{NotNullable{"T", "F"}, "NotNullable{T.F}"},
 		{NoEmptyList{"T", "F"}, "NoEmptyList{T.F}"},
+		{NoEmptyText{"T", "F"}, "NoEmptyText{T.F}"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.want, func(t *testing.T) {
@@ -379,6 +398,7 @@ func TestPredicateSubject_EachKind_NamesWhatItIsAbout(t *testing.T) {
 		{TagName{"T", "F", EncoderQuery, "k"}, "T"},
 		{NotNullable{"T", "F"}, "T"},
 		{NoEmptyList{"T", "F"}, "T"},
+		{NoEmptyText{"T", "F"}, "T"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.predicate.String(), func(t *testing.T) {
@@ -404,6 +424,7 @@ func TestBodyKey_Predicates_AnswerTheJSONKeyOfTheFieldTheyName(t *testing.T) {
 		{name: "tagged", predicate: NotNullable{"Options", "Omitted"}, want: "omitted", wantOK: true},
 		{name: "every field predicate", predicate: WritesAlways{"Options", "Always", EncoderQuery}, want: "always", wantOK: true},
 		{name: "untagged", predicate: FieldKind{"Options", "Untagged", "*string"}, want: "Untagged", wantOK: true},
+		{name: "text", predicate: NoEmptyText{"Options", "Text"}, want: "text", wantOK: true},
 		{name: "skipped", predicate: NoEmptyList{"Options", "Hidden"}},
 		{name: "unknown field", predicate: TagName{"Options", "Gone", EncoderJSON, "gone"}},
 		{name: "no field", predicate: LacksKey{"Options", "always"}},

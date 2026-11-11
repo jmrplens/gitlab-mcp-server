@@ -98,10 +98,7 @@ func writeLastDeployment(c *toolutil.Card, d *DeploymentOutput) {
 // shortSHA renders the first eight characters of a commit SHA, the form GitLab
 // itself shows, and leaves a shorter value alone.
 func shortSHA(sha string) string {
-	if len(sha) <= 8 {
-		return sha
-	}
-	return sha[:8]
+	return sha[:min(len(sha), 8)]
 }
 
 // stateHints picks the next step the environment's own state allows: an

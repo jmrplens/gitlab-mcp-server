@@ -73,8 +73,8 @@ type UpdateRuleInput struct {
 	ApprovalRuleID    int64                `json:"approval_rule_id"             jsonschema:"Approval rule ID,required"`
 	Name              string               `json:"name,omitempty"               jsonschema:"Rule name"`
 	ApprovalsRequired *int64               `json:"approvals_required,omitempty" jsonschema:"Number of approvals required"`
-	UserIDs           []int64              `json:"user_ids,omitempty"           jsonschema:"User IDs eligible to approve"`
-	GroupIDs          []int64              `json:"group_ids,omitempty"          jsonschema:"Group IDs eligible to approve"`
+	UserIDs           []int64              `json:"user_ids,omitempty"           jsonschema:"User IDs eligible to approve. Pass [] to take every user off the rule. Omit the field to leave them untouched"`
+	GroupIDs          []int64              `json:"group_ids,omitempty"          jsonschema:"Group IDs eligible to approve. Pass [] to take every group off the rule. Omit the field to leave them untouched"`
 }
 
 // DeleteRuleInput defines parameters for deleting an MR approval rule.
@@ -476,10 +476,12 @@ func UpdateRule(ctx context.Context, client *gitlabclient.Client, input UpdateRu
 	if input.ApprovalsRequired != nil {
 		opts.ApprovalsRequired = input.ApprovalsRequired
 	}
-	if len(input.UserIDs) > 0 {
+	// Presence decides, never emptiness: [] takes every user or group off
+	// the rule, which GitLab stores (measured on 19.5.0-ee, issue 1306).
+	if input.UserIDs != nil {
 		opts.UserIDs = new(input.UserIDs)
 	}
-	if len(input.GroupIDs) > 0 {
+	if input.GroupIDs != nil {
 		opts.GroupIDs = new(input.GroupIDs)
 	}
 

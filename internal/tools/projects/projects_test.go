@@ -43,6 +43,9 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 		"description", "merge_commit_template", "squash_commit_template", "suggestion_commit_message",
 		"ci_config_path", "mr_default_title_template", "issue_branch_template", "merge_request_title_regex",
 		"merge_request_title_regex_description", "external_authorization_classification_label",
+		// Measured on 19.5.0-ee: the templates clear with "", and so does the
+		// mirror branch regex beside another setting.
+		"issues_template", "merge_requests_template", "mirror_branch_regex",
 	}
 	params := map[string]any{
 		"project_id":                             "42",
@@ -133,6 +136,60 @@ func TestUpdate_DuoWorkflowSwitches_EachReachesTheBodyAlone(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestUpdate_MirrorBranchRegexAlone_IsRefusedBeforeAnyRequest holds the
+// project update to refusing a call whose only setting is the mirror branch
+// regex, empty or not, which GitLab answers 400 because the route's
+// at-least-one-of list leaves the parameter out (measured on 19.5.0-ee), and
+// to sending it beside any other setting, a body edit's null included.
+func TestUpdate_MirrorBranchRegexAlone_IsRefusedBeforeAnyRequest(t *testing.T) {
+	refused := []struct {
+		name  string
+		regex string
+	}{
+		{"emptied", ""},
+		{"set", "^main$"},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MirrorBranchRegex: new(tc.regex)})
+			if err == nil || !strings.Contains(err.Error(), "only setting is mirror_branch_regex") {
+				t.Fatalf("Update() error = %v, want the refusal naming mirror_branch_regex", err)
+			}
+		})
+	}
+
+	sent := []struct {
+		name   string
+		params map[string]any
+		want   map[string]string
+	}{
+		{
+			name:   "beside another setting",
+			params: map[string]any{"project_id": "42", "mirror_branch_regex": "", "description": "kept"},
+			want:   map[string]string{"mirror_branch_regex": `""`, "description": `"kept"`},
+		},
+		{
+			name:   "beside a setting only a body edit writes",
+			params: map[string]any{"project_id": "42", "mirror_branch_regex": "", "ci_delete_pipelines_in_seconds": 0},
+			want:   map[string]string{"mirror_branch_regex": `""`, "ci_delete_pipelines_in_seconds": `null`},
+		},
+	}
+	for _, tc := range sent {
+		t.Run(tc.name, func(t *testing.T) {
+			input, err := toolutil.UnmarshalParams[UpdateInput](tc.params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			client, recorder := testutil.RecordWrites(t, `{}`, projectJSON)
+			if _, err = Update(t.Context(), client, input); err != nil {
+				t.Fatalf("Update() error: %v", err)
+			}
+			recorder.AssertMembers(t, tc.want)
+		})
 	}
 }
 
@@ -7704,9 +7761,9 @@ func TestConfigurePullMirror_AllOptionalFields(t *testing.T) {
 		ProjectID:                        "42",
 		Enabled:                          &bTrue,
 		URL:                              "https://mirror.example.com",
-		AuthUser:                         "user",
-		AuthPassword:                     "pass",
-		MirrorBranchRegex:                "^main$",
+		AuthUser:                         new("user"),
+		AuthPassword:                     new("pass"),
+		MirrorBranchRegex:                new("^main$"),
 		MirrorTriggerBuilds:              &bTrue,
 		OnlyMirrorProtectedBranches:      &bFalse,
 		MirrorOverwritesDivergedBranches: &bTrue,
@@ -8718,8 +8775,8 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		SuggestionCommitMessage:                  new("scm"),
 		MRDefaultTitleTemplate:                   new("mdtt"),
 		IssueBranchTemplate:                      new("ibt"),
-		IssuesTemplate:                           "it",
-		MergeRequestsTemplate:                    "mrt",
+		IssuesTemplate:                           new("it"),
+		MergeRequestsTemplate:                    new("mrt"),
 		SnippetsEnabled:                          new(true),
 		ContainerRegistryEnabled:                 new(true),
 		ServiceDeskEnabled:                       new(true),
@@ -8751,7 +8808,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		PublicJobs:                               new(true),
 		Mirror:                                   new(true),
 		MirrorTriggerBuilds:                      new(true),
-		MirrorBranchRegex:                        "main",
+		MirrorBranchRegex:                        new("main"),
 		MirrorOverwritesDivergedBranches:         new(true),
 		MirrorUserID:                             new(int64(9)),
 		OnlyMirrorProtectedBranches:              new(true),

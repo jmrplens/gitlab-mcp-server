@@ -5,6 +5,7 @@ package pages
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -74,8 +75,12 @@ type UpdateDomainInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Domain         string               `json:"domain" jsonschema:"The Pages domain name to update,required"`
 	AutoSslEnabled *bool                `json:"auto_ssl_enabled,omitempty" jsonschema:"Enable automatic SSL certificate provisioning"`
-	Certificate    string               `json:"certificate,omitempty" jsonschema:"PEM-encoded SSL certificate"`
-	Key            string               `json:"key,omitempty" jsonschema:"PEM-encoded private key for the certificate"`
+	// The certificate and the key are pointers so the empty strings that
+	// remove them reach GitLab. GitLab removes them only together: either
+	// emptied alone is answered "key doesn't match the certificate"
+	// (measured on 19.5.0-ee, issue 1306).
+	Certificate *string `json:"certificate,omitempty" jsonschema:"PEM-encoded SSL certificate. Pass an empty string, together with key as an empty string, to remove the custom certificate. Omit the field to leave it untouched"`
+	Key         *string `json:"key,omitempty" jsonschema:"PEM-encoded private key for the certificate. Pass an empty string, together with certificate as an empty string, to remove the custom certificate. Omit the field to leave it untouched"`
 }
 
 // DeleteDomainInput defines parameters for deleting a Pages domain.
@@ -349,6 +354,24 @@ func CreateDomain(ctx context.Context, client *gitlabclient.Client, input Create
 	return toDomainOutput(domain, extra), nil
 }
 
+// checkCredentialsRemovedTogether refuses an update that empties one of the
+// certificate and the key without emptying the other: GitLab validates the
+// key against the certificate and answers either removed alone with 400 "key
+// doesn't match the certificate", and removes both when both are sent empty
+// (measured on 19.5.0-ee). The refusal names the other field before any
+// request.
+func checkCredentialsRemovedTogether(input UpdateDomainInput) error {
+	certificateEmptied := input.Certificate != nil && *input.Certificate == ""
+	keyEmptied := input.Key != nil && *input.Key == ""
+	if certificateEmptied && !keyEmptied {
+		return errors.New("pagesDomainUpdate: an empty certificate removes the custom certificate only with an empty key; send key as an empty string too")
+	}
+	if keyEmptied && !certificateEmptied {
+		return errors.New("pagesDomainUpdate: an empty key removes the custom certificate only with an empty certificate; send certificate as an empty string too")
+	}
+	return nil
+}
+
 // UpdateDomain updates the auto-SSL flag and/or custom certificate
 // of an existing Pages domain via the GitLab Pages domains API
 // (PUT /projects/:id/pages/domains/:domain).
@@ -360,15 +383,12 @@ func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input Update
 		return DomainOutput{}, toolutil.ErrFieldRequired("domain")
 	}
 
-	opts := &gl.UpdatePagesDomainOptions{}
+	if err := checkCredentialsRemovedTogether(input); err != nil {
+		return DomainOutput{}, err
+	}
+	opts := &gl.UpdatePagesDomainOptions{Certificate: input.Certificate, Key: input.Key}
 	if input.AutoSslEnabled != nil {
 		opts.AutoSslEnabled = input.AutoSslEnabled
-	}
-	if input.Certificate != "" {
-		opts.Certificate = new(input.Certificate)
-	}
-	if input.Key != "" {
-		opts.Key = new(input.Key)
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)

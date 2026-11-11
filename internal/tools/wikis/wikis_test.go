@@ -464,7 +464,7 @@ func TestWikiUpdate_Success(t *testing.T) {
 		ProjectID: "42",
 		Slug:      "my-page",
 		Title:     "Updated Page",
-		Content:   "Updated content",
+		Content:   new("Updated content"),
 	})
 	if err != nil {
 		t.Fatalf("Update() unexpected error: %v", err)
@@ -482,7 +482,7 @@ func TestWikiUpdate_EmptyProjectID(t *testing.T) {
 
 	_, err := Update(context.Background(), client, UpdateInput{
 		Slug:    "my-page",
-		Content: "Updated content",
+		Content: new("Updated content"),
 	})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
@@ -497,7 +497,7 @@ func TestWikiUpdate_EmptySlug(t *testing.T) {
 
 	_, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: "42",
-		Content:   "Updated content",
+		Content:   new("Updated content"),
 	})
 	if err == nil {
 		t.Fatal("Update() expected error for empty slug, got nil")
@@ -515,7 +515,7 @@ func TestWikiUpdate_CancelledContext(t *testing.T) {
 	_, err := Update(ctx, client, UpdateInput{
 		ProjectID: "42",
 		Slug:      "my-page",
-		Content:   "Updated content",
+		Content:   new("Updated content"),
 	})
 	if err == nil {
 		t.Fatal("Update() expected error for canceled context, got nil")
@@ -1220,7 +1220,7 @@ func TestWikis_UnreadableCapturedMetaID(t *testing.T) {
 		}},
 		{Name: "update", Call: func() error {
 			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
-			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", Slug: "home", Content: "hello again"})
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", Slug: "home", Content: new("hello again")})
 			return err
 		}},
 	})
@@ -1319,8 +1319,15 @@ func TestWikiUpdate_OptionalFields_SentOnlyWhenTheCallerChangedThem(t *testing.T
 		},
 		{
 			name:  "content only",
-			input: UpdateInput{ProjectID: "42", Slug: "my-page", Content: "Fresh body"},
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Content: new("Fresh body")},
 			want:  map[string]any{"title": nil, "content": "Fresh body", "format": nil},
+		},
+		{
+			// An empty content is the caller emptying the page, which GitLab
+			// stores (measured on 19.5.0-ee, issue 1306).
+			name:  "content emptied",
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Content: new("")},
+			want:  map[string]any{"title": nil, "content": "", "format": nil},
 		},
 		{
 			name:  "format only",
@@ -1329,7 +1336,7 @@ func TestWikiUpdate_OptionalFields_SentOnlyWhenTheCallerChangedThem(t *testing.T
 		},
 		{
 			name:  "all three, each a distinct value",
-			input: UpdateInput{ProjectID: "42", Slug: "my-page", Title: "Renamed", Content: "Fresh body", Format: "rdoc"},
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Title: "Renamed", Content: new("Fresh body"), Format: "rdoc"},
 			want:  map[string]any{"title": "Renamed", "content": "Fresh body", "format": "rdoc"},
 		},
 	}
@@ -1440,7 +1447,7 @@ func TestWikis_CapturedFieldsReachTheOutput(t *testing.T) {
 
 	t.Run("update", func(t *testing.T) {
 		out, err := Update(context.Background(), answering(homePage), UpdateInput{
-			ProjectID: "42", Slug: "home", Content: "hello again",
+			ProjectID: "42", Slug: "home", Content: new("hello again"),
 		})
 		if err != nil {
 			t.Fatalf(fmtUnexpectedErr, err)

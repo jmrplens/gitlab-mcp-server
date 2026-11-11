@@ -360,7 +360,7 @@ type UpdateProjectInput struct {
 	Name               string               `json:"name,omitempty"        jsonschema:"Updated name"`
 	ExternalURL        string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
 	SharedSecret       string               `json:"shared_secret,omitempty" jsonschema:"Updated shared secret for HMAC verification"`
-	ProtectedBranchIDs []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs"`
+	ProtectedBranchIDs []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs. Pass [] to scope the check to every branch again. Omit the field to leave them untouched"`
 }
 
 // UpdateProjectExternalStatusCheck updates an external status check for a project.
@@ -384,7 +384,9 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	if input.SharedSecret != "" {
 		opts.SharedSecret = new(input.SharedSecret)
 	}
-	if len(input.ProtectedBranchIDs) > 0 {
+	// Presence decides, never emptiness: [] takes every protected branch off
+	// the check, which GitLab stores (measured on 19.5.0-ee, issue 1306).
+	if input.ProtectedBranchIDs != nil {
 		opts.ProtectedBranchIDs = &input.ProtectedBranchIDs
 	}
 	check, _, err := client.GL().ExternalStatusChecks.UpdateProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, opts, gl.WithContext(ctx))

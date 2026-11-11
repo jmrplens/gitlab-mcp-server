@@ -5349,7 +5349,7 @@ var table = finegrained.Table{
 		{ID: "environment.protected_update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{239}}},
 		{ID: "environment.stop", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{240}}},
 		{ID: "environment.stop_stale", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{241}}},
-		{ID: "environment.update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{242}}},
+		{ID: "environment.update", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{242}}, Optional: []uint32{233}},
 		{ID: "external_status_check.create_project", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{243}}},
 		{ID: "external_status_check.delete_project", Classic: finegrained.ClassicAPI, Paths: [][]uint32{{244}}},
 		{ID: "external_status_check.list_project", Classic: finegrained.ClassicReadAPI, Paths: [][]uint32{{245}}},

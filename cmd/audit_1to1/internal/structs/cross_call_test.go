@@ -1399,6 +1399,24 @@ func Checked(c *gl.Client, in CheckedInput) error {
 	return checked(filter{search: in.Search}, func(f filter) error { return c.Widgets.Protect(1, protectOf(f)) })
 }
 
+// apply calls the closure it is handed with the search of the intermediate
+// it is handed and an intermediate of constants.
+func apply(f filter, use func(string, filter) error) error {
+	return use(f.search, filter{search: "z"})
+}
+
+type NarrowInput struct {
+	Search string ~json:"search"~
+}
+
+// Narrow hands apply a closure whose first parameter, which apply hands the
+// search, is no intermediate, and whose second has no name: neither holds
+// the input, so the literal the closure fills from the first carries
+// nothing.
+func Narrow(c *gl.Client, in NarrowInput) error {
+	return apply(filter{search: in.Search}, func(s string, _ filter) error { return c.Widgets.Protect(1, protectOf(filter{search: s})) })
+}
+
 // wrapper holds an intermediate in a field; no handler fills one in a
 // literal.
 type wrapper struct {
@@ -1429,8 +1447,10 @@ func Wrapped(c *gl.Client, in WrappedInput) error {
 // and a single target holds whatever its value reads, the one result of a
 // function that drops what it is handed included. An intermediate assigned
 // to the blank identifier is held by nothing, so a literal of constants
-// beside it carries nothing; and a closure a function calls with constants
-// alone holds nothing, whatever else the function hands its intermediate to.
+// beside it carries nothing; a closure a function calls with constants
+// alone holds nothing, whatever else the function hands its intermediate to;
+// and a closure's parameter that is no intermediate, or that has no name,
+// holds nothing even where the function hands it something of the input.
 func TestCollectCallerInputs_WhatOnlyALaterPassOrAPlaceTellsApart_IsPairedAsItHolds(t *testing.T) {
 	pkgs := checkedTree(t, pairingSDK, toolSource{path: "example.com/x/internal/tools/passes", source: passesSource})
 

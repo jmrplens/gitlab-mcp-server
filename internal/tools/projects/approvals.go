@@ -295,10 +295,10 @@ type UpdateApprovalRuleInput struct {
 	RuleID                        int64                `json:"rule_id" jsonschema:"Approval rule ID,required"`
 	Name                          string               `json:"name,omitempty" jsonschema:"Updated rule name"`
 	ApprovalsRequired             *int64               `json:"approvals_required,omitempty" jsonschema:"Updated number of approvals required"`
-	UserIDs                       []int64              `json:"user_ids,omitempty" jsonschema:"Updated user IDs to assign as approvers"`
-	GroupIDs                      []int64              `json:"group_ids,omitempty" jsonschema:"Updated group IDs to assign as approvers"`
-	ProtectedBranchIDs            []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs"`
-	Usernames                     []string             `json:"usernames,omitempty" jsonschema:"Updated usernames to assign as approvers"`
+	UserIDs                       []int64              `json:"user_ids,omitempty" jsonschema:"Updated user IDs to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched"`
+	GroupIDs                      []int64              `json:"group_ids,omitempty" jsonschema:"Updated group IDs to assign as approvers. Pass [] to take every group off the rule. Omit the field to leave them untouched"`
+	ProtectedBranchIDs            []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs. Pass [] to scope the rule to no protected branch. Omit the field to leave them untouched"`
+	Usernames                     []string             `json:"usernames,omitempty" jsonschema:"Updated usernames to assign as approvers. Pass [] to take every user off the rule. Omit the field to leave them untouched"`
 	AppliesToAllProtectedBranches *bool                `json:"applies_to_all_protected_branches,omitempty" jsonschema:"Apply this rule to all protected branches"`
 }
 
@@ -320,16 +320,18 @@ func UpdateApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	if input.ApprovalsRequired != nil {
 		opts.ApprovalsRequired = input.ApprovalsRequired
 	}
-	if len(input.UserIDs) > 0 {
+	// Presence decides, never emptiness: [] empties each list, which GitLab
+	// stores (measured on 19.5.0-ee, issue 1306).
+	if input.UserIDs != nil {
 		opts.UserIDs = &input.UserIDs
 	}
-	if len(input.GroupIDs) > 0 {
+	if input.GroupIDs != nil {
 		opts.GroupIDs = &input.GroupIDs
 	}
-	if len(input.ProtectedBranchIDs) > 0 {
+	if input.ProtectedBranchIDs != nil {
 		opts.ProtectedBranchIDs = &input.ProtectedBranchIDs
 	}
-	if len(input.Usernames) > 0 {
+	if input.Usernames != nil {
 		opts.Usernames = &input.Usernames
 	}
 	if input.AppliesToAllProtectedBranches != nil {

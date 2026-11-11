@@ -564,7 +564,7 @@ func TestEdit_Success(t *testing.T) {
 		ProjectID:         testProjectID,
 		MirrorID:          42,
 		Enabled:           &enabled,
-		MirrorBranchRegex: "^release/.*$",
+		MirrorBranchRegex: new("^release/.*$"),
 		AuthMethod:        "password",
 	})
 	if err != nil {
@@ -1440,7 +1440,7 @@ func TestEdit_OptionalAttributes_ReachGitLabOnlyWhenSupplied(t *testing.T) {
 			in: EditInput{
 				ProjectID:         testProjectID,
 				MirrorID:          42,
-				MirrorBranchRegex: "^hotfix/",
+				MirrorBranchRegex: new("^hotfix/"),
 				AuthMethod:        "password",
 				HostKeys:          []string{"ssh-rsa AAAAB3Nz"},
 			},

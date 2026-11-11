@@ -79,9 +79,9 @@ type EditInput struct {
 	Enabled               *bool                `json:"enabled,omitempty"                 jsonschema:"Whether the mirror is enabled"`
 	KeepDivergentRefs     *bool                `json:"keep_divergent_refs,omitempty"     jsonschema:"Keep divergent refs on the remote"`
 	OnlyProtectedBranches *bool                `json:"only_protected_branches,omitempty" jsonschema:"Mirror only protected branches"`
-	MirrorBranchRegex     string               `json:"mirror_branch_regex,omitempty"     jsonschema:"Regex pattern for branches to mirror"`
+	MirrorBranchRegex     *string              `json:"mirror_branch_regex,omitempty"     jsonschema:"Regex pattern for branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched"`
 	AuthMethod            string               `json:"auth_method,omitempty"             jsonschema:"Authentication method (password or ssh_public_key)"`
-	HostKeys              []string             `json:"host_keys,omitempty"               jsonschema:"SSH host keys for the remote mirror"`
+	HostKeys              []string             `json:"host_keys,omitempty"               jsonschema:"SSH host keys for the remote mirror. Pass [] to remove every host key. Omit the field to leave them untouched"`
 }
 
 // DeleteInput holds parameters for deleting a project mirror.
@@ -283,18 +283,18 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 	if in.MirrorID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("mirror_id")
 	}
+	// The branch regex and the host keys decide presence by nil: "" and []
+	// remove them, which GitLab stores (measured on 19.5.0-ee, issue 1306).
 	opts := &gl.EditProjectMirrorOptions{
 		Enabled:               in.Enabled,
 		KeepDivergentRefs:     in.KeepDivergentRefs,
 		OnlyProtectedBranches: in.OnlyProtectedBranches,
-	}
-	if in.MirrorBranchRegex != "" {
-		opts.MirrorBranchRegex = new(in.MirrorBranchRegex)
+		MirrorBranchRegex:     in.MirrorBranchRegex,
 	}
 	if in.AuthMethod != "" {
 		opts.AuthMethod = new(in.AuthMethod)
 	}
-	if len(in.HostKeys) > 0 {
+	if in.HostKeys != nil {
 		opts.HostKeys = &in.HostKeys
 	}
 	m, _, err := client.GL().ProjectMirrors.EditProjectMirror(string(in.ProjectID), in.MirrorID, opts, gl.WithContext(ctx))

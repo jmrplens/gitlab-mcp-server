@@ -362,6 +362,8 @@ const (
 	actionTargetBranchRuleCreate        harness.ActionID = "project.target_branch_rule_create"
 	actionTargetBranchRuleList          harness.ActionID = "project.target_branch_rule_list"
 	actionTargetBranchRuleDelete        harness.ActionID = "project.target_branch_rule_delete"
+	actionProjectGet                    harness.ActionID = "project.get"
+	actionProjectUpdate                 harness.ActionID = "project.update"
 	actionPullMirrorGet                 harness.ActionID = "project.pull_mirror_get"
 	actionPullMirrorConfigure           harness.ActionID = "project.pull_mirror_configure"
 	actionStartMirroring                harness.ActionID = "project.start_mirroring"
@@ -375,10 +377,6 @@ const (
 	actionProjectSecuritySettingsGet    harness.ActionID = "project.security_settings_get"
 	actionProjectSecuritySettingsUpdate harness.ActionID = "project.security_settings_update"
 )
-
-// actionProjectUpdate is Free, and is named here for the pull mirror settings
-// it reaches, which only a licensed instance serves.
-const actionProjectUpdate harness.ActionID = "project.update"
 
 // The licensed actions of the merge request tool, and the three Free ones
 // its approval scenarios stand on.

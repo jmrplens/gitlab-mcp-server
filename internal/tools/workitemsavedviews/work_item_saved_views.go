@@ -148,9 +148,11 @@ type CreateInput struct {
 // [gl.UpdateWorkItemSavedViewOptions]: every field is optional, and an omitted
 // one is left as it is.
 type UpdateInput struct {
-	SavedViewID     int64          `json:"saved_view_id"              jsonschema:"Numeric ID of the saved view to update,required"`
-	Name            string         `json:"name,omitempty"             jsonschema:"New name for the saved view"`
-	Description     string         `json:"description,omitempty"      jsonschema:"New description for the saved view"`
+	SavedViewID int64  `json:"saved_view_id"              jsonschema:"Numeric ID of the saved view to update,required"`
+	Name        string `json:"name,omitempty"             jsonschema:"New name for the saved view"`
+	// Description is a pointer so the empty string that removes it reaches
+	// GitLab, which stores it (measured on 19.5.0-ee, issue 1306).
+	Description     *string        `json:"description,omitempty"      jsonschema:"New description for the saved view. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	IsPrivate       *bool          `json:"is_private,omitempty"       jsonschema:"Whether the view is private to the user who created it"`
 	Filters         *Filters       `json:"filters,omitempty"          jsonschema:"Replacement filters. Omit to leave the existing filters unchanged"`
 	Sort            string         `json:"sort,omitempty"             jsonschema:"New sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC"`
@@ -314,6 +316,16 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return mutateOutput(fmt.Sprintf("Successfully created saved view %q.", name), toItem(view)), nil
 }
 
+// trimmedPresent trims a field an update may empty, keeping nil for one left
+// out and "" for one the caller emptied, which optionalString would read as
+// left out.
+func trimmedPresent(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	return new(strings.TrimSpace(*s))
+}
+
 // Update changes the supplied fields of an existing saved view.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (MutateOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -328,7 +340,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	opts := &gl.UpdateWorkItemSavedViewOptions{
 		Name:        optionalString(strings.TrimSpace(input.Name)),
-		Description: optionalString(strings.TrimSpace(input.Description)),
+		Description: trimmedPresent(input.Description),
 		IsPrivate:   input.IsPrivate,
 		Filters:     filters,
 		Sort:        optionalString(strings.TrimSpace(input.Sort)),

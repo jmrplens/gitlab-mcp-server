@@ -508,7 +508,7 @@ func TestSetJira_Success(t *testing.T) {
 	out, err := SetJira(t.Context(), client, SetJiraInput{
 		ProjectID: "1",
 		URL:       "https://jira.example.com",
-		Username:  "user",
+		Username:  new("user"),
 		Password:  "pass",
 	})
 	if err != nil {
@@ -883,14 +883,15 @@ func setJiraBody(t *testing.T, input SetJiraInput) map[string]any {
 // exactly that field under its documented name and value.
 //
 // One field per case is the only fixture that separates them. SetJira assigns
-// sixteen pointer fields straight across and guards nine more on emptiness, so
-// a request carrying all of them agrees with itself however the handler pairs
-// an input field with an option field, and a guard written the wrong way round
-// silently drops the caller's value. The cases that pass false or an empty
-// list also pin that an explicitly negative setting is sent rather than
-// omitted as a zero, and that an unset list is left out rather than sent as
-// null, which is the difference between leaving Jira's project restriction
-// alone and clearing it.
+// twenty-three pointer fields straight across and guards two more, so a
+// request carrying all of them agrees with itself however the handler pairs an
+// input field with an option field, and a guard written the wrong way round
+// silently drops the caller's value. The cases that pass false, an empty text
+// or an empty list pin that an explicitly negative or emptied setting is sent
+// rather than omitted as a zero (issue 1306), and
+// TestSetJira_NoOptionalField_SendsOnlyTheURL that an unset list is left out
+// rather than sent, which is the difference between leaving Jira's project
+// restriction alone and clearing it.
 func TestSetJira_OneOptionalFieldAtATime_SendsOnlyThatField(t *testing.T) {
 	yes, no := true, false
 	authType, issueType := int64(1), int64(10001)
@@ -901,30 +902,38 @@ func TestSetJira_OneOptionalFieldAtATime_SendsOnlyThatField(t *testing.T) {
 		key   string
 		value any
 	}{
-		{"api_url", func(in *SetJiraInput) { in.APIURL = "https://jira.example.com/api" }, "api_url", "https://jira.example.com/api"},
-		{"username", func(in *SetJiraInput) { in.Username = "jira-user" }, "username", "jira-user"},
+		{"api_url", func(in *SetJiraInput) { in.APIURL = new("https://jira.example.com/api") }, "api_url", "https://jira.example.com/api"},
+		{"api_url emptied", func(in *SetJiraInput) { in.APIURL = new("") }, "api_url", ""},
+		{"username", func(in *SetJiraInput) { in.Username = new("jira-user") }, "username", "jira-user"},
+		{"username emptied", func(in *SetJiraInput) { in.Username = new("") }, "username", ""},
 		{"password", func(in *SetJiraInput) { in.Password = "jira-token" }, "password", "jira-token"},
 		{"active", func(in *SetJiraInput) { in.Active = &no }, "active", false},
 		{"jira_auth_type", func(in *SetJiraInput) { in.JiraAuthType = &authType }, "jira_auth_type", float64(1)},
-		{"jira_issue_prefix", func(in *SetJiraInput) { in.JiraIssuePrefix = "PROJ" }, "jira_issue_prefix", "PROJ"},
-		{"jira_issue_regex", func(in *SetJiraInput) { in.JiraIssueRegex = `[A-Z]+-\d+` }, "jira_issue_regex", `[A-Z]+-\d+`},
+		{"jira_issue_prefix", func(in *SetJiraInput) { in.JiraIssuePrefix = new("PROJ") }, "jira_issue_prefix", "PROJ"},
+		{"jira_issue_prefix emptied", func(in *SetJiraInput) { in.JiraIssuePrefix = new("") }, "jira_issue_prefix", ""},
+		{"jira_issue_regex", func(in *SetJiraInput) { in.JiraIssueRegex = new(`[A-Z]+-\d+`) }, "jira_issue_regex", `[A-Z]+-\d+`},
+		{"jira_issue_regex emptied", func(in *SetJiraInput) { in.JiraIssueRegex = new("") }, "jira_issue_regex", ""},
 		{"jira_issue_transition_automatic", func(in *SetJiraInput) { in.JiraIssueTransitionAutomatic = &yes }, "jira_issue_transition_automatic", true},
-		{"jira_issue_transition_id", func(in *SetJiraInput) { in.JiraIssueTransitionID = "31" }, "jira_issue_transition_id", "31"},
+		{"jira_issue_transition_id", func(in *SetJiraInput) { in.JiraIssueTransitionID = new("31") }, "jira_issue_transition_id", "31"},
+		{"jira_issue_transition_id emptied", func(in *SetJiraInput) { in.JiraIssueTransitionID = new("") }, "jira_issue_transition_id", ""},
 		{"commit_events", func(in *SetJiraInput) { in.CommitEvents = &no }, "commit_events", false},
 		{"merge_requests_events", func(in *SetJiraInput) { in.MergeRequestsEvents = &yes }, "merge_requests_events", true},
 		{"comment_on_event_enabled", func(in *SetJiraInput) { in.CommentOnEventEnabled = &no }, "comment_on_event_enabled", false},
 		{"issues_enabled", func(in *SetJiraInput) { in.IssuesEnabled = &yes }, "issues_enabled", true},
 		{"project_keys", func(in *SetJiraInput) { in.ProjectKeys = []string{"PROJ", "DEV"} }, "project_keys", []any{"PROJ", "DEV"}},
+		{"project_keys emptied", func(in *SetJiraInput) { in.ProjectKeys = []string{} }, "project_keys", []any{}},
 		{"use_inherited_settings", func(in *SetJiraInput) { in.UseInheritedSettings = &no }, "use_inherited_settings", false},
 		{"vulnerabilities_enabled", func(in *SetJiraInput) { in.VulnerabilitiesEnabled = &yes }, "vulnerabilities_enabled", true},
 		{"vulnerabilities_issuetype", func(in *SetJiraInput) { in.VulnerabilitiesIssueType = &issueType }, "vulnerabilities_issuetype", float64(10001)},
-		{"project_key", func(in *SetJiraInput) { in.ProjectKey = "SEC" }, "project_key", "SEC"},
+		{"project_key", func(in *SetJiraInput) { in.ProjectKey = new("SEC") }, "project_key", "SEC"},
+		{"project_key emptied", func(in *SetJiraInput) { in.ProjectKey = new("") }, "project_key", ""},
 		{"customize_jira_issue_enabled", func(in *SetJiraInput) { in.CustomizeJiraIssueEnabled = &yes }, "customize_jira_issue_enabled", true},
 		{"jira_check_enabled", func(in *SetJiraInput) { in.JiraCheckEnabled = &no }, "jira_check_enabled", false},
 		{"jira_exists_check_enabled", func(in *SetJiraInput) { in.JiraExistsCheckEnabled = &yes }, "jira_exists_check_enabled", true},
 		{"jira_assignee_check_enabled", func(in *SetJiraInput) { in.JiraAssigneeCheckEnabled = &no }, "jira_assignee_check_enabled", false},
 		{"jira_status_check_enabled", func(in *SetJiraInput) { in.JiraStatusCheckEnabled = &yes }, "jira_status_check_enabled", true},
-		{"jira_allowed_statuses_as_string", func(in *SetJiraInput) { in.JiraAllowedStatusesAsString = "In Progress,Done" }, "jira_allowed_statuses_as_string", "In Progress,Done"},
+		{"jira_allowed_statuses_as_string", func(in *SetJiraInput) { in.JiraAllowedStatusesAsString = new("In Progress,Done") }, "jira_allowed_statuses_as_string", "In Progress,Done"},
+		{"jira_allowed_statuses_as_string emptied", func(in *SetJiraInput) { in.JiraAllowedStatusesAsString = new("") }, "jira_allowed_statuses_as_string", ""},
 	}
 
 	for _, tt := range tests {
@@ -974,15 +983,15 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	got := setJiraBody(t, SetJiraInput{
 		ProjectID:                    "1",
 		URL:                          testJiraURL,
-		Username:                     "user",
+		Username:                     new("user"),
 		Password:                     "pass",
 		Active:                       &active,
-		APIURL:                       "https://jira.example.com/api",
+		APIURL:                       new("https://jira.example.com/api"),
 		JiraAuthType:                 &authType,
-		JiraIssuePrefix:              "PROJ",
-		JiraIssueRegex:               "[A-Z]+-\\d+",
+		JiraIssuePrefix:              new("PROJ"),
+		JiraIssueRegex:               new("[A-Z]+-\\d+"),
 		JiraIssueTransitionAutomatic: &autoTransition,
-		JiraIssueTransitionID:        "31",
+		JiraIssueTransitionID:        new("31"),
 		CommitEvents:                 &commitEvents,
 		MergeRequestsEvents:          &mrEvents,
 		CommentOnEventEnabled:        &commentEnabled,
@@ -991,13 +1000,13 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 		UseInheritedSettings:         &useInherited,
 		VulnerabilitiesEnabled:       &vulnEnabled,
 		VulnerabilitiesIssueType:     &vulnIssueType,
-		ProjectKey:                   "SEC",
+		ProjectKey:                   new("SEC"),
 		CustomizeJiraIssueEnabled:    &customizeJira,
 		JiraCheckEnabled:             &jiraCheck,
 		JiraExistsCheckEnabled:       &jiraExists,
 		JiraAssigneeCheckEnabled:     &jiraAssignee,
 		JiraStatusCheckEnabled:       &jiraStatus,
-		JiraAllowedStatusesAsString:  "In Progress,Done",
+		JiraAllowedStatusesAsString:  new("In Progress,Done"),
 	})
 	// Key presence is checked against the decoded object rather than against
 	// the raw text: "project_key" is a substring of the "project_keys" beside

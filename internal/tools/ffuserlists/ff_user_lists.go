@@ -71,7 +71,9 @@ type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create. Do not use the user list name,required"`
 	Name      string               `json:"name,omitempty" jsonschema:"New user list name"`
-	UserXIDs  string               `json:"user_xids,omitempty" jsonschema:"Comma-separated list of user external IDs"`
+	// UserXIDs is a pointer so the empty string that takes every user off
+	// the list is told from a list left alone (issue 1306).
+	UserXIDs *string `json:"user_xids,omitempty" jsonschema:"Comma-separated list of user external IDs. Pass an empty string to take every user off the list. Omit the field to leave it untouched"`
 }
 
 // DeleteInput contains parameters for deleting a feature flag user list.
@@ -191,13 +193,20 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 	if input.IID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_update", toolutil.ErrFieldRequired("user_list_iid"))
 	}
-	opts := &gl.UpdateFeatureFlagUserListOptions{
-		Name:     input.Name,
-		UserXIDs: input.UserXIDs,
+	// client-go types the users as a string tagged omitempty, so the empty
+	// one that empties the list (measured on 19.5.0-ee) is written into the
+	// body through a request option (issue 1306, upstream register row 122).
+	opts := &gl.UpdateFeatureFlagUserListOptions{Name: input.Name}
+	var emptied toolutil.BodyEdit
+	if input.UserXIDs != nil {
+		opts.UserXIDs = *input.UserXIDs
+		if *input.UserXIDs == "" {
+			emptied.Set = map[string]any{"user_xids": ""}
+		}
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().FeatureFlagUserLists.UpdateFeatureFlagUserList(
-		string(input.ProjectID), input.IID, opts, gl.WithContext(ctx),
+		string(input.ProjectID), input.IID, opts, gl.WithContext(ctx), toolutil.EditJSONBody(emptied),
 	)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {

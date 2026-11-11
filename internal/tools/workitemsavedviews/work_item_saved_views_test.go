@@ -498,7 +498,7 @@ func TestMutations_ForwardDescriptionAndPrivacy(t *testing.T) {
 		}))
 		if _, err := Update(context.Background(), client, UpdateInput{
 			SavedViewID: 7,
-			Description: " Everything assigned to me ",
+			Description: new(" Everything assigned to me "),
 			IsPrivate:   &shared,
 		}); err != nil {
 			t.Fatalf("Update() unexpected error: %v", err)

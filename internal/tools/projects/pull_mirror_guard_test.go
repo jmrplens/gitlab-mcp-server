@@ -280,8 +280,14 @@ func TestConfigurePullMirror_WideningAnOverwritingMirror_IsRefused(t *testing.T)
 		{
 			name:     "a regex in place of the protected branches",
 			filter:   protectedBranchesFilter,
-			input:    ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			input:    ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: new(".*")},
 			branches: branchesMatching(".*"),
+		},
+		{
+			name:     "every branch of a mirror whose regex is removed",
+			filter:   releaseBranchesFilter,
+			input:    ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: new("")},
+			branches: everyBranch,
 		},
 		{
 			name:     "the protected branches in place of a regex",
@@ -330,7 +336,12 @@ func TestConfigurePullMirror_NarrowingAnOverwritingMirror_Proceeds(t *testing.T)
 		{
 			name:   "the regex the mirror already pulls through",
 			filter: releaseBranchesFilter,
-			input:  ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: releaseBranchesFilter.regex},
+			input:  ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: new(releaseBranchesFilter.regex)},
+		},
+		{
+			name:   "the regex removed from a mirror that pulls only its protected branches",
+			filter: protectedBranchesFilter,
+			input:  ConfigurePullMirrorInput{ProjectID: "42", MirrorBranchRegex: new("")},
 		},
 	}
 	for _, tt := range tests {
@@ -1405,14 +1416,20 @@ func TestUpdate_WideningAnOverwritingMirror_IsRefusedWithoutConfirmation(t *test
 		{
 			name:  "a regex in place of the protected branches",
 			read:  readFilteredMirror(true, protectedBranchesFilter),
-			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: new(".*"), MirrorTriggerBuilds: new(true)},
 			want:  mirrorWideningRefusal(opProjectUpdate, branchesMatching(".*"), configuredMirrorSource),
 		},
 		{
 			name:  "another regex",
 			read:  readFilteredMirror(true, releaseBranchesFilter),
-			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: "^(release|hotfix)/"},
+			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: new("^(release|hotfix)/"), MirrorTriggerBuilds: new(true)},
 			want:  mirrorWideningRefusal(opProjectUpdate, branchesMatching("^(release|hotfix)/"), configuredMirrorSource),
+		},
+		{
+			name:  "the regex removed",
+			read:  readFilteredMirror(true, releaseBranchesFilter),
+			input: UpdateInput{ProjectID: "42", MirrorBranchRegex: new(""), MirrorTriggerBuilds: new(true)},
+			want:  mirrorWideningRefusal(opProjectUpdate, everyBranch, configuredMirrorSource),
 		},
 		{
 			name:  "the protected branches in place of a regex",
@@ -1517,7 +1534,7 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 		{
 			name:      "narrowing it to a regex",
 			read:      readOverwritingMirror,
-			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: "^main$"},
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: new("^main$"), MirrorTriggerBuilds: new(true)},
 			wantReads: 1,
 		},
 		{
@@ -1529,7 +1546,13 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 		{
 			name:      "re-sending the regex the mirror pulls through",
 			read:      readFilteredMirror(true, releaseBranchesFilter),
-			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: releaseBranchesFilter.regex},
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: new(releaseBranchesFilter.regex), MirrorTriggerBuilds: new(true)},
+			wantReads: 1,
+		},
+		{
+			name:      "removing the regex of a mirror that pulls only its protected branches",
+			read:      readFilteredMirror(true, protectedBranchesFilter),
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: new(""), MirrorTriggerBuilds: new(true)},
 			wantReads: 1,
 		},
 		{
@@ -1559,7 +1582,7 @@ func TestUpdate_NotLeavingTheOverwriteArmed_ProceedsWithoutAsking(t *testing.T) 
 		{
 			name:      "a branch regex where no pull mirror route is mounted",
 			read:      readRouteNotMounted,
-			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: ".*"},
+			input:     UpdateInput{ProjectID: "42", MirrorBranchRegex: new(".*"), MirrorTriggerBuilds: new(true)},
 			wantReads: 1,
 		},
 		{

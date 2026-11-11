@@ -93,7 +93,7 @@ for the fork, branch, fix, test and MR workflow.
   - [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status)
   - [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes)
   - [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update)
-  - [Eight update option structs cannot send the null or the empty list that clears a field](#eight-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field)
+  - [Nine update option structs cannot send the null or the empty value that clears a field](#nine-update-option-structs-cannot-send-the-null-or-the-empty-value-that-clears-a-field)
   - [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer)
   - [PositionOptions types the image coordinates as floats, and NotePosition carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields)
   - [Three option structs carry a timestamp parameter as a date](#three-option-structs-carry-a-timestamp-parameter-as-a-date)
@@ -391,7 +391,7 @@ readable without opening the tracker:
 | 119 | client-go | [UpdateWorkItemOptions cannot remove a reference, a date or the health status](#updateworkitemoptions-cannot-remove-a-reference-a-date-or-the-health-status) | No | No | No | No | Yes, `issue.work_item_update` and `group.epic_update` write null into the mutation input through a request option |
 | 120 | client-go | [ListAuditEventsOptions models neither entity filter the instance list takes](#listauditeventsoptions-models-neither-entity-filter-the-instance-list-takes) | No | No | No | No | Yes, `audit_event.list_instance` adds `entity_type` and `entity_id` to the query through a request option |
 | 121 | client-go | [UpdateReleaseOptions sends the title and the notes as null on every partial update](#updatereleaseoptions-sends-the-title-and-the-notes-as-null-on-every-partial-update) | No | No | No | No | Yes, `release.update` takes the two keys out of the body through a request option whenever the caller did not set them |
-| 122 | client-go | [Eight update option structs cannot send the null or the empty list that clears a field](#eight-update-option-structs-cannot-send-the-null-or-the-empty-list-that-clears-a-field) | No | No | No | No | Yes, the eight update actions write the null or the `[]` into the body through a request option, and the group label actions no longer offer the priority |
+| 122 | client-go | [Nine update option structs cannot send the null or the empty value that clears a field](#nine-update-option-structs-cannot-send-the-null-or-the-empty-value-that-clears-a-field) | No | No | No | No | Yes, the nine update actions write the null, the `[]` or the `""` into the body through a request option, and the group label actions no longer offer the priority |
 | 123 | gitlab-org/gitlab | [The vulnerability dismissal reason outlives the dismissal](#the-vulnerability-dismissal-reason-outlives-the-dismissal) | No | No | No | No; a confirmed, resolved or redetected vulnerability answered the reason it was dismissed with | Yes, `vulnerabilities` publishes the reason only while the state is `DISMISSED` |
 | 124 | gitlab-org/gitlab | [Issue move and clone, and transfer, are authorized at the source boundary only for a fine-grained token](#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token) | Not needed: GitLab documents the behavior as intended, [gitlab-org/gitlab!254840](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254840), merged on 2026-09-18 | No, and none is coming: [gitlab-org/gitlab!256181](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/256181) removed the target checks that existed and [gitlab-org/gitlab!254851](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254851) the `additional_scopes` mechanism, both in 19.5 | No, works as intended upstream | No | None; the fine-grained tokens page warns that a grant does not bound where these actions write, permanently while GitLab keeps this design |
 | 125 | client-go | [The issue statistics options type assignee_id as an integer](#the-issue-statistics-options-type-assignee_id-as-an-integer) | No | No | No | No | Yes, the three statistics actions write `None` or `Any` into the query through a request option |
@@ -7946,7 +7946,7 @@ regenerated.
 **Effort**: small: `omitempty` on both halves of two tags, and a test that a
 date-only update sends neither key.
 
-### Eight update option structs cannot send the null or the empty list that clears a field
+### Nine update option structs cannot send the null or the empty value that clears a field
 
 - **Reported**: no. It belonged with the option struct commits of the joint
   merge request,
@@ -7956,7 +7956,7 @@ date-only update sends neither key.
   their topic.
 - **In review**: no.
 - **Merged**: no. v3.18.0 carries the same fields, and so do v3.29.0, which
-  adds the eighth struct's field, v3.30.0, v3.40.3, v3.44.0 and v3.46.1, the version
+  adds the merge request struct's field, v3.30.0, v3.40.3, v3.44.0 and v3.46.1, the version
   `go.mod` pins, where every predicate the upstream wait table holds row 122 to still
   holds.
 - **Blocking**: no.
@@ -7970,12 +7970,14 @@ date-only update sends neither key.
   goes out as null, and `TestUpdate_OptionalFields_ReachTheBody` holds the
   body. It retires field by field as each option can carry the value.
 
-**Where**: eight option structs and the methods that send them, at v3.15.0
-for the first seven and v3.29.0 for the eighth:
+**Where**: nine option structs and the methods that send them, at v3.15.0
+for all but the merge request's, which v3.29.0 added:
 
-- `EditGroupMemberOptions.MemberRoleID` and
-  `EditProjectMemberOptions.MemberRoleID`, `*int64` tagged `omitempty`, sent
-  by `EditGroupMember` and `EditProjectMember`.
+- `EditGroupMemberOptions.MemberRoleID` and `ExpiresAt` and
+  `EditProjectMemberOptions.MemberRoleID` and `ExpiresAt`, `*int64` and
+  `*string` tagged `omitempty`, sent by `EditGroupMember` and
+  `EditProjectMember`: GitLab removes an expiry on null too (`Member`
+  validates `expires_at` with `allow_blank`).
 - `UpdateReleaseLinkOptions.FilePath` and `DirectAssetPath`, `*string`
   tagged `omitempty`, sent by `UpdateReleaseLink`.
 - `UpdatePagesOptions.PagesPrimaryDomain`, `*string` tagged `omitempty`,
@@ -7990,6 +7992,11 @@ for the first seven and v3.29.0 for the eighth:
   sent by `UpdateMergeRequest`, which v3.29.0 added with
   `CreateMergeRequestOptions.MergeAfter` through another contributor's
   [gitlab-org/api/client-go!3128](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3128).
+- `UpdateFeatureFlagUserListOptions.UserXIDs`, a `string` tagged
+  `omitempty`, sent by `UpdateFeatureFlagUserList`: GitLab empties a user
+  list with `""` (measured on 19.5.0-ee), which the field cannot carry, so
+  `feature_flags.ff_user_list_update` writes `""` into the body through
+  `toolutil.EditJSONBody`.
 
 Beside them, `CreateGroupLabelOptions.Priority` and
 `UpdateGroupLabelOptions.Priority` offer a priority that no group label

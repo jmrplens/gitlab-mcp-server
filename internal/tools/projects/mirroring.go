@@ -81,15 +81,19 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 
 // ConfigurePullMirrorInput defines parameters for configuring pull mirroring.
 type ConfigurePullMirrorInput struct {
-	ProjectID                        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Enabled                          *bool                `json:"enabled,omitempty" jsonschema:"Enable or disable pull mirroring"`
-	URL                              string               `json:"url,omitempty" jsonschema:"Pull mirror source URL. Do not include credentials in the URL. Unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication"`
-	AuthUser                         string               `json:"auth_user,omitempty" jsonschema:"Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password"`
-	AuthPassword                     string               `json:"auth_password,omitempty" jsonschema:"Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors"`
-	MirrorBranchRegex                string               `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror"`
-	MirrorTriggerBuilds              *bool                `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger CI builds when mirror updates"`
-	OnlyMirrorProtectedBranches      *bool                `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
-	MirrorOverwritesDivergedBranches *bool                `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Enabled   *bool                `json:"enabled,omitempty" jsonschema:"Enable or disable pull mirroring"`
+	URL       string               `json:"url,omitempty" jsonschema:"Pull mirror source URL. Do not include credentials in the URL. Unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication"`
+	// The credentials and the branch regex are pointers so the empty string
+	// that removes one reaches GitLab: the route keeps an empty user or
+	// password as the credential (extract_credentials! compacts nil only,
+	// ee/lib/api/project_mirror.rb) and stores an empty regex (issue 1306).
+	AuthUser                         *string `json:"auth_user,omitempty" jsonschema:"Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	AuthPassword                     *string `json:"auth_password,omitempty" jsonschema:"Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	MirrorBranchRegex                *string `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched"`
+	MirrorTriggerBuilds              *bool   `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger CI builds when mirror updates"`
+	OnlyMirrorProtectedBranches      *bool   `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
+	MirrorOverwritesDivergedBranches *bool   `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
@@ -112,21 +116,16 @@ func ConfigurePullMirror(ctx context.Context, client *gitlabclient.Client, input
 	if err := confirmDivergedOverwrite(ctx, client, "projectConfigurePullMirror", input); err != nil {
 		return PullMirrorOutput{}, err
 	}
-	opts := &gl.ConfigureProjectPullMirrorOptions{}
+	opts := &gl.ConfigureProjectPullMirrorOptions{
+		AuthUser:          input.AuthUser,
+		AuthPassword:      input.AuthPassword,
+		MirrorBranchRegex: input.MirrorBranchRegex,
+	}
 	if input.Enabled != nil {
 		opts.Enabled = input.Enabled
 	}
 	if input.URL != "" {
 		opts.URL = &input.URL
-	}
-	if input.AuthUser != "" {
-		opts.AuthUser = &input.AuthUser
-	}
-	if input.AuthPassword != "" {
-		opts.AuthPassword = &input.AuthPassword
-	}
-	if input.MirrorBranchRegex != "" {
-		opts.MirrorBranchRegex = &input.MirrorBranchRegex
 	}
 	if input.MirrorTriggerBuilds != nil {
 		opts.MirrorTriggerBuilds = input.MirrorTriggerBuilds

@@ -105,9 +105,9 @@ func decorateWikiMeta(options *toolutil.ActionSpecOptions, individualTool string
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
-	if len(meta.overrides) > 0 {
-		options.InputSchemaOverrides = append([]toolutil.InputSchemaOverride(nil), meta.overrides...)
-	}
+	// No other source sets the overrides, and appending none to nil is nil,
+	// so the copy needs no guard: an entry without overrides leaves none.
+	options.InputSchemaOverrides = append([]toolutil.InputSchemaOverride(nil), meta.overrides...)
 }
 
 // wikiActionMetaEntry is the discovery metadata for one wiki action.
@@ -139,47 +139,41 @@ func wikiFormatOverride() []toolutil.InputSchemaOverride {
 // wikiActionMeta maps each individual wiki tool to its discovery metadata.
 var wikiActionMeta = map[string]wikiActionMetaEntry{
 	"gitlab_wiki_list": {
-		usage:   "List the wiki pages of a project. Set with_content only when the page bodies are needed, since it returns the full content of every page.",
-		aliases: []string{"list wiki pages", "show project wiki", "find wiki pages"},
-		related: []string{actionWikiGet, "wiki.create", "project.get"},
-		description: "List a project's wiki pages. Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. " +
-			"See also: gitlab_wiki_get, gitlab_wiki_create.",
+		usage:       "List the wiki pages of a project. Set with_content only when the page bodies are needed, since it returns the full content of every page.",
+		aliases:     []string{"list wiki pages", "show project wiki", "find wiki pages"},
+		related:     []string{actionWikiGet, "wiki.create", "project.get"},
+		description: "List a project's wiki pages. Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. See also: gitlab_wiki_get, gitlab_wiki_create.",
 	},
 	"gitlab_wiki_get": {
-		usage:   "Fetch one wiki page by its slug. Use after wiki.list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
-		aliases: []string{"get wiki page", "read wiki page", "show wiki page content"},
-		related: []string{actionWikiList, actionWikiUpdate, "wiki.delete"},
-		description: "Get a single wiki page by slug. Returns: the page title, slug, format, content, and encoding. " +
-			"See also: gitlab_wiki_list, gitlab_wiki_update, gitlab_wiki_delete.",
+		usage:       "Fetch one wiki page by its slug. Use after wiki.list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
+		aliases:     []string{"get wiki page", "read wiki page", "show wiki page content"},
+		related:     []string{actionWikiList, actionWikiUpdate, "wiki.delete"},
+		description: "Get a single wiki page by slug. Returns: the page title, slug, format, content, and encoding. See also: gitlab_wiki_list, gitlab_wiki_update, gitlab_wiki_delete.",
 	},
 	"gitlab_wiki_create": {
-		usage:   "Create a new wiki page in a project. Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
-		aliases: []string{"create wiki page", "add wiki page", "new wiki page"},
-		related: []string{actionWikiList, actionWikiGet, actionWikiUpdate},
-		description: "Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
-			"See also: gitlab_wiki_get, gitlab_wiki_update, gitlab_wiki_list.",
-		overrides: wikiFormatOverride(),
+		usage:       "Create a new wiki page in a project. Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
+		aliases:     []string{"create wiki page", "add wiki page", "new wiki page"},
+		related:     []string{actionWikiList, actionWikiGet, actionWikiUpdate},
+		description: "Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. See also: gitlab_wiki_get, gitlab_wiki_update, gitlab_wiki_list.",
+		overrides:   wikiFormatOverride(),
 	},
 	"gitlab_wiki_update": {
-		usage:   "Update an existing wiki page identified by slug. Provide at least one of title, content, or format to change.",
-		aliases: []string{"update wiki page", "edit wiki page", "rename wiki page"},
-		related: []string{actionWikiGet, actionWikiList, "wiki.delete"},
-		description: "Update an existing wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. " +
-			"See also: gitlab_wiki_get, gitlab_wiki_delete, gitlab_wiki_list.",
-		overrides: wikiFormatOverride(),
+		usage:       "Update an existing wiki page identified by slug. Provide at least one of title, content, or format to change.",
+		aliases:     []string{"update wiki page", "edit wiki page", "rename wiki page"},
+		related:     []string{actionWikiGet, actionWikiList, "wiki.delete"},
+		description: "Update an existing wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. See also: gitlab_wiki_get, gitlab_wiki_delete, gitlab_wiki_list.",
+		overrides:   wikiFormatOverride(),
 	},
 	"gitlab_wiki_delete": {
-		usage:   "Permanently delete a wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the project and slug.",
-		aliases: []string{"delete wiki page", "remove wiki page", "destroy wiki page", "drop wiki page"},
-		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
-		description: "Delete a wiki page permanently. Returns: a success confirmation for the removed page. " +
-			"See also: gitlab_wiki_get, gitlab_wiki_list.",
+		usage:       "Permanently delete a wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the project and slug.",
+		aliases:     []string{"delete wiki page", "remove wiki page", "destroy wiki page", "drop wiki page"},
+		related:     []string{actionWikiGet, actionWikiList, actionWikiUpdate},
+		description: "Delete a wiki page permanently. Returns: a success confirmation for the removed page. See also: gitlab_wiki_get, gitlab_wiki_list.",
 	},
 	"gitlab_wiki_upload_attachment": {
-		usage:   "Upload a file to the wiki's uploads folder so it can be referenced from wiki pages. Provide either content_base64 or file_path, plus a filename and optional branch.",
-		aliases: []string{"upload wiki attachment", "attach file to wiki", "add wiki attachment"},
-		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
-		description: "Upload an attachment to the project wiki repository. Returns: the attachment file name, file path, branch, URL, and ready-to-paste Markdown link. " +
-			"See also: gitlab_wiki_get, gitlab_wiki_update.",
+		usage:       "Upload a file to the wiki's uploads folder so it can be referenced from wiki pages. Provide either content_base64 or file_path, plus a filename and optional branch.",
+		aliases:     []string{"upload wiki attachment", "attach file to wiki", "add wiki attachment"},
+		related:     []string{actionWikiGet, actionWikiList, actionWikiUpdate},
+		description: "Upload an attachment to the project wiki repository. Returns: the attachment file name, file path, branch, URL, and ready-to-paste Markdown link. See also: gitlab_wiki_get, gitlab_wiki_update.",
 	},
 }
