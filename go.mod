@@ -12,7 +12,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/tiktoken-go/tokenizer v0.10.0
 	github.com/vektah/gqlparser/v2 v2.5.64
-	gitlab.com/gitlab-org/api/client-go/v3 v3.30.1
+	gitlab.com/gitlab-org/api/client-go/v3 v3.39.1
 	go.opentelemetry.io/contrib/bridges/otelslog v0.21.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.23.0
@@ -33,7 +33,7 @@ require (
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sync v0.24.0
+	golang.org/x/sync v0.25.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/time v0.16.0
 	golang.org/x/tools v0.52.0
