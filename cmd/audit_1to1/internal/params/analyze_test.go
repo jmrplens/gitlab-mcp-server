@@ -238,12 +238,16 @@ func fixtureRaw() []sdk.RawRequest {
 	}
 }
 
-// fixtureDeclarations answer the stand-in's findings, the upstream one the
-// "v3.30.0" filter, which the "v3.38.0" state models.
+// fixtureDeclarations answer the stand-in's findings: the upstream one the
+// "v3.30.0" filter, which the "v3.38.0" state models, the map the integration
+// is set from, and the two params an option struct models and no input
+// offers, which fail the gate unless a declaration answers them.
 func fixtureDeclarations() []paramDeclaration {
 	return []paramDeclaration{
 		{Route: "GET /projects/:id/widgets", Param: "merged_after", Category: categoryUpstream, Reason: "the stand-in's", Row: 7},
 		{Route: "PUT /projects/:id/integrations/*", Param: anyParam, Category: categoryMapInput, Reason: "the stand-in's"},
+		{Route: "POST /projects/:id/widgets", Param: "avatar", Category: categoryDeclaredNotApplied, Reason: "the stand-in's"},
+		{Route: "POST /projects/import", Param: "override[name]", Category: categoryDeclaredNotApplied, Reason: "the stand-in's"},
 	}
 }
 
@@ -321,7 +325,8 @@ func verdicts(report Report) []string {
 // so it leaves the list's params judged rather than unjudged. On the create,
 // the name is offered through the alias that fills it from title, the
 // headers through the nested schema of the input's list, the avatar is the
-// file an upload sends when one is given, and url_variables, with nothing to
+// file an upload sends when one is given, which no input offers and a
+// declaration answers, and url_variables, with nothing to
 // send any of its members, stands for them. The avatar upload sends its file
 // on every call. The hook's raw request is read through the call the action's
 // handler makes, so the struct of the list call the hook list makes does not
@@ -333,7 +338,8 @@ func verdicts(report Report) []string {
 // key beside it, its file is the field the upload always sends, and the
 // attributes Workhorse fills for the file are not judged; its override
 // container, modeled by no struct and offered by no input, is dropped for its
-// member, which is of another class. The integration's options are a free
+// member, which is of another class and answered by a declaration. The
+// integration's options are a free
 // map, on the route the record places it and on the one its derived spelling
 // meets, and the map declaration answers both. A request through no site and
 // one through a method client-go does not declare leave the version's param
@@ -355,11 +361,11 @@ func TestRun_TheStandInTree_JudgesEveryParamOfEveryRouteReached(t *testing.T) {
 		"GET /projects/:id/widgets search offered_unrecorded",
 		"GET /version detail unjudged",
 		"POST /projects/:id/hooks custom_headers[id] unmodeled",
-		"POST /projects/:id/widgets avatar not_offered",
+		"POST /projects/:id/widgets avatar not_offered declared-not-applied",
 		"POST /projects/:id/widgets headers offered_unrecorded [headers[key] headers[value]]",
 		"POST /projects/:id/widgets name offered_unrecorded",
 		"POST /projects/:id/widgets url_variables unmodeled [url_variables[key] url_variables[value]]",
-		"POST /projects/import override[name] not_offered",
+		"POST /projects/import override[name] not_offered declared-not-applied",
 		"POST /projects/import path offered_unrecorded",
 		"PUT /projects/:id/integrations/jira url unjudged map-input",
 		"PUT /projects/:id/integrations/slack webhook unjudged map-input",
@@ -388,7 +394,7 @@ func TestRun_TheStandInTree_JudgesEveryParamOfEveryRouteReached(t *testing.T) {
 	}
 	summary := Summary{
 		Routes: 8, RoutesWithFindings: 7, Params: 28, Covered: 9,
-		Unmodeled: 2, NotOffered: 2, OfferedUnrecorded: 5, Unjudged: 1, Declared: 3, UnreadRequests: 6,
+		Unmodeled: 2, OfferedUnrecorded: 5, Unjudged: 1, Declared: 5, UnreadRequests: 6,
 	}
 	if report.Summary != summary {
 		t.Errorf("summary = %+v, want %+v", report.Summary, summary)
@@ -400,9 +406,9 @@ func TestRun_TheStandInTree_JudgesEveryParamOfEveryRouteReached(t *testing.T) {
 // stand-in's list options lack merged_after and the declaration answers the
 // unmodeled finding; once client-go models it ("v3.38.0") the finding is one
 // an input can offer today, and the declaration, which answers an unmodeled
-// param alone, is stale and fails the gate. Without the declaration the
-// "v3.30.0" finding is reported and the gate still passes, since a finding
-// is a report.
+// param alone, is stale and fails the gate, as the finding does. Without the
+// declaration the "v3.30.0" finding is reported and the gate still passes,
+// since an unmodeled finding is a report.
 func TestRun_AClientGoThatModelsTheParam_RetiresItsUpstreamDeclaration(t *testing.T) {
 	t.Run("v3.30.0 without the declaration", func(t *testing.T) {
 		useFixtures(t, false)
@@ -519,7 +525,9 @@ func useWorkhorseFixtures(t *testing.T) {
 			{Site: "widgets.attach", Constructor: "UploadRequest", Verb: "POST", UploadField: "attachment"},
 		}, dir, nil
 	}
-	declarations = func() []paramDeclaration { return nil }
+	declarations = func() []paramDeclaration {
+		return []paramDeclaration{{Route: "POST /widgets/import", Param: "file", Category: categoryDeclaredNotApplied, Reason: "the stand-in's"}}
+	}
 }
 
 // TestRun_ARequiredFileNoFormCarries_IsTheBodyWorkhorseRewrote is the planted
@@ -532,8 +540,9 @@ func useWorkhorseFixtures(t *testing.T) {
 // that body. A form that carries its file under another name, through
 // client-go or by hand, is still a finding, and so is a file client-go's
 // options model (its group import writes its own multipart form under that
-// name), which an input can offer today, and so are an optional file and a
-// required param of another type on a request with no form.
+// name), which an input can offer today and which fails the gate unless a
+// declaration answers it, as the fixture's does, and so are an optional file
+// and a required param of another type on a request with no form.
 func TestRun_ARequiredFileNoFormCarries_IsTheBodyWorkhorseRewrote(t *testing.T) {
 	useWorkhorseFixtures(t)
 	content, clean, err := Run("root", Options{})
@@ -546,7 +555,7 @@ func TestRun_ARequiredFileNoFormCarries_IsTheBodyWorkhorseRewrote(t *testing.T) 
 		"POST /projects/:id/widgets/file file unmodeled",
 		"POST /projects/:id/widgets/plain file unmodeled",
 		"POST /projects/:id/widgets/plain title unmodeled",
-		"POST /widgets/import file not_offered",
+		"POST /widgets/import file not_offered declared-not-applied",
 	}
 	if got := verdicts(report); !slices.Equal(got, wantVerdicts) {
 		t.Errorf("verdicts =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantVerdicts, "\n"))
@@ -575,6 +584,72 @@ func TestRecordedByRoute_TwoPackagesRecordingOneRoute_KeepEachOthersParams(t *te
 	}, index)
 	if want := []string{"page", "title"}; !slices.Equal(sortedKeys(got["GET /widgets"]), want) {
 		t.Errorf("recorded = %v, want the params of both rows, %v", got, want)
+	}
+}
+
+// TestRun_AParamAnInputCouldOfferAndNoneDoes_FailsTheGate is step 1 of issue
+// 1599: a not_offered finding no declaration answers fails the gate, since an
+// input can offer that param today. In the "v3.38.0" state the stand-in's
+// list options model merged_after and no input offers it, and without the
+// upstream declaration, which is stale there, that finding is the only thing
+// wrong with the tree. In the "v3.30.0" state the declaration answering the
+// avatar the create's options model is dropped. Each run fails on the one
+// undeclared not_offered finding alone, while the unmodeled, offered but
+// unrecorded and unjudged findings the stand-in reports beside it pass.
+func TestRun_AParamAnInputCouldOfferAndNoneDoes_FailsTheGate(t *testing.T) {
+	cases := []struct {
+		name              string
+		modelsMergedAfter bool
+		dropped           string
+		want              string
+	}{
+		{"a param client-go starts to model", true, "merged_after", "GET /projects/:id/widgets merged_after not_offered"},
+		{"an option no input offers", false, "avatar", "POST /projects/:id/widgets avatar not_offered"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			useFixtures(t, tc.modelsMergedAfter)
+			declarations = func() []paramDeclaration {
+				return slices.DeleteFunc(fixtureDeclarations(), func(d paramDeclaration) bool { return d.Param == tc.dropped })
+			}
+			content, clean, err := Run("root", Options{GapsOnly: true})
+			if err != nil || clean {
+				t.Fatalf("Run = clean %t, error %v; want the gate to fail on the undeclared not_offered finding", clean, err)
+			}
+			report := decode(t, content)
+			if !slices.Contains(verdicts(report), tc.want) {
+				t.Errorf("verdicts = %v, want %q among them", verdicts(report), tc.want)
+			}
+			if report.Summary.NotOffered != 1 || len(report.Stale) != 0 {
+				t.Errorf("not_offered = %d, stale = %v; want the one finding and no stale declaration", report.Summary.NotOffered, report.Stale)
+			}
+			if report.Summary.Unmodeled == 0 || report.Summary.OfferedUnrecorded == 0 || report.Summary.Unjudged == 0 {
+				t.Errorf("summary = %+v, want the other classes reported beside it", report.Summary)
+			}
+		})
+	}
+}
+
+// TestSummary_Clean_FailsOnAStaleDeclarationOrAnUndeclaredNotOfferedFinding
+// holds the gate's verdict to its two conditions, each alone, and to the
+// classes it does not gate on.
+func TestSummary_Clean_FailsOnAStaleDeclarationOrAnUndeclaredNotOfferedFinding(t *testing.T) {
+	cases := []struct {
+		name    string
+		summary Summary
+		want    bool
+	}{
+		{"nothing", Summary{}, true},
+		{"a stale declaration", Summary{Stale: 1}, false},
+		{"a not_offered finding", Summary{NotOffered: 1}, false},
+		{"every other class", Summary{Unmodeled: 3, OfferedUnrecorded: 4, Unjudged: 5, Declared: 6}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.summary.clean(); got != tc.want {
+				t.Errorf("clean(%+v) = %t, want %t", tc.summary, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -697,15 +772,15 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // 19.5 added, which no option struct modeled. On the v3.40.3 pin client-go
 // models twelve of them on every list, the deployment filters and environment
 // on the three ListMergeRequestsOptions and ListGroupMergeRequestsOptions
-// serve, in on the project's, and source_project_id on the group's alone, so
-// each of those is not_offered until an input offers it, and source_project_id
-// stays unmodeled on the other three. So are a project edit's three duo_*
-// flags EditProjectOptions models from v3.36.0, a registry repository read's
-// size, the service account's external flag, whose declarations went with
-// the bump, and the three other list types a group board's list takes, which
-// CreateGroupIssueBoardListOptions models from v3.39.0. The project and group
-// hooks' url_variables, which the add and edit options model from v3.38.0, are
-// offered now, and no recorded request carries them yet. Still unmodeled are the
+// serve, in on the project's, and source_project_id on the group's alone, and
+// source_project_id stays unmodeled on the other three. So does it model a
+// project edit's three duo_* flags (v3.36.0), a registry repository read's
+// size, the service account's external flag, the twenty-one plan limits
+// beside the package file sizes, and the three other list types a group
+// board's list takes (v3.39.0). Each of those, and the project and group
+// hooks' url_variables, which the add and edit options model from v3.38.0, is
+// offered now, and no recorded request carries it until the request inventory
+// is generated again from the tests that send it. Still unmodeled are the
 // system hooks' url_variables and
 // custom_headers; every issues_statistics route's and the group epic list's
 // not[author_id]; a release read's include_html_description, which
@@ -753,9 +828,9 @@ func TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers(t
 // so is lfs_enabled, which the import input offered before them.
 //
 // It pins those cases and no more: a param client-go starts modeling in a
-// bump is reported as not_offered beside the rest, which the scope reports
-// and does not gate, and the bump updates this list as it does every
-// witness's.
+// bump is reported as not_offered, which fails the gate until an input offers
+// it or a declaration answers it, and the bump updates this list as it does
+// every witness's.
 func TestRun_Repository_OffersOrDeclaresTheParamsNoInputOfferedOnV3300(t *testing.T) {
 	report := repositoryReport(t)
 	reported := map[string]Finding{}
@@ -872,16 +947,26 @@ func witnessCases() []witnessCase {
 		"GET /projects/:id/merge_requests":                            slices.Concat(everyList, []string{"in"}),
 		"GET /groups/:id/merge_requests":                              slices.Concat(everyList, deployments, []string{"source_project_id"}),
 		"GET /projects/:id/deployments/:deployment_id/merge_requests": slices.Concat(everyList, deployments),
+		"PUT /projects/:id":                                           {"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled"},
+		"PUT /application/plan_limits": {
+			"cargo_max_file_size", "ci_active_jobs", "ci_instance_level_variables", "ci_needs_size_limit",
+			"ci_pipeline_schedules", "ci_pipeline_size", "ci_project_subscriptions", "ci_registered_group_runners",
+			"ci_registered_project_runners", "dotenv_size", "dotenv_variables", "enforcement_limit",
+			"max_pipelines_per_merge_train", "notification_limit", "pipeline_hierarchy_size",
+			"service_desk_outbound_emails_per_day", "service_desk_outbound_emails_per_hour", "storage_size_limit",
+			"web_hook_calls", "web_hook_calls_low", "web_hook_calls_mid",
+		},
+		"GET /registry/repositories/:id":          {"size"},
+		"POST /service_accounts":                  {"external"},
+		"PATCH /service_accounts/:user_id":        {"external"},
+		"POST /groups/:id/boards/:board_id/lists": {"assignee_id", "iteration_id", "milestone_id"},
 	} {
 		for _, param := range params {
-			cases = append(cases, want{route, param, ClassNotOffered, ""})
+			cases = append(cases, want{route, param, ClassOfferedUnrecorded, ""})
 		}
 	}
 	for _, route := range []string{"GET /merge_requests", "GET /projects/:id/merge_requests", "GET /projects/:id/deployments/:deployment_id/merge_requests"} {
 		cases = append(cases, want{route, "source_project_id", ClassUnmodeled, ""})
-	}
-	for _, param := range []string{"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled"} {
-		cases = append(cases, want{"PUT /projects/:id", param, ClassNotOffered, ""})
 	}
 	for _, route := range []string{"POST /hooks", "PUT /hooks/:hook_id"} {
 		cases = append(cases, want{route, "url_variables", ClassUnmodeled, ""}, want{route, "custom_headers", ClassUnmodeled, ""})
@@ -901,14 +986,8 @@ func witnessCases() []witnessCase {
 		}
 	}
 	cases = append(cases,
-		want{"GET /registry/repositories/:id", "size", ClassNotOffered, ""},
 		want{"GET /projects/:id/releases/:tag_name", "include_html_description", ClassUnmodeled, ""},
 		want{"POST /projects/:id/protected_environments", "approval_rules[id]", ClassUnmodeled, ""},
-		want{"POST /service_accounts", "external", ClassNotOffered, ""},
-		want{"PATCH /service_accounts/:user_id", "external", ClassNotOffered, ""},
-		want{"POST /groups/:id/boards/:board_id/lists", "assignee_id", ClassNotOffered, ""},
-		want{"POST /groups/:id/boards/:board_id/lists", "iteration_id", ClassNotOffered, ""},
-		want{"POST /groups/:id/boards/:board_id/lists", "milestone_id", ClassNotOffered, ""},
 	)
 	return cases
 }

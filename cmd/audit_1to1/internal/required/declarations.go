@@ -102,11 +102,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 		},
 
 		// Alternatives of which client-go carries one.
-		{action: "group.group_board_create_list", field: "label_id"}: {
-			DirectionGitLabOptional, categoryOneAlternative,
-			"CE requires label_id and EE takes exactly one of label_id, milestone_id, iteration_id and assignee_id " +
-				"(ee/lib/ee/api/boards_responses.rb); client-go's group board list options carry label_id alone",
-		},
 		{action: "user.create_current_user_pat", field: "scopes"}: {
 			DirectionGitLabOptional, categoryOneAlternative,
 			"POST /user/personal_access_tokens takes exactly one of scopes and granular_scopes, the second behind the " +

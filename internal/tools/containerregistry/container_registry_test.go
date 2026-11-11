@@ -1742,16 +1742,20 @@ func TestListProject_OneTagFlagAtATime_SendsThatFlagAndNothingElse(t *testing.T)
 
 // TestGetRepository_OneTagFlagAtATime_SendsThatFlagAndNothingElse is the same
 // property for the single-repository read, whose only test with the flags set
-// never looked at the query at all.
+// never looked at the query at all. size is the third flag, which
+// GetSingleRegistryRepositoryOptions models from client-go v3.34.0. Each flag
+// arrives as the parameters a tool call carries, so the input's json tags are
+// held to the keys a caller sends as well.
 func TestGetRepository_OneTagFlagAtATime_SendsThatFlagAndNothingElse(t *testing.T) {
 	tests := []struct {
-		name  string
-		input GetRepositoryInput
-		want  map[string]string
+		name   string
+		params map[string]any
+		want   map[string]string
 	}{
-		{"nothing", GetRepositoryInput{RepositoryID: 99}, map[string]string{}},
-		{"tags", GetRepositoryInput{RepositoryID: 99, Tags: true}, map[string]string{"tags": "true"}},
-		{"tags_count", GetRepositoryInput{RepositoryID: 99, TagsCount: true}, map[string]string{"tags_count": "true"}},
+		{"nothing", map[string]any{"repository_id": 99}, map[string]string{}},
+		{"tags", map[string]any{"repository_id": 99, "tags": true}, map[string]string{"tags": "true"}},
+		{"tags_count", map[string]any{"repository_id": 99, "tags_count": true}, map[string]string{"tags_count": "true"}},
+		{"size", map[string]any{"repository_id": 99, "size": true}, map[string]string{"size": "true"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1763,7 +1767,11 @@ func TestGetRepository_OneTagFlagAtATime_SendsThatFlagAndNothingElse(t *testing.
 			})
 			client := testutil.NewTestClient(t, mux)
 
-			if _, err := GetRepository(context.Background(), client, tt.input); err != nil {
+			input, err := toolutil.UnmarshalParams[GetRepositoryInput](tt.params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			if _, err = GetRepository(context.Background(), client, input); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {

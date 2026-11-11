@@ -5,6 +5,7 @@ package groupboards
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -423,14 +424,30 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	return convertBoardList(list), nil
 }
 
-// CreateGroupBoardListInput represents input for creating a group board list.
+// CreateGroupBoardListInput represents input for creating a group board list:
+// a column scoped to exactly one label, or on Premium and Ultimate to one
+// assignee, milestone or iteration. client-go's
+// CreateGroupIssueBoardListOptions models the last three from v3.39.0.
 type CreateGroupBoardListInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	BoardID int64                `json:"board_id" jsonschema:"Board ID,required"`
-	LabelID int64                `json:"label_id" jsonschema:"Label ID to create a label list,required"`
+	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
+	BoardID     int64                `json:"board_id" jsonschema:"Board ID,required"`
+	LabelID     int64                `json:"label_id,omitempty" jsonschema:"Label ID to create a label list"`
+	AssigneeID  int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID to create an assignee list"`
+	MilestoneID int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID to create a milestone list"`
+	IterationID int64                `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Iteration ID to create an iteration list"`
 }
 
-// CreateGroupBoardList creates a new group board list.
+// errGroupListType refuses a column create that names no list type or more
+// than one, which an Enterprise route answers with a 400 and a Community
+// Edition one with a 400 for a missing label_id.
+var errGroupListType = errors.New("name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id or iteration_id")
+
+// CreateGroupBoardList creates a new group board list, sending the one list
+// type the caller named and refusing an input that names none or more than
+// one before any request. GitLab decides whether it takes the type, and
+// answers otherwise with a 400 [createGroupBoardListError] explains: a
+// Community Edition route requires label_id, and an Enterprise one takes the
+// other three only where they are licensed.
 func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, input CreateGroupBoardListInput) (BoardListOutput, error) {
 	if input.GroupID == "" {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", toolutil.ErrFieldRequired("group_id"))
@@ -438,40 +455,85 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.BoardID == 0 {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", toolutil.ErrFieldRequired("board_id"))
 	}
-	if input.LabelID == 0 {
-		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", toolutil.ErrFieldRequired("label_id"))
+	named := 0
+	for _, id := range []int64{input.LabelID, input.AssigneeID, input.MilestoneID, input.IterationID} {
+		if id != 0 {
+			named++
+		}
 	}
-	opts := &gl.CreateGroupIssueBoardListOptions{
-		LabelID: new(input.LabelID),
+	if named != 1 {
+		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", errGroupListType)
+	}
+	opts := &gl.CreateGroupIssueBoardListOptions{}
+	if input.LabelID != 0 {
+		opts.LabelID = new(input.LabelID)
+	}
+	if input.AssigneeID != 0 {
+		opts.AssigneeID = new(input.AssigneeID)
+	}
+	if input.MilestoneID != 0 {
+		opts.MilestoneID = new(input.MilestoneID)
+	}
+	if input.IterationID != 0 {
+		opts.IterationID = new(input.IterationID)
 	}
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return BoardListOutput{}, createGroupBoardListError(err)
+		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0
+		return BoardListOutput{}, createGroupBoardListError(err, licensedType)
 	}
 	return convertBoardList(list), nil
 }
 
+const (
+	// groupListTypeLicenseHint follows the 400 an Enterprise instance answers
+	// a list type its license or the group's plan lacks with
+	// (EE::Boards::Lists::CreateService#license_validation_error).
+	groupListTypeLicenseHint = "assignee, milestone and iteration lists need GitLab Premium or Ultimate, which the license or plan this group is on does not include, so only a label list (label_id) can be created on its boards"
+
+	// groupListScopeHint follows every other 400 of a list creation: Grape's
+	// own parameter rule (a Community Edition route requires label_id), a
+	// target the group cannot use ("Label not found") and a second list for
+	// one the board already has ("Label has already been taken").
+	groupListScopeHint = "a Community Edition instance takes label_id alone. label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), milestone_id and iteration_id one this group can use (group.group_milestone_list lists the milestones), and assignee_id an existing user, and a board holds one list per label, assignee, milestone or iteration, so GitLab answers that it has already been taken when this board has that list already (group.group_board_list_lists shows them)"
+
+	// groupListTypeLicenseClause follows groupListScopeHint on a 400 refusing
+	// an assignee, milestone or iteration list in words other than the English
+	// license refusal, which GitLab writes in the caller's preferred language.
+	groupListTypeLicenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences, and only a label list (label_id) can be created there"
+)
+
+// groupListTypeLicenseRefusal is the fixed part of the message GitLab refuses a
+// list type the license lacks with ("Assignee lists not available with your
+// current license", and the same for milestone, iteration and status lists)
+// when the caller's preferred language is English.
+const groupListTypeLicenseRefusal = "lists not available with your current license"
+
 // createGroupBoardListError wraps GitLab's refusal of a column creation with
-// the hint its cause calls for, in terms of the one parameter the input
-// offers. GitLab's route also takes assignee_id, milestone_id and iteration_id
-// on a licensed instance, but this action offers label_id alone, so neither
-// hint may send a model after the others.
-//
-// What GitLab answers, read at v19.4.1-ee: a label this group cannot use and a
-// second list for a label the board already has a list for are both a 400
-// (API::BoardsResponses#create_list renders the service's first error,
-// "Label not found" or "Label has already been taken", with that status), and
-// a license the instance lacks is a 400 too, for the other list types only. A
-// caller without admin_issue_board_list on the group is refused by authorize!
-// with a 403: every role from Planner up holds it, and an archived group, or
-// one under an archived parent, withholds it from all of them. That refusal is
-// keyed on [toolutil.IsPermissionRefusal] rather than on the status, since a
-// 403 naming an RFC 6750 code refuses the token's scope rather than the
-// caller's role, and some routes answer a missing permission with 401.
-func createGroupBoardListError(err error) error {
+// the hint its cause calls for. What GitLab answers, read at v19.4.1-ee: every
+// refusal of what was sent is a 400, since API::BoardsResponses#create_list
+// renders the service's first error with that status and Grape answers its
+// own parameter rules with it. A list type the license or the group's plan
+// lacks is one of those 400s, so the license is named on a 400 and never on a
+// 403. GitLab translates the license refusal, so a 400 refusing an assignee,
+// milestone or iteration list (licensedType) in any other words names the
+// license beside the scope, and a 400 refusing a label list, which no license
+// gates, names none. A caller without admin_issue_board_list on the group is
+// refused by authorize! with a 403: every role from Planner up holds it, and
+// an archived group, or one under an archived parent, withholds it from all of
+// them. That refusal is keyed on [toolutil.IsPermissionRefusal] rather than on
+// the status, since a 403 naming an RFC 6750 code refuses the token's scope
+// rather than the caller's role, and some routes answer a missing permission
+// with 401.
+func createGroupBoardListError(err error, licensedType bool) error {
 	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-		return toolutil.WrapErrWithHint("group_board_list_create", err,
-			"label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), and a board holds one list per label, so GitLab answers that the label has already been taken when this board already has a list for that label (group.group_board_list_lists shows them)")
+		if toolutil.ContainsAny(err, groupListTypeLicenseRefusal) {
+			return toolutil.WrapErrWithHint("group_board_list_create", err, groupListTypeLicenseHint)
+		}
+		if licensedType {
+			return toolutil.WrapErrWithHint("group_board_list_create", err, groupListScopeHint+". "+groupListTypeLicenseClause)
+		}
+		return toolutil.WrapErrWithHint("group_board_list_create", err, groupListScopeHint)
 	}
 	if toolutil.IsPermissionRefusal(err) {
 		return toolutil.WrapErrWithHint("group_board_list_create", err, groupBoardListsHint)

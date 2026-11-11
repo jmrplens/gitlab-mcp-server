@@ -69,12 +69,16 @@
 //
 // # What it gates
 //
-// Nothing a finding says: almost every one is a client-go merge request, and
-// GitLab adds params every week. It gates the declaration table
-// (declarations.go), which answers a finding with a category and a reason,
-// and fails on a declaration that answers nothing, so an `upstream` one goes
-// stale the day client-go models its param, and a `declared-not-applied` one
-// stops answering a param once an input offers it. It reads the committed
-// request record, so in CI it runs beside R-GRANT under the FRESHNESS
-// deferral.
+// A `not_offered` finding no declaration answers: this repository can offer
+// that param today, so a client-go release that starts modeling one fails the
+// gate until an input offers it or a declaration says why none does. The other
+// classes are a report: almost every `unmodeled` one is a client-go merge
+// request and GitLab adds params every week, and an `offered_unrecorded` or
+// `unjudged` one is still to be looked at (issue 1599 orders them). It also
+// gates the declaration table (declarations.go), which answers a finding with
+// a category and a reason, and fails on a declaration that answers nothing, so
+// an `upstream` one goes stale the day client-go models its param, and a
+// `declared-not-applied` one stops answering a param once an input offers it.
+// It reads the committed request record, so in CI it runs beside R-GRANT under
+// the FRESHNESS deferral.
 package params

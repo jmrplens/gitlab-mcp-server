@@ -2244,11 +2244,12 @@ audit-1to1-required-report:
 ## anything here can send it (R-PARAM). A param no recorded request carries is a finding:
 ## unmodeled (no option struct the route's requests carry models it and no input offers
 ## it, client-go's to fix), not_offered (an option struct models it and no input offers
-## it), offered_unrecorded (an input offers it and no test sends it) or unjudged. The
-## findings are a report; it FAILS only on a declaration in
-## cmd/audit_1to1/internal/params/declarations.go that answers nothing. It reads the
-## committed request record, the inventory and the live record and loads the tool packages
-## for their raw requests; CI runs it under the FRESHNESS deferral with R-GRANT.
+## it), offered_unrecorded (an input offers it and no test sends it) or unjudged. It
+## FAILS on a not_offered finding no declaration answers, which an input can offer today,
+## and on a declaration in cmd/audit_1to1/internal/params/declarations.go that answers
+## nothing; the other findings are a report. It reads the committed request record, the
+## inventory and the live record and loads the tool packages for their raw requests; CI
+## runs it under the FRESHNESS deferral with R-GRANT.
 audit-1to1-params:
 	go run ./cmd/audit_1to1/ -scope=params -gaps-only
 

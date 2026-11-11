@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"strconv"
@@ -523,10 +524,10 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 }
 
 // TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset verifies an
-// input naming no approver username leaves the option nil rather than
-// pointing it at the empty list. Both encode to the same query today, so the
-// options themselves are what can tell a filter the caller gave from one the
-// handler invented.
+// input naming no approver, assignee or negated assignee username leaves each
+// option nil rather than pointing it at the empty list. Both encode to the same
+// query today, so the options themselves are what can tell a filter the caller
+// gave from one the handler invented.
 func TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -536,12 +537,21 @@ func TestBuildListOptions_AnEmptyUsernameFilterLeavesTheOptionUnset(t *testing.T
 		{name: "empty", usernames: []string{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opts, err := buildListOptions(ListInput{ProjectID: "1", DeploymentID: 2, ApprovedByUsernames: tc.usernames})
+			opts, err := buildListOptions(ListInput{
+				ProjectID: "1", DeploymentID: 2,
+				ApprovedByUsernames: tc.usernames, AssigneeUsername: tc.usernames, NotAssigneeUsername: tc.usernames,
+			})
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if opts.ApprovedByUsernames != nil {
-				t.Errorf("ApprovedByUsernames = %v, want nil for an input naming no username", *opts.ApprovedByUsernames)
+			for name, option := range map[string]*[]string{
+				"ApprovedByUsernames": opts.ApprovedByUsernames,
+				"AssigneeUsername":    opts.AssigneeUsername,
+				"NotAssigneeUsername": opts.NotAssigneeUsername,
+			} {
+				if option != nil {
+					t.Errorf("%s = %v, want nil for an input naming no username", name, *option)
+				}
 			}
 		})
 	}
@@ -1433,5 +1443,79 @@ func TestList_DateFilterThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testing
 	_, err := List(context.Background(), client, ListInput{ProjectID: "42", DeploymentID: 1, UpdatedAfter: "not-a-date"})
 	if err == nil || !strings.Contains(err.Error(), "updated_after must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
 		t.Errorf("List() error = %v, want the updated_after refusal quoting the value", err)
+	}
+}
+
+// TestList_FiltersClientGoModels_EachReachesOnlyItsOwnKey drives each filter
+// ListMergeRequestsOptions models at the v3.40.3 pin that no input offered,
+// alone and through the parameters a tool call carries, and holds the query
+// GitLab receives to that filter's key and value and nothing else. The route
+// takes merge_requests_base_params, and MergeRequestsFinder reads every one of
+// them beside the deployment_id the route adds. Each carries a value of its
+// own, so two filters written onto each other's option cannot pass.
+func TestList_FiltersClientGoModels_EachReachesOnlyItsOwnKey(t *testing.T) {
+	filters := []struct {
+		param string
+		value any
+		key   string
+		want  []string
+	}{
+		{"assignee_username", []any{"alice"}, "assignee_username[]", []string{"alice"}},
+		{"deployed_after", "2026-03-01T00:00:00Z", "deployed_after", []string{"2026-03-01T00:00:00Z"}},
+		{"deployed_before", "2026-03-02T00:00:00Z", "deployed_before", []string{"2026-03-02T00:00:00Z"}},
+		{"environment", "production", "environment", []string{"production"}},
+		{"merge_user_id", 7, "merge_user_id", []string{"7"}},
+		{"merge_user_username", "mia", "merge_user_username", []string{"mia"}},
+		{"merged_after", "2026-02-01T00:00:00Z", "merged_after", []string{"2026-02-01T00:00:00Z"}},
+		{"merged_before", "2026-02-02T00:00:00Z", "merged_before", []string{"2026-02-02T00:00:00Z"}},
+		{"not_assignee_id", 8, "not[assignee_id]", []string{"8"}},
+		{"not_assignee_username", []any{"bob", "carol"}, "not[assignee_username][]", []string{"bob", "carol"}},
+		{"not_author_id", 9, "not[author_id]", []string{"9"}},
+		{"not_milestone", "v2", "not[milestone]", []string{"v2"}},
+		{"not_my_reaction_emoji", "eyes", "not[my_reaction_emoji]", []string{"eyes"}},
+		{"not_reviewer_id", 10, "not[reviewer_id]", []string{"10"}},
+		{"not_reviewer_username", "rita", "not[reviewer_username]", []string{"rita"}},
+	}
+	for _, filter := range filters {
+		t.Run(filter.param, func(t *testing.T) {
+			queries := make(chan url.Values, 1)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				queries <- r.URL.Query()
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			input, err := toolutil.UnmarshalParams[ListInput](map[string]any{"project_id": "42", "deployment_id": 7, filter.param: filter.value})
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			if _, err = List(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			q := <-queries
+			if got := q[filter.key]; !slices.Equal(got, filter.want) {
+				t.Errorf("query %s = %v, want %v (all=%v)", filter.key, got, filter.want, q)
+			}
+			if len(q) != 1 {
+				t.Errorf("list with %s alone sent query %v, want %s and nothing else", filter.param, q, filter.key)
+			}
+		})
+	}
+}
+
+// TestList_MergeAndDeploymentTimeThatDoesNotParse_IsRefusedBeforeAnyRequest
+// holds the four time bounds the list gained to the refusal the created and
+// updated bounds give a value that is not a timestamp: the field named, the
+// value quoted, and no request sent.
+func TestList_MergeAndDeploymentTimeThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, field := range []string{"deployed_after", "deployed_before", "merged_after", "merged_before"} {
+		t.Run(field, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			input, err := toolutil.UnmarshalParams[ListInput](map[string]any{"project_id": "42", "deployment_id": 1, field: "not-a-date"})
+			if err == nil {
+				_, err = List(t.Context(), client, input)
+			}
+			if err == nil || !strings.Contains(err.Error(), field+" must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("List() error = %v, want the %s refusal quoting the value", err, field)
+			}
+		})
 	}
 }

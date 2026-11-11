@@ -108,17 +108,43 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 // ChangePlanLimits
 // ---------------------------------------------------------------------------.
 
-// ChangeInput is the input for changing plan limits.
+// ChangeInput is the input for changing plan limits: every limit
+// PUT /application/plan_limits takes, each a pointer so that 0, which GitLab
+// stores as a limit of its own and reads as unlimited for the web hook and
+// Service Desk limits, is sent when the caller gives it. client-go's
+// ChangePlanLimitOptions models the twenty-one beside the package file sizes
+// from v3.35.0.
 type ChangeInput struct {
-	PlanName                   string `json:"plan_name" jsonschema:"Plan name to update (e.g. default, free, bronze, silver, gold, premium, ultimate),required"`
-	ConanMaxFileSize           *int64 `json:"conan_max_file_size,omitempty" jsonschema:"Maximum Conan package file size in bytes"`
-	GenericPackagesMaxFileSize *int64 `json:"generic_packages_max_file_size,omitempty" jsonschema:"Maximum generic package file size in bytes"`
-	HelmMaxFileSize            *int64 `json:"helm_max_file_size,omitempty" jsonschema:"Maximum Helm chart file size in bytes"`
-	MavenMaxFileSize           *int64 `json:"maven_max_file_size,omitempty" jsonschema:"Maximum Maven package file size in bytes"`
-	NPMMaxFileSize             *int64 `json:"npm_max_file_size,omitempty" jsonschema:"Maximum NPM package file size in bytes"`
-	NugetMaxFileSize           *int64 `json:"nuget_max_file_size,omitempty" jsonschema:"Maximum NuGet package file size in bytes"`
-	PyPiMaxFileSize            *int64 `json:"pypi_max_file_size,omitempty" jsonschema:"Maximum PyPI package file size in bytes"`
-	TerraformModuleMaxFileSize *int64 `json:"terraform_module_max_file_size,omitempty" jsonschema:"Maximum Terraform module file size in bytes"`
+	PlanName                         string `json:"plan_name" jsonschema:"Plan name to update (e.g. default, free, bronze, silver, gold, premium, ultimate),required"`
+	ConanMaxFileSize                 *int64 `json:"conan_max_file_size,omitempty" jsonschema:"Maximum Conan package file size in bytes"`
+	GenericPackagesMaxFileSize       *int64 `json:"generic_packages_max_file_size,omitempty" jsonschema:"Maximum generic package file size in bytes"`
+	HelmMaxFileSize                  *int64 `json:"helm_max_file_size,omitempty" jsonschema:"Maximum Helm chart file size in bytes"`
+	MavenMaxFileSize                 *int64 `json:"maven_max_file_size,omitempty" jsonschema:"Maximum Maven package file size in bytes"`
+	NPMMaxFileSize                   *int64 `json:"npm_max_file_size,omitempty" jsonschema:"Maximum NPM package file size in bytes"`
+	NugetMaxFileSize                 *int64 `json:"nuget_max_file_size,omitempty" jsonschema:"Maximum NuGet package file size in bytes"`
+	PyPiMaxFileSize                  *int64 `json:"pypi_max_file_size,omitempty" jsonschema:"Maximum PyPI package file size in bytes"`
+	TerraformModuleMaxFileSize       *int64 `json:"terraform_module_max_file_size,omitempty" jsonschema:"Maximum Terraform module file size in bytes"`
+	CargoMaxFileSize                 *int64 `json:"cargo_max_file_size,omitempty" jsonschema:"Maximum Cargo package file size in bytes"`
+	CIActiveJobs                     *int64 `json:"ci_active_jobs,omitempty" jsonschema:"Total number of jobs in currently active pipelines"`
+	CIInstanceLevelVariables         *int64 `json:"ci_instance_level_variables,omitempty" jsonschema:"Maximum number of instance-level CI/CD variables that can be defined"`
+	CINeedsSizeLimit                 *int64 `json:"ci_needs_size_limit,omitempty" jsonschema:"Maximum number of needs dependencies a job can have"`
+	CIPipelineSchedules              *int64 `json:"ci_pipeline_schedules,omitempty" jsonschema:"Maximum number of pipeline schedules"`
+	CIPipelineSize                   *int64 `json:"ci_pipeline_size,omitempty" jsonschema:"Maximum number of jobs in a single pipeline"`
+	CIProjectSubscriptions           *int64 `json:"ci_project_subscriptions,omitempty" jsonschema:"Maximum number of pipeline subscriptions to and from a project"`
+	CIRegisteredGroupRunners         *int64 `json:"ci_registered_group_runners,omitempty" jsonschema:"Maximum number of runners created or active in a group during the past seven days"`
+	CIRegisteredProjectRunners       *int64 `json:"ci_registered_project_runners,omitempty" jsonschema:"Maximum number of runners created or active in a project during the past seven days"`
+	DotenvSize                       *int64 `json:"dotenv_size,omitempty" jsonschema:"Maximum size of a dotenv artifact in bytes"`
+	DotenvVariables                  *int64 `json:"dotenv_variables,omitempty" jsonschema:"Maximum number of variables in a dotenv artifact"`
+	EnforcementLimit                 *int64 `json:"enforcement_limit,omitempty" jsonschema:"Maximum storage size for the root namespace enforcement, in MiB"`
+	MaxPipelinesPerMergeTrain        *int64 `json:"max_pipelines_per_merge_train,omitempty" jsonschema:"Maximum number of parallel pipelines per merge train"`
+	NotificationLimit                *int64 `json:"notification_limit,omitempty" jsonschema:"Maximum storage size for the root namespace notifications, in MiB"`
+	PipelineHierarchySize            *int64 `json:"pipeline_hierarchy_size,omitempty" jsonschema:"Maximum number of downstream pipelines in a pipeline's hierarchy tree"`
+	ServiceDeskOutboundEmailsPerDay  *int64 `json:"service_desk_outbound_emails_per_day,omitempty" jsonschema:"Maximum number of outbound Service Desk emails per day, per top-level namespace. 0 for unlimited"`
+	ServiceDeskOutboundEmailsPerHour *int64 `json:"service_desk_outbound_emails_per_hour,omitempty" jsonschema:"Maximum number of outbound Service Desk emails per hour, per top-level namespace. 0 for unlimited"`
+	StorageSizeLimit                 *int64 `json:"storage_size_limit,omitempty" jsonschema:"Maximum storage size for the root namespace, in MiB"`
+	WebHookCalls                     *int64 `json:"web_hook_calls,omitempty" jsonschema:"Maximum number of times a webhook can be called per minute, per top-level namespace. 0 for unlimited"`
+	WebHookCallsLow                  *int64 `json:"web_hook_calls_low,omitempty" jsonschema:"Maximum number of times a webhook can be called per minute, per top-level namespace (the low limit, GitLab.com only). 0 for unlimited"`
+	WebHookCallsMid                  *int64 `json:"web_hook_calls_mid,omitempty" jsonschema:"Maximum number of times a webhook can be called per minute, per top-level namespace (the mid limit, GitLab.com only). 0 for unlimited"`
 }
 
 // ChangeOutput is the output for changing plan limits.
@@ -130,15 +156,36 @@ type ChangeOutput struct {
 // Change modifies plan limits.
 func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput) (ChangeOutput, error) {
 	opts := &gl.ChangePlanLimitOptions{
-		PlanName:                   new(input.PlanName),
-		ConanMaxFileSize:           input.ConanMaxFileSize,
-		GenericPackagesMaxFileSize: input.GenericPackagesMaxFileSize,
-		HelmMaxFileSize:            input.HelmMaxFileSize,
-		MavenMaxFileSize:           input.MavenMaxFileSize,
-		NPMMaxFileSize:             input.NPMMaxFileSize,
-		NugetMaxFileSize:           input.NugetMaxFileSize,
-		PyPiMaxFileSize:            input.PyPiMaxFileSize,
-		TerraformModuleMaxFileSize: input.TerraformModuleMaxFileSize,
+		PlanName:                         new(input.PlanName),
+		ConanMaxFileSize:                 input.ConanMaxFileSize,
+		GenericPackagesMaxFileSize:       input.GenericPackagesMaxFileSize,
+		HelmMaxFileSize:                  input.HelmMaxFileSize,
+		MavenMaxFileSize:                 input.MavenMaxFileSize,
+		NPMMaxFileSize:                   input.NPMMaxFileSize,
+		NugetMaxFileSize:                 input.NugetMaxFileSize,
+		PyPiMaxFileSize:                  input.PyPiMaxFileSize,
+		TerraformModuleMaxFileSize:       input.TerraformModuleMaxFileSize,
+		CargoMaxFileSize:                 input.CargoMaxFileSize,
+		CIActiveJobs:                     input.CIActiveJobs,
+		CIInstanceLevelVariables:         input.CIInstanceLevelVariables,
+		CINeedsSizeLimit:                 input.CINeedsSizeLimit,
+		CIPipelineSchedules:              input.CIPipelineSchedules,
+		CIPipelineSize:                   input.CIPipelineSize,
+		CIProjectSubscriptions:           input.CIProjectSubscriptions,
+		CIRegisteredGroupRunners:         input.CIRegisteredGroupRunners,
+		CIRegisteredProjectRunners:       input.CIRegisteredProjectRunners,
+		DotenvSize:                       input.DotenvSize,
+		DotenvVariables:                  input.DotenvVariables,
+		EnforcementLimit:                 input.EnforcementLimit,
+		MaxPipelinesPerMergeTrain:        input.MaxPipelinesPerMergeTrain,
+		NotificationLimit:                input.NotificationLimit,
+		PipelineHierarchySize:            input.PipelineHierarchySize,
+		ServiceDeskOutboundEmailsPerDay:  input.ServiceDeskOutboundEmailsPerDay,
+		ServiceDeskOutboundEmailsPerHour: input.ServiceDeskOutboundEmailsPerHour,
+		StorageSizeLimit:                 input.StorageSizeLimit,
+		WebHookCalls:                     input.WebHookCalls,
+		WebHookCallsLow:                  input.WebHookCallsLow,
+		WebHookCallsMid:                  input.WebHookCallsMid,
 	}
 
 	limits, _, err := client.GL().PlanLimits.ChangePlanLimits(opts, gl.WithContext(ctx))

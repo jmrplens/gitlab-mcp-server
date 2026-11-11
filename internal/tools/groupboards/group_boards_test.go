@@ -560,9 +560,76 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "board_id is required") {
 		t.Fatalf("expected board_id required error, got: %v", err)
 	}
-	_, err = CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1})
-	if err == nil || !strings.Contains(err.Error(), "label_id is required") {
-		t.Fatalf("expected label_id required error, got: %v", err)
+}
+
+// TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey drives each of
+// the four list types the route takes alone, through the parameters a tool
+// call carries, and pins the whole POST body. CreateGroupIssueBoardListOptions
+// models the assignee, milestone and iteration from client-go v3.39.0, each
+// omitempty, so a column asked for one of them carries that key alone. The
+// four ids are interchangeable numbers, so a swapped pair would create a
+// column scoped to something the caller never named.
+func TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+		want   map[string]any
+	}{
+		{"label_id", map[string]any{"label_id": 8}, map[string]any{"label_id": float64(8)}},
+		{"assignee_id", map[string]any{"assignee_id": 3}, map[string]any{"assignee_id": float64(3)}},
+		{"milestone_id", map[string]any{"milestone_id": 5}, map[string]any{"milestone_id": float64(5)}},
+		{"iteration_id", map[string]any{"iteration_id": 9}, map[string]any{"iteration_id": float64(9)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bodies := make(chan map[string]any, 1)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body := map[string]any{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					body = map[string]any{"undecodable": err.Error()}
+				}
+				bodies <- body
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":12,"position":2}`)
+			}))
+			params := map[string]any{"group_id": "42", "board_id": 1}
+			maps.Copy(params, tc.params)
+			input, err := toolutil.UnmarshalParams[CreateGroupBoardListInput](params)
+			if err != nil {
+				t.Fatalf("UnmarshalParams() error: %v", err)
+			}
+			if _, err = CreateGroupBoardList(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := <-bodies; !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("POST body = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCreateGroupBoardList_NotExactlyOneListType_IsRefusedBeforeAnyRequest
+// verifies a column create naming no list type, or more than one, is refused
+// with the four names before anything is sent. An Enterprise route takes
+// exactly one of them and a Community Edition one requires label_id, so
+// GitLab would refuse either call with a 400.
+func TestCreateGroupBoardList_NotExactlyOneListType_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateGroupBoardListInput
+	}{
+		{"none", CreateGroupBoardListInput{GroupID: "42", BoardID: 1}},
+		{"label and milestone", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, MilestoneID: 5}},
+		{"assignee and iteration", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, AssigneeID: 3, IterationID: 9}},
+		{"all four", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, AssigneeID: 3, MilestoneID: 5, IterationID: 9}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := CreateGroupBoardList(t.Context(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), "name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id or iteration_id") {
+				t.Errorf("CreateGroupBoardList() error = %v, want the refusal naming the four list types", err)
+			}
+		})
 	}
 }
 
@@ -1172,46 +1239,105 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers verifies
-// the hint each refusal of a column creation carries, read from GitLab's own
-// answers at v19.4.1-ee. A label this group cannot use ("Label not found") and
-// a second list for a label the board already has a list for ("Label has
-// already been taken") are both answered 400 by API::BoardsResponses'
-// create_list, which renders the service's first error with that status, and
-// both get the label hint. A caller without admin_issue_board_list on the
-// group, which a role below Planner lacks and an archived group withholds from
-// every role, is refused by authorize! with a plain 403, or a plain 401 where
-// GitLab answers a permission refusal that way (register row 55), and gets the
-// role hint, keyed on the refusal rather than on the status: a 403 naming an
-// RFC 6750 code refuses the token's scope and is told nothing about roles. A
-// 422 is not an answer this route gives, and a 404 names a group or board this
-// call cannot see, so neither carries a hint.
-//
-// Every case also holds the error to the parameters the input offers: the
-// input takes label_id alone, so no refusal may send a model after the
-// assignee, milestone or iteration a list could be scoped to on a licensed
-// instance, nor tell it a license is what it lacks.
-func TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers(t *testing.T) {
+// TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer verifies the
+// hint each 400 of a column creation carries, read from what GitLab answers at
+// v19.4.1-ee, the same answers the project board route gives. Every refusal
+// the route makes for what it was sent is a 400: API::BoardsResponses'
+// create_list renders the service's first error with that status, and Grape
+// answers its own parameter rules with it. A list type the instance's license
+// or the group's plan lacks is one of them
+// (EE::Boards::Lists::CreateService#license_validation_error, "Assignee lists
+// not available with your current license"), so the license hint is keyed on
+// that message. GitLab writes it in the caller's preferred language, so a 400
+// refusing an assignee, milestone or iteration list in other words gets the
+// scope hint with the license named beside it, as does a Community Edition
+// route's refusal of anything but label_id. A 400 refusing a label list gets
+// the scope hint alone and names no license, since no license gates a label
+// list: the ID has to name a label the group can use ("Label not found"), and
+// a board holds one list per label, assignee, milestone or iteration ("Label
+// has already been taken").
+func TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) {
 	const (
-		labelHint = "label_id must name a label of this group or of one of its parent groups"
-		takenHint = "this board already has a list for that label"
-		roleHint  = "needs at least the Planner role on the group"
+		licenseHint   = "assignee, milestone and iteration lists need GitLab Premium or Ultimate"
+		scopeHint     = "a Community Edition instance takes label_id alone"
+		labelHint     = "a label of this group or of one of its parent groups"
+		licenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences"
 	)
-	notOffered := regexp.MustCompile(`(?i)assignee|milestone|iteration|premium|ultimate|licen[cs]e`)
+	licenseWords := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e`)
+	assignee := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, AssigneeID: 3}
+	milestone := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, MilestoneID: 4}
+	iteration := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, IterationID: 5}
+	label := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 20}
 	tests := []struct {
-		name      string
-		status    int
-		body      string
-		wantLabel bool
-		wantRole  bool
+		name  string
+		input CreateGroupBoardListInput
+		body  string
+		// license: the license hint alone; clause: the scope hint with the
+		// license named beside it; scope: the scope hint, naming no license.
+		want string
 	}{
-		{"label not found", http.StatusBadRequest, `{"message":{"error":"Label not found"}}`, true, false},
-		{"label already taken", http.StatusBadRequest, `{"message":{"error":"Label has already been taken"}}`, true, false},
-		{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, false, true},
-		{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, false, true},
-		{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false, false},
-		{"422 is not this route's", http.StatusUnprocessableEntity, `{"message":"Unprocessable"}`, false, false},
-		{"404 board", http.StatusNotFound, `{"message":"404 Board Not Found"}`, false, false},
+		{"assignee list unlicensed", assignee, `{"message":{"error":"Assignee lists not available with your current license"}}`, "license"},
+		{"milestone list unlicensed", milestone, `{"message":{"error":"Milestone lists not available with your current license"}}`, "license"},
+		{"iteration list unlicensed", iteration, `{"message":{"error":"Iteration lists not available with your current license"}}`, "license"},
+		{"assignee list unlicensed in Spanish", assignee, `{"message":{"error":"Las listas de personas asignadas no están disponibles con su licencia actual"}}`, "clause"},
+		{"milestone list unlicensed in German", milestone, `{"message":{"error":"Meilensteinlisten sind mit deiner momentanen Lizenz nicht verfügbar"}}`, "clause"},
+		{"iteration list unlicensed in Japanese", iteration, `{"message":{"error":"現在のライセンスではイテレーション一覧は利用できません"}}`, "clause"},
+		{"assignee not found", assignee, `{"message":{"error":"Assignee not found"}}`, "clause"},
+		{"community edition requires label_id", assignee, `{"error":"label_id is missing"}`, "clause"},
+		{"label not found", label, `{"message":{"error":"Label not found"}}`, "scope"},
+		{"label already taken", label, `{"message":{"error":"Label has already been taken"}}`, "scope"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, tt.body)
+			}))
+
+			_, err := CreateGroupBoardList(t.Context(), client, tt.input)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			hint := suggestionOf(err.Error())
+			if got, want := strings.Contains(hint, licenseHint), tt.want == "license"; got != want {
+				t.Errorf("hint %q of %q carries the license hint = %v, want %v", hint, err.Error(), got, want)
+			}
+			if got, want := strings.Contains(hint, scopeHint) && strings.Contains(hint, labelHint), tt.want != "license"; got != want {
+				t.Errorf("hint %q of %q carries the scope hint = %v, want %v", hint, err.Error(), got, want)
+			}
+			if got, want := strings.Contains(hint, licenseClause), tt.want == "clause"; got != want {
+				t.Errorf("hint %q of %q names the license beside the scope = %v, want %v", hint, err.Error(), got, want)
+			}
+			if tt.want == "scope" {
+				if word := licenseWords.FindString(hint); word != "" {
+					t.Errorf("hint %q names %q, although no license gates what was asked for", hint, word)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateGroupBoardList_Refused_RoleHintFollowsAPermissionRefusal verifies
+// the hint a refusal other than a 400 carries. A caller without
+// admin_issue_board_list on the group, which a role below Planner lacks and an
+// archived group withholds from every role, is refused by authorize! with a
+// plain 403, or a plain 401 where GitLab answers a permission refusal that way
+// (register row 55), and gets the role hint, keyed on the refusal rather than
+// on the status: a 403 naming an RFC 6750 code refuses the token's scope and is
+// told nothing about roles. A 422 is not an answer this route gives, and a 404
+// names a group or board this call cannot see, so neither carries a hint.
+func TestCreateGroupBoardList_Refused_RoleHintFollowsAPermissionRefusal(t *testing.T) {
+	const roleHint = "needs at least the Planner role on the group"
+	tests := []struct {
+		name     string
+		status   int
+		body     string
+		wantRole bool
+	}{
+		{"plain 403", http.StatusForbidden, `{"message":"403 Forbidden"}`, true},
+		{"plain 401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, true},
+		{"403 insufficient scope", http.StatusForbidden, `{"error":"insufficient_scope","error_description":"The request requires higher privileges than provided by the access token."}`, false},
+		{"422 is not this route's", http.StatusUnprocessableEntity, `{"message":"Unprocessable"}`, false},
+		{"404 board", http.StatusNotFound, `{"message":"404 Board Not Found"}`, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1224,14 +1350,11 @@ func TestCreateGroupBoardList_Refused_HintNamesOnlyWhatTheInputOffers(t *testing
 				t.Fatal(errExpectedAPI)
 			}
 			msg := err.Error()
-			if got := strings.Contains(msg, labelHint) && strings.Contains(msg, takenHint); got != tt.wantLabel {
-				t.Errorf("error %q carries the label hint = %v, want %v", msg, got, tt.wantLabel)
-			}
 			if got := strings.Contains(msg, roleHint); got != tt.wantRole {
 				t.Errorf("error %q carries the role hint = %v, want %v", msg, got, tt.wantRole)
 			}
-			if absent := notOffered.FindString(msg); absent != "" {
-				t.Errorf("error %q names %q, which the input does not offer", msg, absent)
+			if got := strings.Contains(msg, "Suggestion: "); got != tt.wantRole {
+				t.Errorf("error %q carries a hint = %v, want %v", msg, got, tt.wantRole)
 			}
 		})
 	}

@@ -8885,3 +8885,111 @@ func TestGet_HeadPipelineThatNeverRan_PublishesNoDuration(t *testing.T) {
 		})
 	}
 }
+
+// modeledFilter is one filter of a merge request list as a caller writes it
+// and as GitLab reads it: the input's name, the value the caller sends, the
+// query key and the values the query carries under it.
+type modeledFilter struct {
+	param string
+	value any
+	key   string
+	want  []string
+}
+
+// modeledFiltersOfEveryList are the filters client-go models on the list
+// options of all four merge request lists at the v3.40.3 pin, which no input
+// offered before: the merge user and merge time filters, the assignee usernames
+// and the seven negated filters, all of which client-go models from v3.33.0.
+// Each carries a value of its own, so two filters written onto each other's
+// option cannot pass.
+var modeledFiltersOfEveryList = []modeledFilter{
+	{"assignee_username", []any{"alice"}, "assignee_username[]", []string{"alice"}},
+	{"merge_user_id", 7, "merge_user_id", []string{"7"}},
+	{"merge_user_username", "mia", "merge_user_username", []string{"mia"}},
+	{"merged_after", "2026-02-01T00:00:00Z", "merged_after", []string{"2026-02-01T00:00:00Z"}},
+	{"merged_before", "2026-02-02T00:00:00Z", "merged_before", []string{"2026-02-02T00:00:00Z"}},
+	{"not_assignee_id", 8, "not[assignee_id]", []string{"8"}},
+	{"not_assignee_username", []any{"bob", "carol"}, "not[assignee_username][]", []string{"bob", "carol"}},
+	{"not_author_id", 9, "not[author_id]", []string{"9"}},
+	{"not_milestone", "v2", "not[milestone]", []string{"v2"}},
+	{"not_my_reaction_emoji", "eyes", "not[my_reaction_emoji]", []string{"eyes"}},
+	{"not_reviewer_id", 10, "not[reviewer_id]", []string{"10"}},
+	{"not_reviewer_username", "rita", "not[reviewer_username]", []string{"rita"}},
+}
+
+// modeledDeploymentFilters are the deployment filters the global and group
+// lists did not offer, which the project list already did.
+var modeledDeploymentFilters = []modeledFilter{
+	{"environment", "production", "environment", []string{"production"}},
+	{"deployed_after", "2026-03-01T00:00:00Z", "deployed_after", []string{"2026-03-01T00:00:00Z"}},
+	{"deployed_before", "2026-03-02T00:00:00Z", "deployed_before", []string{"2026-03-02T00:00:00Z"}},
+}
+
+// TestMergeRequestListings_FiltersClientGoModels_EachReachesOnlyItsOwnKey
+// drives each filter the three lists gained at the v3.40.3 pin alone, through
+// the parameters a tool call carries, and holds the query GitLab receives to
+// that filter's key and value and nothing else. The project list gains in,
+// which the other two already offered, the global and group lists the
+// deployment filters, and the group list source_project_id, which only
+// ListGroupMergeRequestsOptions models.
+func TestMergeRequestListings_FiltersClientGoModels_EachReachesOnlyItsOwnKey(t *testing.T) {
+	listings := []struct {
+		name    string
+		path    string
+		call    func(context.Context, *gitlabclient.Client, map[string]any) error
+		base    map[string]any
+		filters []modeledFilter
+	}{
+		{
+			name: "merge_request.list", path: pathMRs, call: listWithParams(List), base: map[string]any{"project_id": "42"},
+			filters: slices.Concat(modeledFiltersOfEveryList, []modeledFilter{{"in", "title", "in", []string{"title"}}}),
+		},
+		{
+			name: "merge_request.list_global", path: pathGlobalMRs, call: listWithParams(ListGlobal),
+			filters: slices.Concat(modeledFiltersOfEveryList, modeledDeploymentFilters),
+		},
+		{
+			name: "merge_request.list_group", path: pathGroupMRs, call: listWithParams(ListGroup), base: map[string]any{"group_id": "99"},
+			filters: slices.Concat(modeledFiltersOfEveryList, modeledDeploymentFilters,
+				[]modeledFilter{{"source_project_id", 11, "source_project_id", []string{"11"}}}),
+		},
+	}
+	for _, listing := range listings {
+		for _, filter := range listing.filters {
+			t.Run(listing.name+"/"+filter.param, func(t *testing.T) {
+				var q url.Values
+				client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, listing.path, &q))
+				params := maps.Clone(listing.base)
+				if params == nil {
+					params = map[string]any{}
+				}
+				params[filter.param] = filter.value
+				if err := listing.call(t.Context(), client, params); err != nil {
+					t.Fatalf("%s unexpected error: %v", listing.name, err)
+				}
+				if got := q[filter.key]; !slices.Equal(got, filter.want) {
+					t.Errorf("query %s = %v, want %v (all=%v)", filter.key, got, filter.want, q)
+				}
+				if len(q) != 1 {
+					t.Errorf("%s with %s alone sent query %v, want %s and nothing else", listing.name, filter.param, q, filter.key)
+				}
+			})
+		}
+	}
+}
+
+// TestMergeRequestListings_MergeTimeThatDoesNotParse_IsRefusedBeforeAnyRequest
+// holds the two merge time bounds to the refusal the other time filters give
+// a value that is not a timestamp: the field named, the value quoted, and no
+// request sent.
+func TestMergeRequestListings_MergeTimeThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, field := range []string{"merged_after", "merged_before"} {
+		t.Run(field, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := listWithParams(List)(t.Context(), client, map[string]any{"project_id": "42", field: "not-a-date"})
+			if err == nil || !strings.Contains(err.Error(), field+" must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
+				t.Errorf("List() error = %v, want the %s refusal quoting the value", err, field)
+			}
+		})
+	}
+}
