@@ -621,7 +621,9 @@ func endsAutolink(r rune) bool {
 
 // titleLink is the long form of a link: the title and the address escaped
 // apart, [title](url), a code span for an address that is not linked, and the
-// escaped title alone when there is no address. An address of whitespace alone
+// escaped title alone when there is no address. Its callers hand it a title
+// that is the address whenever the title is blank, so a title is never blank
+// beside an address. An address of whitespace alone
 // is no address: it used to be written as a code span holding the spaces,
 // which gave a card's URL row a value a reader sees nothing in.
 //
@@ -635,7 +637,7 @@ func titleLink(title, url string) string {
 		return escaped
 	}
 	if !LinkableDestination(url) {
-		if blank(title) || title == url {
+		if title == url {
 			return MdCodeSpanCell(url)
 		}
 		return escaped + " " + MdCodeSpanCell(url)
