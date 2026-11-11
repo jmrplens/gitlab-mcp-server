@@ -143,6 +143,16 @@ type unwritten struct {
 	Fresh     bool   ~json:"fresh"~
 }
 
+type crossAPI struct {
+	gl.Embedded
+	Raw bool ~json:"raw"~
+}
+
+type crossed struct {
+	gl.Options
+	Nested []*crossAPI ~json:"nested"~
+}
+
 var (
 	widgets   []*widgetAPI
 	one       *mirror
@@ -157,6 +167,7 @@ var (
 	tags      tagged
 	tagOnly   taggedOnly
 	unwrit    unwritten
+	crosses   crossed
 )
 `
 
@@ -290,7 +301,11 @@ func TestSupersetOf_ClientGoEmbeddedThroughAStructOfItsOwn_IsTheRoot(t *testing.
 // embedded field its tag names, or that holds no struct, is a key of its
 // own, while one tagged "-" or of an unexported type that is no struct is
 // never written, its tag naming it or not, and neither is an unexported
-// field its tag names, even one holding a struct.
+// field its tag names, even one holding a struct. Below a field client-go
+// models with a struct of its own, a struct of the package's own that embeds
+// another client-go struct in its place does not embed that one, so a key
+// it carries the way that struct does shadows nothing, while a key the
+// struct it embeds carries beside it is still lacked.
 func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 	sdk := standInSDK(t)
 	local := localPackage(t, sdk)
@@ -317,6 +332,10 @@ func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 		{name: "unwrit", want: Superset{
 			Type: "local.unwritten", Root: "Inner", Keys: []string{"fresh"},
 			Needs: []string{"LacksKey{Inner, fresh}"},
+		}},
+		{name: "crosses", want: Superset{
+			Type: "local.crossed", Root: "Options", Keys: []string{"nested.page"},
+			Needs: []string{"LacksKey{Options, nested.page}"},
 		}},
 	}
 	for _, tc := range cases {
