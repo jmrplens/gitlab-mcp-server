@@ -1,15 +1,18 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// Package shared tests the memoized typed-package loader the structs and
-// actions analyzers share, against small throwaway modules so the tests
-// state exactly which packages resolve and which errors abort a run.
+// Package shared tests the memoized typed-package loader the analyzers
+// share, the tool packages and the capability packages beside them, against
+// small throwaway modules so the tests state exactly which packages resolve
+// and which errors abort a run.
 package shared
 
 import (
+	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,6 +85,65 @@ func TestLoadToolPackages_Module_ReturnsTypedToolPackagesOnce(t *testing.T) {
 	if len(second) != len(first) || &second[0] != &first[0] {
 		t.Error("second call did not return the memoized slice")
 	}
+	tools, capabilities, err := LoadToolAndCapabilityPackages(root)
+	if err != nil {
+		t.Fatalf("LoadToolAndCapabilityPackages: %v", err)
+	}
+	if len(tools) != len(first) || &tools[0] != &first[0] {
+		t.Error("LoadToolAndCapabilityPackages did not return the memoized tool packages")
+	}
+	if len(capabilities) != 0 {
+		t.Errorf("capabilities = %v, want none in a tree without them, the root tools package included", capabilities)
+	}
+}
+
+// TestLoadToolAndCapabilityPackages_TheResourceAndPromptPackages_AreLoadedFromTheirSource
+// verifies that internal/resources and internal/prompts are loaded beside
+// the tool packages in the same pass and handed over apart from them (issue
+// 1601): with their syntax and type information, their unexported
+// declarations in their scope, and compiled against the same toolutil
+// package object the tool packages see, so a type they share is one object.
+// A package outside the two (internal/completions here) is not loaded, and a
+// second call hands back the memoized slices.
+func TestLoadToolAndCapabilityPackages_TheResourceAndPromptPackages_AreLoadedFromTheirSource(t *testing.T) {
+	const shape = "package %s\n\nimport \"example.com/fixture/internal/toolutil\"\n\ntype row struct{ ID int }\n\n// Read is exported, row is not.\nfunc Read() toolutil.Shape { return toolutil.Shape{ID: len([]row{})} }\n"
+	root := writeModule(t, map[string]string{
+		"internal/toolutil/toolutil.go":       "package toolutil\n\n// Shape is shared.\ntype Shape struct{ ID int }\n",
+		"internal/tools/alpha/alpha.go":       fmt.Sprintf(shape, "alpha"),
+		"internal/resources/resources.go":     fmt.Sprintf(shape, "resources"),
+		"internal/prompts/prompts.go":         fmt.Sprintf(shape, "prompts"),
+		"internal/completions/completions.go": fmt.Sprintf(shape, "completions"),
+	})
+	tools, capabilities, err := LoadToolAndCapabilityPackages(root)
+	if err != nil {
+		t.Fatalf("LoadToolAndCapabilityPackages: %v", err)
+	}
+	if len(tools) != 1 || tools[0].PkgPath != "example.com/fixture/internal/tools/alpha" {
+		t.Fatalf("tools = %v, want the one tool package", tools)
+	}
+	const toolutilPath = "example.com/fixture/internal/toolutil"
+	toolutil := tools[0].Imports[toolutilPath].Types
+	var paths []string
+	for _, pkg := range capabilities {
+		paths = append(paths, pkg.PkgPath)
+		if len(pkg.Syntax) == 0 || pkg.TypesInfo == nil || pkg.Types.Scope().Lookup("row") == nil {
+			t.Errorf("%s = %+v, want it loaded from its source", pkg.PkgPath, pkg)
+		}
+		if imported := pkg.Imports[toolutilPath]; imported == nil || imported.Types != toolutil {
+			t.Errorf("%s compiles against %v, want the toolutil package the tool packages see", pkg.PkgPath, imported)
+		}
+	}
+	slices.Sort(paths)
+	if want := []string{"example.com/fixture/internal/prompts", "example.com/fixture/internal/resources"}; !slices.Equal(paths, want) {
+		t.Errorf("capabilities = %q, want %q", paths, want)
+	}
+	again, againCapabilities, err := LoadToolAndCapabilityPackages(root)
+	if err != nil {
+		t.Fatalf("second LoadToolAndCapabilityPackages: %v", err)
+	}
+	if &again[0] != &tools[0] || len(againCapabilities) != len(capabilities) || &againCapabilities[0] != &capabilities[0] {
+		t.Error("second call did not return the memoized slices")
+	}
 }
 
 // TestLoadToolPackages_TheSharedToolutilPackage_IsLoadedFromItsSource
@@ -112,10 +174,10 @@ func TestLoadToolPackages_TheSharedToolutilPackage_IsLoadedFromItsSource(t *test
 }
 
 // TestLoadToolPackages_UntypedPackage_IsLeftOut verifies the filter's last
-// guard: a package under internal/tools that the loader hands back with no
-// type information is dropped rather than passed to an analyzer that would
-// dereference it. The real loader always attaches types when asked to, so
-// the case is reached through the loader seam.
+// guard: a package under internal/tools or a capability package that the
+// loader hands back with no type information is dropped rather than passed
+// to an analyzer that would dereference it. The real loader always attaches
+// types when asked to, so the case is reached through the loader seam.
 func TestLoadToolPackages_UntypedPackage_IsLeftOut(t *testing.T) {
 	original := loadPackages
 	t.Cleanup(func() { loadPackages = original })
@@ -123,15 +185,20 @@ func TestLoadToolPackages_UntypedPackage_IsLeftOut(t *testing.T) {
 		return []*packages.Package{
 			{PkgPath: "example.com/untyped/internal/tools/alpha"},
 			{PkgPath: "example.com/untyped/internal/tools/beta", Types: types.NewPackage("example.com/untyped/internal/tools/beta", "beta"), TypesInfo: &types.Info{}},
+			{PkgPath: "example.com/untyped/internal/resources"},
+			{PkgPath: "example.com/untyped/internal/prompts", Types: types.NewPackage("example.com/untyped/internal/prompts", "prompts"), TypesInfo: &types.Info{}},
 		}, nil
 	}
 
-	pkgs, err := LoadToolPackages(filepath.Join(t.TempDir(), "untyped"))
+	pkgs, capabilities, err := LoadToolAndCapabilityPackages(filepath.Join(t.TempDir(), "untyped"))
 	if err != nil {
-		t.Fatalf("LoadToolPackages: %v", err)
+		t.Fatalf("LoadToolAndCapabilityPackages: %v", err)
 	}
 	if len(pkgs) != 1 || pkgs[0].PkgPath != "example.com/untyped/internal/tools/beta" {
 		t.Errorf("loaded %v, want only the typed beta package", pkgs)
+	}
+	if len(capabilities) != 1 || capabilities[0].PkgPath != "example.com/untyped/internal/prompts" {
+		t.Errorf("capabilities = %v, want only the typed prompts package", capabilities)
 	}
 }
 
@@ -195,7 +262,8 @@ func TestLoadToolPackages_HalfTypedPackage_IsLeftOut(t *testing.T) {
 
 // TestLoadToolPackages_Failures_AbortTheRun verifies both failure classes
 // surface as errors rather than a partial package set: a root the go tool
-// cannot enter, and a tool package that does not type-check.
+// cannot enter, and a tool package or a capability package that does not
+// type-check.
 func TestLoadToolPackages_Failures_AbortTheRun(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -220,10 +288,25 @@ func TestLoadToolPackages_Failures_AbortTheRun(t *testing.T) {
 			},
 			wantErr: "package load errors:",
 		},
+		{
+			name: "type_error_in_a_capability_package",
+			root: func(t *testing.T) string {
+				t.Helper()
+				return writeModule(t, map[string]string{
+					"internal/tools/alpha/alpha.go":   "package alpha\n\nfunc A() int { return 1 }\n",
+					"internal/prompts/broken.go":      "package prompts\n\nfunc P() int { return \"not an int\" }\n",
+					"internal/resources/resources.go": "package resources\n\nfunc R() int { return 1 }\n",
+				})
+			},
+			wantErr: "package load errors:",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := tc.root(t)
+			if _, capabilities, err := LoadToolAndCapabilityPackages(root); err == nil || capabilities != nil {
+				t.Errorf("capabilities = %v, error = %v, want none and an error", capabilities, err)
+			}
 			pkgs, err := LoadToolPackages(root)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("LoadToolPackages error = %v, want it to contain %q", err, tc.wantErr)

@@ -176,7 +176,7 @@ func Run(root string, gapsOnly bool) (content []byte, clean bool, err error) {
 }
 
 func buildReport(root string, gapsOnly bool) (report, error) {
-	pkgs, err := shared.LoadToolPackages(root)
+	pkgs, capabilities, err := shared.LoadToolAndCapabilityPackages(root)
 	if err != nil {
 		return report{}, err
 	}
@@ -219,7 +219,9 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 
-	captures, capturesStale := analyzeCaptures(pkgs, clientGo, captureDeclarations)
+	// The captures are read in the resource and prompt packages too, which
+	// capture as the tool packages do; every other rule keeps to the tools.
+	captures, capturesStale := analyzeCaptures(pkgs, capabilities, clientGo, captureDeclarations)
 
 	// The identifiers are held to the live API record, a pinned oracle a
 	// re-pin moves and a stack never regenerates, so reading it does not
