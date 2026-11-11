@@ -60,6 +60,9 @@ const (
 	toolGroupHookDelHeader = "gitlab_group_hook_delete_custom_header"
 	toolGroupHookSetURLVar = "gitlab_group_hook_set_url_variable"
 	toolGroupHookDelURLVar = "gitlab_group_hook_delete_url_variable"
+
+	toolGroupSharedProjectDelete = "gitlab_group_shared_project_delete"
+	actionGroupSharedProjects    = "group.shared_projects"
 )
 
 // ActionSpecs returns canonical specs for core group and group hook actions.
@@ -126,6 +129,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupDeleteSpec("unshare_from_group", toolutil.DestructiveVoidAction(client, UnshareGroupFromGroup), "gitlab_group_unshare_from_group"),
 		// gitlab_group_shared_projects_list — list projects shared with a group.
 		groupReadSpec("shared_projects", toolutil.RouteAction(client, ListSharedProjects), "gitlab_group_shared_projects_list"),
+		// gitlab_group_shared_project_delete: remove a project shared with a group, from the group's side (destructive).
+		groupDeleteSpec("shared_project_delete", toolutil.DestructiveVoidAction(client, DeleteSharedProject), toolGroupSharedProjectDelete),
 		// gitlab_group_transfer — move a group under a new parent group or to top level.
 		groupUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
 		// gitlab_group_upload_avatar — upload or replace a group's avatar image.
@@ -570,7 +575,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 	case "gitlab_group_shared_projects_list":
 		options.Usage = "List the projects shared *into* this group from elsewhere (not the group's own projects). Use when the user asks which external projects a group can access via sharing."
 		options.Aliases = []string{"list group shared projects", "projects shared with group", "show externally shared projects"}
-		options.RelatedActions = []string{actionGroupProjects, actionGroupSharedWith, actionGroupGet}
+		options.RelatedActions = []string{actionGroupProjects, "group.shared_project_delete", actionGroupSharedWith, actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramGroupID: {
 				SemanticRole:     roleScopeGroup,
@@ -579,7 +584,25 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"Lists projects shared *into* the group. Use group.projects for the group's own projects."},
 			},
 		}
-		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
+		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: compact project rows with names and paths, web and clone URLs, visibility, default branch, topics, star and fork counts, archived status, and created and last-activity times. See also: gitlab_group_projects, gitlab_group_shared_project_delete, gitlab_group_shared_with_list, gitlab_group_get."
+	case toolGroupSharedProjectDelete:
+		options.Usage = "Remove a project shared *into* this group, from the group's side: the share project.share_with_group created, which project.delete_shared_group removes from the project's side. Destructive. Send group_id and the numeric project_id group.shared_projects lists. Requires the Owner role on the group, and no access to the project."
+		options.Aliases = []string{"remove shared project from group", "remove project shared into group", "revoke project shared with group", "delete group project share link"}
+		options.RelatedActions = []string{actionGroupSharedProjects, "project.delete_shared_group", "project.share_with_group", actionGroupGet}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			paramGroupID: {
+				SemanticRole:     roleScopeGroup,
+				ValueSource:      "Group numeric ID or full path the project is shared with.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"group_id is the group the project was shared into, not the project's own namespace."},
+			},
+			"project_id": {
+				ValueSource:      "Numeric ID of the shared project, from group.shared_projects.",
+				ExampleBinding:   `params.project_id:42`,
+				CommonConfusions: []string{"GitLab takes the numeric ID alone here, not the project's path."},
+			},
+		}
+		options.IndividualTool.Description = "Remove a project shared with a GitLab group, from the group's side. Returns: a success confirmation. See also: gitlab_group_shared_projects_list, gitlab_project_delete_shared_group, gitlab_project_share_with_group, gitlab_group_get."
 	case "gitlab_group_transfer":
 		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}

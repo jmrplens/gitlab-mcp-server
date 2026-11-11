@@ -23,6 +23,9 @@ const registerUploadListJSON = `[{"id":1,"size":1024,"filename":"image.png","cre
 // which is what holds the secret and the filename in that order.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
+	handler.HandleFunc("POST /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, groupUploadJSON)
+	})
 	handler.HandleFunc("GET /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, registerUploadListJSON)
 	})
@@ -39,6 +42,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
+		{"upload", opGroupUpload, map[string]any{"group_id": "5", "filename": "notes.txt", "content_base64": "bm90ZXM="}},
 		{"list", "gitlab_list_group_markdown_uploads", map[string]any{"group_id": "5"}},
 		{"delete_by_id", "gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "5", "upload_id": 1}},
 		{"delete_by_secret", "gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "5", "secret": "abc123", "filename": "image.png"}},
@@ -71,6 +75,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
+		{"upload", opGroupUpload, map[string]any{"group_id": "5", "filename": "notes.txt", "content_base64": "bm90ZXM="}},
 		{"list", "gitlab_list_group_markdown_uploads", map[string]any{"group_id": "5"}},
 		{"delete_by_id", "gitlab_delete_group_markdown_upload_by_id", map[string]any{"group_id": "5", "upload_id": 1}},
 		{"delete_by_secret", "gitlab_delete_group_markdown_upload_by_secret", map[string]any{"group_id": "5", "secret": "abc", "filename": "file.png"}},

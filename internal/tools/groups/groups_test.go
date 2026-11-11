@@ -2700,8 +2700,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := groupSpecsByTool(t, specs)
 
-	if len(specs) != 37 {
-		t.Fatalf("len(ActionSpecs) = %d, want 37", len(specs))
+	if len(specs) != 38 {
+		t.Fatalf("len(ActionSpecs) = %d, want 38", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))

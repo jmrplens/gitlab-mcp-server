@@ -145,6 +145,52 @@ func UnshareGroupFromGroup(ctx context.Context, client *gitlabclient.Client, inp
 }
 
 // ---------------------------------------------------------------------------
+// DeleteSharedProject
+// ---------------------------------------------------------------------------.
+
+// DeleteSharedProjectInput defines parameters for removing a project shared
+// with a group, from the group's side.
+type DeleteSharedProjectInput struct {
+	GroupID   toolutil.StringOrInt `json:"group_id"   jsonschema:"Group ID or URL-encoded path of the group the project is shared with,required"`
+	ProjectID int64                `json:"project_id" jsonschema:"Numeric ID of the project shared with the group, as group.shared_projects lists it,required"`
+}
+
+// The hints below say what DELETE /groups/:id/shared_projects/:project_id
+// answers each refusal for, read off lib/api/groups.rb at v19.5.0-ee. The
+// route asks for the group's delete_group_link permission, which the Owner
+// role grants, and answers 403 without it, and a fine-grained token needs the
+// unshare_project permission; it answers 404 "Project Group Link Not Found"
+// when the project is not shared with the group. The group's Owner can remove
+// the share without any access to the project itself.
+const (
+	deleteSharedProjectNotFoundHint = "the project is not shared with this group, or the IDs are wrong: group.shared_projects lists the projects shared with it, by numeric ID, and project.delete_shared_group removes the same share from the project's side"
+	deleteSharedProjectRefusedHint  = "removing a project shared with a group needs the Owner role on the group (no access to the project is needed), and a fine-grained personal access token needs the unshare_project permission"
+)
+
+// DeleteSharedProject removes a project shared with a group, through the
+// group: the share project.share_with_group creates and
+// project.delete_shared_group removes from the project's side.
+func DeleteSharedProject(ctx context.Context, client *gitlabclient.Client, input DeleteSharedProjectInput) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if input.GroupID == "" {
+		return errors.New("groupDeleteSharedProject: group_id is required")
+	}
+	if input.ProjectID == 0 {
+		return errors.New("groupDeleteSharedProject: project_id is required. Use group.shared_projects to find the numeric ID of a project shared with the group")
+	}
+	_, err := client.GL().Groups.DeleteGroupSharedProject(string(input.GroupID), input.ProjectID, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsPermissionRefusal(err) {
+			return toolutil.WrapErrWithHint("groupDeleteSharedProject", err, deleteSharedProjectRefusedHint)
+		}
+		return toolutil.WrapErrWithStatusHint("groupDeleteSharedProject", err, http.StatusNotFound, deleteSharedProjectNotFoundHint)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // ListGroupSharedProjects
 // ---------------------------------------------------------------------------.
 

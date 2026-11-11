@@ -7,11 +7,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 func init() {
+	toolutil.RegisterMarkdownResult(UploadToolResult)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
+}
+
+// UploadToolResult renders a group upload as the uploads package renders a
+// project's, which carries the same keys: the card of the file, with an
+// image embed for a person to look at when the file is an image whose
+// address can be linked.
+func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
+	return uploads.UploadToolResult(uploads.UploadOutput(u))
 }
 
 // FormatListMarkdownString renders a list of group markdown uploads.

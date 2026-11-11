@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -381,6 +382,86 @@ func TestSharing_CanceledContext(t *testing.T) {
 	}
 	if _, err := ListSharedProjects(ctx, client, ListSharedProjectsInput{GroupID: "99"}); err == nil {
 		t.Error("ListSharedProjects: expected context error")
+	}
+	if err := DeleteSharedProject(ctx, client, DeleteSharedProjectInput{GroupID: "99", ProjectID: 42}); err == nil {
+		t.Error("DeleteSharedProject: expected context error")
+	}
+}
+
+// TestDeleteSharedProject_SendsTheDeleteOfTheGroupsLink verifies the handler
+// sends DELETE /groups/:id/shared_projects/:project_id, with the group as the
+// caller named it, and answers nothing on GitLab's 204.
+func TestDeleteSharedProject_SendsTheDeleteOfTheGroupsLink(t *testing.T) {
+	var hit atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.EscapedPath() == "/api/v4/groups/org%2Finfra/shared_projects/42" {
+			hit.Store(true)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.EscapedPath())
+		http.NotFound(w, r)
+	}))
+	if err := DeleteSharedProject(context.Background(), client, DeleteSharedProjectInput{GroupID: "org/infra", ProjectID: 42}); err != nil {
+		t.Fatalf("DeleteSharedProject() unexpected error: %v", err)
+	}
+	if !hit.Load() {
+		t.Fatal("DeleteSharedProject() sent no DELETE to the group's shared project route")
+	}
+}
+
+// TestDeleteSharedProject_RefusesAMissingIDBeforeAnyRequest verifies each
+// required input is asked for by name and that GitLab is not asked at all.
+func TestDeleteSharedProject_RefusesAMissingIDBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input DeleteSharedProjectInput
+		want  string
+	}{
+		{name: "group_id", input: DeleteSharedProjectInput{ProjectID: 42}, want: "group_id is required"},
+		{name: "project_id", input: DeleteSharedProjectInput{GroupID: "99"}, want: "project_id is required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := DeleteSharedProject(context.Background(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("DeleteSharedProject(%+v) error = %v, want one containing %q", tc.input, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestDeleteSharedProject_StatusHints verifies the hint each refusal carries:
+// a project the group holds no share of is named as such, with the listing
+// that shows the shares, and a refused permission names the Owner role and
+// the fine-grained permission, while another status carries GitLab's message
+// and neither hint.
+func TestDeleteSharedProject_StatusHints(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		want    string
+		notWant string
+	}{
+		{name: "not_shared", status: http.StatusNotFound, body: `{"message":"404 Project Group Link Not Found"}`, want: "group.shared_projects lists the projects shared with it", notWant: "Owner role"},
+		{name: "refused", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, want: "Owner role on the group", notWant: "group.shared_projects lists"},
+		{name: "other", status: http.StatusConflict, body: `{"message":"409 the share is locked"}`, want: "the share is locked", notWant: "group.shared_projects lists"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, tc.body)
+			}))
+			err := DeleteSharedProject(context.Background(), client, DeleteSharedProjectInput{GroupID: "99", ProjectID: 42})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("DeleteSharedProject() error = %v, want one containing %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), tc.notWant) {
+				t.Errorf("DeleteSharedProject() error = %v, want no %q", err, tc.notWant)
+			}
+		})
 	}
 }
 

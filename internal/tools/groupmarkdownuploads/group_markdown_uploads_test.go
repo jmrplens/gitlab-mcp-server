@@ -8,16 +8,201 @@ package groupmarkdownuploads
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// pathGroupUploads is the route a group upload is sent to.
+const pathGroupUploads = "/api/v4/groups/7/uploads"
+
+// groupUploadJSON is what POST /groups/:id/uploads answers with
+// (API::Entities::GroupUpload at v19.5.0-ee): the file's id, its alt text,
+// the /uploads/<secret>/<name> address, the full path under /-/group/ and the
+// Markdown reference.
+const groupUploadJSON = `{
+	"id": 5,
+	"alt": "notes",
+	"url": "/uploads/0123456789abcdef0123456789abcdef/notes.txt",
+	"full_path": "/-/group/7/uploads/0123456789abcdef0123456789abcdef/notes.txt",
+	"markdown": "[notes.txt](/uploads/0123456789abcdef0123456789abcdef/notes.txt)"
+}`
+
+// TestUpload_SendsTheFileAndPublishesTheAnswer verifies that Upload sends the
+// decoded content as the multipart field "file" under the name given, to the
+// group's uploads route, and publishes what GitLab answers, with the full
+// address built from the instance's root rather than from the API's.
+func TestUpload_SendsTheFileAndPublishesTheAnswer(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathGroupUploads {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("the request carries no multipart form: %v", err)
+			http.Error(w, "no form", http.StatusBadRequest)
+			return
+		}
+		file, header, err := testutil.FormFile(form, "file")
+		if err != nil {
+			t.Errorf("the form carries no field \"file\": %v", err)
+			http.Error(w, "no file", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		content, _ := io.ReadAll(file)
+		if header.Filename != "notes.txt" || string(content) != "group notes" {
+			t.Errorf("the upload sent %q holding %q, want notes.txt holding %q", header.Filename, content, "group notes")
+		}
+		testutil.RespondJSON(w, http.StatusCreated, groupUploadJSON)
+	}))
+
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		GroupID:       "7",
+		Filename:      "notes.txt",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("group notes")),
+	})
+	if err != nil {
+		t.Fatalf("Upload() unexpected error: %v", err)
+	}
+	want := UploadOutput{
+		ID:       5,
+		Alt:      "notes",
+		URL:      "/uploads/0123456789abcdef0123456789abcdef/notes.txt",
+		FullPath: "/-/group/7/uploads/0123456789abcdef0123456789abcdef/notes.txt",
+		Markdown: "[notes.txt](/uploads/0123456789abcdef0123456789abcdef/notes.txt)",
+		FullURL:  strings.TrimSuffix(client.GL().BaseURL().String(), "/api/v4/") + "/-/group/7/uploads/0123456789abcdef0123456789abcdef/notes.txt",
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Upload() = %+v\nwant %+v", out, want)
+	}
+}
+
+// TestUpload_RefusesBeforeAnyRequest verifies each input the upload cannot be
+// sent without is refused before GitLab is asked: the group, the file name,
+// and a content given both ways, neither way, or as base64 that does not
+// decode.
+func TestUpload_RefusesBeforeAnyRequest(t *testing.T) {
+	content := base64.StdEncoding.EncodeToString([]byte("x"))
+	cases := []struct {
+		name  string
+		input UploadInput
+		want  string
+	}{
+		{name: "group_id", input: UploadInput{Filename: "a.txt", ContentBase64: content}, want: "group_id"},
+		{name: "filename", input: UploadInput{GroupID: "7", ContentBase64: content}, want: "filename"},
+		{name: "neither", input: UploadInput{GroupID: "7", Filename: "a.txt"}, want: "either file_path or content_base64 is required"},
+		{name: "both", input: UploadInput{GroupID: "7", Filename: "a.txt", ContentBase64: content, FilePath: "/tmp/a.txt"}, want: "not both"},
+		{name: "invalid_base64", input: UploadInput{GroupID: "7", Filename: "a.txt", ContentBase64: "!!not base64!!"}, want: "invalid base64"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Upload(context.Background(), nil, client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), opGroupUpload) {
+				t.Fatalf("Upload(%+v) error = %v, want one from %s naming %q", tc.input, err, opGroupUpload, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpload_CanceledContext_SendsNothing verifies a context already ended
+// is answered with its error before the content is read or GitLab is asked.
+func TestUpload_CanceledContext_SendsNothing(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Upload(testutil.CancelledCtx(t), nil, client, UploadInput{GroupID: "7", Filename: "a.txt", ContentBase64: "eA=="})
+	if err == nil || !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("Upload() error = %v, want the context's", err)
+	}
+}
+
+// TestUpload_WithProgressToken verifies Upload wraps the request body with a
+// progress reader when the MCP request carries a progress token, so the
+// client hears about the upload while it is sent.
+func TestUpload_WithProgressToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form, err := testutil.ReadMultipartForm(r, 10<<20)
+		if err != nil {
+			t.Errorf("failed to parse multipart form: %v", err)
+			http.Error(w, "parse multipart form", http.StatusInternalServerError)
+			return
+		}
+		file, _, err := testutil.FormFile(form, "file")
+		if err != nil {
+			t.Errorf("failed to get form file: %v", err)
+			http.Error(w, "failed to get form file", http.StatusInternalServerError)
+			return
+		}
+		defer file.Close()
+		_, _ = io.Copy(io.Discard, file)
+		testutil.RespondJSON(w, http.StatusCreated, groupUploadJSON)
+	}))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "group-upload-test-server", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "group_upload_with_progress"}, func(ctx context.Context, req *mcp.CallToolRequest, input UploadInput) (*mcp.CallToolResult, UploadOutput, error) {
+		out, err := Upload(ctx, req, client, input)
+		if err != nil {
+			return nil, UploadOutput{}, err
+		}
+		return UploadToolResult(out), out, nil
+	})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	progressSeen := make(chan struct{}, 1)
+	var once sync.Once
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "group-upload-test-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, _ *mcp.ProgressNotificationClientRequest) {
+			once.Do(func() { progressSeen <- struct{}{} })
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "group_upload_with_progress",
+		Arguments: map[string]any{
+			"group_id":       "7",
+			"filename":       "notes.txt",
+			"content_base64": base64.StdEncoding.EncodeToString([]byte("progress payload")),
+		},
+		Meta: mcp.Meta{"progressToken": "group-upload-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	select {
+	case <-progressSeen:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress notification")
+	}
+}
 
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
@@ -674,6 +859,16 @@ func TestHandlers_NotFound_CarryTheRouteThatRecovers(t *testing.T) {
 		recovery string
 		call     func(t *testing.T, code int) error
 	}{
+		{
+			name:     "upload",
+			recovery: "group.get",
+			call: func(t *testing.T, code int) error {
+				t.Helper()
+				_, err := Upload(t.Context(), nil, testutil.NewTestClient(t, statusHandler(code)),
+					UploadInput{GroupID: "5", Filename: "notes.txt", ContentBase64: base64.StdEncoding.EncodeToString([]byte("notes"))})
+				return err
+			},
+		},
 		{
 			name:     "list",
 			recovery: "group.get",

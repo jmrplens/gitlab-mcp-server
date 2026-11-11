@@ -6,13 +6,100 @@ package groupmarkdownuploads
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// Upload.
+
+// opGroupUpload is the operation an upload's errors are named by, the
+// individual tool's name as the package's other handlers name theirs.
+const opGroupUpload = "gitlab_group_markdown_upload"
+
+// UploadInput represents input for uploading a file to a group's Markdown
+// attachments store. Exactly one of FilePath or ContentBase64 carries the
+// content.
+type UploadInput struct {
+	GroupID       toolutil.StringOrInt `json:"group_id" jsonschema:"The ID or URL-encoded path of the group,required"`
+	Filename      string               `json:"filename" jsonschema:"Name of the file to upload (e.g. diagram.png),required"`
+	FilePath      string               `json:"file_path,omitempty" jsonschema:"Absolute path to a local file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided."`
+	ContentBase64 string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Only one of file_path or content_base64 should be provided."`
+}
+
+// UploadOutput contains the result of a group upload: the keys
+// API::Entities::GroupUpload sends (id, alt, url, full_path, markdown, at
+// v19.5.0-ee) and the full address built from the full path. They are a
+// project upload's, key for key, so the type is [uploads.UploadOutput]'s
+// field for field and is rendered by its card ([UploadToolResult]).
+type UploadOutput struct {
+	toolutil.HintableOutput
+	ID       int64  `json:"id,omitempty"`
+	Alt      string `json:"alt"`
+	URL      string `json:"url"`
+	FullPath string `json:"full_path"`
+	Markdown string `json:"markdown"`
+	FullURL  string `json:"full_url,omitempty"`
+}
+
+// apiVersionPath is the segment client-go appends to the configured instance
+// URL, which a web address does not start from.
+const apiVersionPath = "api/v4/"
+
+// instanceRootURL returns the address the instance serves its web interface
+// at: the SDK's base URL without the API version path or a trailing slash. A
+// group upload's full_path ("/-/group/<id>/uploads/<secret>/<name>") is a path
+// from that root, as a project upload's is, which is why the uploads package
+// builds its full address the same way.
+func instanceRootURL(client *gitlabclient.Client) string {
+	base := client.GL().BaseURL()
+	base.Path = strings.TrimSuffix(base.Path, apiVersionPath)
+	return strings.TrimRight(base.String(), "/")
+}
+
+// Upload uploads a file to a group's Markdown attachments store through
+// POST /groups/:id/uploads, which GitLab serves from 19.0 and client-go
+// models from v3.42.0, and answers with what GitLab sends and the full
+// address of the file.
+func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input UploadInput) (UploadOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return UploadOutput{}, err
+	}
+	if string(input.GroupID) == "" {
+		return UploadOutput{}, toolutil.ErrRequiredString(opGroupUpload, "group_id")
+	}
+	if input.Filename == "" {
+		return UploadOutput{}, toolutil.ErrRequiredString(opGroupUpload, "filename")
+	}
+	reader, err := toolutil.ReadFileOrBase64(opGroupUpload, input.FilePath, input.ContentBase64)
+	if err != nil {
+		return UploadOutput{}, err
+	}
+	var body io.Reader = reader
+	if tracker := progress.FromRequest(req); tracker.IsActive() {
+		body = toolutil.NewProgressReader(ctx, reader, int64(reader.Len()), tracker)
+	}
+	uploaded, _, err := client.GL().GroupMarkdownUploads.UploadGroupMarkdown(string(input.GroupID), body, input.Filename, gl.WithContext(ctx))
+	if err != nil {
+		return UploadOutput{}, toolutil.WrapErrWithStatusHint(opGroupUpload, err, http.StatusNotFound,
+			"verify group_id with group.get; GitLab serves this route from 19.0, and an older instance answers 404")
+	}
+	return UploadOutput{
+		ID:       uploaded.ID,
+		Alt:      uploaded.Alt,
+		URL:      uploaded.URL,
+		FullPath: uploaded.FullPath,
+		Markdown: uploaded.Markdown,
+		FullURL:  instanceRootURL(client) + uploaded.FullPath,
+	}, nil
+}
 
 // List.
 

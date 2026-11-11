@@ -762,25 +762,30 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 	}
 }
 
-// TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers
+// TestRun_Repository_ReportsTheParamsClientGoV3440CannotSendOrNoInputOffers
 // fixes the cases R-PARAM was built to see on the pinned client-go. It is
 // sensitive to the version on purpose: each bump of client-go changes it, and
 // that change is the evidence the scope was run again.
 //
 // On v3.30.0 the four merge request lists (the global one, the project's, the
 // group's and a deployment's) took source_project_id and the filters GitLab
-// 19.5 added, which no option struct modeled. On the v3.40.3 pin client-go
-// models twelve of them on every list, the deployment filters and environment
-// on the three ListMergeRequestsOptions and ListGroupMergeRequestsOptions
-// serve, in on the project's, and source_project_id on the group's alone, and
+// 19.5 added, which no option struct modeled. From v3.40.3 client-go models
+// twelve of them on every list, the deployment filters and environment on the
+// three ListMergeRequestsOptions and ListGroupMergeRequestsOptions serve, in
+// on the project's, and source_project_id on the group's alone, and
 // source_project_id stays unmodeled on the other three. So does it model a
 // project edit's three duo_* flags (v3.36.0), a registry repository read's
 // size, the service account's external flag, the twenty-one plan limits
 // beside the package file sizes, and the three other list types a group
 // board's list takes (v3.39.0). Each of those, and the project and group
 // hooks' url_variables, which the add and edit options model from v3.38.0, is
-// offered now, and no recorded request carries it until the request inventory
-// is generated again from the tests that send it. Still unmodeled are the
+// offered now, and covered, since the request inventory generated at the
+// v3.44.0 pin records the tests that send it. So are the project lists'
+// topic_id, updated_after and updated_before, which ListProjectsOptions
+// models from v3.44.0, and the application settings'
+// search_rate_limit_allowlist_raw, which UpdateSettingsOptions models from
+// the same release, is answered by the declaration of the settings route's
+// map input. Still unmodeled are the
 // system hooks' url_variables and
 // custom_headers; every issues_statistics route's and the group epic list's
 // not[author_id]; a release read's include_html_description, which
@@ -794,8 +799,10 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // request sends: on the add, whose recorded body carries custom_headers,
 // they are covered only because the walk of AddProjectHookOptions models
 // them, and on the edit, whose recorded body does not, the container stands
-// for them with the struct EditProjectHookOptions modeling it.
-func TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers(t *testing.T) {
+// for them with the struct EditProjectHookOptions modeling it. The add's
+// duo_flow_callback_enabled, which no option struct models, is reported
+// with AddProjectHookOptions as the struct its raw request sends.
+func TestRun_Repository_ReportsTheParamsClientGoV3440CannotSendOrNoInputOffers(t *testing.T) {
 	report := repositoryReport(t)
 	reported := map[string]Finding{}
 	for _, finding := range slices.Concat(report.Findings, report.Declared) {
@@ -807,6 +814,12 @@ func TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers(t
 	for _, tc := range witnessCases() {
 		t.Run(tc.route+" "+tc.param, func(t *testing.T) {
 			finding, found := reported[tc.route+" "+tc.param]
+			if tc.class == witnessCovered {
+				if found {
+					t.Errorf("%s %s = %+v, want it covered by a recorded request", tc.route, tc.param, finding)
+				}
+				return
+			}
 			if !found || finding.Class != tc.class || finding.Category != tc.category {
 				t.Errorf("%s %s = %+v (found %t), want class %s category %q", tc.route, tc.param, finding, found, tc.class, tc.category)
 			}
@@ -929,10 +942,16 @@ func notOfferedOnV3300() (offered, declared []routeParam) {
 }
 
 // witnessCase is one param the witness test expects reported, with its class
-// and, when a declaration answers it, its category.
+// and, when a declaration answers it, its category, or covered.
 type witnessCase struct{ route, param, class, category string }
 
-// witnessCases are the params the witness test expects on v3.40.3.
+// witnessCovered is the class of a witness case the scope reports nothing
+// for: a recorded request carries the param, so it is covered rather than a
+// finding.
+const witnessCovered = "covered"
+
+// witnessCases are the params the witness test expects on v3.44.0, with the
+// request inventory generated at that pin.
 func witnessCases() []witnessCase {
 	type want = witnessCase
 	var cases []want
@@ -962,9 +981,15 @@ func witnessCases() []witnessCase {
 		"POST /groups/:id/boards/:board_id/lists": {"assignee_id", "iteration_id", "milestone_id"},
 	} {
 		for _, param := range params {
-			cases = append(cases, want{route, param, ClassOfferedUnrecorded, ""})
+			cases = append(cases, want{route, param, witnessCovered, ""})
 		}
 	}
+	for _, route := range []string{"GET /projects", "GET /projects/:id/forks", "GET /users/:user_id/projects", "GET /users/:user_id/starred_projects"} {
+		for _, param := range []string{"topic_id", "updated_after", "updated_before"} {
+			cases = append(cases, want{route, param, witnessCovered, ""})
+		}
+	}
+	cases = append(cases, want{"PUT /application/settings", "search_rate_limit_allowlist_raw", ClassNotOffered, categoryMapInput})
 	for _, route := range []string{"GET /merge_requests", "GET /projects/:id/merge_requests", "GET /projects/:id/deployments/:deployment_id/merge_requests"} {
 		cases = append(cases, want{route, "source_project_id", ClassUnmodeled, ""})
 	}
@@ -972,7 +997,7 @@ func witnessCases() []witnessCase {
 		cases = append(cases, want{route, "url_variables", ClassUnmodeled, ""}, want{route, "custom_headers", ClassUnmodeled, ""})
 	}
 	for _, route := range []string{"POST /projects/:id/hooks", "PUT /projects/:id/hooks/:hook_id", "POST /groups/:id/hooks", "PUT /groups/:id/hooks/:hook_id"} {
-		cases = append(cases, want{route, "url_variables", ClassOfferedUnrecorded, ""})
+		cases = append(cases, want{route, "url_variables", witnessCovered, ""})
 	}
 	for _, route := range []string{"GET /issues_statistics", "GET /groups/:id/issues_statistics", "GET /projects/:id/issues_statistics", "GET /groups/:id/epics"} {
 		cases = append(cases, want{route, "not[author_id]", ClassUnmodeled, ""})
@@ -1000,8 +1025,8 @@ func checkProjectHookHeaders(t *testing.T, reported map[string]Finding) {
 	t.Helper()
 	const hookAdd, hookEdit = "POST /projects/:id/hooks", "PUT /projects/:id/hooks/:hook_id"
 	t.Run(hookAdd+" is read through AddProjectHookOptions", func(t *testing.T) {
-		if finding := reported[hookAdd+" url_variables"]; !slices.Contains(finding.OptionTypes, "AddProjectHookOptions") {
-			t.Errorf("%s url_variables option types = %v, want the AddProjectHookOptions the raw request sends", hookAdd, finding.OptionTypes)
+		if finding := reported[hookAdd+" duo_flow_callback_enabled"]; !slices.Contains(finding.OptionTypes, "AddProjectHookOptions") {
+			t.Errorf("%s duo_flow_callback_enabled option types = %v, want the AddProjectHookOptions the raw request sends", hookAdd, finding.OptionTypes)
 		}
 	})
 	for _, param := range []string{"custom_headers", "custom_headers[key]", "custom_headers[value]"} {

@@ -1045,7 +1045,7 @@ var witnessUnpaired = []string{
 	"toolutil.DeploymentApprovalOutput answers_no_struct",
 }
 
-// witnessDeclared is what the witness expects of the captures on v3.40.3:
+// witnessDeclared is what the witness expects of the captures on v3.44.0:
 // each declaration by the type and key it is written on, with its category
 // and how many keys both a capture and the client-go struct beside it read
 // it answers.
@@ -1091,6 +1091,8 @@ var witnessDeclared = map[string]string{
 	"toolutil.ProjectExtra.duo_secret_detection_fp_enabled":                   "kept-for-presence 1",
 	"toolutil.ProjectExtra.only_allow_merge_if_all_status_checks_passed":      "kept-for-presence 1",
 	"users.serviceAccountExtra.external":                                      "kept-for-presence 1",
+	"toolutil.GroupDetailExtra.lock_require_sha_for_merge":                    "kept-for-presence 1",
+	"toolutil.GroupDetailExtra.require_sha_for_merge":                         "kept-for-presence 1",
 	"toolutil.MemberExtra.group_saml_identity":                                "kept-for-sibling-pairing 3",
 	"toolutil.MemberExtra.public_email":                                       "kept-for-sibling-pairing 1",
 	"toolutil.MergeRequestExtra.work_in_progress":                             "kept-for-sibling-pairing 1",
@@ -1102,7 +1104,7 @@ var witnessDeclared = map[string]string{
 	"mrapprovals.enterpriseApprovalCapture.suggested_approvers":               "kept-with-its-object 6",
 }
 
-// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3403 is the
+// TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3440 is the
 // witness on the real tree. A struct a handler decodes off a captured
 // response (ADR-0021) reads keys the client-go struct decoded from the same
 // answer does not model, and nothing asked whether it also reads keys the
@@ -1124,7 +1126,10 @@ var witnessDeclared = map[string]string{
 // switches and assignee, a descendant milestone's project). A group board's
 // weight, which reads the null of no scope as 0 like a project board's, is kept
 // for its null, and a project's external status checks flag, behind a license
-// like the Duo ones, for its presence. A reader that hands back an object from
+// like the Duo ones, for its presence. client-go v3.41 to v3.44 model two
+// more, a group's two SHA settings, which only the detail entity of 19.5 sends
+// and the SDK's plain booleans read as false everywhere else, so both are
+// kept for their presence too. A reader that hands back an object from
 // inside the answer is paired at that object's depth, and every struct a capture
 // is decoded into is paired or has no SDK half. The resource and prompt packages
 // capture too, and their pairings are read where they make them.
@@ -1132,7 +1137,7 @@ var witnessDeclared = map[string]string{
 // It reads the report as plain JSON and spells the status it expects, so
 // copied on its own into a tree that has no such section it compiles and
 // fails there, which is the point.
-func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3403(t *testing.T) {
+func TestRun_Repository_DeclaresEveryKeyACaptureSharesWithClientGoV3440(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)

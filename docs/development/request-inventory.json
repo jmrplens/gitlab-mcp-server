@@ -4650,7 +4650,7 @@
         "sort"
       ],
       "identifiers": {
-        ":group_id": 4
+        ":group_id": 3
       }
     },
     {
@@ -4884,6 +4884,7 @@
       "method": "GET",
       "path": "/registry/repositories/:repository_id",
       "query": [
+        "size",
         "tags",
         "tags_count"
       ],
@@ -5395,18 +5396,33 @@
         "approved_by_usernames",
         "approver_ids[]",
         "assignee_id",
+        "assignee_username[]",
         "author_id",
         "author_username",
         "created_after",
         "created_before",
+        "deployed_after",
+        "deployed_before",
         "draft",
+        "environment",
         "in",
         "labels",
+        "merge_user_id",
+        "merge_user_username",
+        "merged_after",
+        "merged_before",
         "milestone",
         "my_reaction_emoji",
         "non_archived",
+        "not[assignee_id]",
+        "not[assignee_username][]",
+        "not[author_id]",
         "not[author_username]",
         "not[labels]",
+        "not[milestone]",
+        "not[my_reaction_emoji]",
+        "not[reviewer_id]",
+        "not[reviewer_username]",
         "order_by",
         "page",
         "per_page",
@@ -7602,7 +7618,10 @@
       "method": "POST",
       "path": "/groups/:group_id/boards/:board_id/lists",
       "body": [
-        "label_id"
+        "assignee_id",
+        "iteration_id",
+        "label_id",
+        "milestone_id"
       ],
       "identifiers": {
         ":board_id": 1,
@@ -7628,7 +7647,7 @@
       "identifiers": {
         ":board_id": 1,
         ":group_id": 1,
-        ":list_id": 3
+        ":list_id": 2
       }
     },
     {
@@ -7642,7 +7661,7 @@
       "identifiers": {
         ":board_id": 1,
         ":group_id": 1,
-        ":list_id": 2
+        ":list_id": 1
       }
     },
     {
@@ -8058,6 +8077,18 @@
       ],
       "identifiers": {
         ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupmarkdownuploads",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/uploads",
+      "body": [
+        "file"
+      ],
+      "identifiers": {
+        ":group_id": 2
       }
     },
     {
@@ -8853,6 +8884,7 @@
         "tag_push_events",
         "token",
         "url",
+        "url_variables",
         "vulnerability_events",
         "wiki_page_events"
       ],
@@ -8914,6 +8946,7 @@
         "tag_push_events",
         "token",
         "url",
+        "url_variables",
         "vulnerability_events",
         "wiki_page_events"
       ],
@@ -9431,6 +9464,16 @@
       "identifiers": {
         ":group_id": 1,
         ":share_id": 2
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/shared_projects/:shared_project_id",
+      "identifiers": {
+        ":group_id": 2,
+        ":shared_project_id": 1
       }
     },
     {
@@ -9970,7 +10013,7 @@
         "sort"
       ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 2
       }
     },
     {
@@ -9982,7 +10025,7 @@
         "destination_storage_name"
       ],
       "identifiers": {
-        ":group_id": 3
+        ":group_id": 2
       }
     },
     {
@@ -9991,7 +10034,7 @@
       "method": "GET",
       "path": "/groups/:group_id/repository_storage_moves/:repository_storage_move_id",
       "identifiers": {
-        ":group_id": 3,
+        ":group_id": 2,
         ":repository_storage_move_id": 2
       }
     },
@@ -12838,18 +12881,33 @@
         "approved_by_ids[]",
         "approver_ids[]",
         "assignee_id",
+        "assignee_username[]",
         "author_id",
         "author_username",
         "created_after",
         "created_before",
+        "deployed_after",
+        "deployed_before",
         "draft",
+        "environment",
         "in",
         "labels",
+        "merge_user_id",
+        "merge_user_username",
+        "merged_after",
+        "merged_before",
         "milestone",
         "my_reaction_emoji",
         "non_archived",
+        "not[assignee_id]",
+        "not[assignee_username][]",
+        "not[author_id]",
         "not[author_username]",
         "not[labels]",
+        "not[milestone]",
+        "not[my_reaction_emoji]",
+        "not[reviewer_id]",
+        "not[reviewer_username]",
         "order_by",
         "page",
         "per_page",
@@ -12859,6 +12917,7 @@
         "search",
         "sort",
         "source_branch",
+        "source_project_id",
         "state",
         "target_branch",
         "updated_after",
@@ -12881,18 +12940,33 @@
         "approved_by_ids[]",
         "approver_ids[]",
         "assignee_id",
+        "assignee_username[]",
         "author_id",
         "author_username",
         "created_after",
         "created_before",
+        "deployed_after",
+        "deployed_before",
         "draft",
+        "environment",
         "in",
         "labels",
+        "merge_user_id",
+        "merge_user_username",
+        "merged_after",
+        "merged_before",
         "milestone",
         "my_reaction_emoji",
         "non_archived",
+        "not[assignee_id]",
+        "not[assignee_username][]",
+        "not[author_id]",
         "not[author_username]",
         "not[labels]",
+        "not[milestone]",
+        "not[my_reaction_emoji]",
+        "not[reviewer_id]",
+        "not[reviewer_username]",
         "order_by",
         "page",
         "per_page",
@@ -12923,6 +12997,7 @@
         "approved_by_usernames",
         "approver_ids[]",
         "assignee_id",
+        "assignee_username[]",
         "author_id",
         "author_username",
         "created_after",
@@ -12932,12 +13007,24 @@
         "draft",
         "environment",
         "iids[]",
+        "in",
         "labels",
+        "merge_user_id",
+        "merge_user_username",
+        "merged_after",
+        "merged_before",
         "milestone",
         "my_reaction_emoji",
         "non_archived",
+        "not[assignee_id]",
+        "not[assignee_username][]",
+        "not[author_id]",
         "not[author_username]",
         "not[labels]",
+        "not[milestone]",
+        "not[my_reaction_emoji]",
+        "not[reviewer_id]",
+        "not[reviewer_username]",
         "order_by",
         "page",
         "per_page",
@@ -15379,15 +15466,36 @@
       "method": "PUT",
       "path": "/application/plan_limits",
       "body": [
+        "cargo_max_file_size",
+        "ci_active_jobs",
+        "ci_instance_level_variables",
+        "ci_needs_size_limit",
+        "ci_pipeline_schedules",
+        "ci_pipeline_size",
+        "ci_project_subscriptions",
+        "ci_registered_group_runners",
+        "ci_registered_project_runners",
         "conan_max_file_size",
+        "dotenv_size",
+        "dotenv_variables",
+        "enforcement_limit",
         "generic_packages_max_file_size",
         "helm_max_file_size",
         "maven_max_file_size",
+        "max_pipelines_per_merge_train",
+        "notification_limit",
         "npm_max_file_size",
         "nuget_max_file_size",
+        "pipeline_hierarchy_size",
         "plan_name",
         "pypi_max_file_size",
-        "terraform_module_max_file_size"
+        "service_desk_outbound_emails_per_day",
+        "service_desk_outbound_emails_per_hour",
+        "storage_size_limit",
+        "terraform_module_max_file_size",
+        "web_hook_calls",
+        "web_hook_calls_low",
+        "web_hook_calls_mid"
       ]
     },
     {
@@ -15786,6 +15894,9 @@
         "sort",
         "topic",
         "topic[]",
+        "topic_id",
+        "updated_after",
+        "updated_before",
         "with_programming_language"
       ]
     },
@@ -15864,6 +15975,9 @@
         "ci_delete_pipelines_in_seconds",
         "container_expiration_policy_attributes",
         "description",
+        "duo_sast_fp_detection_enabled",
+        "duo_sast_vr_workflow_enabled",
+        "duo_secret_detection_fp_enabled",
         "external_authorization_classification_label",
         "import_url",
         "issue_branch_template",
@@ -16058,6 +16172,9 @@
         "per_page",
         "search",
         "sort",
+        "topic_id",
+        "updated_after",
+        "updated_before",
         "visibility"
       ],
       "identifiers": {
@@ -16125,6 +16242,7 @@
         "tag_push_events",
         "token",
         "url",
+        "url_variables",
         "vulnerability_events",
         "wiki_page_events"
       ],
@@ -16183,6 +16301,7 @@
         "tag_push_events",
         "token",
         "url",
+        "url_variables",
         "vulnerability_events",
         "wiki_page_events"
       ],
@@ -16582,7 +16701,10 @@
         "page_token",
         "pagination",
         "per_page",
-        "sort"
+        "sort",
+        "topic_id",
+        "updated_after",
+        "updated_before"
       ],
       "identifiers": {
         ":user_id": 2
@@ -16599,7 +16721,10 @@
         "page_token",
         "pagination",
         "per_page",
-        "sort"
+        "sort",
+        "topic_id",
+        "updated_after",
+        "updated_before"
       ],
       "identifiers": {
         ":user_id": 2
@@ -17190,10 +17315,6 @@
       "kind": "rest",
       "method": "PATCH",
       "path": "/projects/:project_id/packages/protection/rules/:rule_id",
-      "body": [
-        "package_name_pattern",
-        "package_type"
-      ],
       "identifiers": {
         ":project_id": 1,
         ":rule_id": 1
@@ -19125,7 +19246,7 @@
         "sort"
       ],
       "identifiers": {
-        ":snippet_id": 3
+        ":snippet_id": 2
       }
     },
     {
@@ -19137,7 +19258,7 @@
         "destination_storage_name"
       ],
       "identifiers": {
-        ":snippet_id": 4
+        ":snippet_id": 3
       }
     },
     {
@@ -19147,7 +19268,7 @@
       "path": "/snippets/:snippet_id/repository_storage_moves/:repository_storage_move_id",
       "identifiers": {
         ":repository_storage_move_id": 3,
-        ":snippet_id": 3
+        ":snippet_id": 2
       }
     },
     {
@@ -19458,6 +19579,36 @@
       "package": "internal/tools/terraformstates",
       "kind": "rest",
       "method": "DELETE",
+      "path": "/projects/:project_id/terraform/state/prod.eu/lock",
+      "query": [
+        "ID"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/terraformstates",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/terraform/state/prod.eu/lock",
+      "body": [
+        "Created",
+        "ID",
+        "Info",
+        "Operation",
+        "Path",
+        "Version",
+        "Who"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/terraformstates",
+      "kind": "rest",
+      "method": "DELETE",
       "path": "/projects/:project_id/terraform/state/state1",
       "identifiers": {
         ":project_id": 3
@@ -19468,6 +19619,9 @@
       "kind": "rest",
       "method": "DELETE",
       "path": "/projects/:project_id/terraform/state/state1/lock",
+      "query": [
+        "ID"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -19477,6 +19631,15 @@
       "kind": "rest",
       "method": "POST",
       "path": "/projects/:project_id/terraform/state/state1/lock",
+      "body": [
+        "Created",
+        "ID",
+        "Info",
+        "Operation",
+        "Path",
+        "Version",
+        "Who"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -19900,6 +20063,7 @@
       "path": "/service_accounts",
       "body": [
         "email",
+        "external",
         "name",
         "username"
       ]
@@ -19911,6 +20075,7 @@
       "path": "/service_accounts/:service_account_id",
       "body": [
         "email",
+        "external",
         "name",
         "username"
       ],
@@ -20366,6 +20531,42 @@
       "identifiers": {
         ":user_id": 1
       }
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jane.doe/events"
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jane.doe/keys"
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jane.doe/status"
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jdoe/events"
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jdoe/keys"
+    },
+    {
+      "package": "internal/tools/users",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/users/jdoe/status"
     },
     {
       "package": "internal/tools/vulnerabilities",

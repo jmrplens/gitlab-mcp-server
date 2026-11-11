@@ -186,27 +186,29 @@ const (
 	actionGroupTransferLocations harness.ActionID = "group.transfer_locations"
 )
 
-// A group's archive state, its issues, its avatar, its shared projects,
-// the two transfers, its restore and the two ways of sharing it with
-// another group.
+// A group's archive state, its issues, its avatar, its shared projects and
+// the removal of one, the two transfers, its restore, the two ways of sharing
+// it with another group, and its Markdown uploads.
 const (
-	actionGroupArchive            harness.ActionID = "group.archive"
-	actionGroupUnarchive          harness.ActionID = "group.unarchive"
-	actionGroupIssues             harness.ActionID = "group.issues"
-	actionGroupUploadAvatar       harness.ActionID = "group.upload_avatar"
-	actionGroupSharedProjects     harness.ActionID = "group.shared_projects"
-	actionGroupTransferProject    harness.ActionID = "group.transfer_project"
-	actionGroupTransfer           harness.ActionID = "group.transfer"
-	actionGroupRestore            harness.ActionID = "group.restore"
-	actionGroupShareWithGroup     harness.ActionID = "group.share_with_group"
-	actionGroupUnshareFromGroup   harness.ActionID = "group.unshare_from_group"
-	actionGroupMemberShare        harness.ActionID = "group.group_member_share"
-	actionGroupMemberUnshare      harness.ActionID = "group.group_member_unshare"
-	actionGroupMemberEdit         harness.ActionID = "group.group_member_edit"
-	actionGroupMemberRemove       harness.ActionID = "group.group_member_remove"
-	actionGroupUploadList         harness.ActionID = "group.group_upload_list"
-	actionGroupUploadDeleteByID   harness.ActionID = "group.group_upload_delete_by_id"
-	actionGroupUploadDeleteSecret harness.ActionID = "group.group_upload_delete_by_secret"
+	actionGroupArchive             harness.ActionID = "group.archive"
+	actionGroupUnarchive           harness.ActionID = "group.unarchive"
+	actionGroupIssues              harness.ActionID = "group.issues"
+	actionGroupUploadAvatar        harness.ActionID = "group.upload_avatar"
+	actionGroupSharedProjects      harness.ActionID = "group.shared_projects"
+	actionGroupSharedProjectDelete harness.ActionID = "group.shared_project_delete"
+	actionGroupTransferProject     harness.ActionID = "group.transfer_project"
+	actionGroupTransfer            harness.ActionID = "group.transfer"
+	actionGroupRestore             harness.ActionID = "group.restore"
+	actionGroupShareWithGroup      harness.ActionID = "group.share_with_group"
+	actionGroupUnshareFromGroup    harness.ActionID = "group.unshare_from_group"
+	actionGroupMemberShare         harness.ActionID = "group.group_member_share"
+	actionGroupMemberUnshare       harness.ActionID = "group.group_member_unshare"
+	actionGroupMemberEdit          harness.ActionID = "group.group_member_edit"
+	actionGroupMemberRemove        harness.ActionID = "group.group_member_remove"
+	actionGroupUpload              harness.ActionID = "group.group_upload"
+	actionGroupUploadList          harness.ActionID = "group.group_upload_list"
+	actionGroupUploadDeleteByID    harness.ActionID = "group.group_upload_delete_by_id"
+	actionGroupUploadDeleteSecret  harness.ActionID = "group.group_upload_delete_by_secret"
 )
 
 // A group's export, import and relations export.

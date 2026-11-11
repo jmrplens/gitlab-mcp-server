@@ -16,10 +16,12 @@ import (
 const (
 	groupDomainPrefix = "group."
 
+	actionGroupUpload               = "group_upload"
 	actionGroupUploadList           = "group_upload_list"
 	actionGroupUploadDeleteByID     = "group_upload_delete_by_id"
 	actionGroupUploadDeleteBySecret = "group_upload_delete_by_secret"
 
+	idGroupUpload               = groupDomainPrefix + actionGroupUpload
 	idGroupUploadList           = groupDomainPrefix + actionGroupUploadList
 	idGroupUploadDeleteByID     = groupDomainPrefix + actionGroupUploadDeleteByID
 	idGroupUploadDeleteBySecret = groupDomainPrefix + actionGroupUploadDeleteBySecret
@@ -30,10 +32,15 @@ const (
 // ActionSpecs returns canonical specs for group markdown upload actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		groupUploadCreateSpec(actionGroupUpload, toolutil.RouteActionWithRequest(client, Upload), opGroupUpload,
+			"Use to upload a file into a group's Markdown attachments store (GitLab 19.0 and later) and obtain a Markdown-embeddable reference for a group or epic description.",
+			"Upload a file (via local file_path or base64 content) to a group's Markdown attachments store. Returns: the upload's id, alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_id, gitlab_group_get.",
+			[]string{idGroupUploadList, idGroupUploadDeleteByID, actionGroupGet},
+			[]string{"upload file to group markdown", "attach file to group description", "add markdown image to group", "upload group attachment"}),
 		groupUploadReadSpec(actionGroupUploadList, toolutil.RouteAction(client, List), "gitlab_list_group_markdown_uploads",
 			"Use to enumerate files uploaded into a group's Markdown attachments store.",
-			"List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_delete_group_markdown_upload_by_id, gitlab_delete_group_markdown_upload_by_secret, gitlab_group_get.",
-			[]string{actionGroupGet, idGroupUploadDeleteByID, idGroupUploadDeleteBySecret},
+			"List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_group_markdown_upload, gitlab_delete_group_markdown_upload_by_id, gitlab_delete_group_markdown_upload_by_secret, gitlab_group_get.",
+			[]string{actionGroupGet, idGroupUpload, idGroupUploadDeleteByID, idGroupUploadDeleteBySecret},
 			[]string{"list group markdown uploads", "show a group's uploaded attachments", "enumerate group description attachments", "browse group markdown files"}),
 		groupUploadDeleteSpec(actionGroupUploadDeleteByID, toolutil.DestructiveAction(client, deleteByIDOutput), "gitlab_delete_group_markdown_upload_by_id",
 			"Use to permanently remove a group Markdown upload identified by its numeric upload ID.",
@@ -46,6 +53,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{idGroupUploadList, idGroupUploadDeleteByID, actionGroupGet},
 			[]string{"delete group markdown upload by secret", "remove group attachment by secret and filename", "purge group markdown file by secret"}),
 	}
+}
+
+func groupUploadCreateSpec(name string, route toolutil.ActionRoute, individualTool, usage, description string, related, aliases []string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, groupUploadOptions(individualTool, usage, description, related, aliases))
 }
 
 func groupUploadReadSpec(name string, route toolutil.ActionRoute, individualTool, usage, description string, related, aliases []string) toolutil.ActionSpec {
