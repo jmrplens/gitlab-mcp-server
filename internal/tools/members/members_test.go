@@ -1090,7 +1090,7 @@ func TestMemberEdit_WithExpiresAt(t *testing.T) {
 		ProjectID:   "42",
 		UserID:      10,
 		AccessLevel: 40,
-		ExpiresAt:   "2026-12-31",
+		ExpiresAt:   new("2026-12-31"),
 	})
 	if err != nil {
 		t.Fatalf("Edit() unexpected error: %v", err)
@@ -1177,7 +1177,7 @@ func TestAddAndEdit_ExpiresAtThatIsNotADate_IsRefusedBeforeAnyRequest(t *testing
 			return err
 		},
 		"edit": func() error {
-			_, err := Edit(ctx, client, EditInput{ProjectID: "42", UserID: 7, AccessLevel: 30, ExpiresAt: "not-a-date"})
+			_, err := Edit(ctx, client, EditInput{ProjectID: "42", UserID: 7, AccessLevel: 30, ExpiresAt: new("not-a-date")})
 			return err
 		},
 	}
@@ -1618,7 +1618,7 @@ func TestMemberEdit_SendsOnlyTheOptionsItWasGiven(t *testing.T) {
 		},
 		{
 			name:    "expires_at is carried when set",
-			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, ExpiresAt: "2026-12-31"},
+			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, ExpiresAt: new("2026-12-31")},
 			present: map[string]any{fieldExpiresAt: "2026-12-31"},
 		},
 		{

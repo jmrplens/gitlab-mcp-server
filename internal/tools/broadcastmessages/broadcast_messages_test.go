@@ -632,7 +632,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		Message:            "Updated all",
 		StartsAt:           "2026-06-01T00:00:00Z",
 		EndsAt:             "2026-06-02T00:00:00Z",
-		Font:               "mono",
+		Font:               new("mono"),
 		TargetAccessLevels: []int64{40},
 		TargetPath:         new("/admin"),
 		BroadcastType:      "banner",
@@ -945,13 +945,13 @@ func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
 		Message:            "Updated all",
 		StartsAt:           "2026-06-01T00:00:00Z",
 		EndsAt:             "2026-06-02T00:00:00Z",
-		Font:               "mono",
+		Font:               new("mono"),
 		TargetAccessLevels: []int64{40},
 		TargetPath:         new("/admin"),
 		BroadcastType:      testBannerType,
 		Dismissable:        &dismiss,
 		Theme:              "red",
-		Color:              testColor,
+		Color:              new(testColor),
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1068,11 +1068,11 @@ func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
 			return err
 		}},
 		{name: "update with color", method: http.MethodPut, path: pathBroadcastMessage1, color: testColor, call: func(c *gitlabclient.Client, color string) error {
-			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Color: color})
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Color: &color})
 			return err
 		}},
-		{name: "update without color", method: http.MethodPut, path: pathBroadcastMessage1, call: func(c *gitlabclient.Client, color string) error {
-			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Message: testMessage, Color: color})
+		{name: "update without color", method: http.MethodPut, path: pathBroadcastMessage1, call: func(c *gitlabclient.Client, _ string) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Message: testMessage})
 			return err
 		}},
 	}
@@ -1091,6 +1091,30 @@ func TestBroadcastMessages_Color_SentOnlyWhenGiven(t *testing.T) {
 				t.Errorf("request body %s carries color = %#v (present %v), want %q sent only when given", *body, got, ok, tt.color)
 			}
 		})
+	}
+}
+
+// TestUpdate_EmptyFontAndColor_ReachTheBody holds an empty font and an empty
+// color, given through toolutil.UnmarshalParams as every surface's arguments
+// go, to the body as the empty strings that clear them. Both sat behind a
+// non-empty guard, so the update answered success with the font and color
+// still in place; app/models/system/broadcast_message.rb allows a blank one
+// of each (issue 1306).
+func TestUpdate_EmptyFontAndColor_ReachTheBody(t *testing.T) {
+	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"id": 1, "font": "", "color": ""})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error: %v", err)
+	}
+	client, body := bodyRecordingClient(t, http.MethodPut, pathBroadcastMessage1)
+	if _, err = Update(context.Background(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	var sent map[string]any
+	if err = json.Unmarshal(*body, &sent); err != nil {
+		t.Fatalf("decode request body %q: %v", *body, err)
+	}
+	if len(sent) != 2 || sent["font"] != "" || sent["color"] != "" {
+		t.Errorf("request body = %s, want exactly an empty font and an empty color", *body)
 	}
 }
 

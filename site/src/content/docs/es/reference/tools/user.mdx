@@ -1085,7 +1085,7 @@ Sin parámetros.
 | `location`                | `string`  | no        | New location                                                                              |
 | `name`                    | `string`  | no        | New display name                                                                          |
 | `note`                    | `string`  | no        | New admin note                                                                            |
-| `organization`            | `string`  | no        | New organization                                                                          |
+| `organization`            | `string`  | no        | New organization. Pass an empty string to remove it. Omit the field to leave it untouched |
 | `password`                | `string`  | no        | New password                                                                              |
 | `private_profile`         | `boolean` | no        | Set profile as private                                                                    |
 | `projects_limit`          | `integer` | no        | New maximum projects limit                                                                |
@@ -1254,7 +1254,6 @@ Sin parámetros.
 | `new_issue`                    | `boolean`                                                                      | no        | Notify on new issue                                                         |
 | `new_merge_request`            | `boolean`                                                                      | no        | Notify on new MR                                                            |
 | `new_note`                     | `boolean`                                                                      | no        | Notify on new note                                                          |
-| `notification_email`           | `string`                                                                       | no        | Email address for notifications                                             |
 | `push_to_merge_request`        | `boolean`                                                                      | no        | Notify on push to MR                                                        |
 | `reassign_issue`               | `boolean`                                                                      | no        | Notify on issue reassign                                                    |
 | `reassign_merge_request`       | `boolean`                                                                      | no        | Notify on MR reassign                                                       |
@@ -1303,7 +1302,6 @@ Sin parámetros.
 | `new_issue`                    | `boolean`                                                                      | no        | Notify on new issue                                                         |
 | `new_merge_request`            | `boolean`                                                                      | no        | Notify on new MR                                                            |
 | `new_note`                     | `boolean`                                                                      | no        | Notify on new note                                                          |
-| `notification_email`           | `string`                                                                       | no        | Email address for notifications                                             |
 | `push_to_merge_request`        | `boolean`                                                                      | no        | Notify on push to MR                                                        |
 | `reassign_issue`               | `boolean`                                                                      | no        | Notify on issue reassign                                                    |
 | `reassign_merge_request`       | `boolean`                                                                      | no        | Notify on MR reassign                                                       |

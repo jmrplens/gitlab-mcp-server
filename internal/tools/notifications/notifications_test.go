@@ -350,7 +350,7 @@ func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	tr := true
 	fa := false
 	opts, err := buildUpdateOpts(eventFields{
-		Level: "custom", NotificationEmail: "email@test.com",
+		Level:      "custom",
 		CloseIssue: &tr, CloseMergeRequest: &fa, FailedPipeline: &tr, FixedPipeline: &fa,
 		IssueDue: &tr, MergeMergeRequest: &fa, MergeWhenPipelineSucceeds: &tr, MovedProject: &fa,
 		NewIssue: &fa, NewMergeRequest: &tr, NewNote: &fa,
@@ -366,8 +366,46 @@ func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	if opts.CloseMergeRequest == nil || *opts.CloseMergeRequest != false {
 		t.Error("CloseMergeRequest should be false")
 	}
-	if opts.NotificationEmail == nil || *opts.NotificationEmail != "email@test.com" {
-		t.Error("email should be set")
+	if opts.NotificationEmail != nil {
+		t.Errorf("email = %q, want none: the shared fields carry no notification email", *opts.NotificationEmail)
+	}
+}
+
+// TestUpdate_NotificationEmail_OnlyTheAccountWideSettingsTakeIt verifies the
+// email reaches the account-wide update and that the group and project
+// updates offer no such parameter: PUT /notification_settings declares
+// notification_email and the group and project routes do not, so a caller
+// who set it there changed nothing (issue 1306). The scoped inputs refuse the
+// key as an unknown parameter rather than dropping it.
+func TestUpdate_NotificationEmail_OnlyTheAccountWideSettingsTakeIt(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode the request body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"level":"custom","notification_email":"n@example.com"}`)
+	}))
+	if _, err := UpdateGlobalSettings(context.Background(), client, UpdateGlobalInput{NotificationEmail: "n@example.com"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if body["notification_email"] != "n@example.com" {
+		t.Errorf("account-wide update body = %v, want the notification email", body)
+	}
+	for name, decode := range map[string]func() error{
+		"group": func() error {
+			_, err := toolutil.UnmarshalParams[UpdateGroupInput](map[string]any{"group_id": "1", "notification_email": "n@example.com"})
+			return err
+		},
+		"project": func() error {
+			_, err := toolutil.UnmarshalParams[UpdateProjectInput](map[string]any{"project_id": "1", "notification_email": "n@example.com"})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := decode(); err == nil || !strings.Contains(err.Error(), "notification_email") {
+				t.Errorf("decoding a %s update with notification_email error = %v, want it refused by name", name, err)
+			}
+		})
 	}
 }
 

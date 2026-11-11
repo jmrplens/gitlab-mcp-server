@@ -115,7 +115,7 @@ type AddOutput struct {
 type EditInput struct {
 	ID                     int64   `json:"id"                        jsonschema:"System hook ID to edit,required"`
 	URL                    string  `json:"url,omitempty"             jsonschema:"Updated hook URL"`
-	Name                   string  `json:"name,omitempty"            jsonschema:"Updated hook name"`
+	Name                   *string `json:"name,omitempty"            jsonschema:"Updated hook name. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Description            *string `json:"description,omitempty"     jsonschema:"Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Token                  string  `json:"token,omitempty"           jsonschema:"Updated secret token for payload validation"`
 	SigningToken           string  `json:"signing_token,omitempty"   jsonschema:"Updated write-only signing token for webhook signature validation"`
@@ -243,7 +243,6 @@ func hookOptionsFromAdd(input AddInput) hookOptions {
 func hookOptionsFromEdit(input EditInput) hookOptions {
 	return hookOptions{
 		URL:                    input.URL,
-		Name:                   input.Name,
 		Token:                  input.Token,
 		SigningToken:           input.SigningToken,
 		PushEvents:             input.PushEvents,
@@ -308,7 +307,9 @@ func hookEditOptions(input EditInput) *gl.EditHookOptions {
 	applyHookOptions(hookOptionsFromEdit(input), addOptions)
 	editOptions := gl.EditHookOptions(*addOptions)
 	// The settings an edit can remove go through as given, since an empty one
-	// is the caller removing it (issue 1306).
+	// is the caller removing it (issue 1306): WebHooks::Hook validates a
+	// name's length only, so an empty name is one GitLab stores.
+	editOptions.Name = input.Name
 	editOptions.Description = input.Description
 	editOptions.PushEventsBranchFilter = input.PushEventsBranchFilter
 	editOptions.CustomWebhookTemplate = input.CustomWebhookTemplate

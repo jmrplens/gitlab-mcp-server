@@ -71,8 +71,8 @@ type Output struct {
 type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	TagName     string               `json:"tag_name"              jsonschema:"Tag name of the release,required"`
-	Name        string               `json:"name,omitempty"        jsonschema:"New release title"`
-	Description string               `json:"description,omitempty" jsonschema:"Updated release notes"`
+	Name        *string              `json:"name,omitempty"        jsonschema:"New release title. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	Description *string              `json:"description,omitempty" jsonschema:"Updated release notes. Pass an empty string to remove them. Omit the field to leave them untouched"`
 	ReleasedAt  string               `json:"released_at,omitempty" jsonschema:"New release date in ISO 8601 format"`
 	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release. Pass [] to detach every milestone. Omit the field to leave them untouched"`
 }
@@ -221,15 +221,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("releaseUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
-	opts := &gl.UpdateReleaseOptions{}
+	// client-go writes the title and the notes as null when they are nil
+	// (register row 121), so a field left out is dropped from the body, and
+	// one given, "" included, is sent as given: Release validates their
+	// length only, so an empty title or empty notes are values GitLab
+	// stores (issue 1306).
+	opts := &gl.UpdateReleaseOptions{Name: input.Name}
 	var unset []string
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	} else {
+	if input.Name == nil {
 		unset = append(unset, "name")
 	}
-	if input.Description != "" {
-		opts.Description = new(toolutil.NormalizeText(input.Description))
+	if input.Description != nil {
+		opts.Description = new(toolutil.NormalizeText(*input.Description))
 	} else {
 		unset = append(unset, "description")
 	}

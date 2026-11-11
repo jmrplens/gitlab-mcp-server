@@ -276,14 +276,14 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Package: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#package))
 - **Behavior**: writes, idempotent
 
-| Parameter                         | Type             | Mandatory | Description                                                                                                                       |
-| --------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `project_id`                      | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                    |
-| `rule_id`                         | `integer`        | yes       | Package protection rule ID                                                                                                        |
-| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin)                                                                        |
-| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin)                                                                          |
-| `package_name_pattern`            | `string`         | no        | Package name pattern with optional wildcards                                                                                      |
-| `package_type`                    | `string`         | no        | Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list |
+| Parameter                         | Type             | Mandatory | Description                                                                                                                                                               |
+| --------------------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                      | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                            |
+| `rule_id`                         | `integer`        | yes       | Package protection rule ID                                                                                                                                                |
+| `minimum_access_level_for_delete` | `string`         | no        | Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched |
+| `minimum_access_level_for_push`   | `string`         | no        | Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched   |
+| `package_name_pattern`            | `string`         | no        | Package name pattern with optional wildcards                                                                                                                              |
+| `package_type`                    | `string`         | no        | Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list                                         |
 
 ### `package.publish`
 

@@ -113,7 +113,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	TriggerID   int64                `json:"trigger_id" jsonschema:"Pipeline trigger ID,required"`
-	Description string               `json:"description,omitempty" jsonschema:"New trigger token description"`
+	Description *string              `json:"description,omitempty" jsonschema:"New trigger token description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 }
 
 // DeleteInput contains parameters for deleting a pipeline trigger.
@@ -236,10 +236,9 @@ func UpdateTrigger(ctx context.Context, client *gitlabclient.Client, input Updat
 	if input.TriggerID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("pipeline_trigger_update", toolutil.ErrFieldRequired("trigger_id"))
 	}
-	opts := &gl.EditPipelineTriggerOptions{}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
+	// An empty description is the caller removing it: Ci::Trigger validates
+	// its length only (issue 1306).
+	opts := &gl.EditPipelineTriggerOptions{Description: input.Description}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	t, _, err := client.GL().PipelineTriggers.EditPipelineTrigger(
 		string(input.ProjectID), input.TriggerID, opts, gl.WithContext(ctx),

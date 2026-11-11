@@ -2459,7 +2459,7 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 	out, err := AddHook(context.Background(), client, AddHookInput{
 		GroupID:                  "99",
 		URL:                      "https://hooks.example.com/ci",
-		Name:                     "Full Hook",
+		Name:                     new("Full Hook"),
 		Description:              new("All events"),
 		Token:                    "secret-token",
 		PushEvents:               &bTrue,
@@ -2550,7 +2550,7 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 		GroupID:                  "99",
 		HookID:                   10,
 		URL:                      "https://hooks.example.com/updated",
-		Name:                     "Edited",
+		Name:                     new("Edited"),
 		Description:              new("Updated hook"),
 		Token:                    "new-secret",
 		PushEvents:               &bFalse,
@@ -3385,7 +3385,7 @@ func TestUpdate_AuditFields(t *testing.T) {
 		ShareWithGroupLock:                          new(true),
 		SharedRunnersMinutesLimit:                   new(int64(500)),
 		SharedRunnersSetting:                        "enabled",
-		StepUpAuthRequiredOAuthProvider:             "okta",
+		StepUpAuthRequiredOAuthProvider:             new("okta"),
 		SubGroupCreationLevel:                       "maintainer",
 		TwoFactorGracePeriod:                        new(int64(24)),
 		UniqueProjectDownloadLimit:                  new(int64(5)),
@@ -4527,7 +4527,7 @@ func groupWriteSettings() []groupWriteSetting {
 		{"max_artifacts_size", "max_artifacts_size", float64(128), CreateInput{}, UpdateInput{MaxArtifactsSize: new(int64(128))}},
 		{"ip_restriction_ranges", "ip_restriction_ranges", "192.168.0.0/16", CreateInput{}, UpdateInput{IPRestrictionRanges: "192.168.0.0/16"}},
 		{"allowed_email_domains_list", "allowed_email_domains_list", "acme.example", CreateInput{}, UpdateInput{AllowedEmailDomainsList: "acme.example"}},
-		{"step_up_auth_required_oauth_provider", "step_up_auth_required_oauth_provider", "okta", CreateInput{}, UpdateInput{StepUpAuthRequiredOAuthProvider: "okta"}},
+		{"step_up_auth_required_oauth_provider", "step_up_auth_required_oauth_provider", "okta", CreateInput{}, UpdateInput{StepUpAuthRequiredOAuthProvider: new("okta")}},
 		{"shared_runners_setting", "shared_runners_setting", "disabled_and_overridable", CreateInput{}, UpdateInput{SharedRunnersSetting: "disabled_and_overridable"}},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // localSource is a tool package beside the stand-in client-go, with the
@@ -127,6 +128,7 @@ type tagged struct {
 	gl.Embedded ~json:"embedded"~
 	Labels
 	notStruct
+	secret deeper ~json:"secret"~
 }
 
 type taggedOnly struct {
@@ -139,6 +141,16 @@ type unwritten struct {
 	notStruct ~json:"num"~
 	secret    string ~json:"secret"~
 	Fresh     bool   ~json:"fresh"~
+}
+
+type crossAPI struct {
+	gl.Embedded
+	Raw bool ~json:"raw"~
+}
+
+type crossed struct {
+	gl.Options
+	Nested []*crossAPI ~json:"nested"~
 }
 
 var (
@@ -155,6 +167,7 @@ var (
 	tags      tagged
 	tagOnly   taggedOnly
 	unwrit    unwritten
+	crosses   crossed
 )
 `
 
@@ -162,6 +175,37 @@ var (
 func localPackage(t *testing.T, sdk SDK) *types.Package {
 	t.Helper()
 	return checkSource(t, "local", localSource, map[string]*types.Package{"gitlab": sdk.Types})
+}
+
+// supersetDeadline bounds one SupersetOf call. The walks are over a handful
+// of fields and end in microseconds; one that never ends, because a struct
+// that embeds itself is read again or a level with nothing left is walked
+// once more, fails the test here instead of holding it to the suite's
+// timeout. It is short because the whole package runs in a fraction of a
+// second, so a mutation run gives each mutant a few seconds, and a walk that
+// hangs has to fail inside them to count as caught.
+const supersetDeadline = 2 * time.Second
+
+// supersetWithin returns what SupersetOf answers for carried, failing the
+// test when it does not answer within supersetDeadline.
+func supersetWithin(t *testing.T, sdk SDK, carried types.Type) (Superset, bool) {
+	t.Helper()
+	type answer struct {
+		superset Superset
+		ok       bool
+	}
+	done := make(chan answer, 1)
+	go func() {
+		superset, ok := SupersetOf(sdk, carried)
+		done <- answer{superset, ok}
+	}()
+	select {
+	case got := <-done:
+		return got.superset, got.ok
+	case <-time.After(supersetDeadline):
+		t.Fatalf("SupersetOf(%s) did not answer within %s", carried, supersetDeadline)
+		return Superset{}, false
+	}
 }
 
 // TestSupersetOf_AStructEmbeddingClientGo_NeedsAPredicatePerKeyItCarriesBeside
@@ -181,7 +225,7 @@ func localPackage(t *testing.T, sdk SDK) *types.Package {
 func TestSupersetOf_AStructEmbeddingClientGo_NeedsAPredicatePerKeyItCarriesBeside(t *testing.T) {
 	sdk := standInSDK(t)
 	local := localPackage(t, sdk)
-	got, ok := SupersetOf(sdk, local.Scope().Lookup("widgets").Type())
+	got, ok := supersetWithin(t, sdk, local.Scope().Lookup("widgets").Type())
 	if !ok {
 		t.Fatal("SupersetOf(widgets) found no superset")
 	}
@@ -239,7 +283,7 @@ func TestSupersetOf_ClientGoEmbeddedThroughAStructOfItsOwn_IsTheRoot(t *testing.
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := SupersetOf(sdk, local.Scope().Lookup(tc.name).Type())
+			got, ok := supersetWithin(t, sdk, local.Scope().Lookup(tc.name).Type())
 			if !ok || !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("SupersetOf(%s) = %+v, %v, want %+v", tc.name, got, ok, tc.want)
 			}
@@ -257,7 +301,11 @@ func TestSupersetOf_ClientGoEmbeddedThroughAStructOfItsOwn_IsTheRoot(t *testing.
 // embedded field its tag names, or that holds no struct, is a key of its
 // own, while one tagged "-" or of an unexported type that is no struct is
 // never written, its tag naming it or not, and neither is an unexported
-// field its tag names.
+// field its tag names, even one holding a struct. Below a field client-go
+// models with a struct of its own, a struct of the package's own that embeds
+// another client-go struct in its place does not embed that one, so a key
+// it carries the way that struct does shadows nothing, while a key the
+// struct it embeds carries beside it is still lacked.
 func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 	sdk := standInSDK(t)
 	local := localPackage(t, sdk)
@@ -285,10 +333,14 @@ func TestSupersetOf_TheKeysOfEveryStructItEmbeds_AreItsOwn(t *testing.T) {
 			Type: "local.unwritten", Root: "Inner", Keys: []string{"fresh"},
 			Needs: []string{"LacksKey{Inner, fresh}"},
 		}},
+		{name: "crosses", want: Superset{
+			Type: "local.crossed", Root: "Options", Keys: []string{"nested.page"},
+			Needs: []string{"LacksKey{Options, nested.page}"},
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := SupersetOf(sdk, local.Scope().Lookup(tc.name).Type())
+			got, ok := supersetWithin(t, sdk, local.Scope().Lookup(tc.name).Type())
 			if !ok || !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("SupersetOf(%s) = %+v, %v, want %+v", tc.name, got, ok, tc.want)
 			}
@@ -316,7 +368,7 @@ func TestSupersetOf_WhatIsNoSuperset_ReportsNone(t *testing.T) {
 	}
 	for name, carried := range cases {
 		t.Run(name, func(t *testing.T) {
-			if got, ok := SupersetOf(sdk, carried); ok {
+			if got, ok := supersetWithin(t, sdk, carried); ok {
 				t.Errorf("SupersetOf(%s) = %+v, want none", carried, got)
 			}
 		})

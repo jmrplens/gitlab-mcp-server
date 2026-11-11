@@ -142,7 +142,7 @@ type ModifyInput struct {
 	SkipReconfirmation  *bool   `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
 	Bio                 *string `json:"bio,omitempty" jsonschema:"New bio text. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	Location            string  `json:"location,omitempty" jsonschema:"New location"`
-	Organization        string  `json:"organization,omitempty" jsonschema:"New organization"`
+	Organization        *string `json:"organization,omitempty" jsonschema:"New organization. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	ProjectsLimit       *int64  `json:"projects_limit,omitempty" jsonschema:"New maximum projects limit"`
 	Note                string  `json:"note,omitempty" jsonschema:"New admin note"`
 	PrivateProfile      *bool   `json:"private_profile,omitempty" jsonschema:"Set profile as private"`
@@ -296,11 +296,13 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		Auditor:            input.Auditor,
 		External:           input.External,
 		SkipReconfirmation: input.SkipReconfirmation,
-		// Bio and WebsiteURL go through as given: an empty one is the caller
-		// removing it (issue 1306).
+		// Bio, WebsiteURL and Organization go through as given: an empty one
+		// is the caller removing it (issue 1306), which the users route's own
+		// description of organization says ("Empty string or nil clears the
+		// field").
 		Bio:                 input.Bio,
 		Location:            strPtr(input.Location),
-		Organization:        strPtr(input.Organization),
+		Organization:        input.Organization,
 		ProjectsLimit:       input.ProjectsLimit,
 		Note:                strPtr(input.Note),
 		PrivateProfile:      input.PrivateProfile,

@@ -42,7 +42,6 @@ type GetGroupInput struct {
 // scope's own list rather than this fallback.
 type eventFields struct {
 	Level                     string `json:"level,omitempty" jsonschema:"Notification level, one of the values this action's enum publishes"`
-	NotificationEmail         string `json:"notification_email,omitempty" jsonschema:"Email address for notifications"`
 	CloseIssue                *bool  `json:"close_issue,omitempty" jsonschema:"Notify on issue close"`
 	CloseMergeRequest         *bool  `json:"close_merge_request,omitempty" jsonschema:"Notify on MR close"`
 	FailedPipeline            *bool  `json:"failed_pipeline,omitempty" jsonschema:"Notify on pipeline failure"`
@@ -74,7 +73,13 @@ type epicEvent struct {
 }
 
 // UpdateGlobalInput is the input for updating global notification settings.
+//
+// The notification email is offered here alone: PUT /notification_settings
+// declares it, and the group and project routes declare no
+// notification_email, so a caller who set it there changed nothing (issue
+// 1306). client-go's NotificationSettingsOptions carries it for all three.
 type UpdateGlobalInput struct {
+	NotificationEmail string `json:"notification_email,omitempty" jsonschema:"Email address for notifications"`
 	eventFields
 	epicEvent
 }
@@ -177,6 +182,9 @@ func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, inpu
 		return Output{}, err
 	}
 	opts.NewEpic = input.NewEpic
+	if input.NotificationEmail != "" {
+		opts.NotificationEmail = &input.NotificationEmail
+	}
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_update", err, http.StatusBadRequest,
@@ -290,9 +298,6 @@ func buildUpdateOpts(e eventFields, levels []string) (*gl.NotificationSettingsOp
 			return nil, toolutil.ErrInvalidEnum("level", e.Level, levels)
 		}
 		opts.Level = &lv
-	}
-	if e.NotificationEmail != "" {
-		opts.NotificationEmail = &e.NotificationEmail
 	}
 	opts.CloseIssue = e.CloseIssue
 	opts.CloseMergeRequest = e.CloseMergeRequest

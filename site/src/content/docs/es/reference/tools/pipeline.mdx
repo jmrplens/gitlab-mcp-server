@@ -632,11 +632,11 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Trigger: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#pipeline))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro     | Tipo             | Requerido | Descripción                   |
-| ------------- | ---------------- | --------- | ----------------------------- |
-| `project_id`  | `string/integer` | sí        | Project ID or path            |
-| `trigger_id`  | `integer`        | sí        | Pipeline trigger ID           |
-| `description` | `string`         | no        | New trigger token description |
+| Parámetro     | Tipo             | Requerido | Descripción                                                                                            |
+| ------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `project_id`  | `string/integer` | sí        | Project ID or path                                                                                     |
+| `trigger_id`  | `integer`        | sí        | Pipeline trigger ID                                                                                    |
+| `description` | `string`         | no        | New trigger token description. Pass an empty string to remove it. Omit the field to leave it untouched |
 
 ### `pipeline.update_metadata`
 

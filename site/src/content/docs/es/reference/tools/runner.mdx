@@ -665,18 +665,18 @@ Sin parámetros.
 - **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro          | Tipo       | Requerido | Descripción                                            |
-| ------------------ | ---------- | --------- | ------------------------------------------------------ |
-| `runner_id`        | `integer`  | sí        | Runner ID                                              |
-| `access_level`     | `string`   | no        | Access level: not_protected, ref_protected             |
-| `active`           | `boolean`  | no        | Deprecated: runner active state. Prefer paused instead |
-| `description`      | `string`   | no        | Runner description                                     |
-| `locked`           | `boolean`  | no        | Whether runner is locked to current project            |
-| `maintenance_note` | `string`   | no        | Maintenance note for the runner                        |
-| `maximum_timeout`  | `integer`  | no        | Maximum job timeout in seconds                         |
-| `paused`           | `boolean`  | no        | Pause/unpause the runner                               |
-| `run_untagged`     | `boolean`  | no        | Whether to run untagged jobs                           |
-| `tag_list`         | `string[]` | no        | List of runner tags                                    |
+| Parámetro          | Tipo       | Requerido | Descripción                                                                                              |
+| ------------------ | ---------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| `runner_id`        | `integer`  | sí        | Runner ID                                                                                                |
+| `access_level`     | `string`   | no        | Access level: not_protected, ref_protected                                                               |
+| `active`           | `boolean`  | no        | Deprecated: runner active state. Prefer paused instead                                                   |
+| `description`      | `string`   | no        | Runner description. Pass an empty string to remove it. Omit the field to leave it untouched              |
+| `locked`           | `boolean`  | no        | Whether runner is locked to current project                                                              |
+| `maintenance_note` | `string`   | no        | Maintenance note for the runner. Pass an empty string to remove it. Omit the field to leave it untouched |
+| `maximum_timeout`  | `integer`  | no        | Maximum job timeout in seconds                                                                           |
+| `paused`           | `boolean`  | no        | Pause/unpause the runner                                                                                 |
+| `run_untagged`     | `boolean`  | no        | Whether to run untagged jobs                                                                             |
+| `tag_list`         | `string[]` | no        | List of runner tags                                                                                      |
 
 ### `runner.verify`
 

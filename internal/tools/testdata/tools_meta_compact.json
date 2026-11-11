@@ -1773,7 +1773,10 @@
           "additionalProperties": true,
           "properties": {
             "description": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "email_header_and_footer_enabled": {
               "type": [
@@ -1785,52 +1788,85 @@
               "type": "string"
             },
             "footer_message": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "header_logo": {
               "type": "string"
             },
             "header_message": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "logo": {
               "type": "string"
             },
             "member_guidelines": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "message_background_color": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "message_font_color": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "new_project_guidelines": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "profile_image_guidelines": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "pwa_description": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "pwa_icon": {
               "type": "string"
             },
             "pwa_name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "pwa_short_name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "site_name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "title": {
-              "type": "string"
-            },
-            "url": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             }
           },
           "type": "object"
@@ -2011,7 +2047,10 @@
               "type": "string"
             },
             "color": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "dismissable": {
               "type": [
@@ -2023,7 +2062,10 @@
               "type": "string"
             },
             "font": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "id": {
               "type": "integer"
@@ -3207,7 +3249,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "push_events": {
               "type": [
@@ -10117,7 +10162,10 @@
               "type": "integer"
             },
             "expires_at": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "group_id": {
               "type": [
@@ -10733,7 +10781,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "note_events": {
               "type": [
@@ -10984,7 +11035,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "note_events": {
               "type": [
@@ -13516,7 +13570,10 @@
               "type": "string"
             },
             "step_up_auth_required_oauth_provider": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "subgroup_creation_level": {
               "enum": [
@@ -25028,10 +25085,16 @@
           "additionalProperties": true,
           "properties": {
             "minimum_access_level_for_delete": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "minimum_access_level_for_push": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "package_name_pattern": {
               "type": "string"
@@ -26497,7 +26560,10 @@
           "additionalProperties": true,
           "properties": {
             "description": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "project_id": {
               "type": [
@@ -28443,7 +28509,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "note_events": {
               "type": [
@@ -28677,7 +28746,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "note_events": {
               "type": [
@@ -30629,7 +30701,10 @@
               "type": "integer"
             },
             "expires_at": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "member_role_id": {
               "type": [
@@ -33465,7 +33540,10 @@
           "additionalProperties": true,
           "properties": {
             "description": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "milestones": {
               "type": [
@@ -33474,7 +33552,10 @@
               ]
             },
             "name": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "project_id": {
               "type": [
@@ -35636,7 +35717,10 @@
               ]
             },
             "description": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "locked": {
               "type": [
@@ -35645,7 +35729,10 @@
               ]
             },
             "maintenance_note": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "maximum_timeout": {
               "type": [
@@ -40209,7 +40296,10 @@
               "type": "string"
             },
             "organization": {
-              "type": "string"
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "password": {
               "type": "string"
@@ -40565,9 +40655,6 @@
                 "boolean"
               ]
             },
-            "notification_email": {
-              "type": "string"
-            },
             "push_to_merge_request": {
               "type": [
                 "null",
@@ -40698,9 +40785,6 @@
                 "null",
                 "boolean"
               ]
-            },
-            "notification_email": {
-              "type": "string"
             },
             "project_id": {
               "type": [

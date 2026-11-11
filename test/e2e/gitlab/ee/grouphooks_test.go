@@ -67,7 +67,8 @@ func urlVariableKeys(hook groups.HookOutput) []string {
 // TestGroupHooks_Lifecycle_AddListGetEditDelete walks one hook per surface
 // through its whole life in a shared group, and checks the event flags of a
 // group hook round-trip through an edit and a read: the emoji, access
-// token and project events, and the branch filter with its strategy.
+// token and project events, and the branch filter with its strategy. The
+// hook is added with a name, which an edit sending it empty removes.
 //
 // Replaces: TestEE_MetaGroupEnterpriseOperations
 func TestGroupHooks_Lifecycle_AddListGetEditDelete(t *testing.T) {
@@ -79,9 +80,11 @@ func TestGroupHooks_Lifecycle_AddListGetEditDelete(t *testing.T) {
 		s := e.On(surface)
 		params := map[string]any{"group_id": group.IDParam()}
 
-		added := harness.Do[groups.HookOutput](s, actionGroupHookAdd, withParams(params, map[string]any{"url": hookInitialURL, "push_events": true}))
-		if added.ID == 0 || added.URL != hookInitialURL {
-			e.T.Fatalf("hook_add answered %+v, want a hook on %s with an ID", added, hookInitialURL)
+		added := harness.Do[groups.HookOutput](s, actionGroupHookAdd, withParams(params, map[string]any{
+			"url": hookInitialURL, "push_events": true, "name": e.Name("grouphook"),
+		}))
+		if added.ID == 0 || added.URL != hookInitialURL || added.Name == "" {
+			e.T.Fatalf("hook_add answered %+v, want a named hook on %s with an ID", added, hookInitialURL)
 		}
 		hook := withParams(params, map[string]any{"hook_id": added.ID})
 
@@ -107,6 +110,13 @@ func TestGroupHooks_Lifecycle_AddListGetEditDelete(t *testing.T) {
 		// The read is what proves the flags were stored rather than echoed.
 		reread := harness.Do[groups.HookOutput](s, actionGroupHookGet, hook)
 		assertGroupHookFlags(e, "hook_get after the edit", reread)
+
+		// An empty name removes it, which used to be dropped as unset (issue
+		// 1306): a hook's name is only held to a length.
+		unnamed := harness.Do[groups.HookOutput](s, actionGroupHookEdit, withParams(hook, map[string]any{"name": ""}))
+		if renamed := harness.Do[groups.HookOutput](s, actionGroupHookGet, hook); unnamed.Name != "" || renamed.Name != "" {
+			e.T.Errorf("after the removal the hook edit answered name %q and the read %q, want none", unnamed.Name, renamed.Name)
+		}
 
 		harness.DoVoid(s, actionGroupHookDelete, hook)
 		after := harness.Do[groups.HookListOutput](s, actionGroupHookList, params)

@@ -162,15 +162,21 @@ var upstreamWaits = []Entry{
 	},
 	{
 		Row: 122, Category: CategoryUpstream,
-		Sites:      []string{"members.Edit"},
-		Predicates: []Predicate{NotNullable{Type: "EditProjectMemberOptions", Field: "MemberRoleID"}},
-		Reason:     "EditProjectMemberOptions tags member_role_id omitempty, so the project member edit writes the null that removes the custom role into the body",
+		Sites: []string{"members.Edit"},
+		Predicates: []Predicate{
+			NotNullable{Type: "EditProjectMemberOptions", Field: "MemberRoleID"},
+			NotNullable{Type: "EditProjectMemberOptions", Field: "ExpiresAt"},
+		},
+		Reason: "EditProjectMemberOptions tags member_role_id and expires_at omitempty, so the project member edit writes the null that removes the custom role or the expiry into the body",
 	},
 	{
 		Row: 122, Category: CategoryUpstream,
-		Sites:      []string{"groupmembers.EditMember"},
-		Predicates: []Predicate{NotNullable{Type: "EditGroupMemberOptions", Field: "MemberRoleID"}},
-		Reason:     "EditGroupMemberOptions tags member_role_id omitempty, so the group member edit writes the null that removes the custom role into the body",
+		Sites: []string{"groupmembers.EditMember"},
+		Predicates: []Predicate{
+			NotNullable{Type: "EditGroupMemberOptions", Field: "MemberRoleID"},
+			NotNullable{Type: "EditGroupMemberOptions", Field: "ExpiresAt"},
+		},
+		Reason: "EditGroupMemberOptions tags member_role_id and expires_at omitempty, so the group member edit writes the null that removes the custom role or the expiry into the body",
 	},
 	{
 		Row: 122, Category: CategoryUpstream,

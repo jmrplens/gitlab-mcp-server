@@ -111,10 +111,12 @@ func (s SDK) embeddedLevel(level []*types.Struct, seen map[*types.Struct]bool) (
 			if !field.promoted() {
 				continue
 			}
+			// A promoted field holds a struct, so one client-go does not
+			// declare is the package's own.
 			if named := s.clientGoStruct(field.v.Type()); named != nil {
 				found = append(found, named)
-			} else if inner := s.localStruct(field.v.Type()); inner != nil {
-				next = append(next, inner)
+			} else {
+				next = append(next, s.localStruct(field.v.Type()))
 			}
 		}
 	}
@@ -149,9 +151,11 @@ type embeddedWalk struct {
 
 // collectEmbeddedNeeds is collectNeeds for local and the structs it embeds,
 // shadowing saying whether a key carried the way sdkNamed carries it
-// shadows sdkNamed's.
+// shadows sdkNamed's. Every caller hands it a struct: the one a superset
+// embeds its root in, one a key holds beside client-go's, or one a promoted
+// field holds.
 func (s SDK) collectEmbeddedNeeds(local *types.Struct, shadowing bool, walk embeddedWalk) {
-	if local == nil || walk.walked[local] {
+	if walk.walked[local] {
 		return
 	}
 	walk.walked[local] = true
@@ -256,13 +260,13 @@ func (f structField) promoted() bool {
 
 // keyed reports whether encoding/json writes field under a key of its own,
 // when it is not promoted: an exported field, and an embedded struct of an
-// unexported type that its tag names.
+// unexported type, which, not being promoted, its tag names.
 func (f structField) keyed() bool {
 	if f.v.Exported() {
 		return true
 	}
 	_, isStruct := structOf(f.v.Type())
-	return f.v.Embedded() && isStruct && f.tagName() != ""
+	return f.v.Embedded() && isStruct
 }
 
 // tagName returns the name field's JSON tag gives it, empty for none.

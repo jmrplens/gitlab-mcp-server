@@ -20,9 +20,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,712 |
-| Unit test functions                                   | 21,958 |
-| E2E test functions                                    |  1,754 |
+| Total test functions                                  | 23,727 |
+| Unit test functions                                   | 21,962 |
+| E2E test functions                                    |  1,765 |
 | cmd test functions                                    |  5,890 |
 | Test files (internal/)                                |    761 |
 | Test files (cmd/)                                     |    480 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,745 | 58.0% |
+| `TestFunc_Scenario` (2-part)           | 13,745 | 57.9% |
 | `TestFunc` (no underscore)             |    899 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,068 | 38.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,083 | 38.3% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,269 |        264 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,346 |        480 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,754 |        450 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (181) |         11,350 |        480 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,765 |        450 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          5,890 |        480 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,712** |  **1,691** |                                                                                                 |
+| **Total**               |     **23,727** |  **1,691** |                                                                                                 |
 
 ### Core Packages
 
@@ -152,7 +152,7 @@
 | boards                  |         84 |          2 |   100.0% |        10 |
 | branches                |        114 |          1 |   100.0% |        10 |
 | branchrules             |         35 |          1 |   100.0% |         1 |
-| broadcastmessages       |         38 |          1 |   100.0% |         5 |
+| broadcastmessages       |         39 |          1 |   100.0% |         5 |
 | bulkimports             |         27 |          1 |   100.0% |         7 |
 | cicatalog               |         49 |          3 |   100.0% |         2 |
 | cilint                  |         33 |          1 |   100.0% |         2 |
@@ -253,7 +253,7 @@
 | mrdraftnotes            |         98 |          3 |   100.0% |         7 |
 | mrnotes                 |         51 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
-| notifications           |         40 |          2 |   100.0% |         6 |
+| notifications           |         41 |          2 |   100.0% |         6 |
 | orbit                   |         91 |          5 |   100.0% |         6 |
 | packages                |        179 |          6 |   100.0% |        10 |
 | pages                   |         66 |          2 |   100.0% |         9 |
@@ -273,7 +273,7 @@
 | projecttemplates        |         27 |          1 |   100.0% |         2 |
 | protectedenvdata        |          5 |          2 |   100.0% |         0 |
 | protectedenvs           |         55 |          2 |   100.0% |         5 |
-| protectedpackages       |         44 |          2 |   100.0% |         4 |
+| protectedpackages       |         45 |          2 |   100.0% |         4 |
 | releaselinks            |         72 |          2 |   100.0% |         6 |
 | releases                |         87 |          2 |   100.0% |         6 |
 | repository              |         92 |          2 |   100.0% |         9 |
@@ -298,7 +298,7 @@
 | snippets                |        118 |          3 |   100.0% |        15 |
 | snippetstoragemoves     |         47 |          2 |   100.0% |         6 |
 | surfaces                |         21 |          1 |   100.0% |         0 |
-| systemhooks             |         48 |          2 |   100.0% |         8 |
+| systemhooks             |         49 |          2 |   100.0% |         8 |
 | tags                    |         84 |          2 |   100.0% |         9 |
 | terraformstates         |         51 |          1 |   100.0% |         6 |
 | todos                   |         51 |          4 |   100.0% |         3 |
@@ -314,7 +314,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        142 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,346** |    **480** |          | **1,198** |
+| **Total**               | **11,350** |    **480** |          | **1,198** |
 
 </details>
 

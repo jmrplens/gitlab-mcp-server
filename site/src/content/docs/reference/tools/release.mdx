@@ -269,7 +269,7 @@ Also needs at least one of: `name`; `url`.
 | ------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `project_id`  | `string/integer` | yes       | Project ID or URL-encoded path                                                                                              |
 | `tag_name`    | `string`         | yes       | Tag name of the release                                                                                                     |
-| `description` | `string`         | no        | Updated release notes                                                                                                       |
+| `description` | `string`         | no        | Updated release notes. Pass an empty string to remove them. Omit the field to leave them untouched                          |
 | `milestones`  | `string[]`       | no        | Milestone titles to associate with the release. Pass \[\] to detach every milestone. Omit the field to leave them untouched |
-| `name`        | `string`         | no        | New release title                                                                                                           |
+| `name`        | `string`         | no        | New release title. Pass an empty string to remove it. Omit the field to leave it untouched                                  |
 | `released_at` | `string`         | no        | New release date in ISO 8601 format                                                                                         |

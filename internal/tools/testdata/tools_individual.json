@@ -31260,8 +31260,11 @@
           ]
         },
         "name": {
-          "description": "Updated hook name",
-          "type": "string"
+          "description": "Updated hook name. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "push_events": {
           "description": "Trigger on push events",
@@ -61156,8 +61159,11 @@
           ]
         },
         "name": {
-          "description": "Hook name",
-          "type": "string"
+          "description": "Hook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "note_events": {
           "description": "Trigger on comment events",
@@ -61822,8 +61828,11 @@
           ]
         },
         "name": {
-          "description": "Hook name",
-          "type": "string"
+          "description": "Hook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "note_events": {
           "description": "Trigger on comment events",
@@ -66549,9 +66558,11 @@
           "type": "integer"
         },
         "expires_at": {
-          "description": "New membership expiration date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "New membership expiration date (YYYY-MM-DD). Pass an empty string to remove the expiration, so the membership never expires. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
@@ -79387,8 +79398,11 @@
           "type": "string"
         },
         "step_up_auth_required_oauth_provider": {
-          "description": "OAuth provider required for step-up authentication",
-          "type": "string"
+          "description": "OAuth provider required for step-up authentication. Pass an empty string to turn step-up authentication off. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "subgroup_creation_level": {
           "description": "Who can create subgroups (owner, maintainer)",
@@ -132756,8 +132770,11 @@
           "type": "string"
         },
         "organization": {
-          "description": "New organization",
-          "type": "string"
+          "description": "New organization. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "password": {
           "description": "New password",
@@ -162055,10 +162072,6 @@
             "boolean"
           ]
         },
-        "notification_email": {
-          "description": "Email address for notifications",
-          "type": "string"
-        },
         "push_to_merge_request": {
           "description": "Notify on push to MR",
           "type": [
@@ -162448,10 +162461,6 @@
             "null",
             "boolean"
           ]
-        },
-        "notification_email": {
-          "description": "Email address for notifications",
-          "type": "string"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -171482,8 +171491,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "New trigger token description",
-          "type": "string"
+          "description": "New trigger token description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "project_id": {
           "description": "Project ID or path",
@@ -183846,8 +183858,11 @@
           ]
         },
         "name": {
-          "description": "Webhook name",
-          "type": "string"
+          "description": "Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "note_events": {
           "description": "Trigger on note/comment events",
@@ -184487,8 +184502,11 @@
           ]
         },
         "name": {
-          "description": "Webhook name",
-          "type": "string"
+          "description": "Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "note_events": {
           "description": "Trigger on note/comment events",
@@ -194629,9 +194647,11 @@
           "type": "integer"
         },
         "expires_at": {
-          "description": "Membership expiration date (YYYY-MM-DD)",
-          "format": "date",
-          "type": "string"
+          "description": "Membership expiration date (YYYY-MM-DD). Pass an empty string to remove the expiration, so the membership never expires. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "member_role_id": {
           "description": "Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched",
@@ -213824,8 +213844,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Updated release notes",
-          "type": "string"
+          "description": "Updated release notes. Pass an empty string to remove them. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "milestones": {
           "description": "Milestone titles to associate with the release. Pass [] to detach every milestone. Omit the field to leave them untouched",
@@ -213838,8 +213861,11 @@
           ]
         },
         "name": {
-          "description": "New release title",
-          "type": "string"
+          "description": "New release title. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -222604,8 +222630,11 @@
           ]
         },
         "description": {
-          "description": "Runner description",
-          "type": "string"
+          "description": "Runner description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "locked": {
           "description": "Whether runner is locked to current project",
@@ -222615,8 +222644,11 @@
           ]
         },
         "maintenance_note": {
-          "description": "Maintenance note for the runner",
-          "type": "string"
+          "description": "Maintenance note for the runner. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "maximum_timeout": {
           "description": "Maximum job timeout in seconds",
@@ -235509,8 +235541,11 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "description": "Instance description on sign-in page",
-          "type": "string"
+          "description": "Instance description on sign-in page. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "email_header_and_footer_enabled": {
           "description": "Enable header and footer in emails",
@@ -235524,69 +235559,100 @@
           "type": "string"
         },
         "footer_message": {
-          "description": "Message in footer bar",
-          "type": "string"
+          "description": "Message in footer bar. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "header_logo": {
           "description": "Path to the header logo image asset",
           "type": "string"
         },
         "header_message": {
-          "description": "Message in header bar",
-          "type": "string"
+          "description": "Message in header bar. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "logo": {
           "description": "Path to the instance logo image asset",
           "type": "string"
         },
         "member_guidelines": {
-          "description": "Markdown guidelines for adding members",
-          "type": "string"
+          "description": "Markdown guidelines for adding members. Pass an empty string to remove them. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "message_background_color": {
-          "description": "Background color for header/footer messages (hex)",
-          "type": "string"
+          "description": "Background color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "message_font_color": {
-          "description": "Font color for header/footer messages (hex)",
-          "type": "string"
+          "description": "Font color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "new_project_guidelines": {
-          "description": "Markdown guidelines for new projects",
-          "type": "string"
+          "description": "Markdown guidelines for new projects. Pass an empty string to remove them. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "profile_image_guidelines": {
-          "description": "Markdown guidelines for profile images",
-          "type": "string"
+          "description": "Markdown guidelines for profile images. Pass an empty string to remove them. Omit the field to leave them untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "pwa_description": {
-          "description": "PWA description",
-          "type": "string"
+          "description": "PWA description. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "pwa_icon": {
           "description": "Path to the PWA icon image asset",
           "type": "string"
         },
         "pwa_name": {
-          "description": "Progressive Web App name",
-          "type": "string"
+          "description": "Progressive Web App name. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "pwa_short_name": {
-          "description": "PWA short name",
-          "type": "string"
+          "description": "PWA short name. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "site_name": {
-          "description": "Site name GitLab appends after the page title in the browser tab",
-          "type": "string"
+          "description": "Site name GitLab appends after the page title in the browser tab. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "title": {
-          "description": "Application title displayed in the header",
-          "type": "string"
-        },
-        "url": {
-          "description": "Redirect URL for the system header/footer logo image",
-          "format": "uri",
-          "type": "string"
+          "description": "Application title displayed in the header. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         }
       },
       "type": "object"
@@ -235695,8 +235761,11 @@
           "type": "string"
         },
         "color": {
-          "description": "Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it",
-          "type": "string"
+          "description": "Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "dismissable": {
           "description": "Whether message can be dismissed",
@@ -235710,8 +235779,11 @@
           "type": "string"
         },
         "font": {
-          "description": "Font for the message",
-          "type": "string"
+          "description": "Font for the message. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "id": {
           "description": "Broadcast message ID",
@@ -237260,12 +237332,18 @@
       "additionalProperties": false,
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level for delete (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level for push (maintainer, owner, admin)",
-          "type": "string"
+          "description": "Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched",
+          "type": [
+            "null",
+            "string"
+          ]
         },
         "package_name_pattern": {
           "description": "Package name pattern with optional wildcards",

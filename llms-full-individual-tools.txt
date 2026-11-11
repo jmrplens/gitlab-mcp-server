@@ -2841,7 +2841,7 @@ Edit an instance system hook, including event triggers, SSL verification, and UR
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
 - `id` (integer) (required): System hook ID to edit
 - `merge_requests_events` (boolean): Trigger on merge request events
-- `name` (string): Updated hook name
+- `name` (string): Updated hook name. Pass an empty string to remove it. Omit the field to leave it untouched
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (wildcard, regex, or branch name). Pass an empty string to remove it. Omit the field to leave it untouched
 - `repository_update_events` (boolean): Trigger on repository update events
@@ -4887,7 +4887,7 @@ Create a webhook on a GitLab group. Returns: the created hook with URL, enabled 
 - `member_events` (boolean): Trigger on member events
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `milestone_events` (boolean): Trigger on milestone events
-- `name` (string): Hook name
+- `name` (string): Hook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `project_events` (boolean): Trigger on project events (group-level)
@@ -4967,7 +4967,7 @@ Update a GitLab group webhook. Returns: the updated hook with URL, enabled event
 - `member_events` (boolean): Trigger on member events
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `milestone_events` (boolean): Trigger on milestone events
-- `name` (string): Hook name
+- `name` (string): Hook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `project_events` (boolean): Trigger on project events (group-level)
@@ -5349,7 +5349,7 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 **Parameters:**
 
 - `access_level` (integer) (required): New access level (5=Minimal access (only on a top-level group with a Premium or Ultimate license), 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A group grants no other level
-- `expires_at` (string): New membership expiration date (YYYY-MM-DD)
+- `expires_at` (string): New membership expiration date (YYYY-MM-DD). Pass an empty string to remove the expiration, so the membership never expires. Omit the field to leave it untouched
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. The role's base access level must match access_level. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
 - `user_id` (integer) (required): User ID
@@ -6134,7 +6134,7 @@ Update a GitLab group's settings. Returns: the updated group metadata. See also:
 - `share_with_group_lock` (boolean): Prevent sharing projects in this group with other groups
 - `shared_runners_minutes_limit` (integer): Shared runner compute-minutes limit (administrators only)
 - `shared_runners_setting` (string): Shared runners setting (enabled, disabled_and_overridable, disabled_and_unoverridable)
-- `step_up_auth_required_oauth_provider` (string): OAuth provider required for step-up authentication
+- `step_up_auth_required_oauth_provider` (string): OAuth provider required for step-up authentication. Pass an empty string to turn step-up authentication off. Omit the field to leave it untouched
 - `subgroup_creation_level` (string): Who can create subgroups (owner, maintainer)
 - `two_factor_grace_period` (integer): Grace period in hours before two-factor authentication is enforced
 - `unique_project_download_limit` (integer): Max number of unique projects a user can download before being banned (Ultimate)
@@ -9022,7 +9022,7 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `location` (string): New location
 - `name` (string): New display name
 - `note` (string): New admin note
-- `organization` (string): New organization
+- `organization` (string): New organization. Pass an empty string to remove it. Omit the field to leave it untouched
 - `password` (string): New password
 - `private_profile` (boolean): Set profile as private
 - `projects_limit` (integer): New maximum projects limit
@@ -10317,7 +10317,6 @@ Update the authenticated user's notification settings for a group. Returns: the 
 - `new_issue` (boolean): Notify on new issue
 - `new_merge_request` (boolean): Notify on new MR
 - `new_note` (boolean): Notify on new note
-- `notification_email` (string): Email address for notifications
 - `push_to_merge_request` (boolean): Notify on push to MR
 - `reassign_issue` (boolean): Notify on issue reassign
 - `reassign_merge_request` (boolean): Notify on MR reassign
@@ -10355,7 +10354,6 @@ Update the authenticated user's notification settings for a project. Returns: th
 - `new_issue` (boolean): Notify on new issue
 - `new_merge_request` (boolean): Notify on new MR
 - `new_note` (boolean): Notify on new note
-- `notification_email` (string): Email address for notifications
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `push_to_merge_request` (boolean): Notify on push to MR
 - `reassign_issue` (boolean): Notify on issue reassign
@@ -11132,7 +11130,7 @@ Update a pipeline trigger token's description. Returns: the updated trigger with
 
 **Parameters:**
 
-- `description` (string): New trigger token description
+- `description` (string): New trigger token description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or path
 - `trigger_id` (integer) (required): Pipeline trigger ID
 
@@ -11809,7 +11807,7 @@ Add a webhook to a project. Returns: the created webhook with id, URL, and enabl
 - `job_events` (boolean): Trigger on CI job events
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `milestone_events` (boolean): Trigger on milestone events
-- `name` (string): Webhook name
+- `name` (string): Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `note_events` (boolean): Trigger on note/comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -11887,7 +11885,7 @@ Edit a project webhook. Returns: the updated webhook with URL and enabled events
 - `job_events` (boolean): Trigger on CI job events
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `milestone_events` (boolean): Trigger on milestone events
-- `name` (string): Webhook name
+- `name` (string): Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `note_events` (boolean): Trigger on note/comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -12339,7 +12337,7 @@ Edit a project member's access level, expiry, or custom member role. Returns: th
 **Parameters:**
 
 - `access_level` (integer) (required): New access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). A project grants no other level
-- `expires_at` (string): Membership expiration date (YYYY-MM-DD)
+- `expires_at` (string): Membership expiration date (YYYY-MM-DD). Pass an empty string to remove the expiration, so the membership never expires. Omit the field to leave it untouched
 - `member_role_id` (integer): Custom member role ID to assign, which needs Ultimate: a lower tier ignores it. Pass 0 to remove the custom role, which every tier does and Ultimate requires before it changes the access level of a member that holds one. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `user_id` (integer) (required): User ID of the member to edit
@@ -13447,9 +13445,9 @@ Update an existing release's title, notes, release date, or milestones. Returns:
 
 **Parameters:**
 
-- `description` (string): Updated release notes
+- `description` (string): Updated release notes. Pass an empty string to remove them. Omit the field to leave them untouched
 - `milestones` (array of strings): Milestone titles to associate with the release. Pass [] to detach every milestone. Omit the field to leave them untouched
-- `name` (string): New release title
+- `name` (string): New release title. Pass an empty string to remove it. Omit the field to leave it untouched
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `released_at` (string): New release date in ISO 8601 format
 - `tag_name` (string) (required): Tag name of the release
@@ -14270,9 +14268,9 @@ Update a runner's configuration (description, pause state, tags, locked, access 
 
 - `access_level` (string): Access level: not_protected, ref_protected
 - `active` (boolean): Deprecated: runner active state. Prefer paused instead
-- `description` (string): Runner description
+- `description` (string): Runner description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `locked` (boolean): Whether runner is locked to current project
-- `maintenance_note` (string): Maintenance note for the runner
+- `maintenance_note` (string): Maintenance note for the runner. Pass an empty string to remove it. Omit the field to leave it untouched
 - `maximum_timeout` (integer): Maximum job timeout in seconds
 - `paused` (boolean): Pause/unpause the runner
 - `run_untagged` (boolean): Whether to run untagged jobs
@@ -15306,25 +15304,24 @@ Update GitLab application appearance and branding settings. Returns: the updated
 
 **Parameters:**
 
-- `description` (string): Instance description on sign-in page
+- `description` (string): Instance description on sign-in page. Pass an empty string to remove it. Omit the field to leave it untouched
 - `email_header_and_footer_enabled` (boolean): Enable header and footer in emails
 - `favicon` (string): Path to the favicon image asset
-- `footer_message` (string): Message in footer bar
+- `footer_message` (string): Message in footer bar. Pass an empty string to remove it. Omit the field to leave it untouched
 - `header_logo` (string): Path to the header logo image asset
-- `header_message` (string): Message in header bar
+- `header_message` (string): Message in header bar. Pass an empty string to remove it. Omit the field to leave it untouched
 - `logo` (string): Path to the instance logo image asset
-- `member_guidelines` (string): Markdown guidelines for adding members
-- `message_background_color` (string): Background color for header/footer messages (hex)
-- `message_font_color` (string): Font color for header/footer messages (hex)
-- `new_project_guidelines` (string): Markdown guidelines for new projects
-- `profile_image_guidelines` (string): Markdown guidelines for profile images
-- `pwa_description` (string): PWA description
+- `member_guidelines` (string): Markdown guidelines for adding members. Pass an empty string to remove them. Omit the field to leave them untouched
+- `message_background_color` (string): Background color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched
+- `message_font_color` (string): Font color for header/footer messages (hex). Pass an empty string to remove it. Omit the field to leave it untouched
+- `new_project_guidelines` (string): Markdown guidelines for new projects. Pass an empty string to remove them. Omit the field to leave them untouched
+- `profile_image_guidelines` (string): Markdown guidelines for profile images. Pass an empty string to remove them. Omit the field to leave them untouched
+- `pwa_description` (string): PWA description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `pwa_icon` (string): Path to the PWA icon image asset
-- `pwa_name` (string): Progressive Web App name
-- `pwa_short_name` (string): PWA short name
-- `site_name` (string): Site name GitLab appends after the page title in the browser tab
-- `title` (string): Application title displayed in the header
-- `url` (string): Redirect URL for the system header/footer logo image
+- `pwa_name` (string): Progressive Web App name. Pass an empty string to remove it. Omit the field to leave it untouched
+- `pwa_short_name` (string): PWA short name. Pass an empty string to remove it. Omit the field to leave it untouched
+- `site_name` (string): Site name GitLab appends after the page title in the browser tab. Pass an empty string to remove it. Omit the field to leave it untouched
+- `title` (string): Application title displayed in the header. Pass an empty string to remove it. Omit the field to leave it untouched
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -15335,10 +15332,10 @@ Update a broadcast message. Returns: the updated message. See also: gitlab_get_b
 **Parameters:**
 
 - `broadcast_type` (string): Type: banner or notification
-- `color` (string): Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it
+- `color` (string): Background color as a hex code such as #E75E40. GitLab deprecates it in favor of theme and still accepts it. Pass an empty string to remove it. Omit the field to leave it untouched
 - `dismissable` (boolean): Whether message can be dismissed
 - `ends_at` (string): End time in ISO 8601 format
-- `font` (string): Font for the message
+- `font` (string): Font for the message. Pass an empty string to remove it. Omit the field to leave it untouched
 - `id` (integer) (required): Broadcast message ID
 - `message` (string): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
@@ -15474,8 +15471,8 @@ Update an existing package protection rule by its id. Returns: the updated rule'
 
 **Parameters:**
 
-- `minimum_access_level_for_delete` (string): Minimum access level for delete (maintainer, owner, admin)
-- `minimum_access_level_for_push` (string): Minimum access level for push (maintainer, owner, admin)
+- `minimum_access_level_for_delete` (string): Minimum access level for delete (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched
+- `minimum_access_level_for_push` (string): Minimum access level for push (maintainer, owner, admin). Pass an empty string to remove the minimum, which GitLab stores as null. Omit the field to leave it untouched
 - `package_name_pattern` (string): Package name pattern with optional wildcards
 - `package_type` (string): Package type protected by the rule, spelled as GitLab names the registry format, for example npm. GitLab documents no closed list
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
