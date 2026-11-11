@@ -1112,23 +1112,19 @@ func CapturedMergeRequests(capture *gitlabclient.ResponseCapture, decoded int) (
 // instance-wide ones alike present, so the four packages publishing a user
 // share it.
 //
-// Seven of the ten are exposed under no condition. The three counts are gated
-// on Ability.allowed?(current_user, :read_user_profile, user) together with
-// following_users_allowed, so the same endpoint sends them to a caller who may
-// read the profile and to nobody else. Each is a pointer because zero
-// followers and a profile this caller may not read are different answers, and
-// a bare number would tell them apart from nothing.
+// The three counts are gated on Ability.allowed?(current_user,
+// :read_user_profile, user) together with following_users_allowed, so the
+// same endpoint sends them to a caller who may read the profile and to nobody
+// else. Each is a pointer because zero followers and a profile this caller may
+// not read are different answers, and a bare number would tell them apart from
+// nothing. The seven profile keys that entity exposes under no condition
+// (commit_email, discord, github, local_time, preferred_language, pronouns and
+// work_information) are fields of User since client-go v3.47.0, and the
+// handlers read them from it.
 type UserExtra struct {
-	CommitEmail       string `json:"commit_email"`
-	Discord           string `json:"discord"`
-	GitHub            string `json:"github"`
-	LocalTime         string `json:"local_time"`
-	PreferredLanguage string `json:"preferred_language"`
-	Pronouns          string `json:"pronouns"`
-	WorkInformation   string `json:"work_information"`
-	Followers         *int64 `json:"followers"`
-	Following         *int64 `json:"following"`
-	IsFollowed        *bool  `json:"is_followed"`
+	Followers  *int64 `json:"followers"`
+	Following  *int64 `json:"following"`
+	IsFollowed *bool  `json:"is_followed"`
 }
 
 // CapturedUser reads, off the captured answer to a request for one user, the

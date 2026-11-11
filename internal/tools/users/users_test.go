@@ -189,15 +189,16 @@ func TestList_UsersACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 }
 
 // TestGet_UserReadsTheProfileKeysAndTheFollowCounts verifies GET /users/:id,
-// which presents UserProfile, carries the rendered bio and the three follow
-// counts to a caller allowed to read the profile, none of which client-go's
-// User models.
+// which presents UserProfile, carries the profile keys client-go's User models
+// since v3.47.0, and the rendered bio and the three follow counts, none of
+// which it models, to a caller allowed to read the profile.
 func TestGet_UserReadsTheProfileKeysAndTheFollowCounts(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":42,"username":"testuser","bio_html":"<p>Developer</p>","discord":"jdoe#1",
 				"github":"jdoe","work_information":"Org","pronouns":"she/her","local_time":"2:30 PM",
+				"commit_email":"c@example.com","preferred_language":"en",
 				"followers":12,"following":34,"is_followed":true
 			}`)
 			return
@@ -212,8 +213,9 @@ func TestGet_UserReadsTheProfileKeysAndTheFollowCounts(t *testing.T) {
 	if out.BioHTML != "<p>Developer</p>" || out.Discord != "jdoe#1" || out.GitHub != "jdoe" {
 		t.Errorf("out = %+v, want the rendered bio and the two account names", out)
 	}
-	if out.WorkInformation != "Org" || out.Pronouns != "she/her" || out.LocalTime != "2:30 PM" {
-		t.Errorf("out = %+v, want the three profile keys", out)
+	if out.WorkInformation != "Org" || out.Pronouns != "she/her" || out.LocalTime != "2:30 PM" ||
+		out.CommitEmail != "c@example.com" || out.PreferredLanguage != "en" {
+		t.Errorf("out = %+v, want the five profile keys", out)
 	}
 	if out.Followers == nil || *out.Followers != 12 || out.Following == nil || *out.Following != 34 {
 		t.Errorf("counts = %v/%v, want 12 and 34", out.Followers, out.Following)

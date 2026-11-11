@@ -797,9 +797,11 @@ func TestDelete_APIError(t *testing.T) {
 }
 
 // TestGet_ReadsTheCapturedUserPublicKeys verifies the ten keys
-// lib/api/entities/user_public.rb sends that client-go's User declares on no
-// field of its own reach the output, on the side of the permission condition
-// where the caller may read the profile. Both enterprise user routes present
+// lib/api/entities/user_public.rb adds to the user it inherits reach the
+// output, on the side of the permission condition where the caller may read
+// the profile: the seven profile keys through client-go's User, which models
+// them since v3.47.0, and the three counts it declares on no field of its own
+// through the captured response. Both enterprise user routes present
 // UserPublic, so this is the whole set they can carry.
 func TestGet_ReadsTheCapturedUserPublicKeys(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

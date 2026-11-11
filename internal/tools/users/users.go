@@ -68,15 +68,16 @@ type Output struct {
 	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty" tier:"premium"`
 	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
-	// The keys GitLab's user entities send that client-go's User does not
+	// The profile keys GitLab's user entities send on every user, which
+	// client-go's User models since v3.47.0, followed by the keys it does not
 	// model, read from the captured response beside the SDK's own decode
-	// (ADR-0021) and described on toolutil.InstanceUserExtra. Which of them
-	// arrives depends on the route: the profile fields are on every user, the
-	// three counts on a caller allowed to read the profile, bio_html on the
-	// single-user GET, the two enterprise keys and the provisioning group on
-	// the administrator routes under their license, the provisioning project
-	// wherever an administrator is answered, with no license, and
-	// unconfirmed_email on the service account POST alone.
+	// (ADR-0021) and described on toolutil.InstanceUserExtra. Which of those
+	// arrives depends on the route: the three counts on a caller allowed to
+	// read the profile, bio_html on the single-user GET, the two enterprise
+	// keys and the provisioning group on the administrator routes under their
+	// license, the provisioning project wherever an administrator is answered,
+	// with no license, and unconfirmed_email on the service account POST
+	// alone.
 	CommitEmail                 string `json:"commit_email,omitempty"`
 	Discord                     string `json:"discord,omitempty"`
 	GitHub                      string `json:"github,omitempty"`
@@ -645,13 +646,13 @@ func toOutput(u *gl.User, extra toolutil.InstanceUserExtra) Output {
 		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
 		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
 		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
-		CommitEmail:                    extra.CommitEmail,
-		Discord:                        extra.Discord,
-		GitHub:                         extra.GitHub,
-		LocalTime:                      extra.LocalTime,
-		PreferredLanguage:              extra.PreferredLanguage,
-		Pronouns:                       extra.Pronouns,
-		WorkInformation:                extra.WorkInformation,
+		CommitEmail:                    u.CommitEmail,
+		Discord:                        u.Discord,
+		GitHub:                         u.Github,
+		LocalTime:                      u.LocalTime,
+		PreferredLanguage:              u.PreferredLanguage,
+		Pronouns:                       u.Pronouns,
+		WorkInformation:                u.WorkInformation,
 		BioHTML:                        extra.BioHTML,
 		Followers:                      extra.Followers,
 		Following:                      extra.Following,
