@@ -10,12 +10,15 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/parser"
 
@@ -797,120 +800,337 @@ func TestDeleteVersion(t *testing.T) {
 	}
 }
 
-// TestLock verifies Lock.
-func TestLock(t *testing.T) {
+// The lock route of a state whose project is named by its full path, as it
+// reaches GitLab: client-go percent-encodes the "/" of the path, and the
+// client's transport sends the "." of the state name as a dot, so the mock is
+// matched on the escaped path.
+const (
+	lockedProject   = "group/infra"
+	lockedState     = "prod.eu"
+	lockedStatePath = "/api/v4/projects/group%2Finfra/terraform/state/prod.eu/lock"
+)
+
+// lockAnswer is what lib/api/terraform/state.rb answers a lock with: the four
+// keys it was sent back as they were, and the ID, holder and time of the lock
+// it recorded, the time rendered as Rails renders a timestamp.
+const lockAnswer = `{"Operation":"OperationTypeApply","Info":"maintenance","Version":"1.9.5","Path":"",` +
+	`"ID":"6d3b0c8e-lock","Who":"root","Created":"2026-11-04T10:11:12.345Z"}`
+
+// wantLockConflictHint and wantUnlockConflictHint are the guidance a refused
+// lock and a refused unlock carry, written out rather than read back from the
+// constants that produce them.
+const (
+	wantLockHeldHint = `the state is already locked under lock ID "held-by-ci", held by ci-bot since 2026-11-04T09:00:00.000Z; ` +
+		"release it with admin.terraform_state_unlock, passing that ID as lock_id, or no lock_id to release it whatever its ID"
+	wantLockConflictHint = "the state is already locked; release the lock with admin.terraform_state_unlock, " +
+		"passing the lock_id it was taken under, or no lock_id to release it whatever its ID"
+	wantUnlockConflictHint = "the lock is held under another ID: pass the lock_id it was taken under, " +
+		"or leave lock_id out to release it whatever its ID"
+)
+
+// TestLock_SendsTheLockInfoAndPublishesTheLockGitLabRecorded verifies the
+// request GitLab requires and the answer it gives: client-go's Lock sends no
+// body and GitLab refused every call without the lock info with 400 (issue
+// 1597), so the mock reads the body whole and holds it to the seven keys
+// lib/api/terraform/state.rb requires, each with the value the caller gave,
+// and the output to the lock GitLab answered with, field by field, rather
+// than to what the caller sent: GitLab answers the holder and the time it
+// recorded in place of the caller's.
+func TestLock_SendsTheLockInfoAndPublishesTheLockGitLabRecorded(t *testing.T) {
+	var body atomic.Value
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.NotFound(w, r)
+		if r.Method != http.MethodPost || r.URL.EscapedPath() != lockedStatePath {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"unreadable body"}`)
+			return
+		}
+		body.Store(raw)
+		testutil.RespondJSON(w, http.StatusOK, lockAnswer)
 	}))
-	out, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+
+	out, err := Lock(t.Context(), client, LockInput{
+		ProjectID: lockedProject, Name: lockedState, LockID: "6d3b0c8e-lock",
+		Operation: "OperationTypeApply", Info: "maintenance", Who: "ops@laptop",
+		Version: "1.9.5", Created: "2026-11-04T10:11:00Z", Path: "",
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !out.Success {
-		t.Error("expected success")
+
+	raw, _ := body.Load().([]byte)
+	var sent map[string]any
+	if err = json.Unmarshal(raw, &sent); err != nil {
+		t.Fatalf("the lock body %q is not a JSON object: %v", raw, err)
+	}
+	wantSent := map[string]any{
+		"ID": "6d3b0c8e-lock", "Operation": "OperationTypeApply", "Info": "maintenance", "Who": "ops@laptop",
+		"Version": "1.9.5", "Created": "2026-11-04T10:11:00Z", "Path": "",
+	}
+	if !reflect.DeepEqual(sent, wantSent) {
+		t.Errorf("lock body = %v, want %v", sent, wantSent)
+	}
+
+	want := LockOutput{
+		Success: true, Message: "State 'prod.eu' locked",
+		LockID: "6d3b0c8e-lock", Who: "root", Created: "2026-11-04T10:11:12.345Z",
+		Operation: "OperationTypeApply", Info: "maintenance", Version: "1.9.5",
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Lock() = %+v, want %+v", out, want)
 	}
 }
 
-// TestLock_Error verifies Lock when error.
-func TestLock_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusConflict, `{"message":"already locked"}`)
-	}))
-	_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
-	if err == nil {
-		t.Fatal(errExpectedErr)
-	}
-}
-
-// TestLock_BadRequest_HintsSDKLimitation verifies that the guaranteed 400 from
-// GitLab (client-go sends no Terraform lock-info body) is wrapped with a hint
-// pointing at the terraform CLI and admin.terraform_state_unlock.
-func TestLock_BadRequest_HintsSDKLimitation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad request"}`)
-	}))
-	_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
-	if err == nil {
-		t.Fatal(errExpectedErr)
-	}
-	if !strings.Contains(err.Error(), "lock-info body") || !strings.Contains(err.Error(), "admin.terraform_state_unlock") {
-		t.Errorf("error = %q, want SDK-limitation hint with unlock alternative", err.Error())
-	}
-}
-
-// TestUnlock verifies Unlock.
-func TestUnlock(t *testing.T) {
+// TestLock_LockIDAlone_SendsEveryKeyGitLabRequires verifies a lock the caller
+// gives only its ID: GitLab's requires reads whether each key is present,
+// and keeps none of the other six, so each is sent empty rather than left
+// out, which GitLab would refuse with 400.
+func TestLock_LockIDAlone_SendsEveryKeyGitLabRequires(t *testing.T) {
+	var body atomic.Value
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			http.NotFound(w, r)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"unreadable body"}`)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		body.Store(raw)
+		testutil.RespondJSON(w, http.StatusOK, `{"ID":"only-id","Who":"root","Created":"2026-11-04T10:11:12.345Z","Operation":"","Info":"","Version":"","Path":""}`)
 	}))
-	out, err := Unlock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+
+	out, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: "only-id"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !out.Success {
-		t.Error("expected success")
+	raw, _ := body.Load().([]byte)
+	var sent map[string]any
+	if err = json.Unmarshal(raw, &sent); err != nil {
+		t.Fatalf("the lock body %q is not a JSON object: %v", raw, err)
+	}
+	wantSent := map[string]any{"ID": "only-id", "Operation": "", "Info": "", "Who": "", "Version": "", "Created": "", "Path": ""}
+	if !reflect.DeepEqual(sent, wantSent) {
+		t.Errorf("lock body = %v, want %v", sent, wantSent)
+	}
+	want := LockOutput{Success: true, Message: "State 'state1' locked", LockID: "only-id", Who: "root", Created: "2026-11-04T10:11:12.345Z"}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Lock() = %+v, want %+v", out, want)
 	}
 }
 
-// TestUnlock_Error verifies Unlock when error.
-func TestUnlock_Error(t *testing.T) {
+// TestLock_NoLockID_IsRefusedBeforeAnyRequest verifies a lock with no ID, or
+// one of blanks alone, is refused under the parameter's name and sends
+// nothing: GitLab takes a lock only under an ID that is not blank, and a
+// request without one is answered with an error naming no parameter.
+func TestLock_NoLockID_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, lockID := range []string{"", "  "} {
+		t.Run("lock_id "+strconv.Quote(lockID), func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: lockID})
+			if err == nil {
+				t.Fatal(errExpectedErr)
+			}
+			want := "gitlab_lock_terraform_state: lock_id is required"
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Errorf("error = %q, want it to open with %q", err.Error(), want)
+			}
+		})
+	}
+}
+
+// TestLock_AlreadyLocked_NamesTheLockToRelease verifies the answer to a state
+// somebody already holds. lib/api/terraform/state.rb answers 409 with the
+// lock it holds, a body the error leaves out since it is not one of GitLab's
+// error messages, so the hint reads it from the capture and names the lock's
+// ID, its holder and its time, by which the caller can release that lock
+// rather than whatever lock there is. An answer that names no lock, a body
+// without an ID or one that is not the lock info, leaves the hint general.
+func TestLock_AlreadyLocked_NamesTheLockToRelease(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{
+			name: "the lock it holds",
+			body: `{"ID":"held-by-ci","Who":"ci-bot","Created":"2026-11-04T09:00:00.000Z","Operation":"","Info":"","Version":"","Path":""}`,
+			want: wantLockHeldHint,
+		},
+		{name: "no lock ID", body: `{"Who":"ci-bot"}`, want: wantLockConflictHint},
+		{name: "not the lock info", body: `["locked"]`, want: wantLockConflictHint},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusConflict, tc.body)
+			}))
+			_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: "mine"})
+			if err == nil {
+				t.Fatal(errExpectedErr)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to carry %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+// TestLock_Refused_CarriesNoConflictHint verifies the conflict hint follows
+// a 409 alone: a lock GitLab refuses for another reason, here the 400 of a
+// lock info it does not accept, carries GitLab's reason and no word about a
+// lock somebody holds.
+func TestLock_Refused_CarriesNoConflictHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusConflict, `{"message":"not locked"}`)
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"ID is too long (maximum is 255 characters)"}`)
 	}))
-	_, err := Unlock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+	_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: strings.Repeat("x", 256)})
 	if err == nil {
 		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), "ID is too long") || strings.Contains(err.Error(), "already locked") {
+		t.Errorf("error = %q, want GitLab's reason and no conflict hint", err.Error())
+	}
+}
+
+// TestLock_AnswerNotLockInfo_IsAnErrorThatSaysTheLockWasAccepted verifies an
+// answer that does not decode as the lock info is reported, and reported as
+// what it is: GitLab accepted the lock, so the error points at the state read
+// that says whether it holds, rather than reading as a lock refused.
+func TestLock_AnswerNotLockInfo_IsAnErrorThatSaysTheLockWasAccepted(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `["not", "a", "lock"]`)
+	}))
+	_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: "mine"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	for _, want := range []string{"gitlab_lock_terraform_state: ", "GitLab accepted the lock, but its answer is not the lock info", "admin.terraform_state_get"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to carry %q", err.Error(), want)
+			}
+		})
+	}
+}
+
+// TestLockInfoBody_WritesTheLockInfoAsTheBody verifies the request option on
+// a request of its own, so what it writes is read without client-go between:
+// the body is the lock info and nothing else, under the keys GitLab reads.
+func TestLockInfoBody_WritesTheLockInfoAsTheBody(t *testing.T) {
+	req, err := retryablehttp.NewRequest(http.MethodPost, "https://gitlab.example.com/api/v4/projects/1/terraform/state/s/lock", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if err = lockInfoBody(lockInfo{ID: "i", Operation: "o", Info: "n", Who: "w", Version: "v", Created: "c", Path: "p"})(req); err != nil {
+		t.Fatalf("lockInfoBody() error = %v", err)
+	}
+	raw, err := req.BodyBytes()
+	if err != nil {
+		t.Fatalf("BodyBytes: %v", err)
+	}
+	want := `{"ID":"i","Operation":"o","Info":"n","Who":"w","Version":"v","Created":"c","Path":"p"}`
+	if string(raw) != want {
+		t.Errorf("body = %s, want %s", raw, want)
+	}
+}
+
+// TestUnlock_LockID_IsSentForGitLabToMatch verifies the unlock names the lock
+// it releases: GitLab releases a lock only when the ID it is sent matches the
+// one the lock was taken under, so the caller's lock_id reaches the query as
+// ID, the parameter lib/api/terraform/state.rb reads.
+func TestUnlock_LockID_IsSentForGitLabToMatch(t *testing.T) {
+	var query atomic.Value
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.EscapedPath() != lockedStatePath {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			return
+		}
+		query.Store(r.URL.Query())
+		w.WriteHeader(http.StatusOK)
+	}))
+	out, err := Unlock(t.Context(), client, UnlockInput{ProjectID: lockedProject, Name: lockedState, LockID: "6d3b0c8e lock&1"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	got, _ := query.Load().(url.Values)
+	if want := (url.Values{"ID": {"6d3b0c8e lock&1"}}); !reflect.DeepEqual(got, want) {
+		t.Errorf("unlock query = %v, want %v", got, want)
+	}
+	if want := (UnlockOutput{Success: true, Message: "State 'prod.eu' unlocked"}); !reflect.DeepEqual(out, want) {
+		t.Errorf("Unlock() = %+v, want %+v", out, want)
+	}
+}
+
+// TestUnlock_NoLockID_SendsNoID verifies an unlock without a lock_id sends no
+// ID at all, which GitLab reads as a release whatever the lock's ID, as
+// terraform force-unlock does; an empty ID would be compared with the lock's
+// and refused with 409.
+func TestUnlock_NoLockID_SendsNoID(t *testing.T) {
+	var rawQuery atomic.Value
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawQuery.Store(r.URL.RawQuery)
+		w.WriteHeader(http.StatusOK)
+	}))
+	if _, err := Unlock(t.Context(), client, UnlockInput{ProjectID: "1", Name: "state1"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got, _ := rawQuery.Load().(string); got != "" {
+		t.Errorf("unlock query = %q, want none", got)
+	}
+}
+
+// TestUnlock_OtherLockID_HintsTheLockIDOrNone verifies the answer to an
+// unlock that names another lock: GitLab answers 409, and the error says the
+// lock is held under another ID and how to release it.
+func TestUnlock_OtherLockID_HintsTheLockIDOrNone(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+	}))
+	_, err := Unlock(t.Context(), client, UnlockInput{ProjectID: "1", Name: "state1", LockID: "not-the-lock"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), wantUnlockConflictHint) {
+		t.Errorf("error = %q, want it to carry %q", err.Error(), wantUnlockConflictHint)
+	}
+}
+
+// TestUnlock_Refused_CarriesNoConflictHint verifies the unlock's hint follows
+// a 409 alone: a refusal for another reason carries GitLab's reason and no
+// word about another lock ID.
+func TestUnlock_Refused_CarriesNoConflictHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Write access to this Terraform state is restricted by a protection rule"}`)
+	}))
+	_, err := Unlock(t.Context(), client, UnlockInput{ProjectID: "1", Name: "state1"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), "restricted by a protection rule") || strings.Contains(err.Error(), "another ID") {
+		t.Errorf("error = %q, want GitLab's reason and no conflict hint", err.Error())
 	}
 }
 
 // TestLockAndUnlock_EachReportsItsOwnOutcome verifies that the two handlers
 // say which of the two things happened, and say it about the state the caller
-// named. Both answer LockOutput{Success: true} and differ only in one word of
-// a message nothing used to read, so the two lines could be exchanged and
-// every assertion in this package still passed: a model would then be told a
-// state was locked by the call that unlocked it.
+// named. The two messages differ in one word nothing else reads, so the two
+// lines could be exchanged and every other assertion here still passed: a
+// model would then be told a state was locked by the call that unlocked it.
 func TestLockAndUnlock_EachReportsItsOwnOutcome(t *testing.T) {
 	client := testutil.NewTestClient(t, terraformHandler())
 
-	tests := []struct {
-		name string
-		call func() (LockOutput, error)
-		want LockOutput
-	}{
-		{
-			name: "lock",
-			call: func() (LockOutput, error) {
-				return Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
-			},
-			want: LockOutput{Success: true, Message: "State 'state1' locked"},
-		},
-		{
-			name: "unlock",
-			call: func() (LockOutput, error) {
-				return Unlock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
-			},
-			want: LockOutput{Success: true, Message: "State 'state1' unlocked"},
-		},
+	lock, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: "lock-1"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.call()
-			if err != nil {
-				t.Fatalf(fmtUnexpErr, err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%s() = %+v, want %+v", tt.name, got, tt.want)
-			}
-		})
+	if lock.Message != "State 'state1' locked" || !lock.Success {
+		t.Errorf("Lock() = %+v, want success and the message that the state was locked", lock)
+	}
+	unlock, err := Unlock(t.Context(), client, UnlockInput{ProjectID: "1", Name: "state1", LockID: "lock-1"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := (UnlockOutput{Success: true, Message: "State 'state1' unlocked"}); !reflect.DeepEqual(unlock, want) {
+		t.Errorf("Unlock() = %+v, want %+v", unlock, want)
 	}
 }
 
@@ -1015,27 +1235,25 @@ func TestDeleteVersion_NotFound_SaysTheStateOrTheSerialWasNotFound(t *testing.T)
 // FormatStateMarkdown
 // ---------------------------------------------------------------------------.
 
-// The two lock sentences a card carries, written out rather than taken from
-// the constants that produce them. Building the expectation out of
-// hintLockNeedsCLI would let that constant go back to telling a reader to call
-// gitlab_lock_terraform_state, the call GitLab refuses every time and the
-// whole reason the sentence was rewritten, with every test still green.
+// The lock sentences the cards carry, written out rather than taken from the
+// constants that produce them, so a constant that went back to sending a
+// reader somewhere else fails here.
 const (
-	wantLockHint = "Locking a state needs the terraform CLI against the GitLab HTTP backend: " +
-		"`admin.terraform_state_lock` sends no lock-info body, which GitLab refuses"
-	wantUnlockHint = "Use `admin.terraform_state_unlock` to clear a stale lock"
+	wantLockHint   = "Use `admin.terraform_state_lock` with a lock_id of your choosing to lock it"
+	wantUnlockHint = "Use `admin.terraform_state_unlock` to release its lock, with the lock_id it was taken under, " +
+		"or with none to clear a stale lock"
 )
 
-// stateHints is the guidance a Terraform state card closes with: what
-// locking really needs, how to clear a stale lock, and how to delete.
+// stateHints is the guidance a Terraform state card closes with: how to lock
+// it, how to release a lock or clear a stale one, and how to delete it.
 const stateHints = "\n---\n💡 **Next steps:**\n" +
 	"- " + wantLockHint + "\n" +
 	"- " + wantUnlockHint + "\n" +
 	"- Use `admin.terraform_state_delete` to remove it\n"
 
 // TestFormatStateMarkdown_Coverage verifies FormatStateMarkdown renders the
-// whole card for a written state, and that the guidance no longer sends a
-// reader to gitlab_lock_terraform_state, which GitLab refuses on every call.
+// whole card for a written state, closing with how to lock it, release its
+// lock and delete it.
 func TestFormatStateMarkdown_Coverage(t *testing.T) {
 	got := FormatStateMarkdown(StateItem{Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path"})
 	want := "## Terraform State: prod-state\n\n" +
@@ -1155,17 +1373,61 @@ func TestFormatStateMarkdown_UnnamedState(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestFormatLockMarkdown_Coverage verifies FormatLockMarkdown renders the
-// whole card, with the outcome as the flag glyph rather than the word "true".
+// whole card of a lock: the outcome as the flag glyph rather than the word
+// "true", the lock's ID as code, its holder and time, every key of the lock
+// info GitLab answered back, a value of a reader's own escaped, and the way
+// to release the lock.
 func TestFormatLockMarkdown_Coverage(t *testing.T) {
-	got := FormatLockMarkdown(LockOutput{Success: true, Message: "State 'x' locked"})
+	got := FormatLockMarkdown(LockOutput{
+		Success: true, Message: "State 'x' locked", LockID: "6d3b-lock", Who: "root",
+		Created: "2026-11-04T10:11:12.345Z", Operation: "OperationTypeApply", Info: "a|b",
+		Version: "1.9.5", Path: "envs/prod",
+	})
 	want := "## Terraform State Lock\n\n" +
 		"- **Success**: " + toolutil.BoolEmoji(true) + "\n" +
 		"- **Message**: State 'x' locked\n" +
+		"- **Lock ID**: `6d3b-lock`\n" +
+		"- **Holder**: root\n" +
+		"- **Created**: 4 Nov 2026 10:11 UTC\n" +
+		"- **Operation**: OperationTypeApply\n" +
+		"- **Info**: a&#124;b\n" +
+		"- **Terraform Version**: 1.9.5\n" +
+		"- **Path**: `envs/prod`\n" +
 		"\n---\n💡 **Next steps:**\n" +
-		"- " + wantLockHint + "\n" +
-		"- " + wantUnlockHint + "\n"
+		"- Use `admin.terraform_state_unlock` with this lock_id to release the lock\n"
 	if got != want {
 		t.Errorf("FormatLockMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatLockMarkdown_LockInfoLeftEmpty verifies a lock whose four echoed
+// keys GitLab answered empty writes no label for them, rather than labels
+// with nothing after them.
+func TestFormatLockMarkdown_LockInfoLeftEmpty(t *testing.T) {
+	got := FormatLockMarkdown(LockOutput{Success: true, Message: "State 'x' locked", LockID: "id", Who: "root"})
+	want := "## Terraform State Lock\n\n" +
+		"- **Success**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Message**: State 'x' locked\n" +
+		"- **Lock ID**: `id`\n" +
+		"- **Holder**: root\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use `admin.terraform_state_unlock` with this lock_id to release the lock\n"
+	if got != want {
+		t.Errorf("FormatLockMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatUnlockMarkdown_Coverage verifies FormatUnlockMarkdown renders the
+// whole card of a released lock, closing with how to check it.
+func TestFormatUnlockMarkdown_Coverage(t *testing.T) {
+	got := FormatUnlockMarkdown(UnlockOutput{Success: true, Message: "State 'x' unlocked"})
+	want := "## Terraform State Unlock\n\n" +
+		"- **Success**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Message**: State 'x' unlocked\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use `admin.terraform_state_get` to check that the state is no longer locked\n"
+	if got != want {
+		t.Errorf("FormatUnlockMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -1212,11 +1474,11 @@ func TestTerraformStates_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 			return DeleteVersion(t.Context(), client, DeleteVersionInput{ProjectID: "1", Name: "state1", Serial: 5})
 		}},
 		{name: "lock", call: func() error {
-			_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+			_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1", LockID: "lock-1"})
 			return err
 		}},
 		{name: "unlock", call: func() error {
-			_, err := Unlock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+			_, err := Unlock(t.Context(), client, UnlockInput{ProjectID: "1", Name: "state1"})
 			return err
 		}},
 	}
@@ -1274,9 +1536,9 @@ func terraformHandler() http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Lock state
+	// Lock state, answered with the lock GitLab took
 	mux.HandleFunc("POST /api/v4/projects/1/terraform/state/state1/lock", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		testutil.RespondJSON(w, http.StatusOK, `{"ID":"lock-1","Who":"root","Created":"2026-11-04T10:11:12.345Z","Operation":"","Info":"","Version":"","Path":""}`)
 	})
 
 	// Unlock state
@@ -1317,11 +1579,11 @@ func TestOperationLabels_EachHandlerReportsUnderItsOwnName(t *testing.T) {
 			return DeleteVersion(t.Context(), c, DeleteVersionInput{ProjectID: "1", Name: "state1", Serial: 3})
 		}},
 		{"gitlab_lock_terraform_state", func(c *gitlabclient.Client) error {
-			_, err := Lock(t.Context(), c, LockInput{ProjectID: "1", Name: "state1"})
+			_, err := Lock(t.Context(), c, LockInput{ProjectID: "1", Name: "state1", LockID: "lock-1"})
 			return err
 		}},
 		{"gitlab_unlock_terraform_state", func(c *gitlabclient.Client) error {
-			_, err := Unlock(t.Context(), c, LockInput{ProjectID: "1", Name: "state1"})
+			_, err := Unlock(t.Context(), c, UnlockInput{ProjectID: "1", Name: "state1"})
 			return err
 		}},
 	}

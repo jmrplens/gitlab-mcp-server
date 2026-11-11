@@ -140,8 +140,10 @@ func TestAdmin_AlertMetricImages(t *testing.T) {
 }
 
 // TestAdmin_TerraformStates seeds two state versions through the raw backend,
-// then lists and reads the state, locks and unlocks it, deletes the non-latest
-// version and the whole state, and watches the read start answering not found.
+// then lists and reads the state, locks it and reads the lock back, is refused
+// a second lock and an unlock under another lock ID, unlocks it by its own,
+// deletes the non-latest version and the whole state, and watches the read
+// start answering not found.
 //
 // Replaces: TestMeta_AdminTerraformStates
 func TestAdmin_TerraformStates(t *testing.T) {
@@ -176,20 +178,7 @@ func TestAdmin_TerraformStates(t *testing.T) {
 			got.LatestVersionCreatedAt, got.LatestVersionUpdatedAt)
 	}
 
-	lockParams := map[string]any{"project_id": project.IDParam(), "name": stateName}
-	// client-go sends no lock-info body, so the backend deterministically
-	// rejects the lock with 400 on this stack; a future client-go that sends
-	// the body succeeds, and both are accepted.
-	if locked, err := harness.Try[terraformstates.LockOutput](s, actionAdminTerraformStateLock, lockParams); err != nil {
-		assertMentions(e, "terraform_state_lock", err.Error(), "ID is missing", "Operation is missing")
-		e.T.Logf("terraform_state_lock answered the documented bodyless-request error: %s", firstLine(err.Error()))
-	} else if !locked.Success {
-		e.T.Errorf("terraform_state_lock reported neither success nor an error: %+v", locked)
-	}
-	unlocked := harness.Do[terraformstates.LockOutput](s, actionAdminTerraformStateUnlock, lockParams)
-	if !unlocked.Success {
-		e.T.Errorf("terraform_state_unlock reported no success: %+v", unlocked)
-	}
+	lockAndUnlockTerraformState(e, s, project, stateName)
 
 	harness.DoVoid(s, actionAdminTerraformVersionDel, map[string]any{"project_id": project.IDParam(), "name": stateName, "serial": 1})
 	harness.DoVoid(s, actionAdminTerraformStateDelete, map[string]any{"project_id": project.IDParam(), "name": stateName})
@@ -206,6 +195,55 @@ func TestAdmin_TerraformStates(t *testing.T) {
 	})
 	if gone != nil {
 		e.T.Logf("the Terraform state purge is still pending after the poll budget (the delete already succeeded): %v", gone)
+	}
+}
+
+// lockAndUnlockTerraformState locks the state and reads the lock back, is
+// refused a second lock and an unlock under another lock ID, and unlocks it by
+// its own, reading the state after each step that changes it.
+//
+// The lock sends terraform's lock info, of which the caller gives only the ID
+// and the operation here: GitLab requires every key and keeps the ID alone,
+// so it answers with that ID, the token's user as the holder and the moment it
+// took the lock (issue 1597; it refused every lock with 400 before).
+func lockAndUnlockTerraformState(e *harness.Env, s *harness.Session, project fixture.Project, stateName string) {
+	e.T.Helper()
+	lockID := e.Name("lock")
+	locked := harness.Do[terraformstates.LockOutput](s, actionAdminTerraformStateLock, map[string]any{
+		"project_id": project.IDParam(), "name": stateName, "lock_id": lockID, "operation": "OperationTypeApply",
+	})
+	if !locked.Success || locked.LockID != lockID || locked.Who == "" || locked.Created == "" || locked.Operation != "OperationTypeApply" {
+		e.T.Errorf("terraform_state_lock answered %+v, want the lock taken under %q with its holder, its time and the operation sent", locked, lockID)
+	}
+	held := harness.Do[terraformstates.StateItem](s, actionAdminTerraformStateGet, map[string]any{"project_path": project.Path, "name": stateName})
+	if held.LockedAt == "" {
+		e.T.Errorf("terraform_state_get after the lock answered %+v, want the time it was locked", held)
+	}
+	// A second lock is refused with 409, and the error names the lock the
+	// state is held under, so a caller can release that lock by its ID.
+	if _, err := harness.Try[terraformstates.LockOutput](s, actionAdminTerraformStateLock, map[string]any{
+		"project_id": project.IDParam(), "name": stateName, "lock_id": e.Name("other-lock"),
+	}); err == nil {
+		e.T.Errorf("a second terraform_state_lock of a locked state succeeded, want the 409 naming lock %q", lockID)
+	} else {
+		assertMentions(e, "terraform_state_lock", err.Error(), lockID)
+	}
+	// An unlock naming another lock is refused, and one naming the lock
+	// releases it.
+	if _, err := harness.Try[terraformstates.UnlockOutput](s, actionAdminTerraformStateUnlock, map[string]any{
+		"project_id": project.IDParam(), "name": stateName, "lock_id": e.Name("other-lock"),
+	}); err == nil {
+		e.T.Errorf("terraform_state_unlock with another lock_id succeeded, want the 409 GitLab answers a lock held under %q with", lockID)
+	}
+	unlocked := harness.Do[terraformstates.UnlockOutput](s, actionAdminTerraformStateUnlock, map[string]any{
+		"project_id": project.IDParam(), "name": stateName, "lock_id": lockID,
+	})
+	if !unlocked.Success {
+		e.T.Errorf("terraform_state_unlock reported no success: %+v", unlocked)
+	}
+	released := harness.Do[terraformstates.StateItem](s, actionAdminTerraformStateGet, map[string]any{"project_path": project.Path, "name": stateName})
+	if released.LockedAt != "" {
+		e.T.Errorf("terraform_state_get after the unlock answered locked since %q, want the state unlocked", released.LockedAt)
 	}
 }
 

@@ -1013,7 +1013,7 @@ func TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto(t *testing.T)
 // ai_workflows_token_auth. Their classes add the ai_workflows scope to the
 // api scope every API class allows and only authenticate the user, so a
 // user's token calls them and the fourteen no exception takes out are
-// tracked by the Duo domain's row on v3.30.0; the three whose handler checks
+// tracked by the Duo domain's row on v3.40.3; the three whose handler checks
 // the Duo flow's composite identity are taken out by an exception that cites
 // it.
 func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *testing.T) {

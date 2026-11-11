@@ -390,7 +390,7 @@ func adminApplicationStatisticsGetSpec(client *gitlabclient.Client) toolutil.Act
 func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerTerraformStates, "gitlab_unlock_terraform_state")
 	options.Tags = append(options.Tags, "terraform", "terraform_state", "state", "lock", "unlock")
-	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id."
+	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id. Pass lock_id to release only the lock taken under that ID, or leave it out to release the lock whatever its ID."
 	options.Aliases = []string{"terraform_state.unlock", "unlock terraform state", "unlock terraform state lock", "terraform state unlock"}
 	options.RelatedActions = []string{actionTerraformStateGet, actionTerraformStateLock, actionTerraformStateList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -405,7 +405,7 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id."}),
 	}
-	options.IndividualTool.Description = "Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states."
+	options.IndividualTool.Description = "Unlock a project Terraform state by project_id and state name, by the lock's lock_id or whatever its ID. Returns: whether the lock was released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states."
 	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), options)
 }
 
@@ -1136,10 +1136,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Delete a Terraform state. Returns: a success status. See also: gitlab_get_terraform_state, gitlab_delete_terraform_state_version.",
 	},
 	"gitlab_lock_terraform_state": {
-		usage:       "Lock a Terraform state to prevent concurrent applies. Provide project_id and the state name.",
+		usage:       "Lock a Terraform state to prevent concurrent applies. Provide project_id, the state name and a lock_id to take the lock under. The rest of terraform's lock info, operation, info, who, version, created and path, is optional.",
 		aliases:     []string{"lock terraform state", "acquire terraform state lock", "terraform state lock"},
 		related:     []string{"admin.terraform_state_unlock", actionTerraformStateGet, actionTerraformStateList},
-		description: "Lock a Terraform state. Returns: the state with its lock acquired. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
+		description: "Lock a Terraform state under a lock ID. Returns: the lock GitLab took, with its ID, holder and creation time. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
 	},
 	"gitlab_delete_terraform_state_version": {
 		usage:       "Delete a single version of a Terraform state by project_id, state name, and serial/version number.",
