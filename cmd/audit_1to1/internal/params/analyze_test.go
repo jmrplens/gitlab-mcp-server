@@ -687,24 +687,26 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 	}
 }
 
-// TestRun_Repository_ReportsTheParamsClientGoV3381CannotSendOrNoInputOffers
+// TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers
 // fixes the cases R-PARAM was built to see on the pinned client-go. It is
 // sensitive to the version on purpose: each bump of client-go changes it, and
 // that change is the evidence the scope was run again.
 //
 // On v3.30.0 the four merge request lists (the global one, the project's, the
 // group's and a deployment's) took source_project_id and the filters GitLab
-// 19.5 added, which no option struct modeled. On the v3.38.1 pin client-go
+// 19.5 added, which no option struct modeled. On the v3.40.3 pin client-go
 // models twelve of them on every list, the deployment filters and environment
 // on the three ListMergeRequestsOptions and ListGroupMergeRequestsOptions
 // serve, in on the project's, and source_project_id on the group's alone, so
 // each of those is not_offered until an input offers it, and source_project_id
 // stays unmodeled on the other three. So are a project edit's three duo_*
 // flags EditProjectOptions models from v3.36.0, a registry repository read's
-// size and the service account's external flag, whose declarations went with
-// the bump. The project and group hooks' url_variables, which the add and edit
-// options model from v3.38.0, are offered now, and no recorded request carries
-// them yet. Still unmodeled are the system hooks' url_variables and
+// size, the service account's external flag, whose declarations went with
+// the bump, and the three other list types a group board's list takes, which
+// CreateGroupIssueBoardListOptions models from v3.39.0. The project and group
+// hooks' url_variables, which the add and edit options model from v3.38.0, are
+// offered now, and no recorded request carries them yet. Still unmodeled are the
+// system hooks' url_variables and
 // custom_headers; every issues_statistics route's and the group epic list's
 // not[author_id]; a release read's include_html_description, which
 // GetRelease, taking no options, cannot send and the redirect
@@ -718,7 +720,7 @@ func TestRun_Repository_GateIsGreen(t *testing.T) {
 // they are covered only because the walk of AddProjectHookOptions models
 // them, and on the edit, whose recorded body does not, the container stands
 // for them with the struct EditProjectHookOptions modeling it.
-func TestRun_Repository_ReportsTheParamsClientGoV3381CannotSendOrNoInputOffers(t *testing.T) {
+func TestRun_Repository_ReportsTheParamsClientGoV3403CannotSendOrNoInputOffers(t *testing.T) {
 	report := repositoryReport(t)
 	reported := map[string]Finding{}
 	for _, finding := range slices.Concat(report.Findings, report.Declared) {
@@ -855,7 +857,7 @@ func notOfferedOnV3300() (offered, declared []routeParam) {
 // and, when a declaration answers it, its category.
 type witnessCase struct{ route, param, class, category string }
 
-// witnessCases are the params the witness test expects on v3.38.1.
+// witnessCases are the params the witness test expects on v3.40.3.
 func witnessCases() []witnessCase {
 	type want = witnessCase
 	var cases []want
@@ -904,6 +906,9 @@ func witnessCases() []witnessCase {
 		want{"POST /projects/:id/protected_environments", "approval_rules[id]", ClassUnmodeled, ""},
 		want{"POST /service_accounts", "external", ClassNotOffered, ""},
 		want{"PATCH /service_accounts/:user_id", "external", ClassNotOffered, ""},
+		want{"POST /groups/:id/boards/:board_id/lists", "assignee_id", ClassNotOffered, ""},
+		want{"POST /groups/:id/boards/:board_id/lists", "iteration_id", ClassNotOffered, ""},
+		want{"POST /groups/:id/boards/:board_id/lists", "milestone_id", ClassNotOffered, ""},
 	)
 	return cases
 }

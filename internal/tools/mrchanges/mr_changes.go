@@ -5,7 +5,6 @@ package mrchanges
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -159,9 +158,7 @@ type CommitStatsOutput struct {
 // every field returned by the GitLab commit payload inside a diff version is
 // surfaced here. extended_trailers maps each trailer to the list of its
 // values, which is how Gitlab::Git::Commit#parse_commit_trailers builds it and
-// how lib/api/entities/commit.rb documents it; client-go's Commit declares it
-// a map of strings, so it is read off the captured response
-// ([capturedCommit]).
+// how lib/api/entities/commit.rb documents it.
 type DiffVersionCommitOutput struct {
 	ID               string              `json:"id"`
 	ShortID          string              `json:"short_id"`
@@ -183,48 +180,10 @@ type DiffVersionCommitOutput struct {
 	WebURL           string              `json:"web_url,omitempty"`
 }
 
-// capturedDiffVersion is a merge request diff version as the single-version
-// route sends it, read off the captured response (ADR-0021) as client-go's
-// MergeRequestDiffVersion reads it, except for its commits, which the field
-// here takes over so that each commit's extended_trailers can be read as
-// GitLab sends them. encoding/json decodes a key into the shallowest field
-// that names it, so the embedded version's own commits stay empty.
-type capturedDiffVersion struct {
-	gl.MergeRequestDiffVersion
-	Commits []capturedCommit `json:"commits"`
-}
-
-// capturedCommit is one commit of a diff version as GitLab sends it:
-// client-go's Commit, with extended_trailers taken over.
-// lib/api/entities/commit.rb exposes it as each trailer mapped to the list of
-// its values, and client-go's Commit declares it a map of strings, so a
-// version holding one commit with a trailer fails in client-go's decoder as a
-// whole. commits.Captured is the same type for the commit routes; it is
-// mirrored here rather than imported (C-IMPORTS).
-type capturedCommit struct {
-	gl.Commit
-	ExtendedTrailers map[string][]string `json:"extended_trailers"`
-}
-
-// misreadByClientGo reports whether err is client-go failing to decode an
-// answer GitLab gave successfully into a struct of its own that cannot hold
-// it, which is what a version holding a commit with a trailer produces (see
-// [capturedCommit]). Such an answer is read from the capture by a type that
-// can hold it, so the failure is not the handler's; any other error is. When
-// the answer does not fit that type either, decoding the capture fails and
-// the handler reports that instead. commits.MisreadByClientGo is the same
-// predicate for the commit routes.
-func misreadByClientGo(err error) bool {
-	var typeErr *json.UnmarshalTypeError
-	return errors.As(err, &typeErr)
-}
-
-// diffVersionCommits converts the commits of a diff version read off the
-// captured response, in order.
-func diffVersionCommits(rows []capturedCommit) []DiffVersionCommitOutput {
+// diffVersionCommits converts the commits of a diff version, in order.
+func diffVersionCommits(rows []*gl.Commit) []DiffVersionCommitOutput {
 	var out []DiffVersionCommitOutput
-	for i := range rows {
-		c := &rows[i].Commit
+	for _, c := range rows {
 		co := DiffVersionCommitOutput{
 			ID:               c.ID,
 			ShortID:          c.ShortID,
@@ -237,7 +196,7 @@ func diffVersionCommits(rows []capturedCommit) []DiffVersionCommitOutput {
 			ParentIDs:        c.ParentIDs,
 			ProjectID:        c.ProjectID,
 			Trailers:         c.Trailers,
-			ExtendedTrailers: rows[i].ExtendedTrailers,
+			ExtendedTrailers: c.ExtendedTrailers,
 			WebURL:           c.WebURL,
 		}
 		if c.AuthoredDate != nil {
@@ -289,10 +248,7 @@ type DiffVersionsListOutput struct {
 
 // diffVersionToOutput converts the GitLab API response to the tool output
 // format, filling from the decoded version and from what the capture read
-// beside it. The version's commits are not among them: the list route sends
-// none, and the single-version route's are read off the captured response
-// ([diffVersionCommits]), since client-go's Commit cannot hold their
-// extended_trailers.
+// beside it. The list route sends no commits, and the single-version route does.
 func diffVersionToOutput(v *gl.MergeRequestDiffVersion, extra toolutil.MergeRequestDiffExtra) DiffVersionOutput {
 	out := DiffVersionOutput{
 		ID:             v.ID,
@@ -303,6 +259,7 @@ func diffVersionToOutput(v *gl.MergeRequestDiffVersion, extra toolutil.MergeRequ
 		State:          v.State,
 		RealSize:       v.RealSize,
 		PatchIDSHA:     extra.PatchIDSHA,
+		Commits:        diffVersionCommits(v.Commits),
 	}
 	if v.CreatedAt != nil {
 		out.CreatedAt = v.CreatedAt.Format(time.RFC3339)
@@ -375,23 +332,17 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 		opts.Unidiff = new(true)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	_, _, err := client.GL().MergeRequests.GetSingleMergeRequestDiffVersion(
+	version, _, err := client.GL().MergeRequests.GetSingleMergeRequestDiffVersion(
 		string(input.ProjectID), input.MRIID, input.VersionID, opts, gl.WithContext(ctx),
 	)
-	if err != nil && !misreadByClientGo(err) {
+	if err != nil {
 		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with mr_review.diff_versions_list")
-	}
-	var version capturedDiffVersion
-	if err = captured.Decode(&version); err != nil {
-		return DiffVersionOutput{}, toolutil.WrapErr("mrDiffVersionGet", err)
 	}
 	extra, err := toolutil.CapturedMergeRequestDiff(captured)
 	if err != nil {
 		return DiffVersionOutput{}, toolutil.WrapErr("mrDiffVersionGet", err)
 	}
-	out := diffVersionToOutput(&version.MergeRequestDiffVersion, extra)
-	out.Commits = diffVersionCommits(version.Commits)
-	return out, nil
+	return diffVersionToOutput(version, extra), nil
 }
 
 // ---------------------------------------------------------------------------

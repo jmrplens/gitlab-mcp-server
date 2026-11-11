@@ -114,20 +114,22 @@ func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
 // where it is written: the card's field and the listing's cell both escape it.
 func accessLevelLabel(l BranchAccessDescriptionOutput) string {
 	label := toolutil.AccessLevelDescription(gl.AccessLevelValue(l.AccessLevel))
-	switch {
-	case l.UserID != 0:
+	if l.UserID != 0 {
 		return fmt.Sprintf("%s (User #%d)", label, l.UserID)
-	case l.GroupID != 0:
-		return fmt.Sprintf("%s (Group #%d)", label, l.GroupID)
-	case l.MemberRoleID != 0 && l.MemberRoleName != "":
-		return fmt.Sprintf("%s (Custom Role %s #%d)", label, l.MemberRoleName, l.MemberRoleID)
-	case l.MemberRoleID != 0:
-		return fmt.Sprintf("%s (Custom Role #%d)", label, l.MemberRoleID)
-	case l.DeployKeyID != 0:
-		return fmt.Sprintf("%s (Deploy Key #%d)", label, l.DeployKeyID)
-	default:
-		return label
 	}
+	if l.GroupID != 0 {
+		return fmt.Sprintf("%s (Group #%d)", label, l.GroupID)
+	}
+	if l.MemberRoleID != 0 && l.MemberRoleName != "" {
+		return fmt.Sprintf("%s (Custom Role %s #%d)", label, l.MemberRoleName, l.MemberRoleID)
+	}
+	if l.MemberRoleID != 0 {
+		return fmt.Sprintf("%s (Custom Role #%d)", label, l.MemberRoleID)
+	}
+	if l.DeployKeyID != 0 {
+		return fmt.Sprintf("%s (Deploy Key #%d)", label, l.DeployKeyID)
+	}
+	return label
 }
 
 // FormatProtectedMarkdown renders one protected branch rule as a card.

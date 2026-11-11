@@ -141,16 +141,16 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 	if name == "protect" {
 		options = branchProtectOptions(options)
 	}
-	switch {
-	case readOnly:
+	if readOnly {
 		return toolutil.NewReadActionSpec(name, route, options)
-	case route.Destructive && idempotent:
-		return toolutil.NewDeleteActionSpec(name, route, options)
-	case idempotent:
-		return toolutil.NewUpdateActionSpec(name, route, options)
-	default:
-		return toolutil.NewCreateActionSpec(name, route, options)
 	}
+	if route.Destructive && idempotent {
+		return toolutil.NewDeleteActionSpec(name, route, options)
+	}
+	if idempotent {
+		return toolutil.NewUpdateActionSpec(name, route, options)
+	}
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {

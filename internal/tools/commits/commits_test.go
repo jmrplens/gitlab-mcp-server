@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -3880,13 +3879,12 @@ func TestCommitOptionsForAction_UnknownAction_KeepsTheSharedDefaults(t *testing.
 }
 
 // ---------------------------------------------------------------------------
-// extended_trailers, read off the captured response
+// extended_trailers
 // ---------------------------------------------------------------------------.
 
 // trailedCommitJSON is a commit as GitLab answers it once its trailers were
 // parsed: trailers keeps the last value of each trailer, and
-// extended_trailers maps each trailer to the list of all of its values, which
-// is the shape client-go's Commit cannot decode.
+// extended_trailers maps each trailer to the list of all of its values.
 const trailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
 	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
 	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
@@ -3899,13 +3897,12 @@ var wantExtendedTrailers = map[string][]string{
 }
 
 // TestCommitList_TrailersOnAPage_ReadsEveryValueOfEachTrailer is the case of
-// issue 1026: with trailers set, GitLab sends extended_trailers as lists, and
-// client-go failed the whole page on the first commit that carried one
-// ("cannot unmarshal array into Go struct field
-// Commit.extended_trailers.Signed-off-by of type string"). The page is read
-// off the captured response, so the commit keeps both of its Signed-off-by
-// values, the commit beside it keeps its empty map, and the pagination headers
-// of the answer client-go failed to decode still reach the output.
+// issue 1026: with trailers set, GitLab sends extended_trailers as lists, which
+// client-go decodes from v3.40.3 and failed the whole page on before ("cannot
+// unmarshal array into Go struct field Commit.extended_trailers.Signed-off-by
+// of type string"). The commit keeps both of its Signed-off-by values, the
+// commit beside it keeps its empty map, and the pagination headers reach the
+// output.
 func TestCommitList_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != pathRepoCommits {
@@ -3945,10 +3942,8 @@ func TestCommitList_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
 
 // TestCommitHandlers_CommitWithTrailers_PublishTheListsGitLabSent holds every
 // other handler of this package that answers with a commit to the same
-// reading: the route's answer carries extended_trailers as lists, client-go
-// fails to decode it, and the handler still returns the commit with every
-// value of each trailer. None of these routes parses trailers today, which is
-// why nothing failed yet; the failure moves with Gitaly, not with this server.
+// reading: the route's answer carries extended_trailers as lists, and the
+// handler returns the commit with every value of each trailer.
 func TestCommitHandlers_CommitWithTrailers_PublishTheListsGitLabSent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -4003,11 +3998,9 @@ func TestCommitHandlers_CommitWithTrailers_PublishTheListsGitLabSent(t *testing.
 	}
 }
 
-// TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure pins the
-// other side of passing over client-go's decode failure: an answer that fits
-// neither client-go's Commit nor this server's type (an id that is a number)
-// is not published as an empty commit. Decoding the capture fails as well,
-// and every handler reports that failure rather than a success.
+// TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure pins that an
+// answer client-go's Commit cannot hold (an id that is a number) is not
+// published as an empty commit: every handler reports the failure.
 func TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -4051,58 +4044,10 @@ func TestCommitHandlers_AnswerNoCommitTypeHolds_ReportTheDecodeFailure(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.call()
-			if err == nil {
-				t.Fatal("expected the decode failure, got nil")
-			}
-			if !strings.Contains(err.Error(), "decode the captured response") {
-				t.Errorf("error = %v, want the capture's decode failure", err)
+			if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+				t.Fatalf("error = %v, want client-go's decode failure", err)
 			}
 		})
-	}
-}
-
-// TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError holds the
-// predicate the handlers pass client-go's error through: only a JSON type
-// mismatch, bare or wrapped, is client-go failing to read an answer GitLab
-// gave; a nil error, a transport failure and an API refusal are not.
-func TestMisreadByClientGo_TellsADecodeFailureFromEveryOtherError(t *testing.T) {
-	decodeErr := json.Unmarshal([]byte(`{"a":["x"]}`), &map[string]string{})
-	if _, ok := errors.AsType[*json.UnmarshalTypeError](decodeErr); !ok {
-		t.Fatalf("fixture error %v is not a type mismatch", decodeErr)
-	}
-
-	for _, tc := range []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil, want: false},
-		{name: "other error", err: errors.New("connection reset"), want: false},
-		{name: "api refusal", err: &gl.ErrorResponse{StatusCode: http.StatusNotFound, Message: "404 Commit Not Found"}, want: false},
-		{name: "type mismatch", err: decodeErr, want: true},
-		{name: "wrapped type mismatch", err: fmt.Errorf("decoding: %w", decodeErr), want: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := MisreadByClientGo(tc.err); got != tc.want {
-				t.Errorf("MisreadByClientGo(%v) = %v, want %v", tc.err, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestCapturedOutputs_UnreadableCapture_ReportsTheDecodeFailure covers the
-// page reader on its own, as the handlers of other packages call it: a body
-// that is not a list of commits is an error, never an empty page.
-func TestCapturedOutputs_UnreadableCapture_ReportsTheDecodeFailure(t *testing.T) {
-	if _, err := CapturedOutputs(gitlabclient.CapturedBody([]byte(`{"id":"a"}`))); err == nil {
-		t.Fatal("expected a decode failure for an object where a list belongs, got nil")
-	}
-	out, err := CapturedOutputs(gitlabclient.CapturedBody([]byte(`[` + trailedCommitJSON + `]`)))
-	if err != nil {
-		t.Fatalf("CapturedOutputs() unexpected error: %v", err)
-	}
-	if len(out) != 1 || !reflect.DeepEqual(out[0].ExtendedTrailers, wantExtendedTrailers) {
-		t.Errorf("CapturedOutputs() = %+v, want the one commit with its trailers", out)
 	}
 }
 

@@ -211,11 +211,10 @@ func requestLiteral(named *types.Named) bool {
 // builtRequests returns the request structs a composite literal of type t
 // builds: the client-go request struct t is, or, for a struct of our own,
 // each client-go request struct it embeds. A struct that embeds one beside
-// the fields client-go does not model (groupboards.updateGroupBoardBody) is
-// that request with more parameters, and the request goes out with the
-// embedded struct's fields flattened in; a client-go struct it holds in a
-// field of its own is a value of it, not the request, and an embedded result
-// (a captured commit) is no request at all.
+// the fields client-go does not model is that request with more parameters,
+// and the request goes out with the embedded struct's fields flattened in; a
+// client-go struct it holds in a field of its own is a value of it, not the
+// request, and an embedded result (a captured commit) is no request at all.
 func builtRequests(t types.Type) []*types.Named {
 	if named, _, isSDK := clientGoNamedStruct(t); isSDK {
 		if requestLiteral(named) {

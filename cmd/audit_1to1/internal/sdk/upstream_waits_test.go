@@ -1399,12 +1399,29 @@ type witnessReport struct {
 	} `json:"upstream_waits"`
 }
 
-// retiredAtV3381 are the predicates of the two entries the bump to client-go
-// v3.38.1 retired, as the waits table spelled them: the eight scope fields
-// SetFeatureFlagOptions tagged without omitempty (row 6) and the pattern and
-// type of UpdatePackageProtectionRulesOptions (row 52).
-func retiredAtV3381() map[int][]waits.Predicate {
-	retired := map[int][]waits.Predicate{}
+// retiredByTheBump are the predicates of the entries the bump of client-go
+// retired, as the waits table spelled them: on the v3.38.1 step the eight scope
+// fields SetFeatureFlagOptions tagged without omitempty (row 6) and the pattern
+// and type of UpdatePackageProtectionRulesOptions (row 52); on the v3.40.3 step
+// what ImportStatus, PipelineVariable and ListTreeOptions left out (row 34), the
+// method cancel_auto_merge had none of (row 46), the spelling of
+// include_descendants (row 95), and the two list switches of a group board's
+// update (row 98).
+func retiredByTheBump() map[int][]waits.Predicate {
+	retired := map[int][]waits.Predicate{
+		34: {
+			waits.LacksKey{Type: "ImportStatus", Key: "failed_relations"},
+			waits.LacksKey{Type: "ImportStatus", Key: "stats"},
+			waits.LacksKey{Type: "PipelineSchedule", Key: "variables.raw"},
+			waits.LacksKey{Type: "ListTreeOptions", Key: "with_last_commit"},
+		},
+		46: {waits.NoMethodFor{Route: "POST /projects/:/merge_requests/:/cancel_auto_merge"}},
+		95: {waits.TagName{Type: "ListGroupMilestonesOptions", Field: "IncludeDescendents", Encoder: waits.EncoderQuery, Want: "include_descendants"}},
+		98: {
+			waits.LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_backlog_list"},
+			waits.LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_closed_list"},
+		},
+	}
 	for _, field := range []string{"Key", "FeatureGroup", "User", "Group", "Namespace", "Project", "Repository", "Force"} {
 		retired[6] = append(retired[6], waits.WritesAlways{Type: "SetFeatureFlagOptions", Field: field, Encoder: waits.EncoderJSON})
 	}
@@ -1414,20 +1431,26 @@ func retiredAtV3381() map[int][]waits.Predicate {
 	return retired
 }
 
-// TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381 is the
-// witness on the real tree of the two entries the first bump step retires.
-// client-go's SetFeatureFlagOptions tags its scope fields omitempty from
-// v3.34.0, which internal/tools/features.Set and the e2e fixture's setFeature
-// went on posting the body by hand for, and UpdatePackageProtectionRulesOptions
-// its pattern and type from v3.38.0, which the protected package update went
-// on answering a 422 for with a hint to send both. On v3.30.0 every predicate
-// of the two rows held. On the v3.38.1 pin none does, so both entries are
-// gone with the workarounds they held: no entry names either row and no
-// workaround stands at any of their sites, since the three now call the SDK.
+// TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403 is the witness
+// on the real tree of the entries the two bump steps retire. client-go's
+// SetFeatureFlagOptions tags its scope fields omitempty from v3.34.0, which
+// internal/tools/features.Set and the e2e fixture's setFeature went on posting
+// the body by hand for, and UpdatePackageProtectionRulesOptions its pattern and
+// type from v3.38.0, which the protected package update went on answering a 422
+// for with a hint to send both. From v3.39.0 ProjectImportExport models what an
+// import status sends, PipelineVariable its raw, ListTreeOptions with_last_commit,
+// UpdateGroupIssueBoardOptions the list switches and MergeRequests has
+// CancelAutoMerge, and from v3.40.1 ListGroupMilestonesOptions spells
+// include_descendants as GitLab does. On v3.30.0 every predicate of those rows
+// held. On the v3.40.3 pin none does, so the entries are gone with the
+// workarounds they held: no entry names any of the rows and no workaround stands
+// at any of their sites, since each now calls the SDK. One predicate of row 34
+// holds still and is not asked here: ImportStatus keeps CreateAt, deprecated and
+// tagged create_at, beside the CreatedAt the handler reads.
 //
 // It reads the report as plain JSON, so it says the same thing on a tree
 // that has no such section: there it fails, which is the point.
-func TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381(t *testing.T) {
+func TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
@@ -1440,10 +1463,13 @@ func TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381(t *testing.T)
 	if err != nil {
 		t.Fatalf("find the pinned client-go: %v", err)
 	}
-	for row, predicates := range retiredAtV3381() {
+	routes, unresolved := sdkRoutes(structs.ClientGoDir(pkgs))
+	sdk := waits.SDK{Types: clientGo, Routes: routes, Unresolved: unresolved}
+	retired := retiredByTheBump()
+	for row, predicates := range retired {
 		t.Run("row "+strconv.Itoa(row)+" predicates", func(t *testing.T) {
 			for _, predicate := range predicates {
-				if verdict := waits.Evaluate(predicate, waits.SDK{Types: clientGo}); verdict.Holds || verdict.Error != "" {
+				if verdict := waits.Evaluate(predicate, sdk); verdict.Holds || verdict.Error != "" {
 					t.Errorf("%s = %+v on the pinned client-go, want it read and no longer holding", predicate, verdict)
 				}
 			}
@@ -1461,11 +1487,16 @@ func TestRun_Repository_RetiresRowSixAndRowFiftyTwoAtClientGoV3381(t *testing.T)
 		t.Fatal("the sdk report has no upstream_waits section: nothing holds a workaround that waits on client-go to the SDK it is pinned to")
 	}
 	for _, entry := range rep.UpstreamWaits.Entries {
-		if entry.Row == 6 || entry.Row == 52 {
+		if _, gone := retired[entry.Row]; gone {
 			t.Errorf("the waits table still holds an entry for row %d", entry.Row)
 		}
 	}
-	retiredSites := []string{"features.Set", "fixture.setFeature", "protectedpackages.Update"}
+	retiredSites := []string{
+		"features.Set", "fixture.setFeature", "protectedpackages.Update",
+		"projectimportexport.rawGetImportStatus", "projectimportexport.rawImportFromFile",
+		"pipelineschedules.rawGetSchedule", "repository.withLastCommitParam",
+		"mergerequests.postCancelAutoMerge", "groupmilestones.includeDescendants", "groupboards.newRawRequest",
+	}
 	for _, found := range rep.UpstreamWaits.Workarounds {
 		if slices.Contains(retiredSites, found.Site) {
 			t.Errorf("%s %s is still a workaround, want the site calling client-go", found.Form, found.Site)
@@ -1607,7 +1638,7 @@ func TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds(t *testing.T
 				found.Form, found.Site, found.AnsweredBy, found.UnansweredKeys, found.UnansweredNeeds, found.UnansweredMethods, found.KeysUnread)
 		}
 	}
-	want := map[string]int{formRawRequest: 27, formRequestOption: 13, formBodyEdit: 9, formFixtureRawRequest: 4, formScenarioRawRequest: 1}
+	want := map[string]int{formRawRequest: 22, formRequestOption: 11, formBodyEdit: 9, formFixtureRawRequest: 4, formScenarioRawRequest: 1}
 	if !reflect.DeepEqual(forms, want) {
 		t.Errorf("forms = %v, want %v", forms, want)
 	}

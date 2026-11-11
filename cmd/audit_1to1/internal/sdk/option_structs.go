@@ -203,7 +203,7 @@ type optionUniverse struct {
 
 // funcBody is one body the walk reads: a function declaration's, or the
 // function literal a package-level variable is initialized with
-// (groupboards.newRawRequest, a seam its tests replace).
+// (packages.newDownloadRequest, a seam its tests replace).
 type funcBody struct {
 	// name is the function's name as the section prints it, its receiver
 	// type first for a method.
@@ -453,8 +453,7 @@ func (u *optionUniverse) recordReference(info *types.Info, method *types.Func, a
 // receiveOptions records the client-go structs a raw request's options of
 // static type t carry, sent from site: the struct t is or points to, or the
 // client-go structs a struct of the tool package's own embeds beside the
-// fields client-go does not model (groupboards.updateGroupBoardBody), which
-// the request carries flattened.
+// fields client-go does not model, which the request carries flattened.
 func (u *optionUniverse) receiveOptions(t types.Type, site string) {
 	if named, isStruct := clientGoStruct(t); isStruct {
 		u.receive(named, site, true)

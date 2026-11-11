@@ -59,12 +59,10 @@ const fullScheduleJSON = `{
 	"inputs":[{"name":"version","value":"1.2.3"},null]
 }`
 
-// fullScheduleOutput is what the handlers publish for fullScheduleJSON, on
-// either converter: the SDK one formats the timestamps to RFC3339 and the
-// raw one passes them through, and the fixture spells them so both agree.
-// The raw path is the one that can see variables[].raw, so it is passed the
-// only value that tells it apart; the SDK path, which cannot, passes nil.
-func fullScheduleOutput(raw *bool) Output {
+// fullScheduleOutput is what the handlers publish for fullScheduleJSON, its
+// timestamps formatted to RFC3339 and a raw flag the fixture does not send read
+// as false.
+func fullScheduleOutput() Output {
 	return Output{
 		ID:           11,
 		Description:  "Nightly build",
@@ -80,7 +78,7 @@ func fullScheduleOutput(raw *bool) Output {
 			AvatarURL: "https://gitlab.example.com/avatar/7.png", WebURL: "https://gitlab.example.com/admin",
 		},
 		LastPipeline: &LastPipelineOutput{ID: 99, SHA: "a1b2c3d4", Ref: "main", Status: "success"},
-		Variables:    []VariableObject{{Key: "DEPLOY_ENV", Value: "prod", VariableType: "env_var", Raw: raw}},
+		Variables:    []VariableObject{{Key: "DEPLOY_ENV", Value: "prod", VariableType: "env_var"}},
 		// destroy is a request-only param: the schedule entity's inputs carry
 		// name and value, so no answer ever fills it.
 		Inputs: []InputObject{{Name: "version", Value: "1.2.3"}},
@@ -115,7 +113,7 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	want := ListOutput{
-		Schedules:  []Output{fullScheduleOutput(nil)},
+		Schedules:  []Output{fullScheduleOutput()},
 		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 12, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true},
 	}
 	if !reflect.DeepEqual(out, want) {
@@ -215,12 +213,11 @@ func assertLastPipelineDocumentedSubset(t *testing.T, lp *LastPipelineOutput) {
 }
 
 // TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField holds what a
-// get publishes to the schedule GitLab answered, field for field, over the raw
-// superset path the handler takes. It is the same fixture the list test uses,
-// with variables[].raw added, which is the one field that path exists for: no
-// two values agree, so a converter reading a neighbor's field is told from
-// one reading its own, and the null array elements must be skipped rather than
-// published as empty entries.
+// get publishes to the schedule GitLab answered, field for field. It is the same
+// fixture the list test uses, with variables[].raw added: no two values agree,
+// so a converter reading a neighbor's field is told from one reading its own,
+// and the null array elements must be skipped rather than published as empty
+// entries.
 func TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -235,7 +232,9 @@ func TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField(t *testing.T
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if want := fullScheduleOutput(new(true)); !reflect.DeepEqual(out, want) {
+	want := fullScheduleOutput()
+	want.Variables[0].Raw = true
+	if !reflect.DeepEqual(out, want) {
 		t.Errorf("Get() =\n%#v\nwant\n%#v", out, want)
 	}
 }
@@ -282,11 +281,8 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 }
 
 // TestPipelineScheduleGet_RawVariableSurfaced verifies that the documented
-// variables[].raw boolean, which the SDK gl.PipelineVariable omits, is
-// surfaced through the raw REST superset fetch on the get-schedule handler,
-// and published as GitLab sent it whichever way it reads: a false that was
-// sent is a statement about the value, and used to be dropped as if GitLab had
-// said nothing.
+// variables[].raw boolean is published as GitLab sent it whichever way it reads:
+// a false that was sent is a statement about the value.
 func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
 	for _, raw := range []bool{true, false} {
 		t.Run(strconv.FormatBool(raw), func(t *testing.T) {
@@ -305,7 +301,7 @@ func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			if len(out.Variables) != 1 || out.Variables[0].Raw == nil || *out.Variables[0].Raw != raw {
+			if len(out.Variables) != 1 || out.Variables[0].Raw != raw {
 				t.Fatalf("variables = %+v, want one variable with raw=%t", out.Variables, raw)
 			}
 			blob, err := json.Marshal(out.Variables[0])
@@ -321,9 +317,7 @@ func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
 
 // TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance verifies that a
 // schedule whose variables[] entries omit the raw field (older GitLab versions)
-// still decodes successfully, leaving raw unset and omitting it from the
-// serialized output, so that a flag GitLab never sent is not published as
-// false.
+// still decodes successfully, reading raw as false as client-go does.
 func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -343,31 +337,20 @@ func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
 		t.Fatalf("variables = %+v, want one DEPLOY_ENV variable", out.Variables)
 	}
-	if out.Variables[0].Raw != nil {
-		t.Errorf("raw = %v, want none when the field is absent", *out.Variables[0].Raw)
-	}
-	blob, err := json.Marshal(out.Variables[0])
-	if err != nil {
-		t.Fatalf("marshal variable: %v", err)
-	}
-	if strings.Contains(string(blob), "raw") {
-		t.Errorf("variable JSON unexpectedly contains raw when absent: %s", blob)
+	if out.Variables[0].Raw {
+		t.Errorf("raw = true, want false when the field is absent")
 	}
 }
 
-// TestToOutput_SDKConverter_FullSchedule exercises the SDK-wrapper toOutput
-// converter (still used by the list/create/update/take-ownership handlers, which
-// return the gl.PipelineSchedule wrapper) across all of its sub-object and
-// timestamp branches: owner, last_pipeline, variables, inputs, next_run_at,
-// created_at, and updated_at. The get/run handlers now use the raw superset path
-// (toOutputAPI), so this direct test keeps the SDK converter fully covered.
+// TestToOutput_SDKConverter_FullSchedule exercises the toOutput converter across
+// all of its sub-object and timestamp branches: owner, last_pipeline, variables,
+// inputs, next_run_at, created_at, and updated_at.
 //
-// The input's destroy pointer is held here and nowhere else. It is the one
-// field the two converters disagree about on purpose: gl.PipelineInput carries
-// it, so inputObjects passes it through, while the documented response has no
-// per-input destroy and scheduleInputAPI decodes none. Every whole-object
-// fixture in this file answers without one, so with no assertion here the
-// pass-through could be dropped and the package would stay green.
+// The input's destroy pointer is held here and nowhere else: gl.PipelineInput
+// carries it, so inputObjects passes it through, while the documented response
+// has no per-input destroy. Every whole-object fixture in this file answers
+// without one, so with no assertion here the pass-through could be dropped and
+// the package would stay green.
 func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
 	now := time.Date(2026, 3, 8, 1, 0, 0, 0, time.UTC)
 	destroy := true
@@ -740,36 +723,15 @@ func TestCreateVariable_Success(t *testing.T) {
 	if out.Value != "production" {
 		t.Errorf("Value = %q, want %q", out.Value, "production")
 	}
-	if out.Raw == nil || !*out.Raw {
+	if !out.Raw {
 		t.Errorf("Raw = %v, want true: GitLab said the value is not expanded", out.Raw)
 	}
 }
 
-// TestRawGetSchedule_UnreadablePath_IsRefusedBeforeAnyRequest drives the one
-// way client-go's NewRequest refuses a GET, a path url.PathUnescape cannot
-// read, and asserts the refusal comes back before anything reaches GitLab.
-// schedulePath escapes every identifier a caller supplies, so only a path
-// handed in directly reaches this branch.
-func TestRawGetSchedule_UnreadablePath_IsRefusedBeforeAnyRequest(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	if _, err := rawGetSchedule(t.Context(), client, "projects/%zz/pipeline_schedules/1"); err == nil {
-		t.Fatal("rawGetSchedule() error = nil, want the path refused")
-	}
-}
-
-// TestSchedulePath_EscapesTheProjectPath asserts the schedule path escapes a
-// project path's slash, so a namespaced project names one path segment.
-func TestSchedulePath_EscapesTheProjectPath(t *testing.T) {
-	if got, want := schedulePath("group/project", 7), "projects/group%2Fproject/pipeline_schedules/7"; got != want {
-		t.Errorf("schedulePath() = %q, want %q", got, want)
-	}
-}
-
-// TestVariableWrites_UndecodableCapture_IsAnError asserts that both variable
-// writes report an answer whose raw flag is not a boolean, under their own
-// operation label, rather than publishing it as false: client-go models no
-// raw key and decodes the rest, so only the capture's read can refuse it.
-func TestVariableWrites_UndecodableCapture_IsAnError(t *testing.T) {
+// TestVariableWrites_UndecodableRaw_IsAnError asserts that both variable writes
+// report an answer whose raw flag is not a boolean, under their own operation
+// label, rather than publishing it as false.
+func TestVariableWrites_UndecodableRaw_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"K","value":"V","variable_type":"env_var","raw":"yes"}`)
 	}))
@@ -849,8 +811,8 @@ func TestEditVariable_Success(t *testing.T) {
 	if out.VariableType != "env_var" {
 		t.Errorf("VariableType = %q, want %q", out.VariableType, "env_var")
 	}
-	if out.Raw != nil {
-		t.Errorf("Raw = %v, want none: GitLab sent no raw flag", *out.Raw)
+	if out.Raw {
+		t.Error("Raw = true, want false: GitLab sent no raw flag")
 	}
 }
 
@@ -2289,7 +2251,7 @@ const variableCardHints = "\n---\n💡 **Next steps:**\n" +
 // TestFormatVariableMarkdown_WithType checks the whole card of one schedule
 // variable.
 func TestFormatVariableMarkdown_WithType(t *testing.T) {
-	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var", Raw: new(true)})
+	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var", Raw: true})
 	want := "## Pipeline Schedule Variable\n\n" +
 		"- **Key**: MY_VAR\n" +
 		"- **Value**: hello\n" +
@@ -2302,13 +2264,13 @@ func TestFormatVariableMarkdown_WithType(t *testing.T) {
 }
 
 // TestFormatVariableMarkdown_WithoutType checks that a variable GitLab sent no
-// type and no raw flag for shows neither row rather than a label with nothing
-// after it or a flag nobody sent.
+// type for shows no row rather than a label with nothing after it.
 func TestFormatVariableMarkdown_WithoutType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "K", Value: "V"})
 	want := "## Pipeline Schedule Variable\n\n" +
 		"- **Key**: K\n" +
 		"- **Value**: V\n" +
+		"- **Raw (not expanded)**: " + toolutil.BoolEmoji(false) + "\n" +
 		variableCardHints
 	if md != want {
 		t.Errorf("FormatVariableMarkdown(no type)\n got %q\nwant %q", md, want)
@@ -2388,13 +2350,9 @@ func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
 }
 
 // TestPipelineScheduleGet_WithTimestamps holds the three timestamps a get
-// publishes to the three the response carried, each a different instant.
-//
-// The comment here used to say it covered the != nil branches of toOutput,
-// which it never did: the get handler reads the raw superset path, where the
-// timestamps are decoded as strings and passed through with no branch at all,
-// so the only thing to hold is that each lands on its own field. Asserting
-// they are merely non-empty left a converter that reads created_at into
+// publishes to the three the response carried, each a different instant. They go
+// through the != nil branches of toOutput, and each has to land on its own field:
+// asserting they are merely non-empty left a converter that reads created_at into
 // updated_at passing.
 func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -5,7 +5,6 @@ package mrcontextcommits
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -90,31 +89,15 @@ type CommitAuthor struct {
 }
 
 // capturedCommit is one commit of either context commit route's answer, read
-// off the captured response as client-go's Commit reads it, except for
-// extended_trailers, which the field here takes over: Commit declares it a map
-// of strings, so it cannot hold the map of lists GitLab sends, and a page
-// holding one commit with a trailer fails in client-go's decoder as a whole.
-// encoding/json decodes a key into the shallowest field that names it, so the
-// embedded Commit's own field stays empty. The four fields after it are keys
+// off the captured response as client-go's Commit reads it, with the four keys
 // of the list's CommitWithLink that Commit does not model (see [CommitItem]),
-// and are empty on the answer to create_context_commits.
+// which are empty on the answer to create_context_commits.
 type capturedCommit struct {
 	gl.Commit
-	ExtendedTrailers  map[string][]string `json:"extended_trailers"`
-	Author            *CommitAuthor       `json:"author"`
-	AuthorGravatarURL string              `json:"author_gravatar_url"`
-	DescriptionHTML   string              `json:"description_html"`
-	TitleHTML         string              `json:"title_html"`
-}
-
-// misreadByClientGo reports whether err is client-go failing to decode an
-// answer GitLab gave successfully into a struct of its own that cannot hold
-// it, which is what a commit carrying a trailer produces (see
-// [capturedCommit]). Such an answer is read from the capture by a type that
-// can hold it, so the failure is not the handler's; any other error is.
-func misreadByClientGo(err error) bool {
-	var typeErr *json.UnmarshalTypeError
-	return errors.As(err, &typeErr)
+	Author            *CommitAuthor `json:"author"`
+	AuthorGravatarURL string        `json:"author_gravatar_url"`
+	DescriptionHTML   string        `json:"description_html"`
+	TitleHTML         string        `json:"title_html"`
 }
 
 // capturedCommitItems decodes the commits a context commit route answered
@@ -154,7 +137,7 @@ func toCommitItems(rows []capturedCommit) []CommitItem {
 			CreatedAt:         toolutil.RFC3339Ptr(c.CreatedAt),
 			ParentIDs:         c.ParentIDs,
 			Trailers:          c.Trailers,
-			ExtendedTrailers:  rows[i].ExtendedTrailers,
+			ExtendedTrailers:  c.ExtendedTrailers,
 			WebURL:            c.WebURL,
 			Author:            rows[i].Author,
 			AuthorGravatarURL: rows[i].AuthorGravatarURL,
@@ -201,12 +184,10 @@ type CreateOutput struct {
 	Commits []CommitItem `json:"commits"`
 }
 
-// List returns one page of the context commits of a merge request.
-//
-// The page is read from the captured body, since client-go's own decode fails
-// on a commit carrying a trailer (see [capturedCommit]). The capture keeps no
-// headers, so the pagination block comes from the response client-go returns,
-// which it returns on that decode failure too.
+// List returns one page of the context commits of a merge request. The page is
+// read from the captured body for the keys client-go's Commit does not model
+// (see [capturedCommit]), and the capture keeps no headers, so the pagination
+// block comes from the response client-go returns.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -219,7 +200,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, resp, err := client.GL().MergeRequestContextCommits.ListMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, gl.WithContext(ctx), toolutil.PaginationRequestOption(input.PaginationInput))
-	if err != nil && !misreadByClientGo(err) {
+	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_mr_context_commits", err, http.StatusNotFound, "verify project_id and merge_request_iid with merge_request.list")
 	}
 	items, err := capturedCommitItems(captured)
@@ -254,7 +235,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	_, _, err := client.GL().MergeRequestContextCommits.CreateMergeRequestContextCommits(string(input.ProjectID), input.MergeRequest, opts, gl.WithContext(ctx))
-	if err != nil && !misreadByClientGo(err) {
+	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_mr_context_commits", err, http.StatusBadRequest, "verify commit SHAs exist in the project repository")
 	}
 	items, err := capturedCommitItems(captured)

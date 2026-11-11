@@ -292,17 +292,16 @@ func assertSubmoduleNotSent(t *testing.T, body map[string]any, key string) {
 	}
 }
 
-// TestUpdate_UndecodableCommitDetail_IsAnError verifies that an answer the SDK
-// decodes and whose CommitDetail keys do not fit the captured read is reported
-// rather than published with those keys silently empty: client-go models no
-// project_id, so a malformed one reaches only this server's own decode.
+// TestUpdate_UndecodableCommitDetail_IsAnError verifies that an answer whose
+// CommitDetail keys do not fit is reported rather than published with those keys
+// silently empty.
 func TestUpdate_UndecodableCommitDetail_IsAnError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id": "abc123", "short_id": "abc", "project_id": "not a number"}`)
 	}))
 	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", Submodule: "lib", Branch: "main", CommitSHA: "abc123"})
 	if err == nil || !strings.Contains(err.Error(), "update_repository_submodule") {
-		t.Fatalf("Update() error = %v, want the failed read of the captured commit", err)
+		t.Fatalf("Update() error = %v, want the failed read of the commit", err)
 	}
 }
 

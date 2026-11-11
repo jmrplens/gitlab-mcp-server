@@ -469,22 +469,16 @@ func TestSearchCommits_CancelledContext(t *testing.T) {
 
 // searchTrailedCommitJSON is a commit as GitLab answers it once its trailers
 // were parsed: trailers keeps the last value of each trailer, and
-// extended_trailers maps each trailer to the list of all of its values, the
-// shape client-go's Commit cannot decode (row 69 of
-// docs/development/upstream-bugs.md).
+// extended_trailers maps each trailer to the list of all of its values.
 const searchTrailedCommitJSON = `{"id":"a1b2c3","short_id":"a1b2c3","title":"feat: signed twice","web_url":"https://gitlab.example.com/-/commit/a1b2c3",` +
 	`"trailers":{"Signed-off-by":"Bob <bob@example.com>","Reviewed-by":"Carol <carol@example.com>"},` +
 	`"extended_trailers":{"Signed-off-by":["Alice <alice@example.com>","Bob <bob@example.com>"],"Reviewed-by":["Carol <carol@example.com>"]}}`
 
 // TestSearchCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer holds
 // search.commits, at each of its three scopes, to the reading issue 1026 gave
-// the commit list: a page carrying a commit whose extended_trailers are lists
-// makes client-go fail the whole page ("cannot unmarshal array into Go struct
-// field .0.extended_trailers.Signed-off-by of type string"), so the page is
-// read off the captured response. The trailed commit keeps both of its
-// Signed-off-by values, the commit beside it keeps its empty map, and the
-// pagination headers of the answer client-go failed to decode still reach the
-// output.
+// the commit list: on a page carrying a commit whose extended_trailers are
+// lists, the trailed commit keeps both of its Signed-off-by values, the commit
+// beside it keeps its empty map, and the pagination headers reach the output.
 func TestSearchCommits_TrailersOnAPage_ReadsEveryValueOfEachTrailer(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -547,29 +541,8 @@ func assertTrailedCommitPage(t *testing.T, out CommitsOutput) {
 	}
 }
 
-// TestSearchCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure pins the
-// other side of passing over client-go's decode failure: an answer that fits
-// neither client-go's Commit nor this server's type (an id that is a number)
-// is not published as an empty page. Decoding the capture fails as well, and
-// the handler reports that failure.
-func TestSearchCommits_AnswerNoCommitTypeHolds_ReportsTheDecodeFailure(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":5}]`)
-	}))
-
-	_, err := Commits(context.Background(), client, CommitsInput{ProjectID: "42", Query: "x"})
-	if err == nil {
-		t.Fatal("expected the decode failure, got nil")
-	}
-	if !strings.Contains(err.Error(), "decode the captured response") {
-		t.Errorf("error = %v, want the capture's decode failure", err)
-	}
-}
-
-// TestSearchCommits_Refused_ReportsTheRefusal holds the error client-go
-// returns for a refusal apart from the decode failure the handler passes
-// over: a 403 is reported as GitLab's refusal, and never as a capture that
-// failed to decode.
+// TestSearchCommits_Refused_ReportsTheRefusal holds the error client-go returns
+// for a refusal: a 403 is reported as GitLab's refusal.
 func TestSearchCommits_Refused_ReportsTheRefusal(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -582,26 +555,25 @@ func TestSearchCommits_Refused_ReportsTheRefusal(t *testing.T) {
 	if !toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 		t.Errorf("error = %v, want GitLab's 403", err)
 	}
-	if strings.Contains(err.Error(), "decode the captured response") {
-		t.Errorf("error = %v, want the refusal rather than a decode failure", err)
-	}
 }
 
 // TestScopedSearches_AnswerClientGoCannotDecode_ReportClientGosDecodeFailure
-// holds the scope of what search.commits and search.wiki pass over: client-go
-// failing to decode GitLab's answer is dropped only for the two searches that
-// read their page from the captured response. Every other search sent at a
-// project, a group or the whole instance, fed an answer with a key of the
-// wrong JSON type, still fails with client-go's own decode error, never with
-// the capture's and never as an empty page. The issue case names iid rather
-// than id because client-go's Issue reads a string id as an external
-// tracker's.
+// holds the scope of what search.wiki passes over: client-go failing to decode
+// GitLab's answer is dropped only for that search, which reads its page from
+// the captured response. Every other search sent at a project, a group or the
+// whole instance, fed an answer with a key of the wrong JSON type, still fails
+// with client-go's own decode error, never with the capture's and never as an
+// empty page. The issue case names iid rather than id because client-go's Issue
+// reads a string id as an external tracker's.
 func TestScopedSearches_AnswerClientGoCannotDecode_ReportClientGosDecodeFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		body   string
 		search func(context.Context, *gitlabclient.Client) (any, error)
 	}{
+		{name: "commits", body: `[{"id":5}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
+			return Commits(ctx, client, CommitsInput{ProjectID: "42", Query: "x"})
+		}},
 		{name: "code", body: `[{"startline":"x"}]`, search: func(ctx context.Context, client *gitlabclient.Client) (any, error) {
 			return Code(ctx, client, CodeInput{ProjectID: "42", Query: "x"})
 		}},

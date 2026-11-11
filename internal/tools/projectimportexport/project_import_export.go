@@ -290,25 +290,33 @@ type ImportFromFileInput struct {
 // ImportStatusOutput is the output for import operations: every key
 // lib/api/entities/project_import_status.rb sends. FailedRelations are the
 // relations the import could not bring over, at most a hundred, and Stats is
-// what a GitHub import has fetched and imported so far, per object type,
-// which GitLab sends as null for any other import. client-go's ImportStatus
-// models neither, and both are read by the raw decode this package already
-// makes.
+// what a GitHub import has fetched and imported so far, which GitLab sends as
+// null for any other import.
 type ImportStatusOutput struct {
 	toolutil.HintableOutput
-	ID                int64                       `json:"id"`
-	Description       string                      `json:"description"`
-	Name              string                      `json:"name"`
-	NameWithNamespace string                      `json:"name_with_namespace"`
-	Path              string                      `json:"path"`
-	PathWithNamespace string                      `json:"path_with_namespace"`
-	CreatedAt         string                      `json:"created_at,omitempty"`
-	ImportStatus      string                      `json:"import_status"`
-	ImportType        string                      `json:"import_type,omitempty"`
-	CorrelationID     string                      `json:"correlation_id,omitempty"`
-	ImportError       string                      `json:"import_error,omitempty"`
-	FailedRelations   []FailedRelationOutput      `json:"failed_relations"`
-	Stats             map[string]map[string]int64 `json:"stats,omitempty"`
+	ID                int64                  `json:"id"`
+	Description       string                 `json:"description"`
+	Name              string                 `json:"name"`
+	NameWithNamespace string                 `json:"name_with_namespace"`
+	Path              string                 `json:"path"`
+	PathWithNamespace string                 `json:"path_with_namespace"`
+	CreatedAt         string                 `json:"created_at,omitempty"`
+	ImportStatus      string                 `json:"import_status"`
+	ImportType        string                 `json:"import_type,omitempty"`
+	CorrelationID     string                 `json:"correlation_id,omitempty"`
+	ImportError       string                 `json:"import_error,omitempty"`
+	FailedRelations   []FailedRelationOutput `json:"failed_relations"`
+	Stats             ImportStatsOutput      `json:"stats,omitzero"`
+}
+
+// ImportStatsOutput mirrors gl.ProjectImportStats: what a GitHub import has
+// fetched and what it has imported so far, per object type. GitLab adds a type
+// only once it counts one, so both maps start empty, and they are spelled
+// omitzero so that an empty one goes out as the empty map GitLab sent while a
+// key it did not send, or an answer with neither, publishes nothing.
+type ImportStatsOutput struct {
+	Fetched  map[string]int64 `json:"fetched,omitzero"`
+	Imported map[string]int64 `json:"imported,omitzero"`
 }
 
 // FailedRelationOutput is one relation an import could not bring over, as
@@ -326,44 +334,9 @@ type FailedRelationOutput struct {
 	LineNumber     int64  `json:"line_number"`
 }
 
-// failedRelationAPI is one failed relation as the raw decode reads it.
-type failedRelationAPI struct {
-	ID             int64      `json:"id"`
-	CreatedAt      *time.Time `json:"created_at"`
-	ExceptionClass string     `json:"exception_class"`
-	Source         string     `json:"source"`
-	RelationName   string     `json:"relation_name"`
-	LineNumber     int64      `json:"line_number"`
-}
-
-// importStatusAPI is a raw-decode superset of the documented import-status
-// response (doc/api/project_import_export.md import/status responses). It exists
-// because gl.ImportStatus tags its timestamp field as `create_at` (an SDK typo),
-// so it never captures the documented `created_at` attribute. Decoding into this
-// superset reads the documented `created_at` first and falls back to the legacy
-// `create_at` spelling, so the value is surfaced regardless of which spelling the
-// instance returns. The other fields mirror gl.ImportStatus 1:1, and the two it
-// does not model, failed_relations and stats, are read here too.
-type importStatusAPI struct {
-	ID                int64                       `json:"id"`
-	Description       string                      `json:"description"`
-	Name              string                      `json:"name"`
-	NameWithNamespace string                      `json:"name_with_namespace"`
-	Path              string                      `json:"path"`
-	PathWithNamespace string                      `json:"path_with_namespace"`
-	CreatedAt         *time.Time                  `json:"created_at"`
-	CreateAt          *time.Time                  `json:"create_at"`
-	ImportStatus      string                      `json:"import_status"`
-	ImportType        string                      `json:"import_type"`
-	CorrelationID     string                      `json:"correlation_id"`
-	ImportError       string                      `json:"import_error"`
-	FailedRelations   []failedRelationAPI         `json:"failed_relations"`
-	Stats             map[string]map[string]int64 `json:"stats"`
-}
-
-// rawImportStatusToOutput maps the raw-decode superset onto ImportStatusOutput,
-// preferring the documented `created_at` attribute over the legacy `create_at`.
-func rawImportStatusToOutput(s *importStatusAPI) ImportStatusOutput {
+// importStatusToOutput converts an import's status, failed_relations an empty
+// list rather than null when the import lost none, as GitLab sends it.
+func importStatusToOutput(s *gl.ImportStatus) ImportStatusOutput {
 	out := ImportStatusOutput{
 		ID:                s.ID,
 		Description:       s.Description,
@@ -371,12 +344,12 @@ func rawImportStatusToOutput(s *importStatusAPI) ImportStatusOutput {
 		NameWithNamespace: s.NameWithNamespace,
 		Path:              s.Path,
 		PathWithNamespace: s.PathWithNamespace,
+		CreatedAt:         toolutil.RFC3339Ptr(s.CreatedAt),
 		ImportStatus:      s.ImportStatus,
 		ImportType:        s.ImportType,
 		CorrelationID:     s.CorrelationID,
 		ImportError:       s.ImportError,
 		FailedRelations:   make([]FailedRelationOutput, len(s.FailedRelations)),
-		Stats:             s.Stats,
 	}
 	for i, r := range s.FailedRelations {
 		out.FailedRelations[i] = FailedRelationOutput{
@@ -388,47 +361,10 @@ func rawImportStatusToOutput(s *importStatusAPI) ImportStatusOutput {
 			LineNumber:     r.LineNumber,
 		}
 	}
-	if created := s.CreatedAt; created != nil {
-		out.CreatedAt = created.Format(time.RFC3339)
-	} else if s.CreateAt != nil {
-		out.CreatedAt = s.CreateAt.Format(time.RFC3339)
+	if s.Stats != nil {
+		out.Stats = ImportStatsOutput{Fetched: s.Stats.Fetched, Imported: s.Stats.Imported}
 	}
 	return out
-}
-
-// rawGetImportStatus issues a raw REST GET against the import-status path,
-// decoding the documented response (including the documented `created_at`
-// attribute the SDK mistags) into an [importStatusAPI].
-func rawGetImportStatus(ctx context.Context, client *gitlabclient.Client, path string) (*importStatusAPI, error) {
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
-	if err != nil {
-		return nil, err
-	}
-	var status importStatusAPI
-	_, err = client.GL().Do(req, &status)
-	return &status, err
-}
-
-// rawImportFromFile issues a raw multipart REST POST against the import path,
-// decoding the documented response (including the documented `created_at`
-// attribute the SDK mistags) into an [importStatusAPI]. It mirrors the SDK's
-// ProjectImportExport.ImportFromFile upload but reads the documented timestamp.
-func rawImportFromFile(ctx context.Context, client *gitlabclient.Client, archive io.Reader, opts *gl.ImportFileOptions) (*importStatusAPI, error) {
-	req, err := client.GL().UploadRequest(
-		http.MethodPost,
-		"projects/import",
-		archive,
-		"archive.tar.gz",
-		gl.UploadFile,
-		opts,
-		[]gl.RequestOptionFunc{gl.WithContext(ctx)},
-	)
-	if err != nil {
-		return nil, err
-	}
-	var status importStatusAPI
-	_, err = client.GL().Do(req, &status)
-	return &status, err
 }
 
 // openArchive opens an import archive that already passed every check. It is
@@ -485,12 +421,12 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		opts.OverrideParams = op
 	}
 
-	status, err := rawImportFromFile(ctx, client, archiveReader, opts)
+	status, _, err := client.GL().ProjectImportExport.ImportFromFile(archiveReader, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ImportStatusOutput{}, toolutil.WrapErrWithStatusHint("import_from_file", err, http.StatusBadRequest,
 			"archive must be a valid GitLab project export (.tar.gz from project.export_download); namespace must exist and you need create-project permission there; path must be unique unless overwrite=true")
 	}
-	return rawImportStatusToOutput(status), nil
+	return importStatusToOutput(status), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -504,13 +440,12 @@ type GetImportStatusInput struct {
 
 // GetImportStatus returns the import status of a project.
 func GetImportStatus(ctx context.Context, client *gitlabclient.Client, input GetImportStatusInput) (ImportStatusOutput, error) {
-	path := fmt.Sprintf("projects/%s/import", gl.PathEscape(string(input.ProjectID)))
-	status, err := rawGetImportStatus(ctx, client, path)
+	status, _, err := client.GL().ProjectImportExport.ImportStatus(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ImportStatusOutput{}, toolutil.WrapErrWithStatusHint("import_status", err, http.StatusNotFound,
 			"verify project_id with project.get; status values: none, scheduled, started, finished, failed; check import_error field for failure reasons")
 	}
-	return rawImportStatusToOutput(status), nil
+	return importStatusToOutput(status), nil
 }
 
 // ---------------------------------------------------------------------------

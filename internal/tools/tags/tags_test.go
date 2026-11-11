@@ -323,7 +323,7 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 					"authored_date":"2026-06-15T08:00:00Z","committed_date":"2026-06-15T08:10:00Z",
 					"created_at":"2026-06-15T07:50:00Z","web_url":"https://gitlab.example.com/-/commit/aaa111bbb222",
 					"parent_ids":["zzz000"],"project_id":42,"status":"success",
-					"trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":"Dev"},
+					"trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":["Dev"]},
 					"stats":{"additions":3,"deletions":1,"total":4}
 				},
 				"release":{"tag_name":"v2.0.0","description":"Second major release"},
@@ -394,7 +394,7 @@ func TestTagGet_CommitSubsetIgnoresUndocumentedFields(t *testing.T) {
 				"commit":{
 					"id":"ccc333","short_id":"ccc333a","title":"chore",
 					"web_url":"https://gitlab.example.com/-/commit/ccc333","status":"success",
-					"project_id":99,"trailers":{"k":"v"},"extended_trailers":{"k":"v"},
+					"project_id":99,"trailers":{"k":"v"},"extended_trailers":{"k":["v"]},
 					"stats":{"additions":1,"deletions":0,"total":1},
 					"last_pipeline":{"id":7,"ref":"main","status":"success"}
 				}

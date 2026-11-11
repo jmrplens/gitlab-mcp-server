@@ -44,7 +44,7 @@
 //     helper's caller bound to that parameter, which the frame the literal was
 //     resolved in records.
 //   - A package-level variable's initializer is indexed as a function of its
-//     own, so a test seam holding a literal (the group boards' newRawRequest),
+//     own, so a test seam holding a literal (the packages' newDownloadRequest),
 //     a dispatch table of literals (the integrations' getters) and a method
 //     expression (commits' newRequest) are reached by the bodies that name them.
 //

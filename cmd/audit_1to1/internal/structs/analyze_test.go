@@ -983,7 +983,7 @@ func TestBuildReport_Repository_ReportsTheConvertersOfTheSharedShapes(t *testing
 	}
 	pipeline := toolutil.Gaps[index]
 	if len(pipeline.MissingFields) > 0 || len(pipeline.ExtraFields) > 0 {
-		t.Errorf("PipelineOutput against gl.Pipeline = missing %+v, extra %+v; want the two to carry the same keys in v3.38.1", pipeline.MissingFields, pipeline.ExtraFields)
+		t.Errorf("PipelineOutput against gl.Pipeline = missing %+v, extra %+v; want the two to carry the same keys in v3.40.3", pipeline.MissingFields, pipeline.ExtraFields)
 	}
 	mismatched := make([]string, 0, len(pipeline.TypeMismatches))
 	for _, mismatch := range pipeline.TypeMismatches {

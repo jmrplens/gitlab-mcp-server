@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -409,8 +410,9 @@ func TestImportFromFile_InvalidBase64_Error(t *testing.T) {
 }
 
 // TestGetImportStatus_Success verifies that every published import-status field
-// carries the attribute GitLab sent for it, the documented `created_at` (which
-// gl.ImportStatus mistags as `create_at`) included.
+// carries the attribute GitLab sent for it, the documented `created_at` included,
+// which gl.ImportStatus reads into CreatedAt and not into the deprecated CreateAt
+// it keeps beside it.
 //
 // The fixture spells no two values alike and the import is a failed one, so
 // import_error and correlation_id (the two fields a caller reads to find out
@@ -458,7 +460,7 @@ func TestGetImportStatus_Success(t *testing.T) {
 	if !reflect.DeepEqual(out.FailedRelations, wantRelations) {
 		t.Errorf("FailedRelations = %+v, want %+v", out.FailedRelations, wantRelations)
 	}
-	wantStats := map[string]map[string]int64{"fetched": {"issue": 3, "note": 5}, "imported": {"issue": 2}}
+	wantStats := ImportStatsOutput{Fetched: map[string]int64{"issue": 3, "note": 5}, Imported: map[string]int64{"issue": 2}}
 	if !reflect.DeepEqual(out.Stats, wantStats) {
 		t.Errorf("Stats = %v, want %v", out.Stats, wantStats)
 	}
@@ -477,6 +479,58 @@ func TestGetImportStatus_Success(t *testing.T) {
 		t.Run(tc.field, func(t *testing.T) {
 			if tc.got != tc.want {
 				t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetImportStatus_Stats_IsPublishedAsGitLabSendsIt pins the JSON of stats
+// for each answer lib/gitlab/github_import/object_counter.rb and
+// lib/api/entities/project_import_status.rb can give: null for an import that
+// is not GitHub's, EMPTY_SUMMARY's two empty maps while a GitHub import has
+// counted nothing, a map with counts beside an empty one, and the empty
+// import_checksums a finished import can keep. An empty map is published as
+// the empty map GitLab sent, and a key with nothing under it is left out, which
+// the Go zero values of the output would blur.
+func TestGetImportStatus_Stats_IsPublishedAsGitLabSendsIt(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		stats string
+		want  string
+	}{
+		{name: "null for any other import", stats: `null`},
+		{name: "no key at all for an older instance"},
+		{name: "empty checksums of a finished import", stats: `{}`},
+		{name: "nothing counted yet", stats: `{"fetched":{},"imported":{}}`, want: `{"fetched":{},"imported":{}}`},
+		{name: "fetched counted first", stats: `{"fetched":{"issue":3},"imported":{}}`, want: `{"fetched":{"issue":3},"imported":{}}`},
+		{name: "both counted", stats: `{"fetched":{"issue":3},"imported":{"issue":2}}`, want: `{"fetched":{"issue":3},"imported":{"issue":2}}`},
+		{name: "one stage alone", stats: `{"imported":{"issue":2}}`, want: `{"imported":{"issue":2}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"id":42,"import_status":"started"}`
+			if tc.stats != "" {
+				body = `{"id":42,"import_status":"started","stats":` + tc.stats + `}`
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, body)
+			}))
+
+			out, err := GetImportStatus(t.Context(), client, GetImportStatusInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf("GetImportStatus() error: %v", err)
+			}
+			blob, err := json.Marshal(out)
+			if err != nil {
+				t.Fatalf("marshal the output: %v", err)
+			}
+			var published struct {
+				Stats json.RawMessage `json:"stats"`
+			}
+			if err = json.Unmarshal(blob, &published); err != nil {
+				t.Fatalf("read the output back: %v", err)
+			}
+			if string(published.Stats) != tc.want {
+				t.Errorf("stats = %s, want %q in %s", published.Stats, tc.want, blob)
 			}
 		})
 	}
@@ -814,7 +868,7 @@ func TestFormatImportStatusMarkdown_FailedRelationsAndStats(t *testing.T) {
 		FailedRelations: []FailedRelationOutput{
 			{ID: 7, CreatedAt: "2026-03-01T10:05:00Z", ExceptionClass: "NoMethodError", Source: "relation|factory", RelationName: "issues", LineNumber: 3},
 		},
-		Stats: map[string]map[string]int64{"imported": {"note": 1, "issue": 2}, "fetched": {"issue": 3}},
+		Stats: ImportStatsOutput{Imported: map[string]int64{"note": 1, "issue": 2}, Fetched: map[string]int64{"issue": 3}},
 	}))
 	want := "## Import Status: project\n\n" +
 		"- **ID**: 1\n" +
@@ -834,6 +888,32 @@ func TestFormatImportStatusMarkdown_FailedRelationsAndStats(t *testing.T) {
 		"- Monitor import progress by checking status periodically\n"
 	if md != want {
 		t.Errorf("FormatImportStatusMarkdown()\n got: %q\nwant: %q", md, want)
+	}
+}
+
+// TestFormatImportStatusMarkdown_StatsOfOneStageOrNone verifies the counts table
+// appears as soon as either stage has counted something and not before: GitLab
+// sends both maps empty at the start of a GitHub import.
+func TestFormatImportStatusMarkdown_StatsOfOneStageOrNone(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		stats ImportStatsOutput
+		want  string
+	}{
+		{name: "no stats"},
+		{name: "nothing counted yet", stats: ImportStatsOutput{Fetched: map[string]int64{}, Imported: map[string]int64{}}},
+		{name: "fetched only", stats: ImportStatsOutput{Fetched: map[string]int64{"issue": 3}}, want: "| fetched | issue | 3 |\n"},
+		{name: "imported only", stats: ImportStatsOutput{Imported: map[string]int64{"issue": 2}}, want: "| imported | issue | 2 |\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := markdownOf(t, FormatImportStatusMarkdown(ImportStatusOutput{ID: 1, Name: "project", Stats: tc.stats}))
+			if got := strings.Contains(md, "Import Statistics"); got != (tc.want != "") {
+				t.Errorf("table present = %t in %q", got, md)
+			}
+			if !strings.Contains(md, tc.want) {
+				t.Errorf("markdown = %q, want it to hold %q", md, tc.want)
+			}
+		})
 	}
 }
 
@@ -990,74 +1070,32 @@ func TestImportFromFile_Base64DecodeError(t *testing.T) {
 	}
 }
 
-// TestRawImportStatusToOutput_NilCreatedAt verifies rawImportStatusToOutput
-// handles both timestamp fields being nil without panicking (the missed branch).
-func TestRawImportStatusToOutput_NilCreatedAt(t *testing.T) {
-	out := rawImportStatusToOutput(&importStatusAPI{
-		ID:           42,
-		ImportStatus: "finished",
-		CreatedAt:    nil,
-		CreateAt:     nil,
-	})
+// TestImportStatusToOutput_NoCreatedAtAndNoRelations verifies a status GitLab
+// sent neither a timestamp nor a failed relation for: the timestamp is left out,
+// and failed_relations stays the empty list GitLab sends rather than null.
+func TestImportStatusToOutput_NoCreatedAtAndNoRelations(t *testing.T) {
+	out := importStatusToOutput(&gl.ImportStatus{ID: 42, ImportStatus: "finished"})
 	if out.ID != 42 {
 		t.Errorf("ID = %d, want 42", out.ID)
 	}
 	if out.CreatedAt != "" {
 		t.Errorf("CreatedAt = %q, want empty", out.CreatedAt)
 	}
+	if out.FailedRelations == nil || len(out.FailedRelations) != 0 {
+		t.Errorf("FailedRelations = %#v, want an empty list", out.FailedRelations)
+	}
+	if !reflect.DeepEqual(out.Stats, ImportStatsOutput{}) {
+		t.Errorf("Stats = %+v, want none", out.Stats)
+	}
 }
 
-// TestRawImportStatusToOutput_DocumentedCreatedAt verifies rawImportStatusToOutput
-// surfaces the documented `created_at` attribute (the spelling the SDK mistags as
-// `create_at`).
-func TestRawImportStatusToOutput_DocumentedCreatedAt(t *testing.T) {
+// TestImportStatusToOutput_CreatedAt_IsRFC3339 verifies the timestamp goes out
+// in the wire form every other date here takes.
+func TestImportStatusToOutput_CreatedAt_IsRFC3339(t *testing.T) {
 	createdAt := time.Date(2026, 2, 1, 12, 30, 0, 0, time.UTC)
-	out := rawImportStatusToOutput(&importStatusAPI{
-		ID:           42,
-		ImportStatus: "finished",
-		CreatedAt:    &createdAt,
-	})
+	out := importStatusToOutput(&gl.ImportStatus{ID: 42, ImportStatus: "finished", CreatedAt: &createdAt})
 	if out.CreatedAt != "2026-02-01T12:30:00Z" {
 		t.Errorf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
-	}
-}
-
-// TestRawImportStatusToOutput_LegacyCreateAt verifies rawImportStatusToOutput
-// falls back to the legacy `create_at` spelling when the documented `created_at`
-// is absent, preserving compatibility with older instances/SDK decodes.
-func TestRawImportStatusToOutput_LegacyCreateAt(t *testing.T) {
-	legacy := time.Date(2025, 12, 25, 8, 0, 0, 0, time.UTC)
-	out := rawImportStatusToOutput(&importStatusAPI{
-		ID:           42,
-		ImportStatus: "finished",
-		CreateAt:     &legacy,
-	})
-	if out.CreatedAt != "2025-12-25T08:00:00Z" {
-		t.Errorf("CreatedAt = %q, want RFC3339 timestamp from create_at fallback", out.CreatedAt)
-	}
-}
-
-// errReader is an io.Reader that always fails, used to exercise the
-// request-construction error branch of rawImportFromFile.
-type errReader struct{}
-
-func (errReader) Read([]byte) (int, error) { return 0, errors.New("forced read error") }
-
-// TestRawGetImportStatus_RequestError verifies rawGetImportStatus returns the
-// request-construction error when the path contains an invalid percent escape.
-func TestRawGetImportStatus_RequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	if _, err := rawGetImportStatus(t.Context(), client, "projects/%zz/import"); err == nil {
-		t.Fatal("expected request-construction error for invalid path escape, got nil")
-	}
-}
-
-// TestRawImportFromFile_RequestError verifies rawImportFromFile returns the
-// request-construction error when the archive reader fails during multipart copy.
-func TestRawImportFromFile_RequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	if _, err := rawImportFromFile(t.Context(), client, errReader{}, nil); err == nil {
-		t.Fatal("expected request-construction error for failing archive reader, got nil")
 	}
 }
 

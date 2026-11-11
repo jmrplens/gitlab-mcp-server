@@ -18,7 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -336,15 +335,14 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 
 // TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet pins the whole PUT
 // body for the two list switches GitLab's group board update takes on every
-// tier and client-go's UpdateGroupIssueBoardOptions does not model (register
-// row 98). The group update offered neither, so a group board's Open and
-// Closed lists could not be hidden or shown (issue 1241). Each case is built
+// tier, which client-go's UpdateGroupIssueBoardOptions models since v3.39.0
+// (register row 98). The group update offered neither, so a group board's Open
+// and Closed lists could not be hidden or shown (issue 1241). Each case is built
 // from the parameters a model sends, so the switches are read as the catalog
 // reads them, and false is sent as false rather than read as unset. The two
 // switches take values from the same two possibilities, so the cases give
 // them opposite values to tell the two apart, and one case sets a switch
-// beside the name to show the switches and client-go's own fields go out in
-// one body.
+// beside the name to show both go out in one body.
 func TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1567,13 +1565,12 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Documented-but-SDK-missing fields, read off the captured answer
+// Documented Premium fields
 // ---------------------------------------------------------------------------.
 
 // premiumGroupBoardJSON carries the documented Premium/Ultimate group-board
-// fields that gl.GroupIssueBoard omits: hide_backlog_list, hide_closed_list,
-// assignee and weight. It is used to assert the handlers read them off the
-// captured answer on the canonical json keys.
+// fields: hide_backlog_list, hide_closed_list, assignee and weight. It is used to
+// assert the handlers read them on the canonical json keys.
 const premiumGroupBoardJSON = `{
 	"id": 1,
 	"name": "new_name",
@@ -1588,8 +1585,7 @@ const premiumGroupBoardJSON = `{
 
 // TestGetGroupBoard_SurfacesDocumentedPremiumFields verifies that the board
 // read surfaces the documented hide_backlog_list, hide_closed_list, assignee
-// and weight fields that client-go's gl.GroupIssueBoard omits, which it reads
-// off the captured answer.
+// and weight fields.
 func TestGetGroupBoard_SurfacesDocumentedPremiumFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/boards/1", func(w http.ResponseWriter, _ *http.Request) {
@@ -1651,8 +1647,7 @@ func TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent(t *testing.T) {
 }
 
 // TestListGroupBoards_SurfacesDocumentedPremiumFields verifies the list
-// handler surfaces hide_*_list/assignee/weight per board, read off the captured
-// answer one board at a time.
+// handler surfaces hide_*_list/assignee/weight per board.
 func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5/boards", func(w http.ResponseWriter, _ *http.Request) {
@@ -1779,10 +1774,9 @@ func wholeBoardListOutput() BoardListOutput {
 // converter that reads the wrong neighbor, because an assignment has no branch
 // to flip; a whole-struct comparison against distinct values is what notices,
 // and it covers the nested group, milestone, assignee, label and column shapes
-// in one pass. Half of the board comes from client-go's GroupIssueBoard and
-// half from the captured answer beside it, so each route is held, not only the
-// read: a handler that joined the two wrongly would publish another board's
-// keys, or none.
+// in one pass. The weight comes from the captured answer beside client-go's
+// GroupIssueBoard, so each route is held, not only the read: a handler that
+// joined the two wrongly would publish another board's weight, or none.
 func TestGroupBoardRoutes_WholeShapeOfOneAnswer(t *testing.T) {
 	routes := []struct {
 		name string
@@ -1823,51 +1817,40 @@ func TestGroupBoardRoutes_WholeShapeOfOneAnswer(t *testing.T) {
 	}
 }
 
-// TestGroupBoardRoutes_UnreadableCapturedKey_IsTheCapturesFailure verifies
-// that every route answering with a board reads the four board keys
-// client-go's GroupIssueBoard does not model, and each column's limit_metric,
-// off the captured answer, and reports a value that does not fit as the
-// capture's decode failure rather than answering without it. The SDK ignores
-// the keys its struct does not carry, so the captured read is the only thing
-// that can notice. Until issue 1283 the list, read and create sent requests
-// of their own and decoded a superset of the struct, which failed in the
-// decode of the whole answer instead.
-func TestGroupBoardRoutes_UnreadableCapturedKey_IsTheCapturesFailure(t *testing.T) {
+// TestGroupBoardRoutes_AnAnswerTheCaptureCannotRead_IsTheCapturesFailure
+// verifies that every route answering with a board reports the failed read of
+// the weight off the captured answer rather than answering without it.
+//
+// client-go's GroupIssueBoard models the one key the capture reads since v3.39.0,
+// so no value of a well-formed answer fails the capture alone. An answer carrying
+// a second JSON value after the board still does: the SDK's decoder reads the
+// first value and stops, and the capture reads the body whole.
+func TestGroupBoardRoutes_AnAnswerTheCaptureCannotRead_IsTheCapturesFailure(t *testing.T) {
 	poisoned := func(body string) *gitlabclient.Client {
 		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	keys := []struct{ name, member string }{
-		{"hide_backlog_list", `"hide_backlog_list":"yes"`},
-		{"hide_closed_list", `"hide_closed_list":"no"`},
-		{"assignee", `"assignee":"ada"`},
-		{"weight", `"weight":"heavy"`},
-		{"limit_metric", `"lists":[{"id":31,"position":0,"limit_metric":42}]`},
-	}
-	var cases []testutil.CapturedCase
-	for _, key := range keys {
-		board := `{"id":1,"name":"Delivery",` + key.member + `}`
-		cases = append(cases,
-			testutil.CapturedCase{Name: "list/" + key.name, Call: func() error {
-				_, err := ListGroupBoards(t.Context(), poisoned(`[`+board+`]`), ListGroupBoardsInput{GroupID: "42"})
-				return err
-			}},
-			testutil.CapturedCase{Name: "get/" + key.name, Call: func() error {
-				_, err := GetGroupBoard(t.Context(), poisoned(board), GetGroupBoardInput{GroupID: "42", BoardID: 1})
-				return err
-			}},
-			testutil.CapturedCase{Name: "create/" + key.name, Call: func() error {
-				_, err := CreateGroupBoard(t.Context(), poisoned(board), CreateGroupBoardInput{GroupID: "42", Name: "Delivery"})
-				return err
-			}},
-			testutil.CapturedCase{Name: "update/" + key.name, Call: func() error {
-				_, err := UpdateGroupBoard(t.Context(), poisoned(board), UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "Delivery"})
-				return err
-			}},
-		)
-	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	const board = `{"id":1,"name":"Delivery"}`
+	const second = ` {"id":2}`
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListGroupBoards(t.Context(), poisoned(`[`+board+`]`+second), ListGroupBoardsInput{GroupID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := GetGroupBoard(t.Context(), poisoned(board+second), GetGroupBoardInput{GroupID: "42", BoardID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := CreateGroupBoard(t.Context(), poisoned(board+second), CreateGroupBoardInput{GroupID: "42", Name: "Delivery"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := UpdateGroupBoard(t.Context(), poisoned(board+second), UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "Delivery"})
+			return err
+		}},
+	})
 }
 
 // TestGroupBoardRoutes_CallersContext_ReachesTheRequest verifies that every
@@ -1912,37 +1895,11 @@ func TestGroupBoardRoutes_CallersContext_ReachesTheRequest(t *testing.T) {
 	}
 }
 
-// TestConvertGroupBoard_ColumnWithNoCapturedExtraHasNoMetric holds the join
-// of a board's columns to what was read beside them by position: a column the
-// captured board holds nothing for is published without a metric rather than
-// with another column's, and never indexes past what was read. The SDK and
-// the captured read decode the same bytes, so no answer of GitLab's reaches
-// this through a handler.
-func TestConvertGroupBoard_ColumnWithNoCapturedExtraHasNoMetric(t *testing.T) {
-	board := &gl.GroupIssueBoard{ID: 1, Lists: []*gl.BoardList{{ID: 100}, {ID: 101}}}
-	extra := toolutil.GroupBoardExtra{Lists: []toolutil.BoardListExtra{{LimitMetric: "issue_count"}}}
-
-	out := convertGroupBoard(board, extra)
-
-	type columnMetric struct {
-		id     int64
-		metric string
-	}
-	got := make([]columnMetric, 0, len(out.Lists))
-	for _, list := range out.Lists {
-		got = append(got, columnMetric{list.ID, list.LimitMetric})
-	}
-	if want := []columnMetric{{100, "issue_count"}, {101, ""}}; !reflect.DeepEqual(got, want) {
-		t.Errorf("columns = %+v, want %+v", got, want)
-	}
-}
-
 // TestGetGroupBoardList_WholeShapeOfOneAnswer pins the column shape the SDK
 // path produces, for the same reason and against the same distinct values. It
 // is a path of its own rather than a repeat of the board test: here the column
-// comes from client-go's own struct and its limit_metric from the captured
-// response beside it, and only this test says the two are joined on the right
-// column.
+// is the whole answer of a client-go route of its own, limit_metric included,
+// rather than one entry of a board's lists.
 func TestGetGroupBoardList_WholeShapeOfOneAnswer(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/31", func(w http.ResponseWriter, _ *http.Request) {
@@ -1976,82 +1933,6 @@ func wholeBoardListJSON(t *testing.T) string {
 		t.Fatalf("board fixture has %d columns, want 1", len(board.Lists))
 	}
 	return string(board.Lists[0])
-}
-
-// TestGroupBoardLists_UnreadableCapturedLimitMetric verifies that every group
-// board list handler returns an error rather than a half-filled list when
-// GitLab sends limit_metric as something that is not a string. The SDK ignores
-// the key its own BoardList does not model, so the read of the captured
-// response is the only thing that can notice.
-func TestGroupBoardLists_UnreadableCapturedLimitMetric(t *testing.T) {
-	// A list answers with an array and the rest with an object, so each case
-	// drives a client of its own rather than one shared handler.
-	poisoned := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error {
-			client := poisoned(`[{"id":1,"position":0,"limit_metric":42}]`)
-			_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
-			_, err := GetGroupBoardList(context.Background(), client, GetGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1})
-			return err
-		}},
-		{Name: "create", Call: func() error {
-			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
-			_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
-			return err
-		}},
-		{Name: "update", Call: func() error {
-			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
-			_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1, Position: 2})
-			return err
-		}},
-	})
-}
-
-// TestGroupBoardRoutes_RawConstructorFails_OnlyTheUpdateIsRefused verifies
-// that the update is the one group board route that builds a request of its
-// own, and that it surfaces the construction error. The list, read and create
-// call client-go's methods and read what GitLab's struct leaves out off the
-// captured answer (issue 1283), so a constructor that fails reaches none of
-// them and each answers the board the mock serves. The update keeps its
-// request for the two list switches UpdateGroupIssueBoardOptions does not
-// model (issue 1241). Its failure branch is unreachable with valid input
-// (PathEscape sanitizes the path), so the constructor seam is stubbed.
-func TestGroupBoardRoutes_RawConstructorFails_OnlyTheUpdateIsRefused(t *testing.T) {
-	orig := newRawRequest
-	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {
-		return nil, errors.New("construction boom")
-	}
-	t.Cleanup(func() { newRawRequest = orig })
-	answer := func(body string) *gitlabclient.Client {
-		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			testutil.RespondJSON(w, http.StatusOK, body)
-		}))
-	}
-	ctx := t.Context()
-
-	listed, err := ListGroupBoards(ctx, answer(`[`+wholeGroupBoardJSON+`]`), ListGroupBoardsInput{GroupID: "42"})
-	if err != nil || len(listed.Boards) != 1 || listed.Boards[0].ID != 1 {
-		t.Errorf("ListGroupBoards() = %+v, %v; want the one board the mock serves", listed.Boards, err)
-	}
-	read, err := GetGroupBoard(ctx, answer(wholeGroupBoardJSON), GetGroupBoardInput{GroupID: "42", BoardID: 1})
-	if err != nil || read.ID != 1 {
-		t.Errorf("GetGroupBoard() = %+v, %v; want the board the mock serves", read, err)
-	}
-	created, err := CreateGroupBoard(ctx, answer(wholeGroupBoardJSON), CreateGroupBoardInput{GroupID: "42", Name: "b"})
-	if err != nil || created.ID != 1 {
-		t.Errorf("CreateGroupBoard() = %+v, %v; want the board the mock serves", created, err)
-	}
-	if _, err = UpdateGroupBoard(ctx, answer(wholeGroupBoardJSON), UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil || !strings.Contains(err.Error(), "construction boom") {
-		t.Errorf("UpdateGroupBoard() error = %v, want the construction error", err)
-	}
 }
 
 // requestLine finds where the request line starts in an error the wrappers

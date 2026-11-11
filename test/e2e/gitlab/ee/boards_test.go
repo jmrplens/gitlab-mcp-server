@@ -6,9 +6,8 @@
 // boards_test.go covers what the project board answers say about a column
 // whose work-in-progress limit is set, which only a licensed instance has:
 // every answer carrying a column carries the metric that column is counted
-// by, limit_metric, the one key of a column client-go's BoardList does not
-// model (issue 1256), and the text of the board listing names each limited
-// column with its ceilings and its metric (issue 1284). The board and column
+// by, limit_metric (issue 1256), and the text of the board listing names each
+// limited column with its ceilings and its metric (issue 1284). The board and column
 // lifecycle is Free and lives in the common package.
 
 package ee

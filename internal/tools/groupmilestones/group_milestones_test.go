@@ -812,7 +812,8 @@ func TestList_AllFilterParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
 			// include_descendants as lib/api/group_milestones.rb declares it,
-			// and never client-go's include_descendents, which GitLab ignores.
+			// and never the include_descendents client-go spelled before v3.40.1,
+			// which GitLab ignores.
 			if r.URL.Query().Has("include_descendents") {
 				t.Errorf("the query carries include_descendents, a key GitLab does not declare: %s", r.URL.RawQuery)
 			}
@@ -2042,8 +2043,7 @@ func TestGroupMilestones_PublishTheWebURL(t *testing.T) {
 // project's milestone belongs to. GitLab answers that list with the
 // milestones of the group's projects as well as its own
 // (lib/api/concerns/milestones/group_project_params.rb), and its milestone
-// entity sends project_id on those alone, which client-go's GroupMilestone
-// does not model, so it is read off the captured answer, per row.
+// entity sends project_id on those alone.
 func TestList_DescendantProjectMilestones_PublishTheirProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("include_descendants") != "true" {
@@ -2068,49 +2068,6 @@ func TestList_DescendantProjectMilestones_PublishTheirProject(t *testing.T) {
 	if got := out.Milestones[1]; got.GroupID != 0 || got.ProjectID != 7 {
 		t.Errorf("project milestone = group %d project %d, want no group and project 7", got.GroupID, got.ProjectID)
 	}
-}
-
-// TestGroupMilestones_UnreadableCapturedProjectID verifies that every group
-// milestone handler returns an error rather than a half-filled milestone when
-// GitLab sends project_id as something that is not a number. The SDK ignores
-// the key its own GroupMilestone does not model, so the read of the captured
-// response is the only thing that can notice. web_url, the other key the
-// capture reads, is modeled by client-go as of v3.26.0, whose decoder refuses
-// an unreadable one before the capture is read.
-func TestGroupMilestones_UnreadableCapturedProjectID(t *testing.T) {
-	const (
-		one  = `{"id":1,"iid":10,"title":"v1","project_id":"x"}`
-		many = `[{"id":1,"iid":10,"title":"v1","project_id":"x"}]`
-	)
-	// A collection GET is either the list itself or the IID-to-ID lookup Get
-	// and Update make before their own request; everything else is the request
-	// under test and gets the single poisoned milestone.
-	routed := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/milestones") {
-			testutil.RespondJSON(w, http.StatusOK, many)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, one)
-	}
-	client := testutil.NewTestClient(t, http.HandlerFunc(routed))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error {
-			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
-			return err
-		}},
-		{Name: "get", Call: func() error {
-			_, err := Get(context.Background(), client, GetInput{GroupID: "42", MilestoneIID: 10})
-			return err
-		}},
-		{Name: "create", Call: func() error {
-			_, err := Create(context.Background(), client, CreateInput{GroupID: "42", Title: "v1"})
-			return err
-		}},
-		{Name: "update", Call: func() error {
-			_, err := Update(context.Background(), client, UpdateInput{GroupID: "42", MilestoneIID: 10, Title: "v2"})
-			return err
-		}},
-	})
 }
 
 // groupMilestoneSpecsByTool supports group milestone specs by tool assertions in groupmilestones tests.

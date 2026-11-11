@@ -26,12 +26,8 @@ type UpdateInput struct {
 // renders through lib/api/entities/commit_detail.rb: identity, author and
 // committer attribution, the three instants, parents, message, build status,
 // the project, the web URL, the trailers and the commit's latest pipeline.
-//
-// client-go decodes the answer into a SubmoduleCommit, which models the first
-// thirteen of those and none of the last five, so those are read off the
-// captured response ([submoduleCommitExtra]). extended_trailers is typed as
-// GitLab sends it, each key to the list of its values: client-go's Commit
-// declares it a map of strings, which cannot hold a trailer GitLab has parsed.
+// extended_trailers is typed as GitLab sends it, each key to the list of its
+// values.
 type UpdateOutput struct {
 	toolutil.HintableOutput
 	ID               string                       `json:"id"`
@@ -54,18 +50,6 @@ type UpdateOutput struct {
 	LastPipeline     *toolutil.LastPipelineOutput `json:"last_pipeline,omitempty"`
 }
 
-// submoduleCommitExtra is what lib/api/entities/commit_detail.rb sends on the
-// update route that client-go's SubmoduleCommit does not model. All five are
-// exposed with no condition; last_pipeline is null while the commit has no
-// pipeline the caller may read.
-type submoduleCommitExtra struct {
-	ProjectID        int64               `json:"project_id"`
-	WebURL           string              `json:"web_url"`
-	Trailers         map[string]string   `json:"trailers"`
-	ExtendedTrailers map[string][]string `json:"extended_trailers"`
-	LastPipeline     *gl.PipelineInfo    `json:"last_pipeline"`
-}
-
 // Update updates a submodule reference in a repository.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
 	if string(input.ProjectID) == "" {
@@ -80,14 +64,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.CommitMessage = new(input.CommitMessage)
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	commit, _, err := client.GL().RepositorySubmodules.UpdateSubmodule(string(input.ProjectID), input.Submodule, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_repository_submodule", err, http.StatusNotFound, "verify project_id with project.get and submodule path exists")
-	}
-	var extra submoduleCommitExtra
-	if err = captured.Decode(&extra); err != nil {
-		return UpdateOutput{}, toolutil.WrapErr("update_repository_submodule", err)
 	}
 
 	// The three instants go out in RFC 3339, the wire form every other date
@@ -106,11 +85,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		CreatedAt:        toolutil.RFC3339Ptr(commit.CreatedAt),
 		Message:          commit.Message,
 		ParentIDs:        commit.ParentIDs,
-		ProjectID:        extra.ProjectID,
-		WebURL:           extra.WebURL,
-		Trailers:         extra.Trailers,
-		ExtendedTrailers: extra.ExtendedTrailers,
-		LastPipeline:     toolutil.NewLastPipelineOutput(extra.LastPipeline),
+		ProjectID:        commit.ProjectID,
+		WebURL:           commit.WebURL,
+		Trailers:         commit.Trailers,
+		ExtendedTrailers: commit.ExtendedTrailerValues,
+		LastPipeline:     toolutil.NewLastPipelineOutput(commit.LastPipeline),
 	}
 	if commit.Status != nil {
 		out.Status = string(*commit.Status)
