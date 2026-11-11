@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 3.4.0 | up to 1101 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.4.0 | up to 1102 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1101 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1095.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1102 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1096.
 Grouped by domain:
 
 ### access (8 tools)
@@ -1611,6 +1611,7 @@ Create an instance project topic. Returns: the created topic with id, name, titl
 - `avatar` (object): Avatar image to upload with the topic, from a local file or base64 content
 - `description` (string): Topic description
 - `name` (string) (required): Topic name (slug-like unique identifier)
+- `organization_id` (integer): ID of the organization to create the topic in. Omitted, GitLab creates it in the organization it resolves for the request
 - `title` (string) (required): Topic display title
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -2865,7 +2866,7 @@ Enable or disable error tracking. Returns: the updated error-tracking settings. 
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### environment (6 tools)
+### environment (7 tools)
 
 #### gitlab_environment_create
 
@@ -2934,6 +2935,18 @@ Stop a running environment in a GitLab project. Triggers any on_stop actions def
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_id` (integer) (required): Environment ID
 - `force` (boolean): Force stop even if environment has active deployments
+- `project_id` (string or integer) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_environment_stop_stale
+
+Stop every environment of a project last modified or deployed to before a time, protected environments excepted, and the stops run in the background. Returns: the request's status and GitLab's message. See also: gitlab_environment_list, gitlab_environment_stop, gitlab_environment_delete.
+
+**Parameters:**
+
+- `before` (string) (required): Stop the environments last modified or deployed to before this time (ISO 8601 format). GitLab takes a time between 10 years ago and 1 week ago
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -8673,6 +8686,7 @@ List instance project topics. Returns: an array of topics with id, name, title, 
 **Parameters:**
 
 - `order_by` (string): Column to order results by
+- `organization_id` (integer): Return the topics of the organization with this ID. Omitted, GitLab lists the topics of the organization it resolves for the request
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Filter topics by search query
@@ -10823,7 +10837,7 @@ Get the latest pipeline of a ref (the default branch when ref is omitted): the o
 - `sha` (string): Filter by commit SHA. Applies to the list fallback.
 - `sort` (string): Sort direction (asc, desc). Applies to the list fallback.
 - `source` (string): Filter by pipeline source (api, chat, external, external_pull_request_event, merge_request_event, ondemand_dast_scan, ondemand_dast_validation, parent_pipeline, pipeline, push, schedule, security_orchestration_policy, trigger, web, webide). Applies to the list fallback.
-- `status` (string): Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled). Applies to the list fallback.
+- `status` (string): Filter by status (created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, scheduled). Applies to the list fallback.
 - `updated_after` (string): Return pipelines updated after date (ISO 8601 format). Applies to the list fallback.
 - `updated_before` (string): Return pipelines updated before date (ISO 8601 format). Applies to the list fallback.
 - `username` (string): Filter by username that triggered the pipeline. Applies to the list fallback.
@@ -10849,7 +10863,7 @@ List project pipelines with filters and pagination. Returns: pipeline IDs, refs,
 - `sha` (string): Filter by commit SHA
 - `sort` (string): Sort direction (asc, desc)
 - `source` (string): Filter by pipeline source (api, chat, external, external_pull_request_event, merge_request_event, ondemand_dast_scan, ondemand_dast_validation, parent_pipeline, pipeline, push, schedule, security_orchestration_policy, trigger, web, webide)
-- `status` (string): Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled)
+- `status` (string): Filter by status (created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, scheduled)
 - `updated_after` (string): Return pipelines updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)
 - `username` (string): Filter by username that triggered the pipeline

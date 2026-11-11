@@ -179,6 +179,37 @@ func TestList_WithoutProjects_IsSentOnlyWhenSet(t *testing.T) {
 	}
 }
 
+// TestList_OrganizationID_IsSentOnlyWhenSet verifies List sends the
+// organization the caller named as organization_id, the filter GET /topics
+// declares and client-go v3.46.0 added, and no such key when the caller named
+// none, so GitLab lists the organization it resolves for the request.
+func TestList_OrganizationID_IsSentOnlyWhenSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ListInput
+		want  string
+		sent  bool
+	}{
+		{"set", ListInput{OrganizationID: 9}, "9", true},
+		{"unset", ListInput{}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var query url.Values
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.Query()
+				testutil.RespondJSON(w, http.StatusOK, `[`+topicJSON+`]`)
+			}))
+			if _, err := List(t.Context(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got, sent := query.Get("organization_id"), query.Has("organization_id"); got != tt.want || sent != tt.sent {
+				t.Errorf("organization_id = %q (sent: %v), want %q (sent: %v)", got, sent, tt.want, tt.sent)
+			}
+		})
+	}
+}
+
 // TestList_KeysetPagination verifies List forwards per_page, keyset,
 // page_token, order_by, sort and search to the GitLab API. All six are driven
 // at once with values none of them shares, so a handler that writes one
@@ -571,6 +602,26 @@ func TestCreate_OmittedFieldsAreNotSent(t *testing.T) {
 	assertSentBody(t, capturedBody, map[string]string{"name": "go"})
 }
 
+// TestCreate_OrganizationID_ReachesTheBody verifies that the organization the
+// caller named reaches GitLab as organization_id, a number, beside the name,
+// the field client-go v3.46.0 added to CreateTopicOptions.
+func TestCreate_OrganizationID_ReachesTheBody(t *testing.T) {
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, topicJSON)
+	}))
+	if _, err := Create(t.Context(), client, CreateInput{Name: "go", OrganizationID: 9}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := map[string]any{"name": "go", "organization_id": float64(9)}
+	if !maps.Equal(sent, want) {
+		t.Errorf("request body = %v, want %v", sent, want)
+	}
+}
+
 // assertSentBody holds the request body to exactly the fields want names, with
 // exactly the values it gives them. Decoding into a map rather than a struct is
 // what makes a field nobody asked to send visible: a struct would ignore it.
@@ -674,9 +725,9 @@ func TestCreateAndUpdate_WithAvatar_UploadIt(t *testing.T) {
 	}{
 		{
 			name: "create from base64", wantMethod: http.MethodPost, wantContent: "b64-image",
-			wantValues: map[string]string{"name": "go", "title": "Go", "description": "The language"},
+			wantValues: map[string]string{"name": "go", "title": "Go", "description": "The language", "organization_id": "9"},
 			call: func(client *gitlabclient.Client) (TopicItem, error) {
-				out, err := Create(t.Context(), client, CreateInput{Name: "go", Title: "Go", Description: "The language", Avatar: fromBase64})
+				out, err := Create(t.Context(), client, CreateInput{Name: "go", Title: "Go", Description: "The language", OrganizationID: 9, Avatar: fromBase64})
 				return out.Topic, err
 			},
 		},

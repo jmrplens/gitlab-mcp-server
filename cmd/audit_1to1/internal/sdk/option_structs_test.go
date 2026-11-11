@@ -829,7 +829,7 @@ func TestServiceMethod_ASelectorTheTypeCheckerDidNotResolve_NamesNoMethod(t *tes
 // TestRun_Repository_HoldsEveryOptionStructAHandlerSends is the witness of
 // the option structs section on the tree as it stands. The group hook edit is
 // a field-by-field copy of the add options, complete over the thirty-one
-// fields the two share in v3.44.0, and is paired with the edit input that
+// fields the two share in v3.46.1, and is paired with the edit input that
 // reaches it through that copy; the project and system hook edits are
 // conversions; the structs a helper builds out of scalars are each paired
 // with the input of the handler that hands the helper its fields; the

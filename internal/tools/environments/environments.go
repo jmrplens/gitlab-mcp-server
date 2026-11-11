@@ -6,6 +6,7 @@ package environments
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -334,4 +335,51 @@ func Stop(ctx context.Context, client *gitlabclient.Client, input StopInput) (Ou
 			"stopping an environment requires Developer role; use force=true to stop environments with active deployments; verify environment_id")
 	}
 	return toOutput(env), nil
+}
+
+// StopStaleInput defines parameters for stopping a project's stale
+// environments.
+type StopStaleInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Before    string               `json:"before"     jsonschema:"Stop the environments last modified or deployed to before this time (ISO 8601 format). GitLab takes a time between 10 years ago and 1 week ago,required"`
+}
+
+// StopStaleOutput is what GitLab answers a stale environment stop with: the
+// request is accepted and the stops run in the background, so the answer
+// names none of the environments it stops.
+type StopStaleOutput struct {
+	toolutil.HintableOutput
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Before  string `json:"before"`
+}
+
+// StopStale asks GitLab to stop every environment of a project last modified
+// or deployed to before a time. GitLab leaves protected environments out,
+// refuses a time outside the window it takes with 400, and stops the rest in
+// the background after it answers.
+func StopStale(ctx context.Context, client *gitlabclient.Client, input StopStaleInput) (StopStaleOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return StopStaleOutput{}, err
+	}
+	if input.ProjectID == "" {
+		return StopStaleOutput{}, errors.New("environmentStopStale: project_id is required")
+	}
+	if input.Before == "" {
+		return StopStaleOutput{}, errors.New("environmentStopStale: before is required")
+	}
+	opts := &gl.StopStaleEnvironmentsOptions{}
+	if err := toolutil.ParseTimeInputs(toolutil.TimeInput{Field: "before", Value: input.Before, Dest: &opts.Before}); err != nil {
+		return StopStaleOutput{}, fmt.Errorf("environmentStopStale: %w", err)
+	}
+	result, _, err := client.GL().Environments.StopStaleEnvironments(string(input.ProjectID), opts, gl.WithContext(ctx))
+	if err != nil {
+		return StopStaleOutput{}, toolutil.WrapErrWithStatusHint("environmentStopStale", err, http.StatusBadRequest,
+			"before must be a time between 10 years ago and 1 week ago; GitLab refuses any other")
+	}
+	out := StopStaleOutput{Status: "queued", Before: opts.Before.UTC().Format(time.RFC3339)}
+	if result != nil {
+		out.Message = result.Message
+	}
+	return out, nil
 }

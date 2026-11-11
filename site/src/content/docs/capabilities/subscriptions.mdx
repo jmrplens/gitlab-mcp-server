@@ -117,7 +117,7 @@ The polling cadence adapts to the resource:
 | No lifecycle field | 15s        | a wiki page, a file, a label                    |
 | Lease-demoted      | 10min      | 30 minutes without any request on the session   |
 
-Work in flight means a pipeline or job in `created`, `waiting_for_resource`, `preparing`, `pending` or `running` (a job list is busy while any job in it is), or a merge request or issue that is `opened` or `locked`. Every other status counts as settled, `manual` and `scheduled` included: both wait on something outside CI, a person or a clock, so polling them at the floor would spend budget on a resource that cannot change until that happens. Wikis, files, branches, labels, boards and the other kinds have no state to read, so they poll at the 15-second base.
+Work in flight means a pipeline or job in `created`, `waiting_for_resource`, `preparing`, `pending`, `running`, `canceling` or `waiting_for_callback` (a job list is busy while any job in it is), or a merge request or issue that is `opened` or `locked`. Every other status counts as settled, `manual` and `scheduled` included: both wait on something outside CI, a person or a clock, so polling them at the floor would spend budget on a resource that cannot change until that happens. Wikis, files, branches, labels, boards and the other kinds have no state to read, so they poll at the 15-second base.
 
 Nothing retires itself for being finished. GitLab has no terminal state: a retried pipeline reuses its ID and runs again, a closed issue reopens, a merged merge request can still be edited, so a watcher that stopped at `success` would go blind to a real change its subscriber asked about.
 

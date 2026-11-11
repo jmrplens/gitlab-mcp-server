@@ -1809,15 +1809,15 @@ func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	}
 }
 
-// TestDeployments_UnreadableCapturedPendingApprovalCount verifies that the two
-// deployment handlers reading the approval fields off the captured answer
-// return an error rather than a half-filled deployment when GitLab sends
-// pending_approval_count as something that is not a number. The SDK ignores the
-// key its own Deployment does not model, so the captured read is the only thing
-// that can notice, and a deployment reported without its pending approvals
-// would read as one that needs none.
-func TestDeployments_UnreadableCapturedPendingApprovalCount(t *testing.T) {
-	const body = `{"id":1,"iid":1,"ref":"main","status":"created","pending_approval_count":"many"}`
+// TestDeployments_UnreadableCapturedApprovals verifies that the two deployment
+// handlers reading the approval fields off the captured answer return an error
+// rather than a half-filled deployment when GitLab sends approvals as something
+// that is not a list. The SDK ignores the key its own Deployment does not
+// model, so the captured read is the only thing that can notice, and a
+// deployment reported without its approvals would read as one nobody has
+// answered.
+func TestDeployments_UnreadableCapturedApprovals(t *testing.T) {
+	const body = `{"id":1,"iid":1,"ref":"main","status":"created","approvals":"none"}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
@@ -2057,9 +2057,10 @@ func assertBlockedDeployment(t *testing.T, out Output) {
 // three approval fields reach the caller through all three handlers that
 // answer with one deployment.
 //
-// The create and update handlers read them off the captured response and the
-// get handler off its own raw superset, so they are three separate readings of
-// the same entity. Dropping any of them leaves a deployment GitLab is holding
+// The create and update handlers read the approvals and their summary off the
+// captured response and the outstanding count off client-go's Deployment, and
+// the get handler all three off its own raw superset, so they are separate
+// readings of the same entity. Dropping any of them leaves a deployment GitLab is holding
 // for approval indistinguishable from one that needs none, and no branch
 // changes when it is dropped.
 func TestDeployments_ApprovalFields_ReadFromTheAnswerGitLabSent(t *testing.T) {

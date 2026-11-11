@@ -950,7 +950,7 @@ type witnessCase struct{ route, param, class, category string }
 // finding.
 const witnessCovered = "covered"
 
-// witnessCases are the params the witness test expects on v3.44.0, with the
+// witnessCases are the params the witness test expects on v3.46.1, with the
 // request inventory generated at that pin.
 func witnessCases() []witnessCase {
 	type want = witnessCase

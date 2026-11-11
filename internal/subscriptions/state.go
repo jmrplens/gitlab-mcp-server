@@ -50,12 +50,20 @@ const settledFactor = 4
 // waiting on something outside CI — a human clicking play, or a future
 // timestamp — so polling them at the floor would spend the budget on a
 // resource that cannot change until that happens.
+//
+// "canceling" and "waiting_for_callback" sit on the busy side, where
+// toolutil.IsTerminalStatus puts them too: a canceling pipeline or job is
+// moments away from "canceled", and one waiting for a callback is waiting on
+// the system it handed work to, not on a person, so the answer comes on its
+// own.
 var busyStatuses = map[string]bool{
 	"created":              true,
 	"waiting_for_resource": true,
 	"preparing":            true,
 	"pending":              true,
 	"running":              true,
+	"canceling":            true,
+	"waiting_for_callback": true,
 }
 
 // busyStates are the merge-request and issue states that mean the object is

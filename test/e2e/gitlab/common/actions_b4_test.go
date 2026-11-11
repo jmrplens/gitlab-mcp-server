@@ -194,6 +194,7 @@ const (
 	actionEnvironmentList             harness.ActionID = "environment.list"
 	actionEnvironmentUpdate           harness.ActionID = "environment.update"
 	actionEnvironmentStop             harness.ActionID = "environment.stop"
+	actionEnvironmentStopStale        harness.ActionID = "environment.stop_stale"
 	actionEnvironmentDelete           harness.ActionID = "environment.delete"
 	actionEnvironmentDeploymentGet    harness.ActionID = "environment.deployment_get"
 	actionEnvironmentDeploymentUpdate harness.ActionID = "environment.deployment_update"

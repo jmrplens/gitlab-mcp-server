@@ -42,7 +42,7 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.27.4                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.44.0       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.46.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 3.4.0                                               |
@@ -51,7 +51,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~874 Free/CE; ~1029 Premium; ~1095 Ultimate (self-managed) / ~1101 on GitLab.com Ultimate with Orbit |
+| MCP Tools (individual)    | By instance tier: ~875 Free/CE; ~1030 Premium; ~1096 Ultimate (self-managed) / ~1102 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 29 Free/CE; 35 Premium; 46 Ultimate                                                       |
 | Meta-mode tools           | 34 base (Free/CE) / 40 Premium / 51 self-managed Ultimate / 52 GitLab.com Ultimate (Orbit); `gitlab_server` is served on every one of them and is counted here |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
@@ -599,7 +599,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (181 `internal/tools` sub-packages; tools by tier: ~874 Free/CE, ~1029 Premium, ~1095 Ultimate self-managed, ~1101 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (181 `internal/tools` sub-packages; tools by tier: ~875 Free/CE, ~1030 Premium, ~1096 Ultimate self-managed, ~1102 GitLab.com Ultimate) |
 | ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
@@ -642,7 +642,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/md_registry.
 - `toolutil.RegisterMarkdownResult[T](fn)`: registers a formatter for output type `T` that builds the `*mcp.CallToolResult` itself, for a result that carries more than text, such as an upload's image
 - `toolutil.MarkdownForResult(result any)`: looks up and invokes the registered formatter by `reflect.Type`
 - `internal/tools/markdown.go` is a thin delegator that calls `toolutil.MarkdownForResult`
-- 609 output types have a Markdown formatter, declared in 169 packages (the sub-packages that register one, and `toolutil`). The figures count types, not registration calls (`RegisterMarkdownPair` and `RegisterMarkdownTriple` register two and three), and leave out the fixtures `internal/tools` registers from its own tests; `TestAllMarkdownFormattersRegistered` holds them to the registry and, when a formatter is added or removed, names the figures to write. The comparison is a freshness check, so the layers of a stack defer it to the top
+- 610 output types have a Markdown formatter, declared in 169 packages (the sub-packages that register one, and `toolutil`). The figures count types, not registration calls (`RegisterMarkdownPair` and `RegisterMarkdownTriple` register two and three), and leave out the fixtures `internal/tools` registers from its own tests; `TestAllMarkdownFormattersRegistered` holds them to the registry and, when a formatter is added or removed, names the figures to write. The comparison is a freshness check, so the layers of a stack defer it to the top
 
 A formatter escapes what it interpolates: `toolutil.EscapeMdTableCell` on every GitLab-authored string between two pipes of a table row and on every single-line list value, `toolutil.EscapeMdHeading` on the one value that lands in a heading, and `toolutil.MdTitleLink` on both halves of a link rather than hand-writing `[%s](%s)`; an address shown as its own text is written once, `<url>`, by `toolutil.MdAutolink` (or `MdTitleLink` with that title), and a card or table leaves an avatar to `structuredContent` unless the avatar is the whole answer (issue 1396). A code block around GitLab-authored content is built with `toolutil.MarkdownFencedBlock`, or its fence sized with `toolutil.MarkdownCodeFence`, never written as three backticks: a fixed fence is closed by the first run of three the body contains, and everything after it renders as Markdown of the response. `make check-md-escaping` (`cmd/audit_md_escaping`) is the gate for both; a value that needs none is declared in its own package with `//gitlab:allow-unescaped <expression>: <reason>`, and a declaration that excuses nothing fails too.
 

@@ -108,6 +108,16 @@ var pipelineSourceValues = []string{
 	"schedule", "security_orchestration_policy", "trigger", "web", "webide",
 }
 
+// pipelineStatusValues are the statuses a list or latest lookup can filter
+// by: the values GET /projects/:id/pipelines takes for status
+// (Ci::HasStatus::AVAILABLE_STATUSES), matching the gl.BuildStateValue
+// constants in client-go, waiting_for_callback and canceling among them since
+// v3.45.0, in that order.
+var pipelineStatusValues = []string{
+	"created", "waiting_for_resource", "preparing", "waiting_for_callback", "pending", "running",
+	"success", "failed", "canceling", "canceled", "skipped", "manual", "scheduled",
+}
+
 func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute pipelines domain action.", Tags: []string{"ci", "pipeline"},
@@ -135,7 +145,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		options.IndividualTool.Description = "List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
+			toolutil.SchemaEnumOverride("status", pipelineStatusValues...),
 			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
 			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
 			toolutil.SchemaEnumOverride("source", pipelineSourceValues...),
@@ -230,7 +240,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		options.IndividualTool.Description = "Get the latest pipeline of a ref (the default branch when ref is omitted): the one GitLab ran for the commit at its head, or, when that commit has none on the ref, the newest on the ref (the first under any filters or ordering passed). Returns: full pipeline metadata, plus head_sha and fallback_note when the pipeline ran for an earlier commit. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
+			toolutil.SchemaEnumOverride("status", pipelineStatusValues...),
 			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
 			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
 			toolutil.SchemaEnumOverride("source", pipelineSourceValues...),

@@ -5944,6 +5944,18 @@
       }
     },
     {
+      "package": "internal/tools/environments",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/environments/stop_stale",
+      "body": [
+        "before"
+      ],
+      "identifiers": {
+        ":project_id": 2
+      }
+    },
+    {
       "package": "internal/tools/epicdiscussions",
       "kind": "graphql",
       "method": "POST",
@@ -19712,6 +19724,7 @@
       "path": "/topics",
       "query": [
         "order_by",
+        "organization_id",
         "per_page",
         "search",
         "sort",
@@ -19727,6 +19740,7 @@
         "avatar",
         "description",
         "name",
+        "organization_id",
         "title"
       ]
     },

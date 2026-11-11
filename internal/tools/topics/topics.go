@@ -46,6 +46,7 @@ type ListInput struct {
 	toolutil.PaginationInput
 	Search          string `json:"search,omitempty" jsonschema:"Filter topics by search query"`
 	WithoutProjects bool   `json:"without_projects,omitempty" jsonschema:"Return only the topics no project is assigned to"`
+	OrganizationID  int64  `json:"organization_id,omitempty" jsonschema:"Return the topics of the organization with this ID. Omitted, GitLab lists the topics of the organization it resolves for the request"`
 	OrderBy         string `json:"order_by,omitempty" jsonschema:"Column to order results by"`
 	Sort            string `json:"sort,omitempty" jsonschema:"Sort order: 'asc' or 'desc'"`
 }
@@ -74,6 +75,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	if input.WithoutProjects {
 		opts.WithoutProjects = new(true)
+	}
+	if input.OrganizationID > 0 {
+		opts.OrganizationID = new(input.OrganizationID)
 	}
 	topics, resp, err := client.GL().Topics.ListTopics(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -123,6 +127,9 @@ type CreateInput struct {
 	Name        string `json:"name" jsonschema:"Topic name (slug-like unique identifier),required"`
 	Title       string `json:"title,omitempty" jsonschema:"Topic display title,required"`
 	Description string `json:"description,omitempty" jsonschema:"Topic description"`
+	// OrganizationID is experimental in client-go's CreateTopicOptions, which
+	// says it may change outside a major release.
+	OrganizationID int64 `json:"organization_id,omitempty" jsonschema:"ID of the organization to create the topic in. Omitted, GitLab creates it in the organization it resolves for the request"`
 	// Avatar is uploaded with the create, which GitLab takes only as a
 	// multipart form.
 	Avatar *AvatarInput `json:"avatar,omitempty" jsonschema:"Avatar image to upload with the topic, from a local file or base64 content"`
@@ -169,6 +176,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.Description != "" {
 		opts.Description = new(input.Description)
+	}
+	if input.OrganizationID > 0 {
+		opts.OrganizationID = new(input.OrganizationID)
 	}
 	avatar, release, err := openAvatar("create_topic", input.Avatar)
 	if err != nil {

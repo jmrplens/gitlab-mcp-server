@@ -155,6 +155,8 @@ func TestCanonicalIDs_AreTheSpecNamesUnderTheCatalogDomain(t *testing.T) {
 		actionNameUpdate: actionEnvironmentUpdate,
 		actionNameDelete: actionEnvironmentDelete,
 		actionNameStop:   actionEnvironmentStop,
+
+		actionNameStopStale: actionEnvironmentStopStale,
 	}
 
 	registered := map[string]bool{}

@@ -21,6 +21,8 @@ const (
 	actionNameUpdate = "update"
 	actionNameDelete = "delete"
 	actionNameStop   = "stop"
+
+	actionNameStopStale = "stop_stale"
 )
 
 // catalogDomain is the domain the environment specs are published under, the
@@ -51,6 +53,8 @@ const (
 	actionEnvironmentDelete = domainPrefix + actionNameDelete
 	actionEnvironmentStop   = domainPrefix + actionNameStop
 
+	actionEnvironmentStopStale = domainPrefix + actionNameStopStale
+
 	actionDeploymentList   = domainPrefix + "deployment_list"
 	actionDeploymentCreate = domainPrefix + "deployment_create"
 
@@ -70,6 +74,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		environmentUpdateSpec(actionNameUpdate, toolutil.RouteAction(client, Update), "gitlab_environment_update"),
 		environmentDeleteSpec(actionNameDelete, toolutil.DestructiveVoidAction(client, Delete), "gitlab_environment_delete"),
 		environmentStopSpec(client),
+		environmentStopStaleSpec(client),
 	}
 }
 
@@ -99,6 +104,14 @@ func environmentDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := environmentOptionsForAction(actionNameStop, "gitlab_environment_stop")
 	return toolutil.NewDeleteActionSpec(actionNameStop, toolutil.DestructiveAction(client, Stop), options)
+}
+
+// environmentStopStaleSpec is the stop of every environment of a project last
+// touched before a time. It is destructive the way a single stop is, and
+// repeating it with the same time stops nothing more.
+func environmentStopStaleSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := environmentOptionsForAction(actionNameStopStale, "gitlab_environment_stop_stale")
+	return toolutil.NewDeleteActionSpec(actionNameStopStale, toolutil.DestructiveAction(client, StopStale), options)
 }
 
 func environmentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -155,6 +168,18 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 		options.Usage = "Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource."
 		options.Aliases = []string{"stop environment", "pause environment", "halt environment"}
 		options.RelatedActions = []string{actionEnvironmentGet, actionDeploymentList}
+	case actionNameStopStale:
+		options.Usage = "Stop every environment of a project last modified or deployed to before a time, between 10 years ago and 1 week ago. GitLab leaves protected environments out and stops the rest in the background, so the answer names none of them. List the environments afterwards to see which stopped."
+		options.Aliases = []string{"stop stale environments", "stop old environments", "clean up stale environments"}
+		options.RelatedActions = []string{actionEnvironmentList, actionEnvironmentStop, actionEnvironmentDelete}
+		options.IndividualTool.Description = "Stop every environment of a project last modified or deployed to before a time, protected environments excepted, and the stops run in the background. Returns: the request's status and GitLab's message. See also: gitlab_environment_list, gitlab_environment_stop, gitlab_environment_delete."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"before": {
+				SemanticRole:   "stale_environment_cutoff",
+				ValueSource:    "An ISO 8601 time between 10 years ago and 1 week ago. The environments not modified or deployed to since then are stopped.",
+				ExampleBinding: `params.before:"2026-01-01T00:00:00Z"`,
+			},
+		}
 	}
 
 	return options

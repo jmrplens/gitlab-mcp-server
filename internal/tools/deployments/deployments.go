@@ -121,11 +121,12 @@ type ListOutput struct {
 type deploymentAPI struct {
 	gitlab.Deployment
 	Deployable deployableAPI `json:"deployable"`
-	// The extended deployment entity sends these three on every deployment and
-	// the SDK's struct carries none of them.
-	Approvals            []toolutil.DeploymentApprovalOutput       `json:"approvals"`
-	ApprovalSummary      *toolutil.DeploymentApprovalSummaryOutput `json:"approval_summary"`
-	PendingApprovalCount int64                                     `json:"pending_approval_count"`
+	// The extended deployment entity sends these two on every deployment and
+	// the SDK's struct carries neither. The third field of that entity,
+	// pending_approval_count, decodes into the embedded Deployment, which
+	// models it since client-go v3.46.1.
+	Approvals       []toolutil.DeploymentApprovalOutput       `json:"approvals"`
+	ApprovalSummary *toolutil.DeploymentApprovalSummaryOutput `json:"approval_summary"`
 }
 
 // deployableAPI is the raw-fetch superset of gl.DeploymentDeployable. It embeds
@@ -182,7 +183,7 @@ func toOutput(d *gitlab.Deployment, extra toolutil.DeploymentExtra) Output {
 		Status:               d.Status,
 		Approvals:            extra.Approvals,
 		ApprovalSummary:      extra.ApprovalSummary,
-		PendingApprovalCount: extra.PendingApprovalCount,
+		PendingApprovalCount: pendingApprovalCount(d),
 		CreatedAt:            toolutil.FormatTimePtr(d.CreatedAt),
 		UpdatedAt:            toolutil.FormatTimePtr(d.UpdatedAt),
 		User:                 projectUserOutput(d.User),
@@ -209,8 +210,19 @@ func toOutputAPI(d *deploymentAPI) Output {
 
 		Approvals:            d.Approvals,
 		ApprovalSummary:      d.ApprovalSummary,
-		PendingApprovalCount: d.PendingApprovalCount,
+		PendingApprovalCount: pendingApprovalCount(&d.Deployment),
 	}
+}
+
+// pendingApprovalCount is how many approvals the deployment still waits for.
+// GitLab's extended deployment entity exposes the count under no condition,
+// so an answer without it is an older instance's, and a deployment that names
+// no outstanding approval is one waiting for none.
+func pendingApprovalCount(d *gitlab.Deployment) int64 {
+	if d.PendingApprovalCount == nil {
+		return 0
+	}
+	return *d.PendingApprovalCount
 }
 
 // ---------------------------------------------------------------------------

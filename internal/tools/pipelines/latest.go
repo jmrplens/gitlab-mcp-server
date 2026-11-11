@@ -84,7 +84,7 @@ type GetLatestInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Ref           string               `json:"ref,omitempty"           jsonschema:"Branch or tag whose latest pipeline is requested (defaults to the project's default branch)"`
 	Scope         string               `json:"scope,omitempty"         jsonschema:"Filter by scope (running, pending, finished, branches, tags). Applies to the list fallback."`
-	Status        string               `json:"status,omitempty"        jsonschema:"Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled). Applies to the list fallback."`
+	Status        string               `json:"status,omitempty"        jsonschema:"Filter by status (created, waiting_for_resource, preparing, waiting_for_callback, pending, running, success, failed, canceling, canceled, skipped, manual, scheduled). Applies to the list fallback."`
 	Source        string               `json:"source,omitempty"        jsonschema:"Filter by pipeline source (api, chat, external, external_pull_request_event, merge_request_event, ondemand_dast_scan, ondemand_dast_validation, parent_pipeline, pipeline, push, schedule, security_orchestration_policy, trigger, web, webide). Applies to the list fallback."`
 	SHA           string               `json:"sha,omitempty"           jsonschema:"Filter by commit SHA. Applies to the list fallback."`
 	Name          string               `json:"name,omitempty"          jsonschema:"Filter by pipeline name. Applies to the list fallback."`

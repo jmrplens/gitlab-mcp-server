@@ -1266,7 +1266,7 @@ func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string, through []str
 
 // keysetListFields are the two parameters of gl.ListOptions that ask GitLab
 // for a keyset page, pagination and page_token, which client-go declares on
-// ListOptions and on no other struct (gitlab.go at v3.44.0).
+// ListOptions and on no other struct (gitlab.go at v3.46.1).
 //
 // R-INPUT leaves both to the keyset half of R-PAGE (issue 1165), which asks
 // at the action's grain, from the routes the live record says it sends,

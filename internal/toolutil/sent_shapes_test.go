@@ -321,7 +321,7 @@ func tailReaderCases() []capturedReaderCase {
 				`"approval_summary":{"rules":[{"id":5,"required_approvals":2,"access_level":40}]}}`,
 			want: func(v any) bool {
 				e, _ := v.(DeploymentExtra)
-				return e.PendingApprovalCount == 2 && len(e.Approvals) == 1 && e.Approvals[0].Status == "approved" &&
+				return len(e.Approvals) == 1 && e.Approvals[0].Status == "approved" &&
 					e.Approvals[0].User != nil && e.Approvals[0].User.Username == "rev" &&
 					e.ApprovalSummary != nil && len(e.ApprovalSummary.Rules) == 1 && e.ApprovalSummary.Rules[0].RequiredApprovals == 2
 			},

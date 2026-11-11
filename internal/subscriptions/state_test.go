@@ -35,6 +35,8 @@ func TestActivityOf_PipelineStatus_MapsToActivity(t *testing.T) {
 		{"preparing", activityBusy},
 		{"pending", activityBusy},
 		{"running", activityBusy},
+		{"canceling", activityBusy},
+		{"waiting_for_callback", activityBusy},
 
 		// Finished, but every one of these can move again.
 		{"success", activitySettled},

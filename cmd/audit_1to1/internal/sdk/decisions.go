@@ -23,20 +23,22 @@ const (
 	unwrappedTracked = "UNWRAPPED_TRACKED"
 )
 
-// securityWrapperSwallowsErrors is the shared reason behind the eight security
-// attribute and category mutations. The wrappers select exactly the fields the
-// handlers select, so the field-level case for migrating is sound; what stops
-// it is one line they all lack. Each unmarshals into a struct embedding
-// GenericGraphQLErrors and then never looks at it, and GraphQL.Do only errors
-// on a non-2xx status, so a mutation GitLab refuses at the query level (an
-// authorization refusal, a schema mismatch on an older instance) arrives as
-// HTTP 200 with a null payload: destroy and bulk update return no error at all,
-// create returns an empty list, and update degrades to a bare ErrNotFound that
-// drops GitLab's message. The raw handlers read that array through
-// toolutil.GraphQLTopLevelError, which is what internal/tools/securityattributes
-// and internal/tools/securitycategories test under
-// TestHandlers_WrapTopLevelGraphQLErrors.
-const securityWrapperSwallowsErrors = "the wrapper selects the same fields but never reads the response's top-level GraphQL errors array, and GraphQL.Do only errors on a non-2xx status, so a mutation GitLab refuses with HTTP 200 is reported as success (destroy, bulk update), as an empty result (create), or as a bare ErrNotFound that drops GitLab's message (update); the raw handler surfaces it through toolutil.GraphQLTopLevelError. Recorded in docs/development/upstream-bugs.md (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
+// securityWrapperRefusalReading is the shared reason behind the eight security
+// attribute and category mutations. Up to v3.46.0 the wrappers never read the
+// response's top-level errors array, so a mutation GitLab refused with HTTP
+// 200 came back as a success, an empty result or a bare ErrNotFound; v3.46.1
+// returns that array as a *GraphQLResponseError (gitlab-org/api/client-go!3066,
+// upstream-bugs row 19). What still keeps the handlers on their own documents
+// is how the wrappers hand the refusal over: UpdateSecurityAttribute,
+// CreateSecurityCategory and UpdateSecurityCategory return it as an error that
+// also matches ErrNotFound, which toolutil.IsHTTPStatus reads as a 404 and
+// toolutil.WriteAnsweredWithoutObject as a write GitLab ran and answered
+// without its object, so a fine-grained session would be told a refused
+// write was probably committed; DestroySecurityCategory selects no
+// deletedAttributesGid, the attributes the delete reports; and the other four
+// would change the text of every refusal the handlers' tests hold. Moving them
+// is recorded as row 19's remaining work in docs/development/upstream-bugs.md.
+const securityWrapperRefusalReading = "since v3.46.1 the wrapper returns the response's top-level GraphQL errors (client-go!3066), but three of the eight (UpdateSecurityAttribute, CreateSecurityCategory, UpdateSecurityCategory) wrap a refusal so it also matches ErrNotFound, which toolutil reads as a 404 and as a write answered without its object, DestroySecurityCategory selects no deletedAttributesGid, and the move of the rest changes every refusal's text; the raw handler reads the array through toolutil.GraphQLTopLevelError until that move is made. Recorded as row 19 of docs/development/upstream-bugs.md (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
 
 // certificateClusters is the shared reason behind the three cluster services.
 // GitLab deprecated the certificate-based Kubernetes integration for the agent
@@ -93,8 +95,8 @@ var declaredServices = map[string]declaration{
 	// COVERED_GRAPHQL — see graphqlDecisions for the per-operation decision.
 	"EpicIssues":             {coveredGraphQL, "internal/tools/epicissues drives the work-item hierarchy widget over GraphQL. The interface itself is documented upstream as 'Will be removed in v5 of the API, use Work Items API instead'"},
 	"ProjectVulnerabilities": {coveredGraphQL, "internal/tools/vulnerabilities queries and mutates vulnerabilities over GraphQL, which is what the interface's own upstream doc comment directs to: 'Deprecated: use GraphQL Query.vulnerabilities instead'"},
-	"SecurityAttributes":     {coveredGraphQL, "internal/tools/securityattributes issues the securityAttribute* mutations directly; the wrapper drives the same mutations but discards the response's top-level GraphQL errors, so adopting it would report a refused mutation as a success (see graphqlDecisions)"},
-	"SecurityCategories":     {coveredGraphQL, "internal/tools/securitycategories issues the securityCategory* mutations directly; the wrapper drives the same mutations but discards the response's top-level GraphQL errors, so adopting it would report a refused mutation as a success (see graphqlDecisions)"},
+	"SecurityAttributes":     {coveredGraphQL, "internal/tools/securityattributes issues the securityAttribute* mutations directly; the wrapper drives the same mutations and, since v3.46.1, returns their top-level GraphQL errors, but hands UpdateSecurityAttribute's refusal over as one that also matches ErrNotFound (see graphqlDecisions)"},
+	"SecurityCategories":     {coveredGraphQL, "internal/tools/securitycategories issues the securityCategory* mutations directly; the wrapper drives the same mutations and, since v3.46.1, returns their top-level GraphQL errors, but hands the create and update refusals over as ones that also match ErrNotFound and selects no deletedAttributesGid on the destroy (see graphqlDecisions)"},
 
 	// SUPERSEDED_UPSTREAM
 	"GeoNodes":         {supersededUpstream, "upstream marks it 'Deprecated: will be removed in v5 of the API, use Geo Sites API instead'; internal/tools/geo calls GeoSites for all eight operations"},
@@ -176,20 +178,21 @@ var graphqlDecisions = map[string]decision{
 	"vulnerabilities.PipelineSecuritySummary":  {Decision: decisionKeep, Reason: "the pipeline security report summary is GraphQL-only; the wrapper exposes nothing pipeline-scoped"},
 	"vulnerabilities.runVulnerabilityMutation": {Decision: decisionKeep, Reason: "dismiss/confirm/resolve/revert are GraphQL mutations; the wrapper exposes only CreateVulnerability"},
 
-	// KEEP — the security wrappers select the same fields but never read the
-	// top-level GraphQL errors array, which is where GitLab reports a rejected
-	// mutation with HTTP 200. Adopting them would turn a refusal into a
-	// success. Recorded in docs/development/upstream-bugs.md and examined in
-	// https://github.com/jmrplens/gitlab-mcp-server/issues/430.
-	"securityattributes.createSecurityAttributes":       {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securityattributes.updateSecurityAttribute":        {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securityattributes.destroySecurityAttribute":       {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securityattributes.projectUpdateSecurityAttribute": {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securityattributes.bulkUpdateSecurityAttributes":   {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	// KEEP: the security wrappers return the top-level GraphQL errors array
+	// since v3.46.1, where GitLab reports a rejected mutation with HTTP 200,
+	// but three of them hand the refusal over as one that also matches
+	// ErrNotFound and the category delete selects less than the handler
+	// reports. Recorded as row 19 of docs/development/upstream-bugs.md and
+	// examined in https://github.com/jmrplens/gitlab-mcp-server/issues/430.
+	"securityattributes.createSecurityAttributes":       {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securityattributes.updateSecurityAttribute":        {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securityattributes.destroySecurityAttribute":       {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securityattributes.projectUpdateSecurityAttribute": {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securityattributes.bulkUpdateSecurityAttributes":   {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
 
-	"securitycategories.createSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securitycategories.updateSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
-	"securitycategories.destroySecurityCategory": {Decision: decisionKeep, Reason: securityWrapperSwallowsErrors},
+	"securitycategories.createSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securitycategories.updateSecurityCategory":  {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
+	"securitycategories.destroySecurityCategory": {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
 
 	// KEEP: the wrapper cannot page. TerraformStates.List sends a document that
 	// takes neither first nor after and selects neither count nor pageInfo, and

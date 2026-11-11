@@ -146,8 +146,26 @@ func FormatListMarkdown(out ListOutput) string {
 	return b.String()
 }
 
+// FormatStopStaleMarkdown renders GitLab's answer to a stale environment stop.
+// GitLab stops the environments in the background after it answers and names
+// none of them, so the card says what was asked and points at the listing that
+// shows the outcome.
+func FormatStopStaleMarkdown(out StopStaleOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Stale Environments: Stop Requested")
+	c.Field("Status", out.Status)
+	c.Time("Before", out.Before)
+	c.Field("Message", out.Message)
+	c.End(
+		toolutil.HintAction(actionEnvironmentList, "list the environments with states=stopping or states=stopped to see which ones GitLab stopped"),
+		toolutil.HintAction(actionEnvironmentDelete, "delete a stopped environment that is no longer needed"),
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatEnvironmentNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatStopStaleMarkdown)
 }
