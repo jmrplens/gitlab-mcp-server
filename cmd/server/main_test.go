@@ -5169,6 +5169,148 @@ func TestPrepareStdioCatalog_APinnedTier_SurvivesADegradedStart(t *testing.T) {
 	}
 }
 
+// stdioProvisionalTierMessage opens the line a stdio start writes when the
+// tier it detected is provisional.
+const stdioProvisionalTierMessage = "the stdio process serves this provisional licensing tier until it ends"
+
+// TestPrepareStdioCatalog_AProvisionalTier_IsServedAndWarnedAboutOnce covers
+// what a stdio start does with the tier probe's verdict (issue 1782). A step
+// GitLab did not answer, here the license read answering 502, leaves the tier
+// provisional: the catalog is built for the best tier known so far, the
+// namespaces' plan when they name one, and one WARN tells the operator the
+// process keeps it until it ends, that restarting the MCP client asks again
+// and that GITLAB_MCP_TIER pins it, with the tier and the step left unread. A
+// tier every step answered, refused or not, is served without that warning,
+// so the warning is the probe's verdict and not the tier's value: the two
+// Premium cases differ only in whether the license was answered.
+func TestPrepareStdioCatalog_AProvisionalTier_IsServedAndWarnedAboutOnce(t *testing.T) {
+	cases := []struct {
+		name          string
+		licenseStatus int
+		namespaces    string
+		wantTier      edition.Tier
+		wantWarning   bool
+	}{
+		{
+			name: "a license GitLab did not answer and no paid namespace", licenseStatus: http.StatusBadGateway,
+			namespaces: `[]`, wantTier: edition.Free, wantWarning: true,
+		},
+		{
+			name: "a license GitLab did not answer and a premium namespace", licenseStatus: http.StatusBadGateway,
+			namespaces: `[{"id":1,"full_path":"paid-group","plan":"premium"}]`, wantTier: edition.Premium, wantWarning: true,
+		},
+		{
+			name: "a license refused and a premium namespace", licenseStatus: http.StatusForbidden,
+			namespaces: `[{"id":1,"full_path":"paid-group","plan":"premium"}]`, wantTier: edition.Premium,
+		},
+		{
+			name: "no license endpoint and no paid namespace", licenseStatus: http.StatusNotFound,
+			namespaces: `[]`, wantTier: edition.Free,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gitlab := tierProbeGitLab(t, tc.licenseStatus, tc.namespaces)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				IgnoreScopes:   true,
+				DisableRetries: true,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+			logs := &lockedBuffer{}
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+
+			if serverCfg.Tier != tc.wantTier {
+				t.Errorf("catalog tier = %s, want %s", serverCfg.Tier, tc.wantTier)
+			}
+			if got := client.Tier(); got != tc.wantTier {
+				t.Errorf("client tier = %s, want %s", got, tc.wantTier)
+			}
+			warnings := jsonLogRecordsWithPrefix(t, logs.String(), stdioProvisionalTierMessage)
+			if !tc.wantWarning {
+				if len(warnings) != 0 {
+					t.Errorf("a tier GitLab answered whole was warned about as provisional: %v", warnings)
+				}
+				return
+			}
+			if len(warnings) != 1 {
+				t.Fatalf("the provisional tier was warned about %d times, want once:\n%s", len(warnings), logs.String())
+			}
+			assertStdioProvisionalTierWarning(t, warnings[0], tc.wantTier)
+		})
+	}
+}
+
+// tierProbeGitLab answers what a stdio start asks a self-managed instance:
+// the version, the user, the license with licenseStatus and the namespaces
+// with the given page.
+func tierProbeGitLab(t *testing.T, licenseStatus int, namespaces string) *httptest.Server {
+	t.Helper()
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"19.4.1","revision":"abc"}`)
+		case "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser"}`)
+		case "/api/v4/license":
+			testutil.RespondJSON(w, licenseStatus, `{"message":"license"}`)
+		case "/api/v4/namespaces":
+			testutil.RespondJSON(w, http.StatusOK, namespaces)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gitlab.Close)
+	return gitlab
+}
+
+// jsonLogRecordsWithPrefix decodes the JSON log lines in logs and returns the
+// records whose message starts with prefix.
+func jsonLogRecordsWithPrefix(t *testing.T, logs, prefix string) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	for line := range strings.Lines(logs) {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("log line %q is not JSON: %v", line, err)
+		}
+		if msg, _ := record["msg"].(string); strings.HasPrefix(msg, prefix) {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
+// assertStdioProvisionalTierWarning holds the stdio warning to what it must
+// tell the operator: WARN, what restarting the client and GITLAB_MCP_TIER do,
+// the tier served and the license as the step left unread.
+func assertStdioProvisionalTierWarning(t *testing.T, warning map[string]any, wantTier edition.Tier) {
+	t.Helper()
+	if warning["level"] != slog.LevelWarn.String() {
+		t.Errorf("level = %v, want %s", warning["level"], slog.LevelWarn)
+	}
+	msg, _ := warning["msg"].(string)
+	for _, want := range []string{"restarting the MCP client", "GITLAB_MCP_TIER"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the warning %q does not name %q", msg, want)
+		}
+	}
+	if warning["tier"] != wantTier.String() {
+		t.Errorf("tier = %v, want %s", warning["tier"], wantTier)
+	}
+	if got := fmt.Sprint(warning["unresolved"]); got != "[license]" {
+		t.Errorf("unresolved = %s, want [license]", got)
+	}
+}
+
 // TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole covers
 // a stdio start whose fine-grained token GitLab refuses the instance version
 // (no Metadata: Read) and allows everything else startup asks. The start is
