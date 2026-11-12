@@ -2867,7 +2867,15 @@ func TestListenLimitsFromEnv(t *testing.T) {
 // asserting on concurrent state does not race the goroutines it started.
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	waitForWithin(t, 2*time.Second, cond)
+}
+
+// waitForWithin is [waitFor] with a budget of the caller's, for a wait that
+// spans more than a goroutine handing something over, such as building a
+// shape's server under the race detector.
+func waitForWithin(t *testing.T, budget time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		if cond() {
 			return
@@ -3237,6 +3245,7 @@ func TestWatchEndForCause_TurnsAPoolEvictionIntoWhatTheClientIsTold(t *testing.T
 		{name: "the idle sweep", cause: serverpool.CauseIdle, want: endCredentialReset},
 		{name: "a credential too long unchecked", cause: serverpool.CauseStaleCredential, want: endCredentialReset},
 		{name: "a shape that has to be rebuilt", cause: serverpool.CauseRebuild, want: endCredentialReset},
+		{name: "a provisional tier resolved to another", cause: serverpool.CauseTierResolved, want: endCredentialReset},
 		{name: "GitLab refusing a call", cause: serverpool.CauseRejectedCredential, want: endCredentialRevoked},
 		{name: "revalidation finding it refused", cause: serverpool.CauseInvalidCredential, want: endCredentialRevoked},
 		{name: "a credential found below the minimum", cause: serverpool.CauseBelowMinimum, want: endCredentialInsufficient},

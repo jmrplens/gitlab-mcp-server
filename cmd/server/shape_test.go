@@ -32,6 +32,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
 
 // shapeTestConfig is the configuration every shape-key case starts from, so a
@@ -1343,5 +1344,169 @@ func TestNewShapedServerPool_SizePressure_TellsTheSubscriberItsEntryWasEvicted(t
 	}
 	if end.detail == "" {
 		t.Error("the ending carries no advice for a client that does not know the reason word")
+	}
+}
+
+// provisionalTierGitLab stands in for a self-managed instance whose license
+// read fails with a 502 until resolve is called, after which it answers an
+// Ultimate license: an entry built before is served Free provisionally (issue
+// 1782), and its re-detection afterwards resolves Ultimate. Every other read
+// answers as a non-admin's does.
+func provisionalTierGitLab(t *testing.T) (gitlabURL string, resolve func()) {
+	t.Helper()
+	var resolved atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"username":"testuser"}`))
+	})
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"19.6.0-ee","enterprise":true}`))
+	})
+	mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+		if !resolved.Load() {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"plan":"ultimate"}`))
+	})
+	mux.HandleFunc("GET /api/v4/namespaces", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL, func() { resolved.Store(true) }
+}
+
+// provisionalTierServer mounts the handler chain a legacy deployment mounts
+// over the shaped pool, on the meta surface, where the Ultimate catalog lists
+// tools the Free one does not, against an instance whose tier the first build
+// cannot finish reading, with the re-detection's wait shortened so a test can
+// reach it. The sweep is the test's to start.
+func provisionalTierServer(t *testing.T, gitlab string, stateless bool) (*httptest.Server, poolBinding, *serverpool.ServerPool) {
+	t.Helper()
+	cfg := &config.Config{
+		GitLabURL: gitlab, Tier: edition.Free, IgnoreScopes: true, DisableRetries: true, Stateless: stateless,
+		ToolSurface: config.ToolSurfaceMeta, CapabilitySurface: config.CapabilitySurfaceFull,
+		MaxHTTPClients: config.DefaultMaxHTTPClients, SessionTimeout: config.DefaultSessionTimeout,
+	}
+	binding, pool := newShapedServerPool(t.Context(), cfg, serverpool.WithTierRetry(20*time.Millisecond))
+	t.Cleanup(pool.Close)
+	mux := http.NewServeMux()
+	registerLegacyMCPHandlers(t.Context(), cfg, pool, binding, mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, binding, pool
+}
+
+// tierMoveBudget is how long a test waits for the re-detection to move a
+// credential to the Ultimate shape: a sweep tick, the license read and the
+// factory building the full meta catalog for that shape, which took up to two
+// seconds under the race detector on a loaded runner, the whole of waitFor's
+// budget. A wait that succeeds returns as soon as the move lands.
+const tierMoveBudget = 30 * time.Second
+
+// ultimateOnlyTool is a meta tool only the Ultimate catalog lists.
+const ultimateOnlyTool = `"name":"gitlab_vulnerability"`
+
+// TestNewShapedServerPool_AProvisionalTierThatResolves_MovesTheCredentialToTheUltimateShape
+// is issue 1782 through the wiring a deployment runs: an entry built while the
+// license read failed is served the Free catalog, provisionally; once GitLab
+// answers, the pool's re-detection moves the credential to the Ultimate shape
+// with no restart and no --tier, the listen stream open on the provisional
+// entry ends with credential_reset, so its client reconnects, and the next
+// tools/list lists the Ultimate catalog.
+func TestNewShapedServerPool_AProvisionalTierThatResolves_MovesTheCredentialToTheUltimateShape(t *testing.T) {
+	const token = "glpat-provisional"
+	gitlab, resolve := provisionalTierGitLab(t)
+	srv, binding, pool := provisionalTierServer(t, gitlab, true)
+	toolsList := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+
+	status, _, listed := postHeld(t, srv, token, toolsList, legacyHeader("2025-11-25"))
+	if status != http.StatusOK || strings.Contains(listed, ultimateOnlyTool) {
+		t.Fatalf("tools/list on the provisional entry = %d, Ultimate tool listed %t; want 200 and the Free catalog",
+			status, strings.Contains(listed, ultimateOnlyTool))
+	}
+	provisional, err := pool.GetOrCreateEntry(token, gitlab, nil)
+	if err != nil || provisional.Config().Tier != edition.Free {
+		t.Fatalf("the credential's entry = %v, %v; want the Free one its first request built", provisional, err)
+	}
+	state := binding.credentials.get(provisional.Owner())
+	if state == nil {
+		t.Fatal("the pool's insert callback filed no state for the provisional entry")
+	}
+	streamCtx, cancelStream := context.WithCancel(t.Context())
+	t.Cleanup(cancelStream)
+	stream, release := state.streams.arm([]string{"gitlab://project/42"}, provisional.Owner(), nil, cancelStream)
+	t.Cleanup(release)
+
+	resolve()
+	sweep, stopSweep := context.WithCancel(t.Context())
+	defer stopSweep()
+	pool.StartTierRedetection(sweep)
+
+	waitForWithin(t, tierMoveBudget, func() bool { return stream.end.Load() != nil && streamCtx.Err() != nil })
+	end := stream.end.Load()
+	if end == nil || end.reason != endCredentialReset {
+		t.Fatalf("the provisional entry's listen ended with %+v, want %q", end, endCredentialReset)
+	}
+	if binding.credentials.get(provisional.Owner()) != nil {
+		t.Error("the provisional entry's state is still filed after its replacement")
+	}
+
+	status, _, listed = postHeld(t, srv, token, toolsList, legacyHeader("2025-11-25"))
+	if status != http.StatusOK || !strings.Contains(listed, ultimateOnlyTool) {
+		t.Errorf("tools/list after the re-detection = %d, Ultimate tool listed %t; want 200 and the Ultimate catalog",
+			status, strings.Contains(listed, ultimateOnlyTool))
+	}
+}
+
+// TestNewShapedServerPool_AProvisionalTierThatResolves_AsksAStatefulSessionToStartOver
+// covers the stateful half of the same replacement: the session opened on the
+// provisional entry belongs to its owner, which the replacement forgets, so its
+// next request is answered with ADM-007's 404 and the client initializes again,
+// on the Ultimate shape.
+//
+// Not parallel: it takes slots of the process's session counts.
+func TestNewShapedServerPool_AProvisionalTierThatResolves_AsksAStatefulSessionToStartOver(t *testing.T) {
+	// The credential deleteSession presents, so the new session can be ended
+	// as its client would end it.
+	const token = gateTestToken
+	settleProcessSlots(t)
+	gitlab, resolve := provisionalTierGitLab(t)
+	srv, _, pool := provisionalTierServer(t, gitlab, false)
+
+	status, header, got := postHeld(t, srv, token, initializeBody(1), legacyHeader("2025-11-25"))
+	session := header.Get(mcpSessionIDHeader)
+	if status != http.StatusOK || session == "" {
+		t.Fatalf("initialize on the provisional entry = %d with session %q: %s", status, session, got)
+	}
+
+	resolve()
+	sweep, stopSweep := context.WithCancel(t.Context())
+	defer stopSweep()
+	pool.StartTierRedetection(sweep)
+	waitForWithin(t, tierMoveBudget, func() bool { return pool.Stats().TierResolvedEvictions == 1 })
+
+	stale := legacyHeader("2025-11-25")
+	stale.Set(mcpSessionIDHeader, session)
+	status, _, got = postHeld(t, srv, token, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, stale)
+	if status != http.StatusNotFound {
+		t.Fatalf("the provisional entry's session = %d after the replacement: %s; want the 404 that asks for a new session", status, got)
+	}
+	if refusal := decodeJSONRPCError(t, got, "2"); refusal.Error.Message != wantSessionRefusal {
+		t.Errorf("message = %q, want %q", refusal.Error.Message, wantSessionRefusal)
+	}
+
+	status, header, got = postHeld(t, srv, token, initializeBody(3), legacyHeader("2025-11-25"))
+	renewed := header.Get(mcpSessionIDHeader)
+	if status != http.StatusOK || renewed == "" || renewed == session {
+		t.Fatalf("initialize after the 404 = %d with session %q: %s; want a new session", status, renewed, got)
+	}
+	if code := deleteSession(t, srv, renewed); code != http.StatusNoContent {
+		t.Errorf("DELETE of the new session = %d, want 204", code)
 	}
 }

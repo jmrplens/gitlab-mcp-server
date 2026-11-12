@@ -703,10 +703,12 @@ func watchEndForStop(reason error) *watchEnd {
 //
 // The grouping is by what the client should do next, which is the only thing a
 // reason is for. Size pressure leaves a perfectly good credential, so its
-// client should reconnect at once. Idleness, a credential too long unchecked
-// and a shape that has to be rebuilt all end in the same place, an entry the
-// next request rebuilds, so they share a reason rather than each getting one
-// that would tell the client the same thing in different words. A credential
+// client should reconnect at once. Idleness, a credential too long unchecked,
+// a shape that has to be rebuilt and a provisional tier that resolved to
+// another one (register row AUT-010) all end in the same place, an entry the
+// next request finds rebuilt or replaced, so they share a reason rather than
+// each getting one that would tell the client the same thing in different
+// words: start over with the same credential. A credential
 // GitLab has refused, whether at revalidation or on a call, must be replaced
 // before anything is retried. So must one below the admission minimum, which
 // has a reason of its own all the same, because GitLab refused nothing there
@@ -719,7 +721,7 @@ func watchEndForCause(cause serverpool.EvictionCause) *watchEnd {
 	switch cause {
 	case serverpool.CauseSizePressure:
 		return endOfCredentialEviction
-	case serverpool.CauseIdle, serverpool.CauseStaleCredential, serverpool.CauseRebuild:
+	case serverpool.CauseIdle, serverpool.CauseStaleCredential, serverpool.CauseRebuild, serverpool.CauseTierResolved:
 		return endOfCredentialReset
 	case serverpool.CauseRejectedCredential, serverpool.CauseInvalidCredential:
 		return endOfCredentialRevocation

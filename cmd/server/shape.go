@@ -237,8 +237,13 @@ func shapeClient(dotcom bool) *gitlabclient.Client {
 // [poolBinding] is what the authentication gate needs to stamp a request with
 // the credential it authenticated as.
 //
+// extra are options applied after the deployment's own, which only the tests
+// pass: the pool knobs no operator reaches, such as how soon a provisional
+// tier is asked again ([serverpool.WithTierRetry]), are set this way, against
+// the same wiring the server runs.
+//
 // The caller closes the pool.
-func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, *serverpool.ServerPool) {
+func newShapedServerPool(ctx context.Context, cfg *config.Config, extra ...serverpool.Option) (poolBinding, *serverpool.ServerPool) {
 	// sessions records which pooled credential each MCP session belongs to, so
 	// the gate can refuse a session presented with a different credential and
 	// so a resource-updated notification reaches only its own subscriber. It
@@ -301,7 +306,8 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 			return nil, err
 		}
 		return shape.shell.server, nil
-	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
+	}, append([]serverpool.Option{
+		serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithOnInsert(func(entry *serverpool.Entry) bool {
 			return adoptPooledEntry(ctx, shapes, credentials, entry)
 		}),
@@ -345,7 +351,8 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 		// by the request that triggered it: an entry is shared, so one client
 		// disconnecting must not abort a build others are waiting on, and
 		// shutdown must stop it.
-		serverpool.WithBaseContext(func() context.Context { return ctx }))
+		serverpool.WithBaseContext(func() context.Context { return ctx }),
+	}, extra...)...)
 
 	return poolBinding{credentials: credentials, sessions: sessions}, pool
 }

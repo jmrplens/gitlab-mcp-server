@@ -24,6 +24,12 @@
 // Token plus URL hashes (SHA-256) are used as pool keys so that raw tokens are
 // never stored in memory.
 //
+// An entry whose build could not finish detecting the licensing tier, because a
+// step of the probe went unanswered, is served the tier detected so far and
+// asked again by a sweep of its own ([ServerPool.StartTierRedetection]). An
+// answer that resolves another tier moves the credential to that tier's shape,
+// on a new entry that keeps the client ([CauseTierResolved]).
+//
 // The package also extracts GitLab tokens and per-request GitLab URLs from HTTP
 // headers and includes an authentication-failure rate limiter for the HTTP MCP
 // endpoint.

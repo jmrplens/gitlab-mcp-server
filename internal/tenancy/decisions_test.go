@@ -33,7 +33,7 @@ var specRequirementIDs = []string{
 	"POL-001", "POL-002", "POL-003", "POL-004", "POL-005", "POL-006", "POL-007",
 	"POL-008", "POL-009",
 	"AUT-001", "AUT-002", "AUT-003", "AUT-004", "AUT-005", "AUT-006", "AUT-007",
-	"AUT-008", "AUT-009",
+	"AUT-008", "AUT-009", "AUT-010",
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
@@ -122,7 +122,7 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		disposition Disposition
 		want        int
 	}{
-		{"valued", Valued, 33},
+		{"valued", Valued, 34},
 		{"ruled", Ruled, 39},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
@@ -1265,10 +1265,11 @@ func TestDecisions_PoolDefaults_AreAliasesOfTheRegister(t *testing.T) {
 
 // TestDecisions_GoOptions_AreTheValuesOnlyTestsSet pins the rows whose value
 // only a Go option reaches, which no production code sets and no operator can:
-// the pool's credential age option (ADM-008), and the watcher manager's
-// Options fields, its per-credential ceiling (HLD-003) and its lease, cadence
-// and lifetime (HLD-007). Each says why its value is fixed, as a constant
-// does, and no other row is declared a Go option's.
+// the pool's credential age option (ADM-008), the watcher manager's Options
+// fields, its per-credential ceiling (HLD-003) and its lease, cadence and
+// lifetime (HLD-007), and the pool's provisional tier wait (AUT-010). Each says
+// why its value is fixed, as a constant does, and no other row is declared a
+// Go option's.
 func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
 	var options []string
 	for _, d := range Decisions() {
@@ -1280,7 +1281,7 @@ func TestDecisions_GoOptions_AreTheValuesOnlyTestsSet(t *testing.T) {
 			t.Errorf("%s: a Go option's value with no reason it is fixed", d.ID)
 		}
 	}
-	if want := []string{"ADM-008", "HLD-003", "HLD-007"}; !slices.Equal(options, want) {
+	if want := []string{"ADM-008", "AUT-010", "HLD-003", "HLD-007"}; !slices.Equal(options, want) {
 		t.Errorf("the rows only a Go option reaches are %v, want %v", options, want)
 	}
 }
@@ -1769,6 +1770,9 @@ func rowPins() map[string]rowPin {
 			// access token (ADM-004's pin).
 			refusalPin{methods: "tools/call", channel: Withheld, answer: AskOperator},
 		)},
+		"AUT-010": {Authorize, Lifetime, ClassE, Valued, KeyEntry, KeyNone, KeyNone, KeyNone, []refusalPin{
+			pinListenEnd("credential_reset", StartOver),
+		}},
 		"POL-007": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, nil},
 		"DST-003": {Authorize, Rule, ClassC, Ruled, KeyEntry, KeyProcess, KeyNone, KeyNone, []refusalPin{
 			{

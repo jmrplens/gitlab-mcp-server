@@ -288,4 +288,12 @@ const (
 	// issue 1782). It covers one page with its two retries, or several
 	// healthy pages.
 	TierMembershipTimeout = 8 * time.Second
+	// TierProvisionalRetry is how long a pool entry serves a provisional tier
+	// before it is first asked again, and how often the pool's sweep looks
+	// for one whose wait is over (AUT-010).
+	TierProvisionalRetry = 1 * time.Minute
+	// TierProvisionalRetryMax is the longest the wait between two asks of a
+	// tier that stays provisional grows to, doubling from
+	// TierProvisionalRetry (AUT-010).
+	TierProvisionalRetryMax = 15 * time.Minute
 )
