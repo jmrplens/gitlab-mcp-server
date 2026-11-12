@@ -27,6 +27,13 @@
 // connection has to say what it actually checks instead: that no answer
 // came.
 //
+// [SilentEndpoint] is the third address, and the one a test of a deadline
+// needs: it accepts every connection and never answers, so a request waits
+// until the client's own deadline ends it, as against an instance that drops
+// packets after the handshake. A case built on either of the other two passes
+// whether or not the code under test bounds its wait, since both hang up at
+// once.
+//
 // cmd/audit_test_closed_servers keeps the old pattern from coming back: it
 // reports an httptest server closed while its address, or a value built from
 // it, is still used later in the same function.

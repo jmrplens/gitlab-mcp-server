@@ -76,6 +76,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -5246,6 +5247,160 @@ func TestPrepareStdioCatalog_AProvisionalTier_IsServedAndWarnedAboutOnce(t *test
 			}
 			assertStdioProvisionalTierWarning(t, warnings[0], tc.wantTier)
 		})
+	}
+}
+
+// TestPrepareStdioCatalog_AnInstanceThatNeverAnswers_IsAskedWithinTheDetectionBound
+// covers a stdio start against an instance that accepts the connection and
+// never answers (issue 1592). The token, the user, the tier and a grant were
+// asked with the serving context and no deadline, so every SDK request waited
+// out its response-header timeout, and tools/list waited 133 seconds on 3.1.0.
+// They are bounded together by stdioDetectTimeout now, as an HTTP pool
+// entry's build is bounded.
+//
+// Two instances are held. One never answers anything: the connectivity check
+// waits out the health client's own timeout, the start goes degraded, and the
+// token's description, still asked so it is not skipped, ends at the bound.
+// The other answers the version and holds every other request until the
+// client gives up: the start is not degraded, so the token's description is
+// asked, which the instance records, and the questions after it share what is
+// left of the one bound rather than getting one each. The bound ends the
+// questions, it does not skip them. Either start registers the catalog and
+// opens the gate.
+func TestPrepareStdioCatalog_AnInstanceThatNeverAnswers_IsAskedWithinTheDetectionBound(t *testing.T) {
+	t.Parallel()
+	const slack = 10 * time.Second
+	tests := []struct {
+		name string
+		// instance returns the base URL and whether the token's description
+		// was asked of it, nil where nothing is recorded.
+		instance func(t *testing.T) (string, *atomic.Bool)
+		within   time.Duration
+		degraded bool
+	}{
+		{
+			name: "nothing answers",
+			instance: func(t *testing.T) (string, *atomic.Bool) {
+				t.Helper()
+				return netfixture.SilentEndpoint(t), nil
+			},
+			within:   10*time.Second + stdioDetectTimeout + slack,
+			degraded: true,
+		},
+		{
+			name: "only the version answers",
+			instance: func(t *testing.T) (string, *atomic.Bool) {
+				t.Helper()
+				var described atomic.Bool
+				gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/api/v4/version" {
+						testutil.RespondJSON(w, http.StatusOK, `{"version":"19.4.1-ee","revision":"abc","enterprise":true}`)
+						return
+					}
+					if r.URL.Path == "/api/v4/personal_access_tokens/self" {
+						described.Store(true)
+					}
+					// Held until the client gives up, which is what the
+					// detection bound is for.
+					<-r.Context().Done()
+				}))
+				t.Cleanup(gitlab.Close)
+				return gitlab.URL, &described
+			},
+			within: stdioDetectTimeout + slack,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			url, described := tt.instance(t)
+			cfg := &config.Config{
+				GitLabURL:   url,
+				GitLabToken: testToken,
+				ToolSurface: config.ToolSurfaceDynamic,
+				Tier:        edition.Free,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+
+			started := time.Now()
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+			if waited := time.Since(started); waited > tt.within {
+				t.Errorf("the start took %v against an instance that never answers, want it within %v", waited, tt.within)
+			}
+			if !shell.gate.isReady() {
+				t.Error("the start did not open the gate: the catalog must be served once the bound ends the questions")
+			}
+			if got := client.IsInitialized(); got == tt.degraded {
+				t.Errorf("client initialized = %v, want %v", got, !tt.degraded)
+			}
+			if described != nil && !described.Load() {
+				t.Error("the token's description was never asked: the bound must end the question, not skip it")
+			}
+		})
+	}
+}
+
+// TestPrepareStdioCatalog_TheTierDetection_MeasuresTheMembershipStepFromTheProcessContext
+// covers the two contexts the stdio start hands the tier detection (issue
+// 1592). The license and namespace steps share the detection bound, so the
+// first carries stdioDetectTimeout's deadline. The membership step keeps its
+// own eight seconds measured from the membership base, so the second is the
+// process context, which carries no deadline here. Handing the bounded
+// context as both would let the bound and a slow license or namespace step
+// spend the membership step's clock, and nothing a test instance answers
+// shows it, since that step is asked of GitLab.com alone. The detection the
+// seam forwards to still runs, and the start serves its answer.
+func TestPrepareStdioCatalog_TheTierDetection_MeasuresTheMembershipStepFromTheProcessContext(t *testing.T) {
+	gitlab := tierProbeGitLab(t, http.StatusNotFound, `[]`)
+	cfg := &config.Config{
+		GitLabURL:      gitlab.URL,
+		GitLabToken:    testToken,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		IgnoreScopes:   true,
+		DisableRetries: true,
+	}
+	client, serverCfg, shell := newStdioStartupShell(t, cfg)
+	// handed is what one detection was given: whether the context of the
+	// license and namespace steps had a deadline and how long it had left,
+	// and whether the membership base had one.
+	type handed struct {
+		bounded     bool
+		left        time.Duration
+		baseBounded bool
+	}
+	var calls []handed
+	original := detectStdioTier
+	detectStdioTier = func(c *gitlabclient.Client, ctx, membershipBase context.Context) gitlabclient.TierResolution {
+		var got handed
+		if deadline, bounded := ctx.Deadline(); bounded {
+			got.bounded, got.left = true, time.Until(deadline)
+		}
+		_, got.baseBounded = membershipBase.Deadline()
+		calls = append(calls, got)
+		return original(c, ctx, membershipBase)
+	}
+	t.Cleanup(func() { detectStdioTier = original })
+
+	if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+		t.Fatalf("prepareStdioCatalog: %v", prepErr)
+	}
+
+	if len(calls) != 1 {
+		t.Fatalf("the tier was detected %d times, want once", len(calls))
+	}
+	if got := calls[0]; !got.bounded {
+		t.Error("the license and namespace steps were handed a context with no deadline: the detection bound must cover them")
+	} else if got.left <= 0 || got.left > stdioDetectTimeout {
+		t.Errorf("the license and namespace steps' context had %v left, want what is left of the detection bound, at most %v",
+			got.left, stdioDetectTimeout)
+	}
+	if calls[0].baseBounded {
+		t.Error("the membership base carries a deadline: the detection bound would spend the membership step's own clock")
+	}
+	if serverCfg.Tier != edition.Free {
+		t.Errorf("catalog tier = %s, want %s, the answer of the detection the seam forwards to", serverCfg.Tier, edition.Free)
 	}
 }
 
@@ -16883,8 +17038,9 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // internal/testutil/modelscore is the scorer that reads a record back against
 // that corpus, internal/testutil/serialtypecheck is the blank import that
 // serializes go/packages under the race detector, and
-// internal/testutil/netfixture is the dead address and the stoppable server
-// tests use where they used to close an httptest server; each is named here
+// internal/testutil/netfixture is the dead address, the silent one and the
+// stoppable server tests use where they used to close an httptest server or
+// need an instance that never answers; each is named here
 // in its own right because this list matches exact import paths, so
 // internal/testutil does not cover a subpackage of it.
 //

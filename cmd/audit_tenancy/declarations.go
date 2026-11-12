@@ -330,6 +330,7 @@ var notADecision = map[string]exemption{
 	"internal/serverpool:credentialCheckTimeout": {categoryRoundTrip, "one credential probe's round trip, which does not retry"},
 	"internal/serverpool:entryDetectTimeout":     {categoryRoundTrip, "how long one entry build's token, license, namespace and grant reads, one revalidation's probe and re-reads, and one re-detection's license and namespace reads take together (the membership step runs on AUT-003's TierMembershipTimeout)"},
 	"cmd/server:stdioRereadTimeout":              {categoryRoundTrip, "one stdio re-read of a fine-grained token's grant and the instance version"},
+	"cmd/server:stdioDetectTimeout":              {categoryRoundTrip, "how long the stdio start's token, user, license, namespace and grant reads take together, as an entry build's (the membership step runs on AUT-003's TierMembershipTimeout)"},
 
 	// Refusals about the process rather than a caller.
 	"cmd/server:readinessGate.abandoned": {categoryServerState, "answers -50300 to a request that ended while the tool catalog was still building, a fact about the process"},

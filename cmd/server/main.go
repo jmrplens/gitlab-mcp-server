@@ -1705,6 +1705,13 @@ var (
 	metaActionKeys          = gitlabtools.MetaActionKeys
 )
 
+// detectStdioTier is how the stdio start detects the licensing tier,
+// [gitlabclient.Client.DetectTier]. It is a variable so a test can see which
+// context the start hands it as the membership base: the membership step is
+// asked of GitLab.com alone, whose host a test server cannot have, so nothing
+// a test instance answers shows whether the detection bound reached it.
+var detectStdioTier = (*gitlabclient.Client).DetectTier
+
 // prepareStdioCatalog runs everything stdio startup needs GitLab for, registers
 // the tool catalog, and opens the readiness gate.
 //
@@ -1760,13 +1767,28 @@ func prepareStdioCatalog(
 	// question is asked then too: a start that waited for a recovery that
 	// never comes would serve such a token the catalog until the next round,
 	// or for good at 0.
+	//
+	// What the start asks GitLab about the token, its user, the tier and a
+	// fine-grained token's grant is bounded together by stdioDetectTimeout,
+	// as an HTTP pool entry's build is bounded by its own (issue 1592). An
+	// instance that accepts the connection and never answers held tools/list
+	// for 133 seconds here, each SDK request waiting out its response-header
+	// timeout and its retries. The bound ends the questions rather than
+	// skipping them: what one of them could not learn in time is what an
+	// unanswered request leaves, and the re-reads below ask the token's kind
+	// again. The catalog registration and the re-reads keep ctx, and so does
+	// the tier's membership step, whose own eight seconds are measured from
+	// ctx as a pool entry's are from the pool's lifetime, so the bound does
+	// not take them away.
+	detectCtx, cancelDetect := context.WithTimeout(ctx, stdioDetectTimeout)
+	defer cancelDetect()
 	facts := gitlabclient.TokenFacts{KindUnknown: true}
 	if scopeRefused {
 		// Asked only to name the token's scopes in the verdict, which an
 		// unanswered description does not change, so it warns of nothing.
-		facts = gitlabclient.DescribeToken(ctx, client.GL())
+		facts = gitlabclient.DescribeToken(detectCtx, client.GL())
 	} else if !cfg.IgnoreScopes || client.IsInitialized() {
-		facts = gitlabclient.DetectToken(ctx, client.GL())
+		facts = gitlabclient.DetectToken(detectCtx, client.GL())
 	}
 	// A token GitLab accepted below the admission minimum, carrying neither
 	// read_api nor api, reaches no tool, so the process keeps answering the
@@ -1791,7 +1813,7 @@ func prepareStdioCatalog(
 		if sentence, refused := client.VersionRefusal(); refused {
 			warnVersionRefused(ctx, sentence)
 		}
-		userInfo, userErr := client.CurrentUser(ctx)
+		userInfo, userErr := client.CurrentUser(detectCtx)
 		if userErr != nil {
 			slog.WarnContext(ctx, "could not resolve user identity at startup", "error", userErr)
 			slog.InfoContext(ctx, "gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
@@ -1802,6 +1824,7 @@ func prepareStdioCatalog(
 			}
 			identity.set(resolved)
 			ctx = toolutil.IdentityToContext(ctx, resolved)
+			detectCtx = toolutil.IdentityToContext(detectCtx, resolved)
 			slog.InfoContext(ctx,
 				"gitlab connection verified",
 				"url", cfg.GitLabURL,
@@ -1816,9 +1839,10 @@ func prepareStdioCatalog(
 	// GITLAB_MCP_TIER, use it verbatim (no license check) and pin it on the
 	// client, so the lazy re-initialization of a degraded start cannot replace
 	// it with the edition /api/v4/version reports (issue 1016). Otherwise
-	// detect it from the instance, falling back to Free. The membership step
-	// runs on its own clock measured from the process context, so a slow
-	// license or namespace step cannot spend it.
+	// detect it from the instance, falling back to Free. The license and
+	// namespace steps share the detection bound; the membership step runs on
+	// its own clock measured from the process context, so neither a slow
+	// license or namespace step nor the bound can spend it.
 	switch {
 	case cfg.TierExplicit:
 		client.PinTier(cfg.Tier)
@@ -1827,7 +1851,7 @@ func prepareStdioCatalog(
 		client.SetTier(cfg.Tier)
 		serverCfg.Tier = cfg.Tier
 	default:
-		resolution := client.DetectTier(ctx, ctx)
+		resolution := detectStdioTier(client, detectCtx, ctx)
 		warnStdioProvisionalTier(ctx, resolution)
 		serverCfg.Tier = resolution.Tier
 	}
@@ -1846,18 +1870,24 @@ func prepareStdioCatalog(
 		gitlabclient.NarrowToTokenScope(serverCfg)
 	}
 
+	// The grant is read now, the last of the questions the detection bound
+	// covers, so the registration below, which asks GitLab nothing, does not
+	// spend that bound. A classic token gets nil.
+	authority := stdioAuthority(detectCtx, client, facts)
+	cancelDetect()
+
 	// serverCfg is only read again from here: the shell copied everything it
 	// needed into its middleware and its server options before this goroutine
 	// started, and nothing else can reach the catalog while the gate is shut.
 	if registerErr := shell.register(ctx); registerErr != nil {
 		return fmt.Errorf("registering the tool catalog: %w", registerErr)
 	}
-	// After registration, whose own listings must see the whole surface, and
-	// before the gate opens, because the handshake is already answered and a
-	// tools/list parked in the gate would otherwise be served unfiltered and
-	// kept by the client for the listing's cache lifetime (register rows
-	// AUT-007 and AUT-008). A classic token gets nil and nothing changes for it.
-	client.SetAuthority(stdioAuthority(ctx, client, facts))
+	// Attached after registration, whose own listings must see the whole
+	// surface, and before the gate opens, because the handshake is already
+	// answered and a tools/list parked in the gate would otherwise be served
+	// unfiltered and kept by the client for the listing's cache lifetime
+	// (register rows AUT-007 and AUT-008). Nil changes nothing.
+	client.SetAuthority(authority)
 	shell.gate.markReady()
 	slog.InfoContext(ctx, "tool catalog ready", "transport", "stdio")
 	// Re-read at the interval an HTTP pool entry is revalidated at
@@ -2008,6 +2038,14 @@ func redetectStdioToken(ctx context.Context, client *gitlabclient.Client) gitlab
 // stdioRereadTimeout bounds one stdio re-read of a fine-grained token's grant
 // and the instance version, as an HTTP pool entry's revalidation is bounded.
 const stdioRereadTimeout = 10 * time.Second
+
+// stdioDetectTimeout bounds what the stdio start asks GitLab after its
+// connectivity check, taken together: the token's description, the user, the
+// tier's license and namespace steps and a fine-grained token's grant, as an
+// HTTP pool entry's build is bounded by the same ten seconds (issue 1592). The
+// tier's membership step is outside it, on the clock its register row,
+// AUT-003, gives it, measured from the process context.
+const stdioDetectTimeout = 10 * time.Second
 
 // sharedSchemaCache caches resolved tool schemas across every MCP server
 // created by this process (stdio startup and the per-token-and-URL servers of the
