@@ -1307,11 +1307,13 @@ mdlint-fix:
 	@echo === markdownlint --fix ===
 	npx markdownlint-cli2 --fix "**/*.{md,mdx}" "#plan" "#node_modules"
 
-## check-doc-links: verify tracked Markdown/MDX local links resolve, anchor included,
+## check-doc-links: verify the Markdown/MDX pages' local links resolve, anchor included,
 ## and links to the documentation site resolve to a page and an anchor it has.
+## The gate is cmd/audit_doc_links, which reads the pages from disk, so it needs
+## neither Node nor a checkout.
 check-doc-links:
 	@echo === documentation local links ===
-	node scripts/check-doc-links.mjs
+	go run ./cmd/audit_doc_links/
 
 ## check-md-tables: verify the pipe tables of README.md, docs/ and the site are formatted.
 check-md-tables:
