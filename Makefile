@@ -3037,10 +3037,11 @@ check-supply-chain:
 ## branch rather than per commit, so a branch that adds one and cleans it up at
 ## its tip passes. It has to be scoped: the tree already carries thousands in
 ## prose written before the rule, so a whole-tree check would be red on its
-## first run and switched off on its second. No network, no Go build, so it is
-## a gate; run it before pushing. EM_DASH_BASE defaults to origin/main.
+## first run and switched off on its second. It reads git and nothing else, so
+## it is a gate; run it before pushing. EM_DASH_BASE defaults to origin/main.
+## The gate is cmd/audit_pr_text, which holds the description half below too.
 check-em-dash:
-	scripts/check-em-dash.sh diff $(EM_DASH_BASE)
+	go run ./cmd/audit_pr_text/ diff $(EM_DASH_BASE)
 
 ## check-pr-description: fail when the pull request title or body carries an em
 ## dash or a command that makes GitHub skip workflows, or when the body carries
@@ -3053,7 +3054,7 @@ check-em-dash:
 ## report that it judged it. PR_TITLE_FILE and PR_BODY_FILE judge text from
 ## disk instead, which needs no gh and is how the gate is rehearsed.
 check-pr-description:
-	scripts/check-em-dash.sh description
+	go run ./cmd/audit_pr_text/ description
 
 ## check-dco: fail when a commit of DCO_BASE..DCO_HEAD (origin/main..HEAD by
 ## default) carries no Signed-off-by trailer naming its author, the sign-off

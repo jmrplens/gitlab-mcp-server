@@ -474,6 +474,8 @@ func TestReleaseNotesProblems_Lines_PublishNothingTheBodyMayNot(t *testing.T) {
 		{name: "the skip-checks trailer", line: "skip-checks: true", want: []string{label + ":3" + skip}},
 		{name: "the skip-checks trailer indented in backticks", line: "  `skip-checks:true`", want: []string{label + ":3" + skip}},
 		{name: "the skip-checks trailer named in prose", line: "A line reading skip-checks: true is refused."},
+		{name: "the skip-checks trailer in backticks", line: "`skip-checks: true`", want: []string{label + ":3" + skip}},
+		{name: "a skip-checks value that only starts with true", line: "skip-checks: trueish"},
 		{name: "the command named without brackets", line: "A skip ci command is refused."},
 		{name: "a co-author trailer", line: "Co-Authored-By: Someone <someone@example.com>", want: []string{label + ":3" + credit("a Co-Authored-By trailer")}},
 		{name: "a co-author trailer indented", line: "  co-authored-by:x", want: []string{label + ":3" + credit("a Co-Authored-By trailer")}},

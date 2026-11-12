@@ -546,7 +546,7 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 //
 // The generator writes where they point and every audit reads from there, so
 // the two would move together and stay green while the committed record, which
-// scripts/check-em-dash.sh also names by its path, went unread.
+// cmd/audit_pr_text also names by its path, went unread.
 func TestPath_TheDefaultLocation_IsTheRecordTheRepositoryCommits(t *testing.T) {
 	t.Parallel()
 	// The package sits three levels below the repository root.
