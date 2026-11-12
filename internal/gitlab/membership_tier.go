@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -76,6 +78,16 @@ const (
 	membershipMaxPages = tenancy.TierMembershipMaxPages // register row AUT-003
 )
 
+// membershipTimeout bounds the membership step on a clock of its own,
+// measured from the membership base [Client.ResolveTier] is given rather than
+// from what the license and namespace steps left of the context they share.
+// The step is asked last, so a classic token's license and namespace reads,
+// retried with backoff, could spend the whole shared budget before it, and the
+// one step that answers a member of a paid group on GitLab.com then went
+// unread (issue 1782). It covers one page with its two retries or several
+// healthy pages.
+const membershipTimeout = tenancy.TierMembershipTimeout // register row AUT-003
+
 // membershipTierApplies reports whether the membership step is asked of c's
 // instance: GitLab.com alone, the one instance that sells its plans per
 // top-level group. Every other instance is licensed as a whole, which the
@@ -138,9 +150,9 @@ func (g *membershipGroup) tier() edition.Tier {
 
 // tierFromMembership reads the plans of the top-level groups the caller
 // reaches on GitLab.com and answers with the highest, for the reason
-// [Client.tierFromNamespaces] gives for taking the highest. It answers false
-// when no group answered, which a caller in no group is, and a read that fails
-// keeps what earlier pages answered.
+// [Client.tierFromNamespaces] gives for taking the highest. It has answered
+// nothing when no group answered, which a caller in no group is, and a read
+// that fails keeps what earlier pages answered.
 //
 // A page GitLab answered in part keeps the groups it resolved and ends the
 // walk. Every node that came back was resolved whole (see
@@ -148,14 +160,21 @@ func (g *membershipGroup) tier() edition.Tier {
 // whatever GitLab refused beside it, and discarding it would resolve lower
 // than the caller was shown to hold; the page after it would be refused the
 // same way, which is what a fine-grained token's walk would otherwise spend
-// up to membershipMaxPages requests learning.
+// up to membershipMaxPages requests learning. A page whose every error is
+// that permission refusal is GitLab's answer, so the step it ends is
+// resolved, the fine-grained token's page of null nodes included. Any other
+// error leaves the step unresolved ([membershipReadUnresolved]), whatever
+// the page resolved beside it: a feature that ran out of time nulls its node
+// as a refused one does, so the null node may be the group that raises the
+// tier, and the pages after it go unread. The groups the page resolved still
+// count, as the floor the step answers, and the step is asked again.
 //
 // A read that did not come back whole is said at info, naming the setting
 // that pins the tier, because the namespace step may already have answered
 // Free: no warning fires then, and the tier a caller is served would say
 // nothing about the step that could have raised it.
-func (c *Client) tierFromMembership(ctx context.Context) (edition.Tier, bool) {
-	best, found := edition.Free, false
+func (c *Client) tierFromMembership(ctx context.Context) tierStep {
+	best, found, unresolved := edition.Free, false, false
 	after := ""
 	// The page cap ends the walk, as it does the namespace walk, and for the
 	// same reason no second copy of it sits in the loop header.
@@ -172,8 +191,9 @@ func (c *Client) tierFromMembership(ctx context.Context) (edition.Tier, bool) {
 			}
 		}
 		if err != nil {
+			unresolved = membershipReadUnresolved(err)
 			slog.InfoContext(ctx, "could not read every top-level group the token is a member of; the tier is resolved without the rest, "+
-				"and GITLAB_MCP_TIER (or --tier in HTTP mode) pins it", "page", page, "error", err)
+				"and GITLAB_MCP_TIER (or --tier in HTTP mode) pins it", "page", page, "error", err, "unresolved", unresolved)
 			break
 		}
 		if best == edition.Ultimate || !groups.PageInfo.HasNextPage {
@@ -190,7 +210,7 @@ func (c *Client) tierFromMembership(ctx context.Context) (edition.Tier, bool) {
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the top-level groups the token is a member of", "tier", best.String())
 	}
-	return best, found
+	return tierStep{tier: best, answered: found, unresolved: unresolved}
 }
 
 // membershipPage asks for the page of top-level groups that follows after, or
@@ -208,22 +228,41 @@ func (c *Client) membershipPage(ctx context.Context, after string) (*membershipG
 		variables["after"] = after
 	}
 	var answer membershipTierAnswer
-	if _, err := c.inner.GraphQL.Do(gl.GraphQLQuery{Query: MembershipTierQuery, Variables: variables}, &answer, gl.WithContext(ctx)); err != nil {
+	// The retry check goes after the context: WithContext replaces the
+	// request's context, which is where WithRequestRetry keeps the check.
+	if _, err := c.inner.GraphQL.Do(gl.GraphQLQuery{Query: MembershipTierQuery, Variables: variables}, &answer,
+		gl.WithContext(ctx), gl.WithRequestRetry(c.membershipRetry)); err != nil {
 		return nil, err
 	}
 	refusal := graphQLRefusal(answer.Errors)
+	if refusal != nil {
+		return answer.Data.Groups, refusal
+	}
 	if answer.Data.Groups == nil {
-		if refusal != nil {
-			return nil, refusal
-		}
 		return nil, errNoGroupsConnection
 	}
-	return answer.Data.Groups, refusal
+	return answer.Data.Groups, nil
 }
 
-// graphQLRefusal is the error a top-level errors array stands for, or nil
+// membershipRetry is the retry check of the membership query, which is a POST
+// that only reads: the client's policy ([retryOptions]) retries a 5xx only for
+// an idempotent method, so one 502 used to leave the step unread where a GET
+// would have been asked again (issue 1782). It is retryablehttp's default
+// policy, which retries a 5xx other than 501, a 429 and a failure to reach
+// GitLab, and never once ctx has ended, so the deadline that ends the step is
+// not spent on a retry. The re-sends and the wait between them are the
+// client's own (RTC-006), and a client built with retries off retries this
+// request no more than any other.
+func (c *Client) membershipRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	if c.retriesDisabled {
+		return false, nil
+	}
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+}
+
+// graphQLRefusal is the refusal a top-level errors array stands for, or nil
 // when GitLab answered none.
-func graphQLRefusal(refusals []membershipTierError) error {
+func graphQLRefusal(refusals []membershipTierError) *documentRefusalError {
 	if len(refusals) == 0 {
 		return nil
 	}
@@ -231,5 +270,53 @@ func graphQLRefusal(refusals []membershipTierError) error {
 	for _, refusal := range refusals {
 		messages = append(messages, refusal.Message)
 	}
-	return errors.New("GitLab answered the document with errors: " + strings.Join(messages, "; "))
+	return &documentRefusalError{messages: messages}
+}
+
+// permissionRefusalMessage is the sentence GitLab answers a GraphQL field the
+// caller may not read with: the resource is said not to exist or not to be the
+// caller's, never which.
+const permissionRefusalMessage = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+
+// documentRefusalError is a membership page GitLab answered with a top-level
+// errors array, in place of the groups or beside them.
+type documentRefusalError struct {
+	// messages are GitLab's own, in the order it answered them.
+	messages []string
+}
+
+// Error names GitLab's messages, as the line that reports a membership read
+// has always quoted them.
+func (r *documentRefusalError) Error() string {
+	return "GitLab answered the document with errors: " + strings.Join(r.messages, "; ")
+}
+
+// permissionOnly reports whether every message is GitLab's permission
+// refusal, which is an answer about the caller: asked again, GitLab refuses
+// it the same way. Any other message may be GitLab's own moment, a field that
+// ran out of time or an internal error, which it answers with HTTP 200 and
+// the same shape.
+func (r *documentRefusalError) permissionOnly() bool {
+	for _, message := range r.messages {
+		if message != permissionRefusalMessage {
+			return false
+		}
+	}
+	return true
+}
+
+// membershipReadUnresolved reports whether a membership page that came back
+// with an error, whatever groups it resolved beside it, left the step unread,
+// as opposed to GitLab answering it: a document refused or answered in part
+// for anything but the caller's permission, an answer with
+// no groups connection and no reason, or a read [tierReadUnresolved] says
+// GitLab did not answer.
+func membershipReadUnresolved(err error) bool {
+	if refusal, ok := errors.AsType[*documentRefusalError](err); ok {
+		return !refusal.permissionOnly()
+	}
+	if errors.Is(err, errNoGroupsConnection) {
+		return true
+	}
+	return tierReadUnresolved(err)
 }

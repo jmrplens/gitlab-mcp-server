@@ -9,18 +9,22 @@
 package harness
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // TestEnvAccessors_StubInstance_HandOverWhatTheProbeFound checks that an Env
@@ -168,6 +172,127 @@ func TestEnvReprobeTier_AnswersFromTheInstance_NotFromTheRecord(t *testing.T) {
 	}
 	if before != edition.Premium || env.Runtime().Tier != edition.Premium {
 		t.Errorf("ReprobeTier() before = %s and Runtime().Tier = %s, want the bootstrap's premium in both: a re-probe must not rewrite the record", before, env.Runtime().Tier)
+	}
+}
+
+// envOnFlakyLicense returns an Env on a stub that serves a Premium license on
+// every read but the ones failing marks, which fail answers, and the count of
+// the reads. It is the instance the license test meets just after adding or
+// removing a license, when the license can answer 502 for a moment
+// ([answerBadGateway]) or not come back at all ([answerNever]). The
+// bootstrap's probe makes the first read; the client the Env then asks with
+// does not retry, so each ask of the re-probe is one read.
+func envOnFlakyLicense(t *testing.T, failing func(read int64) bool, fail http.HandlerFunc) (env *Env, reads *atomic.Int64) {
+	t.Helper()
+	reads = &atomic.Int64{}
+	stub := startStubGitLab(t, stubRoute{pattern: "GET /api/v4/license", handler: func(w http.ResponseWriter, r *http.Request) {
+		if failing(reads.Add(1)) {
+			fail(w, r)
+			return
+		}
+		writeStubJSON(w, map[string]any{"id": 1, "plan": "premium"})
+	}})
+	inst := instanceForStub(t, stub)
+	client, err := gitlabclient.NewClientWithTokenRetries(stub.URL, stubToken, false, true)
+	if err != nil {
+		t.Fatalf("building a client for the stub: %v", err)
+	}
+	inst.client = client
+	return newEnv(t, inst), reads
+}
+
+// answerBadGateway answers a read 502, as a license just added or removed can
+// for a moment.
+func answerBadGateway(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusBadGateway)
+}
+
+// answerNever holds a read until its asker gives up, as a license that does
+// not come back at all.
+func answerNever(_ http.ResponseWriter, r *http.Request) {
+	<-r.Context().Done()
+}
+
+// TestEnvReprobeTier_ALicenseThatAnswersLate_IsAskedAgain checks that the
+// re-probe reads the tier the way the bootstrap does: a license that answers
+// 502 just after the license test changed it, and then answers, is asked
+// again until it does, and the tier read is the instance's Premium rather
+// than the Free a single ask would have compared with the bootstrap's.
+func TestEnvReprobeTier_ALicenseThatAnswersLate_IsAskedAgain(t *testing.T) {
+	shortTierRetryPause(t)
+	// The bootstrap's read is the first; the two after it are the re-probe's
+	// first two asks, which GitLab leaves unanswered.
+	env, reads := envOnFlakyLicense(t, func(read int64) bool { return read == 2 || read == 3 }, answerBadGateway)
+
+	now, before := env.ReprobeTier()
+
+	if now != edition.Premium || before != edition.Premium {
+		t.Errorf("ReprobeTier() = (%s, %s) after the license answered 502 twice and then answered, want (premium, premium)", now, before)
+	}
+	if got := reads.Load(); got != 1+tierAttempts {
+		t.Errorf("license reads = %d, want the bootstrap's one and the re-probe's %d", got, tierAttempts)
+	}
+}
+
+// reprobeLicenseNeverAnswers is a fatal case
+// [TestEnvReprobeTier_ALicenseThatNeverAnswers_FailsTheTestNamingIt] runs in
+// a child process: the bootstrap reads a Premium license, and every read the
+// re-probe makes after it is answered 502.
+func reprobeLicenseNeverAnswers(t *testing.T) {
+	t.Helper()
+	shortTierRetryPause(t)
+	env, _ := envOnFlakyLicense(t, func(read int64) bool { return read > 1 }, answerBadGateway)
+	env.ReprobeTier()
+}
+
+// reprobeLicenseHangs is the other fatal case
+// [TestEnvReprobeTier_ALicenseThatNeverAnswers_FailsTheTestNamingIt] runs in
+// a child process: the bootstrap reads a Premium license, every read the
+// re-probe makes after it hangs until its asker gives up, and the test's
+// context ends after a moment, standing in for the re-probe's budget running
+// out on a license that never comes back.
+func reprobeLicenseHangs(t *testing.T) {
+	t.Helper()
+	env, _ := envOnFlakyLicense(t, func(read int64) bool { return read > 1 }, answerNever)
+	ctx, cancel := context.WithTimeout(env.Ctx, 200*time.Millisecond)
+	t.Cleanup(cancel)
+	env.Ctx = ctx
+	env.ReprobeTier()
+}
+
+// TestEnvReprobeTier_ALicenseThatNeverAnswers_FailsTheTestNamingIt checks
+// the re-probe's refusal: a license GitLab keeps leaving unanswered, with a
+// 502 on every ask or with no answer before the re-probe's time runs out,
+// fails the test calling it, naming the steps left unread and why it stopped
+// asking, rather than handing back the provisional Free for a comparison that
+// would blame the license test for a license it never lost.
+func TestEnvReprobeTier_ALicenseThatNeverAnswers_FailsTheTestNamingIt(t *testing.T) {
+	cases := []struct {
+		name      string
+		fatalCase string
+		want      string
+	}{
+		{
+			name:      "answered 502 on every ask",
+			fatalCase: "reprobe license never answers",
+			want:      "re-reading the instance's tier: the tier probe left license unanswered " + strconv.Itoa(tierAttempts) + " times in a row",
+		},
+		{
+			// The namespaces are asked after the license, on a context the
+			// hanging read has already spent, so they go unread too.
+			name:      "no answer before the time ran out",
+			fatalCase: "reprobe license hangs",
+			want:      "re-reading the instance's tier: the tier probe left license, namespaces unanswered and the time to ask again ran out: context deadline exceeded",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := runFatalCase(t, tc.fatalCase)
+
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("the child printed:\n%s\nwant %q", out, tc.want)
+			}
+		})
 	}
 }
 

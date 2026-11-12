@@ -114,6 +114,7 @@ func frozenValues() []frozenValue {
 		{"TierNamespaceMaxPages", TierNamespaceMaxPages, 10},
 		{"TierMembershipPageSize", TierMembershipPageSize, 100},
 		{"TierMembershipMaxPages", TierMembershipMaxPages, 10},
+		{"TierMembershipTimeout", TierMembershipTimeout, 8 * time.Second},
 	}
 }
 

@@ -1051,9 +1051,13 @@ func sessionCredential(ctx context.Context, inst *instance, token string) (crede
 		return credentialFacts{}, fmt.Errorf("building a client for the session's own credential: %w", err)
 	}
 	facts := gitlabclient.DetectToken(ctx, client.GL())
+	tier, err := settledTier(ctx, client)
+	if err != nil {
+		return credentialFacts{}, fmt.Errorf("reading the tier the session's own credential is served: %w", err)
+	}
 	return credentialFacts{
 		scopes:    facts.Scopes,
-		tier:      client.DetectTier(ctx),
+		tier:      tier,
 		authority: credentialAuthority(ctx, client, facts),
 	}, nil
 }

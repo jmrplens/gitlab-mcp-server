@@ -63,6 +63,12 @@ type Client struct {
 	// only valid as Bearer), false sends PRIVATE-TOKEN (PAT clients).
 	bearerAuth bool
 
+	// retriesDisabled records that the client was built with client-go's
+	// retries off, which a request carrying a retry check of its own would
+	// otherwise bypass: client-go asks such a check alone. See
+	// [Client.membershipRetry].
+	retriesDisabled bool
+
 	// unbound marks the credential-less client from [NewUnboundClient], which
 	// refuses every request. Handlers on a shared server capture it and resolve
 	// the caller's own through [Client.For], so a handler that still holds this
@@ -272,9 +278,10 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	pools := buildDestinationPools(cfg.SkipTLSVerify)
 
 	c := &Client{
-		baseURL:   cfg.GitLabURL,
-		healthURL: strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
-		token:     cfg.GitLabToken,
+		baseURL:         cfg.GitLabURL,
+		healthURL:       strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
+		token:           cfg.GitLabToken,
+		retriesDisabled: cfg.DisableRetries,
 	}
 	c.SetTier(cfg.Tier)
 	c.maxResponse.Store(DefaultMaxResponseBytes)
@@ -334,9 +341,10 @@ func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, r
 	pools := buildDestinationPools(skipTLSVerify)
 
 	c := &Client{
-		baseURL:   baseURL,
-		healthURL: strings.TrimRight(baseURL, "/") + versionAPIPath,
-		token:     token,
+		baseURL:         baseURL,
+		healthURL:       strings.TrimRight(baseURL, "/") + versionAPIPath,
+		token:           token,
+		retriesDisabled: disableRetries,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
@@ -738,32 +746,67 @@ func (c *Client) pingDirect(ctx context.Context) error {
 // debug rather than as a failed detection: the refusal is a fact about the
 // token's grant, which cannot change. Who reports it depends on the mode. A
 // stdio start warns once, since its token is the operator's own
-// (cmd/server's warnVersionRefused, from [Client.VersionRefusal]). An HTTP
-// pool entry reaches this through [Client.DetectTier] with a caller's token,
-// and there nothing above the debug line reports it: the refusal describes
-// that caller's grant rather than the deployment, and the entry takes the
-// fallback edition.
+// (cmd/server's warnVersionRefused, from [Client.VersionRefusal]). The tier
+// probe reads the edition with [Client.readEdition], which stores nothing.
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
-	if _, refused := c.VersionRefusal(); refused {
+	answer, versionInfo, err := c.readEdition(ctx)
+	switch answer {
+	case editionUnreadable:
 		return c.editionUnreadable(ctx, fallback)
+	case editionUnknown:
+		if err != nil {
+			slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
+		} else {
+			slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
+		}
+		c.SetEnterprise(fallback)
+		return fallback
+	}
+	enterprise := answer == editionEnterprise
+	c.SetEnterprise(enterprise)
+	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", enterprise)
+	return enterprise
+}
+
+// editionAnswer is what /api/v4/version said about the instance's edition.
+type editionAnswer uint8
+
+const (
+	// editionUnknown is no answer, or an answer that named no edition.
+	editionUnknown editionAnswer = iota
+	// editionCE is a Community Edition build.
+	editionCE
+	// editionEnterprise is an Enterprise Edition build, licensed or not.
+	editionEnterprise
+	// editionUnreadable is GitLab refusing the token the endpoint for a
+	// fine-grained permission its grant lacks ([Client.VersionRefusal]).
+	editionUnreadable
+)
+
+// readEdition asks /api/v4/version which edition the instance runs and
+// returns what it said, the version answer when there was one, and why the
+// edition is unknown when the endpoint could not be read. It stores nothing
+// about the edition on the client, and a token GitLab refused the endpoint
+// for a fine-grained permission is not asked again (see
+// [Client.DetectEnterprise]).
+func (c *Client) readEdition(ctx context.Context) (editionAnswer, *gitLabVersionInfo, error) {
+	if _, refused := c.VersionRefusal(); refused {
+		return editionUnreadable, nil, nil
 	}
 	versionInfo, err := c.versionDirect(ctx)
 	if _, refused := errors.AsType[*versionRefusedError](err); refused {
-		return c.editionUnreadable(ctx, fallback)
+		return editionUnreadable, nil, nil
 	}
 	if err != nil {
-		slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
-		c.SetEnterprise(fallback)
-		return fallback
+		return editionUnknown, nil, err
 	}
 	if versionInfo.Enterprise == nil {
-		slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
-		c.SetEnterprise(fallback)
-		return fallback
+		return editionUnknown, versionInfo, nil
 	}
-	c.SetEnterprise(*versionInfo.Enterprise)
-	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
-	return *versionInfo.Enterprise
+	if *versionInfo.Enterprise {
+		return editionEnterprise, versionInfo, nil
+	}
+	return editionCE, versionInfo, nil
 }
 
 // editionUnreadable is [Client.DetectEnterprise]'s answer for a token GitLab
@@ -776,81 +819,29 @@ func (c *Client) editionUnreadable(ctx context.Context, fallback bool) bool {
 	return fallback
 }
 
-// DetectTier resolves the GitLab licensing tier and stores it on the client.
-//
-// It asks up to three questions, because no one of them answers for every
-// deployment:
-//
-//   - GET /license, which carries the instance's own plan and is **admin-only
-//     on self-managed**. It is the authoritative answer where it is available.
-//   - GET /namespaces, which carries a plan per namespace and is readable by
-//     any token, for the namespaces the caller administers. On GitLab.com that
-//     plan is the subscription; on self-managed it is "default" whatever the
-//     instance is licensed for, since a subscription is a GitLab.com concept.
-//   - On GitLab.com alone, the top-level groups the caller is a member of, each
-//     with whether its plan carries a Premium and an Ultimate feature
-//     ([Client.tierFromMembership]), asked unless the namespaces already
-//     answered Ultimate.
-//
-// Measured on 2026-09-22 against a licensed EE 19.3.1 and against GitLab.com:
-// a non-admin token is refused /license with 403 on both, /namespaces reports
-// "default" for admin and non-admin alike on self-managed, and reports the real
-// plan on GitLab.com for each namespace the caller administers. So the second
-// question rescues the GitLab.com caller who owns a paid group, and rescues
-// nobody on self-managed. It does not rescue a member: GitLab.com shows a
-// namespace's plan only to a caller who may administer it, while it serves a
-// licensed feature to every member of a group whose top-level group's plan
-// carries it, which is most of the people working in a paid group (issue
-// 1224). The third question is that check, and GitLab.com answered it for the
-// maintainer's account, a Developer of a subgroup of a licensed group, on
-// 2026-10-08.
-//
-// The highest answer of the second and third wins, on ADR-0018's asymmetry,
-// and a third that fails keeps the second's: a failed read is no evidence that
-// the caller holds less than it was already shown to hold.
-//
-// Where none answers, the tier is [edition.Free] as before. That is right on a
-// CE instance and wrong on a licensed one the caller cannot read the license
-// of, and the two are told apart by the edition rather than guessed at: an
-// enterprise build that could not be resolved gets a warning naming the flag
-// that settles it, and a CE build stays silent because Free is the truth there.
-func (c *Client) DetectTier(ctx context.Context) edition.Tier {
-	if tier, ok := c.tierFromLicense(ctx); ok {
-		c.SetTier(tier)
-		return tier
-	}
-	tier, found := c.tierFromNamespaces(ctx)
-	if tier < edition.Ultimate && membershipTierApplies(c) {
-		if member, answered := c.tierFromMembership(ctx); answered {
-			tier, found = max(tier, member), true
-		}
-	}
-	if found {
-		c.SetTier(tier)
-		return tier
-	}
-
-	c.warnUnresolvedTier(ctx)
-	c.SetTier(edition.Free)
-	return edition.Free
-}
-
 // tierFromLicense reads the instance license, which only an administrator may
 // do on a self-managed instance and nobody may do on GitLab.com.
-func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
+//
+// A refusal and a license with no plan are answers that name no tier, and the
+// probe goes on to the namespaces. A read GitLab did not answer
+// ([tierReadUnresolved]) goes on as well, and is marked unresolved: an
+// administrator's token whose license read met a 502 holds whatever the
+// license says, which the read did not learn.
+func (c *Client) tierFromLicense(ctx context.Context) tierStep {
 	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
+		unresolved := tierReadUnresolved(err)
 		slog.DebugContext(ctx, "the instance license is not readable with this token, trying the namespace plan",
-			"error", err)
-		return edition.Free, false
+			"error", err, "unresolved", unresolved)
+		return tierStep{unresolved: unresolved}
 	}
 	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
 		slog.DebugContext(ctx, "GitLab license reported no plan, trying the namespace plan")
-		return edition.Free, false
+		return tierStep{}
 	}
 	tier := edition.TierFromPlan(lic.Plan)
 	slog.InfoContext(ctx, "detected GitLab tier from the instance license", "plan", lic.Plan, "tier", tier.String())
-	return tier, true
+	return tierStep{tier: tier, answered: true}
 }
 
 // tierFromNamespaces reads the plan of the namespaces the caller administers
@@ -877,13 +868,15 @@ func (c *Client) tierFromLicense(ctx context.Context) (edition.Tier, bool) {
 // **It pages**, under the two bounds namespacePlanPageSize and
 // namespacePlanMaxPages describe: reading only the first page resolved Free for
 // a caller whose paid namespace sat past the hundredth. A page that fails after
-// an earlier one answered keeps that answer rather than discarding it.
-func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
+// an earlier one answered keeps that answer rather than discarding it, and a
+// page GitLab did not answer ([tierReadUnresolved]) marks the step unresolved,
+// since a paid plan on it, or past it, was never seen.
+func (c *Client) tierFromNamespaces(ctx context.Context) tierStep {
 	opts := &gl.ListNamespacesOptions{}
 	opts.PerPage = namespacePlanPageSize
 	opts.Page = 1
 
-	best, found := edition.Free, false
+	best, found, unresolved := edition.Free, false, false
 	// No bound in the loop header: the page cap below is what ends the walk,
 	// and it has to be the one that does, since it is where the walk says it
 	// stopped short. A second copy of the bound up here could never be reached
@@ -895,7 +888,8 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 			// answered: the tier found so far is a fact, and discarding it
 			// would resolve lower than the caller has already been shown to
 			// hold.
-			slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "page", page, "error", err)
+			unresolved = tierReadUnresolved(err)
+			slog.DebugContext(ctx, "could not list namespaces to resolve the tier", "page", page, "error", err, "unresolved", unresolved)
 			break
 		}
 
@@ -933,7 +927,7 @@ func (c *Client) tierFromNamespaces(ctx context.Context) (edition.Tier, bool) {
 	if found {
 		slog.InfoContext(ctx, "detected GitLab tier from the namespace plan", "tier", best.String())
 	}
-	return best, found
+	return tierStep{tier: best, answered: found, unresolved: unresolved}
 }
 
 // nextNamespacePage is the page GitLab says follows resp, or zero when it names
@@ -979,21 +973,28 @@ func namespacePlanAnswers(plan string) bool {
 // leaves the edition unknown, so neither holds: the tier is Free and the reason
 // is logged at debug. A stdio start has already said once, at warning, that
 // the edition could not be read and what settles the tier; in HTTP mode the
-// refusal is a fact about one caller's grant, and [Client.DetectEnterprise]
-// says why nothing above debug reports it there.
+// refusal is a fact about one caller's grant rather than the deployment, so
+// nothing above debug reports it there.
+//
+// An edition the endpoint did not answer is not called CE either (issue
+// 1782): the line says it could not be read, at debug, with the reason. It
+// reads the edition with [Client.readEdition], so the client keeps the tier
+// [Client.DetectTier] stores.
 func (c *Client) warnUnresolvedTier(ctx context.Context) {
-	if !c.DetectEnterprise(ctx, false) {
-		if _, refused := c.VersionRefusal(); refused {
-			slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
-			return
-		}
+	answer, _, err := c.readEdition(ctx)
+	switch answer {
+	case editionEnterprise:
+		slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
+			"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
+			"is reported only on GitLab.com. "+
+			"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
+	case editionUnreadable:
+		slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
+	case editionUnknown:
+		slog.DebugContext(ctx, "no license, no paid namespace plan, and the edition could not be read; the tier is free", "error", err)
+	default:
 		slog.DebugContext(ctx, "no license and no paid namespace plan on a CE instance; the tier is free")
-		return
 	}
-	slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
-		"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
-		"is reported only on GitLab.com. "+
-		"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
 }
 
 // gitLabVersionInfo captures the subset of /api/v4/version needed for health

@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1160,6 +1161,26 @@ func TestDetectEnterprise_OverridesFallback(t *testing.T) {
 	}
 }
 
+// TestDetectEnterprise_EditionReported_WinsBothWays verifies that the edition
+// /version reports decides against either fallback, and that it is stored on
+// the client: an enterprise build is enterprise with a fallback of false, and
+// a CE build is not with a fallback of true.
+func TestDetectEnterprise_EditionReported_WinsBothWays(t *testing.T) {
+	for _, enterprise := range []bool{true, false} {
+		t.Run(strconv.FormatBool(enterprise), func(t *testing.T) {
+			body := fmt.Sprintf(`{"version":"19.5.0","enterprise":%t}`, enterprise)
+			client, err := NewClient(newTestConfig(editionServer(t, http.StatusOK, body).URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			if got := client.DetectEnterprise(t.Context(), !enterprise); got != enterprise || client.IsEnterprise() != enterprise {
+				t.Errorf("DetectEnterprise(fallback %t) = %t, client enterprise %t; want %t from the version endpoint",
+					!enterprise, got, client.IsEnterprise(), enterprise)
+			}
+		})
+	}
+}
+
 // TestDetectEnterprise_MissingFieldUsesFallback verifies graceful fallback for
 // GitLab versions that do not expose the enterprise field.
 func TestDetectEnterprise_MissingFieldUsesFallback(t *testing.T) {
@@ -1259,7 +1280,7 @@ func TestDetectTier_FromLicensePlan(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			got := client.DetectTier(context.Background())
+			got := client.DetectTier(context.Background(), context.Background()).Tier
 			if got != tc.want {
 				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
 			}
@@ -1278,7 +1299,7 @@ func TestDetectTier_ErrorFallsBackToFree(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() on error = %v, want free", got)
 	}
 	if client.IsEnterprise() {
@@ -1328,7 +1349,7 @@ func TestDetectTier_Unresolved_WarnsOnlyAnEnterpriseBuild(t *testing.T) {
 			client := unresolvedTierClient(t, tc.enterprise)
 			logged := captureClientLog(t)
 
-			if got := client.DetectTier(t.Context()); got != edition.Free {
+			if got := client.DetectTier(t.Context(), t.Context()).Tier; got != edition.Free {
 				t.Errorf("DetectTier() = %v, want Free", got)
 			}
 			warnings := strings.Count(logged.String(), `"level":"WARN"`)
@@ -1347,6 +1368,118 @@ func TestDetectTier_Unresolved_WarnsOnlyAnEnterpriseBuild(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// editionServer answers /api/v4/version with status and body, and refuses the
+// license and the namespaces, as a self-managed instance does a
+// non-administrator.
+func editionServer(t *testing.T, status int, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case versionAPIPath:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(body))
+		case "/api/v4/license", "/api/v4/namespaces":
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestReadEdition_TellsWhatTheVersionEndpointSaid checks the four outcomes
+// the tier probe's warning is chosen by, and that reading the edition stores
+// nothing about it on the client.
+func TestReadEdition_TellsWhatTheVersionEndpointSaid(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		want    editionAnswer
+		wantErr bool
+	}{
+		{name: "enterprise", status: http.StatusOK, body: `{"version":"19.5.0-ee","enterprise":true}`, want: editionEnterprise},
+		{name: "CE", status: http.StatusOK, body: `{"version":"19.5.0","enterprise":false}`, want: editionCE},
+		{name: "no edition in the answer", status: http.StatusOK, body: `{"version":"16.11.0"}`, want: editionUnknown},
+		{name: "no answer", status: http.StatusServiceUnavailable, body: `{}`, want: editionUnknown, wantErr: true},
+		{name: "refused for a fine-grained permission", status: http.StatusForbidden, body: metadataRefusalBody, want: editionUnreadable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClient(newTestConfig(editionServer(t, tc.status, tc.body).URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			client.SetTier(edition.Ultimate)
+			answer, _, err := client.readEdition(t.Context())
+			if answer != tc.want || (err != nil) != tc.wantErr {
+				t.Errorf("readEdition() = (%d, %v), want %d with an error %t", answer, err, tc.want, tc.wantErr)
+			}
+			if client.Tier() != edition.Ultimate {
+				t.Errorf("client tier = %v after reading the edition, want the Ultimate it had", client.Tier())
+			}
+		})
+	}
+}
+
+// TestDetectTier_EditionUnread_IsNotCalledCE is the edition half of issue
+// 1782: where no step answered and the edition could not be read either, the
+// line explaining the Free said the instance was CE, which nothing had
+// shown. It says now that the edition could not be read, and warns nobody.
+func TestDetectTier_EditionUnread_IsNotCalledCE(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "the version endpoint failed", status: http.StatusServiceUnavailable, body: `{}`},
+		{name: "the answer named no edition", status: http.StatusOK, body: `{"version":"16.11.0"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewClient(newTestConfig(editionServer(t, tc.status, tc.body).URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			logged := captureClientLog(t)
+			if got := client.DetectTier(t.Context(), t.Context()); got.Tier != edition.Free || got.Provisional {
+				t.Errorf("DetectTier() = %+v, want Free, definitive", got)
+			}
+			if strings.Contains(logged.String(), "CE instance") || strings.Contains(logged.String(), `"level":"WARN"`) {
+				t.Errorf("an edition nobody read was called CE, or warned about:\n%s", logged)
+			}
+			if !strings.Contains(logged.String(), "the edition could not be read") {
+				t.Errorf("the log does not say the edition could not be read:\n%s", logged)
+			}
+		})
+	}
+}
+
+// TestDetectTier_Provisional_AsksNoEdition checks that a provisional result
+// is warned about in its own words and asks /version nothing: the step that
+// went unanswered is why the tier may be wrong, and the budget that left it
+// unanswered is not spent again on the edition, which is how an instance came
+// to be called CE when nothing had been read (issue 1782).
+func TestDetectTier_Provisional_AsksNoEdition(t *testing.T) {
+	server := &fakeGitLabDotCom{pages: []fakeMembershipPage{{status: http.StatusBadGateway}}}
+	logged := captureClientLog(t)
+	got, _ := server.detect(t, false)
+	if got.Tier != edition.Free || !got.Provisional || got.Answered {
+		t.Errorf("DetectTier() = %+v, want Free, nothing answered, provisional", got)
+	}
+	if asked := server.versionRequests(); asked != 0 {
+		t.Errorf("/version asked %d times, want none on a provisional result", asked)
+	}
+	if strings.Contains(logged.String(), "CE instance") || strings.Contains(logged.String(), "could not determine the licensing tier") {
+		t.Errorf("a provisional result logged the edition's lines:\n%s", logged)
+	}
+	if warnings := strings.Count(logged.String(), `"level":"WARN"`); warnings != 1 {
+		t.Errorf("a provisional result logged %d warnings, want the one that says so:\n%s", warnings, logged)
 	}
 }
 
@@ -1876,7 +2009,7 @@ func TestDetectTier_NullLicenseDocument(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	if got := client.DetectTier(context.Background()); got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() on a null license document = %v, want free", got)
 	}
 }
@@ -2406,7 +2539,7 @@ func TestDetectTier_NamespacePlan_RescuesTheNonAdminToken(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			if got := client.DetectTier(context.Background()); got != tc.want {
+			if got := client.DetectTier(context.Background(), context.Background()).Tier; got != tc.want {
 				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
 			}
 		})
@@ -2427,7 +2560,7 @@ func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Free {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() = %v, want Free: \"default\" says nothing about the instance license", got)
 	}
 }
@@ -2496,7 +2629,7 @@ func TestDetectTier_NamespacePlan_ReadsPastTheFirstPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Premium {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Premium {
 		t.Errorf("DetectTier() = %v, want Premium: the paid namespace is on the second page", got)
 	}
 	if asked != 2 {
@@ -2518,7 +2651,7 @@ func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Ultimate {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Ultimate {
 		t.Errorf("DetectTier() = %v, want Ultimate", got)
 	}
 	if asked != 1 {
@@ -2563,8 +2696,11 @@ func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Premium {
-		t.Errorf("DetectTier() = %v, want Premium: the first page answered before the second failed", got)
+	// The page that failed may have carried a higher plan, so the answer is
+	// the floor the first page set, and is provisional (issue 1782).
+	got := client.DetectTier(context.Background(), context.Background())
+	if got.Tier != edition.Premium || !got.Provisional || !slices.Equal(got.Unresolved, []string{"namespaces"}) {
+		t.Errorf("DetectTier() = %+v, want Premium, provisional on the namespaces: the first page answered before the second failed", got)
 	}
 }
 
@@ -2601,8 +2737,8 @@ func TestDetectTier_NamespacePlan_StopsAtThePageBound(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			if got := client.DetectTier(context.Background()); got != tc.want {
-				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			if got := client.DetectTier(context.Background(), context.Background()); got.Tier != tc.want || got.Provisional {
+				t.Errorf("DetectTier() = %+v, want %v, not provisional: the bound is policy, not a read that failed", got, tc.want)
 			}
 			if got := atomic.LoadInt32(&asked); got != namespacePlanMaxPages {
 				t.Errorf("pages read = %d, want %d: the bound, and not one page either side of it", got, namespacePlanMaxPages)
@@ -2660,9 +2796,9 @@ func TestTierFromNamespaces_EntriesThatAnswerNothing_AreNotEvidence(t *testing.T
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			tier, found := client.tierFromNamespaces(context.Background())
-			if tier != tc.wantTier || found != tc.wantFound {
-				t.Errorf("tierFromNamespaces() = (%v, %v), want (%v, %v)", tier, found, tc.wantTier, tc.wantFound)
+			step := client.tierFromNamespaces(context.Background())
+			if step.tier != tc.wantTier || step.answered != tc.wantFound || step.unresolved {
+				t.Errorf("tierFromNamespaces() = %+v, want tier %v, answered %v and resolved", step, tc.wantTier, tc.wantFound)
 			}
 		})
 	}
@@ -2700,7 +2836,7 @@ func TestDetectTier_LicenseWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
-	if got := client.DetectTier(context.Background()); got != edition.Ultimate {
+	if got := client.DetectTier(context.Background(), context.Background()).Tier; got != edition.Ultimate {
 		t.Errorf("DetectTier() = %v, want Ultimate from the license rather than Premium from a namespace", got)
 	}
 }
@@ -2716,8 +2852,9 @@ func TestDetectTier_NamespacesUnreadable_FallsBackToFree(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			if got := client.DetectTier(context.Background()); got != edition.Free {
-				t.Errorf("DetectTier() = %v, want Free", got)
+			// Both refusals are GitLab's answers, so Free is definitive.
+			if got := client.DetectTier(context.Background(), context.Background()); got.Tier != edition.Free || got.Answered || got.Provisional {
+				t.Errorf("DetectTier() = %+v, want Free with no step answering and none unread", got)
 			}
 		})
 	}
@@ -2990,7 +3127,7 @@ func TestDetectTier_VersionRefused_ResolvesFreeWithoutCallingItCE(t *testing.T) 
 	}
 	logged := captureClientLog(t)
 
-	if got := client.DetectTier(t.Context()); got != edition.Free {
+	if got := client.DetectTier(t.Context(), t.Context()).Tier; got != edition.Free {
 		t.Errorf("DetectTier() = %v, want Free", got)
 	}
 	if strings.Contains(logged.String(), "on a CE instance") || strings.Contains(logged.String(), `"level":"WARN"`) {
