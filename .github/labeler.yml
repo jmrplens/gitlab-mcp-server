@@ -53,6 +53,8 @@ security:
           - .github/scripts/**
           - .github/dependabot.yml
           - cmd/audit_supply_chain/**
+          - cmd/audit_pr_text/**
+          - cmd/internal/committext/**
           - cmd/audit_image_vulns/**
           - cmd/audit_vex/**
           - vex/**

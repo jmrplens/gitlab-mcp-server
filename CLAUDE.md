@@ -69,7 +69,7 @@
 | MCP Icons                 | 52 icons (51 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 788 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 488 test files under `internal/tools/`                                                                       |
-| Go packages               | 325 in the module (`go list ./...`); 365 directories hold tracked `.go` files, the forty more being what `go list` leaves out: thirty-nine `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists and the four-package module its condition count reads, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
+| Go packages               | 330 in the module (`go list ./...`); 370 directories hold tracked `.go` files, the forty more being what `go list` leaves out: thirty-nine `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists and the four-package module its condition count reads, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 182 under `internal/tools/...` (the root package plus 181 sub-packages) |
 
 ### Orbit live tests
 
@@ -89,6 +89,9 @@ gitlab-mcp-server/
 │   ├── audit_dead_consts/            # Unread constants in const groups staticcheck cannot judge (make check-dead-consts)
 │   ├── audit_discovery_completeness/ # Discovery metadata: aliases, usage, related, param guidance (META-001)
 │   ├── audit_doc_tool_names/         # Tool names and action IDs the documentation teaches (make check-doc-tool-names)
+│   ├── audit_doc_links/              # Local links and site links of the documentation, anchors included (make check-doc-links)
+│   ├── audit_pr_text/                # Em dashes a branch adds; what a pull request description may not carry (make check-em-dash, check-pr-description)
+│   ├── crash_aware_tests/            # The cross-platform unit suite: a Go runtime crash told from a failing test and rerun once
 │   ├── audit_dynamic_aliases/        # Dynamic discovery aliases
 │   ├── audit_e2e_coverage/           # What the e2e suite covered; static, skip and release gates (make check-e2e-static)
 │   ├── audit_edition_tier/           # Doc-grounded edition tier gating
@@ -141,7 +144,7 @@ gitlab-mcp-server/
 │   ├── gen_testing_docs/             # docs/development/testing/testing.md
 │   ├── gen_tool_reference/           # The site's per-domain tool reference (make gen-tool-reference)
 │   ├── gen_third_party_notices/      # THIRD_PARTY_NOTICES at release time
-│   └── internal/                     # Helpers the commands share (actionrequests, sdkroutes, actionids, apilive, fileheader, graphqldocs, goprogram, sourcegate, mcpsurface, provenance, releaseassets, ...)
+│   └── internal/                     # Helpers the commands share (actionrequests, sdkroutes, actionids, apilive, fileheader, graphqldocs, goprogram, sourcegate, mcpsurface, provenance, releaseassets, committext, docwalk, ...)
 ├── internal/
 │   ├── cachehints/                   # SEP-2549 cache hints on MCP results
 │   ├── capguard/                     # Methods answered kept in step with capabilities declared

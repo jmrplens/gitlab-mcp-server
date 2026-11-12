@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/committext"
@@ -60,6 +61,12 @@ var errNoPullRequest = errors.New("no pull request")
 // installed.
 var errNoGh = errors.New("gh is not installed")
 
+// errNoBranch is why the pull request open for the branch could not be
+// looked up: HEAD is on no branch, as it is in the middle of a rebase or at a
+// commit checked out by its hash. That says nothing about whether a pull
+// request is open, so it is not read as there being none.
+var errNoBranch = errors.New("HEAD is on no branch, so no pull request can be looked up for it: name one with PR_NUMBER=<n>")
+
 // description is the text a squash merge makes the commit message, and
 // where it was read from, which every run prints: a gate that silently
 // judged the wrong text is worse than one that did not run at all.
@@ -95,10 +102,10 @@ func (f *findings) addUpstream(location string, refs []string) {
 	}
 }
 
-// runDescription judges the pull request title and body and returns the exit
-// code.
-func runDescription(ctx context.Context, env func(string) string, stdout, stderr io.Writer) int {
-	d, err := readDescription(ctx, env)
+// runDescription judges the pull request title and body of the branch
+// checked out at dir and returns the exit code.
+func runDescription(ctx context.Context, dir string, env func(string) string, stdout, stderr io.Writer) int {
+	d, err := readDescription(ctx, dir, env)
 	if errors.Is(err, errNoPullRequest) {
 		// Nothing to judge is not a failure: the diff half still gates, and
 		// a branch with no pull request yet has no description to land in
@@ -145,8 +152,9 @@ func report(stdout, stderr io.Writer, locations []string, failure string) {
 }
 
 // readDescription reads the title and body from the files env names, or
-// else from the API through gh.
-func readDescription(ctx context.Context, env func(string) string) (description, error) {
+// else from the API through gh, of the pull request env names or the one
+// open for the branch checked out at dir.
+func readDescription(ctx context.Context, dir string, env func(string) string) (description, error) {
 	titleFile, bodyFile := env("PR_TITLE_FILE"), env("PR_BODY_FILE")
 	if titleFile != "" || bodyFile != "" {
 		d := description{source: "files on disk"}
@@ -170,13 +178,10 @@ func readDescription(ctx context.Context, env func(string) string) (description,
 	}
 	number := env("PR_NUMBER")
 	if number == "" {
-		// A branch with no pull request is one gh refuses to view, so the
-		// refusal reads as there being none.
-		out, err := gh(ctx, "pr", "view", "--json", "number", "--jq", ".number")
-		if errors.Is(err, errNoGh) {
+		var err error
+		if number, err = openPullRequest(ctx, dir, repo); err != nil {
 			return description{}, err
 		}
-		number = strings.TrimSpace(out)
 	}
 	if number == "" {
 		return description{}, errNoPullRequest
@@ -224,6 +229,96 @@ func readTextFile(path string) (string, error) {
 func trimNewlines(text string) string {
 	return strings.TrimRight(text, "\n")
 }
+
+// openPullRequest returns the number of the pull request open in repo from
+// the branch checked out at dir, or the empty string when there is none.
+//
+// gh is asked for a listing, and not for gh pr view, because a listing
+// answers a branch with no pull request with an empty list, where gh pr view
+// answers it with a failure nothing tells apart from a token GitHub refused
+// or a network that is down: all three exit 1, and only gh's words on stderr
+// differ, which no gh release promises to keep. Reading every failure of gh
+// pr view as there being none passed a description the run never read. Here
+// none is a list that holds none, and every failure is the run's, an answer
+// that is not a list included. So is a list with an entry that does not say
+// whether it is from a fork, which would be taken for the repository's own,
+// or that names no pull request, which would be asked for as one, and the
+// whole listing is read before any of it is taken.
+//
+// The branch is the one git has checked out, which is the head gh pr view
+// looks a pull request up by too under git's default push.default; a branch
+// pushed under another name is named with PR_NUMBER. The listing is of repo,
+// the repository the description is then read from, and only a pull request
+// from a branch of repo itself is taken. The listing matches the head by its
+// name alone, so it also holds a fork's pull request from a branch of the
+// same name, which gh pr view skipped for a branch pushed to repo, since it
+// names a fork's branch owner:branch: taking it would judge a local main or
+// patch-1 by a stranger's description. A pull request opened from a fork is
+// named with PR_NUMBER too, which CI always sets. gh lists the newest first,
+// so a branch with pull requests open into two bases is judged by the newest.
+//
+// gh lists no more than it is asked for, 30 unless told, and a listing cut
+// at its limit says nothing about the pull requests past it. The lookup asks
+// for listLimit, and a listing that holds as many with none from a branch of
+// repo fails rather than reading as none, since the one to judge may be past
+// them.
+func openPullRequest(ctx context.Context, dir, repo string) (string, error) {
+	cmd := gitCommand(ctx, dir, "branch", "--show-current")
+	var gitErr bytes.Buffer
+	cmd.Stderr = &gitErr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git branch --show-current: %w: %s", err, strings.TrimSpace(gitErr.String()))
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", errNoBranch
+	}
+	args := []string{"pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--limit", strconv.Itoa(listLimit), "--json", "number,isCrossRepository"}
+	call := strings.Join(args, " ")
+	listing, err := gh(ctx, args...)
+	if err != nil {
+		return "", err
+	}
+	// Pointers, because null decodes into a slice as no error and no
+	// element, which would read as a list that holds none, and an entry
+	// with no isCrossRepository decodes as false, which would read as the
+	// repository's own pull request.
+	var open *[]struct {
+		Number            int   `json:"number"`
+		IsCrossRepository *bool `json:"isCrossRepository"`
+	}
+	if decodeErr := json.Unmarshal([]byte(listing), &open); decodeErr != nil {
+		return "", fmt.Errorf("read the answer of gh %s: %w", call, decodeErr)
+	}
+	if open == nil {
+		return "", fmt.Errorf("read the answer of gh %s: null is not a list", call)
+	}
+	number := ""
+	for i, pr := range *open {
+		if pr.IsCrossRepository == nil {
+			return "", fmt.Errorf("read the answer of gh %s: entry %d does not say whether it is from a fork", call, i+1)
+		}
+		if pr.Number <= 0 {
+			return "", fmt.Errorf("read the answer of gh %s: entry %d names no pull request, number %d", call, i+1, pr.Number)
+		}
+		if number == "" && !*pr.IsCrossRepository {
+			number = strconv.Itoa(pr.Number)
+		}
+	}
+	if number != "" {
+		return number, nil
+	}
+	if len(*open) >= listLimit {
+		return "", fmt.Errorf("gh %s listed %d pull requests, as many as it was asked for and every one from a fork, so one from a branch of %s itself may be past them: name it with PR_NUMBER=<n>", call, len(*open), repo)
+	}
+	return "", nil
+}
+
+// listLimit is how many pull requests the lookup asks gh to list, far more
+// than a branch of the repository has open: a listing that reaches it is of
+// a branch name many forks share, such as main or patch-1.
+const listLimit = 100
 
 // gh runs gh with args and returns what it printed. A gh that is not
 // installed is errNoGh; one that fails is an error carrying the call and
