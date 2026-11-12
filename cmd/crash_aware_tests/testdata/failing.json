@@ -1,0 +1,14 @@
+{"Time":"2026-11-08T09:10:00.000000Z","Action":"start","Package":"example.com/m/gamma"}
+{"Time":"2026-11-08T09:10:00.010000Z","Action":"run","Package":"example.com/m/gamma","Test":"TestGamma"}
+{"Time":"2026-11-08T09:10:00.010100Z","Action":"run","Package":"example.com/m/gamma","Test":"TestGamma/empty"}
+{"Time":"2026-11-08T09:10:00.010200Z","Action":"output","Package":"example.com/m/gamma","Test":"TestGamma/empty","Output":"    gamma_test.go:12: got 1, want 0\n"}
+{"Time":"2026-11-08T09:10:00.010300Z","Action":"fail","Package":"example.com/m/gamma","Test":"TestGamma/empty","Elapsed":0}
+{"Time":"2026-11-08T09:10:00.010400Z","Action":"fail","Package":"example.com/m/gamma","Test":"TestGamma","Elapsed":0}
+{"Time":"2026-11-08T09:10:00.010500Z","Action":"run","Package":"example.com/m/gamma","Test":"TestDelta"}
+{"Time":"2026-11-08T09:10:00.010600Z","Action":"fail","Package":"example.com/m/gamma","Test":"TestDelta","Elapsed":0}
+{"Time":"2026-11-08T09:10:00.010700Z","Action":"output","Package":"example.com/m/gamma","Output":"FAIL\n"}
+{"Time":"2026-11-08T09:10:00.010800Z","Action":"fail","Package":"example.com/m/gamma","Elapsed":0.011}
+{"Time":"2026-11-08T09:10:01.000000Z","Action":"start","Package":"example.com/m/server"}
+{"Time":"2026-11-08T09:10:01.010000Z","Action":"run","Package":"example.com/m/server","Test":"TestServeHTTP"}
+{"Time":"2026-11-08T09:10:03.000100Z","Action":"output","Package":"example.com/m/server","Test":"TestServeHTTP","Output":"fatal error: acquireSudog: found s.elem != nil in cache\n"}
+{"Time":"2026-11-08T09:10:03.100100Z","Action":"fail","Package":"example.com/m/server","Elapsed":2.1}

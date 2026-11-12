@@ -64,6 +64,21 @@ jobs:
 			want: []string{"job build step 1 tests github.event_name == 'schedule'"},
 		},
 		{
+			name: "condition naming two events the workflow is not triggered by",
+			workflow: `
+on: push
+jobs:
+  build:
+    if: github.event_name == 'schedule' || github.event_name == 'release'
+    steps:
+      - run: make all
+`,
+			want: []string{
+				"job build tests github.event_name == 'schedule'",
+				"job build tests github.event_name == 'release'",
+			},
+		},
+		{
 			name: "single event spelled as a string",
 			workflow: `
 on: push

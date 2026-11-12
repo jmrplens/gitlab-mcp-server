@@ -1,0 +1,11 @@
+{"Time":"2026-11-08T09:00:00.000000Z","Action":"start","Package":"example.com/m/alpha"}
+{"Time":"2026-11-08T09:00:00.010000Z","Action":"run","Package":"example.com/m/alpha","Test":"TestAlpha"}
+{"Time":"2026-11-08T09:00:00.010100Z","Action":"output","Package":"example.com/m/alpha","Test":"TestAlpha","Output":"=== RUN   TestAlpha\n"}
+{"Time":"2026-11-08T09:00:00.010200Z","Action":"output","Package":"example.com/m/alpha","Test":"TestAlpha","Output":"--- PASS: TestAlpha (0.00s)\n"}
+{"Time":"2026-11-08T09:00:00.010300Z","Action":"pass","Package":"example.com/m/alpha","Test":"TestAlpha","Elapsed":0}
+{"Time":"2026-11-08T09:00:00.010400Z","Action":"output","Package":"example.com/m/alpha","Output":"PASS\n"}
+{"Time":"2026-11-08T09:00:00.010500Z","Action":"output","Package":"example.com/m/alpha","Output":"ok  \texample.com/m/alpha\t0.012s\n"}
+{"Time":"2026-11-08T09:00:00.010600Z","Action":"pass","Package":"example.com/m/alpha","Elapsed":0.012}
+{"Time":"2026-11-08T09:00:00.020000Z","Action":"start","Package":"example.com/m/beta"}
+{"Time":"2026-11-08T09:00:00.020100Z","Action":"output","Package":"example.com/m/beta","Output":"?   \texample.com/m/beta\t[no test files]\n"}
+{"Time":"2026-11-08T09:00:00.020200Z","Action":"skip","Package":"example.com/m/beta","Elapsed":0}
