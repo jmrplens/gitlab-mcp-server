@@ -20,13 +20,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 23,910 |
-| Unit test functions                                   | 22,128 |
-| E2E test functions                                    |  1,782 |
-| cmd test functions                                    |  6,002 |
-| Test files (internal/)                                |    763 |
+| Total test functions                                  | 23,936 |
+| Unit test functions                                   | 22,153 |
+| E2E test functions                                    |  1,783 |
+| cmd test functions                                    |  6,017 |
+| Test files (internal/)                                |    765 |
 | Test files (cmd/)                                     |    492 |
-| Test files (test/e2e/)                                |    451 |
+| Test files (test/e2e/)                                |    452 |
 | Tool sub-packages tested                              |    181 |
 | Core packages tested                                  |     36 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,780 | 57.6% |
+| `TestFunc_Scenario` (2-part)           | 13,782 | 57.6% |
 | `TestFunc` (no underscore)             |    899 |  3.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,231 | 38.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,255 | 38.7% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,315 |        266 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,325 |        268 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            453 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,358 |        480 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,782 |        451 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          6,002 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **23,910** |  **1,706** |                                                                                                 |
+| E2E integration         |          1,783 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          6,017 |        492 | server entry point and developer command utilities                                              |
+| **Total**               |     **23,936** |  **1,709** |                                                                                                 |
 
 ### Core Packages
 
@@ -90,11 +90,11 @@
 | testutil/modelcorpus     |        58 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                                                                                  |
 | testutil/modelrecord     |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore      |        97 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
-| testutil/netfixture      |         8 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
+| testutil/netfixture      |        12 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,407 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,315** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,413 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,325** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
