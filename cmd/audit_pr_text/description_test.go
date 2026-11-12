@@ -106,7 +106,7 @@ func TestDescription_ACleanDescription_Passes(t *testing.T) {
 	}
 	if absent := lacking(output,
 		"Judging the pull request title and body (files on disk).",
-		"OK: the title and body carry no em dash, no injected block and no skip command.",
+		"OK: the title and body carry no em dash, no injected block, no skip command and no upstream reference.",
 	); len(absent) > 0 {
 		t.Errorf("output lacks %q:\n%s", absent, output)
 	}

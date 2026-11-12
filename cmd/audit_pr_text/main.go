@@ -21,10 +21,11 @@ diff         Fail when a line this branch adds carries an em dash (U+2014).
              comparison is the three-dot form, so only what this branch added
              on top of their merge base is judged.
 
-description  Fail when the pull request title or body carries an em dash or
-             a command that makes GitHub skip workflows, or when the body
-             carries a skip-checks trailer or a generated block a review bot
-             injected.
+description  Fail when the pull request title or body carries an em dash, a
+             command that makes GitHub skip workflows or a reference GitLab
+             resolves to another project's or group's merge request, issue,
+             work item, epic or commit, or when the body carries a
+             skip-checks trailer or a generated block a review bot injected.
              The pull request is $PR_NUMBER, or the one open for the current
              branch. Set PR_TITLE_FILE and PR_BODY_FILE to judge text from
              disk instead, which is how the gate is rehearsed without a pull

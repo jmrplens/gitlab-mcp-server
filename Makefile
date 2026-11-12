@@ -3044,11 +3044,13 @@ check-em-dash:
 	go run ./cmd/audit_pr_text/ diff $(EM_DASH_BASE)
 
 ## check-pr-description: fail when the pull request title or body carries an em
-## dash or a command that makes GitHub skip workflows, or when the body carries
-## a skip-checks trailer or a block a review bot injected. This is the half no
-## later commit can fix: a squash merge copies the description into main's
-## history, and a skip command there turns off CI on main and the release of
-## any tag put on that commit. A branch with no pull request open passes,
+## dash, a command that makes GitHub skip workflows or a reference GitLab
+## resolves to another project's or group's item (issue 1477), or when the body
+## carries a skip-checks trailer or a block a review bot injected. This is the
+## half no later commit can fix: a squash merge copies the description into
+## main's history, a skip command there turns off CI on main and the release of
+## any tag put on that commit, and the GitLab mirror notes a reference there on
+## the item it names for good. A branch with no pull request open passes,
 ## having no description to land; PR_NUMBER names one explicitly. Without gh it
 ## fails and says so, because a check that cannot read what it judges must not
 ## report that it judged it. PR_TITLE_FILE and PR_BODY_FILE judge text from
