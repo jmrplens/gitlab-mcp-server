@@ -85,9 +85,22 @@
 // starts no run.
 //
 // A branch with no pull request open passes, having no description to land.
-// A gh that is missing, and a description that cannot be read, fail and say
-// so, because a check that cannot read what it judges must not report that
-// it judged it.
+// The pull request open for it is looked up with gh pr list, which answers
+// none with an empty list, so only that answer reads as none: a lookup that
+// fails, an answer that is not a list, null included, one with an entry that
+// names no pull request or does not say whether it is from a fork, and a
+// HEAD on no branch fail the run like a gh that is missing and a
+// description that cannot be read, and say so, because a check that cannot
+// read what it judges must not report that it judged it. Only a pull
+// request from a branch of the repository itself is taken, since the
+// listing also holds a fork's pull request from a branch of the same name,
+// which is somebody else's description: a branch whose only open pull
+// requests are forks' passes as one with none, and a pull request opened
+// from a fork, like a branch pushed under another name, is named with
+// PR_NUMBER, which CI always sets. The listing asks for a hundred, where gh
+// lists 30 unless told, and one that holds a hundred with none from a
+// branch of the repository fails as well, since the one to judge may be
+// past them.
 //
 // # What changed in the port
 //
@@ -95,6 +108,8 @@
 // gh call that failed inside its reader returned an empty title and body, and
 // the empty text carried nothing to refuse. Here every such failure stops the
 // run. A title or body file that cannot be read does too, where the script
-// judged it as empty. The skip-checks value is the whole word true, where the
-// script matched it as a prefix and refused "skip-checks: trueish".
+// judged it as empty, and so does a failed lookup of the branch's pull
+// request, which the script read as there being none. The skip-checks value
+// is the whole word true, where the script matched it as a prefix and
+// refused "skip-checks: trueish".
 package main

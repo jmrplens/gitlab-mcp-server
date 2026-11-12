@@ -51,7 +51,7 @@ func run(ctx context.Context, args []string, dir string, env func(string) string
 		return runDiff(ctx, dir, args[1:], env, stdout, stderr)
 	}
 	if subcommand == "description" && len(args) == 1 {
-		return runDescription(ctx, env, stdout, stderr)
+		return runDescription(ctx, dir, env, stdout, stderr)
 	}
 	if subcommand == "help" || subcommand == "-h" || subcommand == "--help" {
 		fmt.Fprint(stdout, usage)

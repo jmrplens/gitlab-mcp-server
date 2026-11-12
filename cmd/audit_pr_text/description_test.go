@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -59,12 +60,30 @@ func judgeFiles(t *testing.T, title, body string) (int, string) {
 	return judge(t, map[string]string{"PR_TITLE_FILE": titleFile, "PR_BODY_FILE": bodyFile})
 }
 
-// judge runs the description gate with vars as its environment.
+// judge runs the description gate with vars as its environment, in a
+// directory that is no repository.
 func judge(t *testing.T, vars map[string]string) (int, string) {
 	t.Helper()
+	return judgeIn(t, t.TempDir(), vars)
+}
+
+// judgeIn runs the description gate in dir with vars as its environment.
+func judgeIn(t *testing.T, dir string, vars map[string]string) (int, string) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := run(t.Context(), []string{"description"}, t.TempDir(), environment(vars), &stdout, &stderr)
+	code := run(t.Context(), []string{"description"}, dir, environment(vars), &stdout, &stderr)
 	return code, stdout.String() + stderr.String()
+}
+
+// onBranch returns a new repository whose HEAD is on branch, which has no
+// commit yet: git names the branch all the same, and the lookup asks for
+// nothing else.
+func onBranch(t *testing.T, branch string) string {
+	t.Helper()
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet")
+	git(t, dir, "symbolic-ref", "HEAD", "refs/heads/"+branch)
+	return dir
 }
 
 // writeFile writes a scratch file of a test.
@@ -353,8 +372,11 @@ func TestMain(m *testing.M) {
 
 // ghStandIn answers the three calls the gate makes as gh would, from files
 // under dir, and records each call it was asked: "api ..." prints payload,
-// "repo view ..." prints repo and "pr view ..." prints number, and a call
-// whose file is missing fails as gh does.
+// "repo view ..." prints repo and "pr list ..." prints listing, the JSON list
+// gh prints there, [] for no pull request. A call whose file is missing
+// fails as gh does, and one whose file has a .fails file beside it fails the
+// way that file says, its first line the exit status and the rest what gh
+// writes on stderr.
 func ghStandIn(dir string, args []string) int {
 	calls, err := os.OpenFile(filepath.Join(dir, "calls"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -363,7 +385,17 @@ func ghStandIn(dir string, args []string) int {
 	_, _ = calls.WriteString(strings.Join(args, " ") + "\n")
 	_ = calls.Close()
 
-	answer := map[string]string{"api": "payload", "repo": "repo", "pr": "number"}[args[0]]
+	answer := map[string]string{"api": "payload", "repo": "repo", "pr": "listing"}[args[0]]
+	failure, noFailure := os.ReadFile(filepath.Join(dir, answer+".fails"))
+	if answer != "" && noFailure == nil {
+		status, message, _ := strings.Cut(string(failure), "\n")
+		_, _ = os.Stderr.WriteString(message)
+		code, badStatus := strconv.Atoi(status)
+		if badStatus != nil {
+			return 125
+		}
+		return code
+	}
 	data, err := os.ReadFile(filepath.Join(dir, answer))
 	if answer == "" || err != nil {
 		_, _ = os.Stderr.WriteString("stand-in gh: no answer for " + strings.Join(args, " ") + "\n")
@@ -389,6 +421,25 @@ func useGh(t *testing.T, dir string) {
 	}
 }
 
+// keepGit points the git seam at the git a lookup finds now, run by its
+// absolute path, for the rest of the test, so that the test can then leave
+// PATH holding no gh and still have git name the branch.
+func keepGit(t *testing.T) {
+	t.Helper()
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := gitCommand
+	t.Cleanup(func() { gitCommand = previous })
+	gitCommand = func(ctx context.Context, dir string, args ...string) *exec.Cmd {
+		// #nosec G204 G702 -- the git the lookup above found, with the arguments the gate passes
+		cmd := exec.CommandContext(ctx, bin, args...)
+		cmd.Dir = dir
+		return cmd
+	}
+}
+
 // calls reads what the stand-in was asked, one call per line.
 func calls(t *testing.T, dir string) string {
 	t.Helper()
@@ -397,6 +448,24 @@ func calls(t *testing.T, dir string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// listFeature is the call that lists the pull requests open from the branch
+// feature in owner/repo, as the stand-in records it, a hundred at most.
+const listFeature = "pr list --repo owner/repo --head feature --state open --limit 100 --json number,isCrossRepository"
+
+// forks is n pull requests from forks, numbered from 1001, as gh lists each.
+func forks(n int) []string {
+	entries := make([]string, n)
+	for i := range n {
+		entries[i] = `{"isCrossRepository":true,"number":` + strconv.Itoa(1001+i) + `}`
+	}
+	return entries
+}
+
+// listed is the listing gh prints for entries, but for its newline.
+func listed(entries ...string) string {
+	return "[" + strings.Join(entries, ",") + "]"
 }
 
 // TestDescription_ReadThroughTheAPIWithCRLFLineEndings_IsJudged verifies the
@@ -429,21 +498,61 @@ func TestDescription_ReadThroughTheAPIWithCRLFLineEndings_IsJudged(t *testing.T)
 
 // TestDescription_TheRepositoryAndPullRequestGhKnows_AreJudged verifies the
 // local path: no variable names either, so gh is asked for the repository
-// and for the pull request open for the branch, and a null body is empty.
+// and for the pull request open there for the branch git has checked out,
+// and a null body is empty.
 func TestDescription_TheRepositoryAndPullRequestGhKnows_AreJudged(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "repo"), []byte("owner/repo\n"))
-	writeFile(t, filepath.Join(dir, "number"), []byte("12\n"))
+	writeFile(t, filepath.Join(dir, "listing"), []byte(`[{"isCrossRepository":false,"number":12}]`+"\n"))
 	writeFile(t, filepath.Join(dir, "payload"), []byte(`{"title": "A title", "body": null}`))
 	useGh(t, dir)
 
-	code, output := judge(t, nil)
-	want := "repo view --json nameWithOwner --jq .nameWithOwner\npr view --json number --jq .number\napi repos/owner/repo/pulls/12\n"
+	code, output := judgeIn(t, onBranch(t, "issue-12-a-branch"), nil)
+	want := "repo view --json nameWithOwner --jq .nameWithOwner\n" +
+		"pr list --repo owner/repo --head issue-12-a-branch --state open --limit 100 --json number,isCrossRepository\n" +
+		"api repos/owner/repo/pulls/12\n"
 	if got := calls(t, dir); got != want {
 		t.Errorf("gh was asked\n%s\nwant\n%s", got, want)
 	}
 	if code != 0 || !strings.Contains(output, "owner/repo#12, read from the API just now") {
 		t.Errorf("exit %d, want 0 and the source named\n%s", code, output)
+	}
+}
+
+// TestDescription_APullRequestFromTheRepositorysOwnBranch_IsTheOneJudged
+// verifies which of the pull requests the listing names is judged: the
+// newest from a branch of the repository itself, which gh lists first, and
+// never a fork's from a branch of the same name, even one gh lists before
+// it, or ninety-nine, the repository's own last of a full listing. gh pr
+// view, which the lookup replaced, skipped a fork's pull request for a branch
+// pushed to the repository, and taking it would hold a local branch to
+// somebody else's description.
+func TestDescription_APullRequestFromTheRepositorysOwnBranch_IsTheOneJudged(t *testing.T) {
+	cases := []struct {
+		name, listing, number string
+	}{
+		{name: "the repository's own", listing: `[{"isCrossRepository":false,"number":12}]`, number: "12"},
+		{name: "a fork's listed first", listing: `[{"isCrossRepository":true,"number":1755},{"isCrossRepository":false,"number":12}]`, number: "12"},
+		{name: "two of the repository's own, into two bases", listing: `[{"isCrossRepository":false,"number":14},{"isCrossRepository":false,"number":12}]`, number: "14"},
+		{name: "the repository's own, last of a full listing", listing: listed(append(forks(99), `{"isCrossRepository":false,"number":12}`)...), number: "12"},
+	}
+	// sequential: each case points the one gh seam at its own stand-in
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "listing"), []byte(tc.listing+"\n"))
+			writeFile(t, filepath.Join(dir, "payload"), []byte(`{"title": "A title", "body": "clean"}`))
+			useGh(t, dir)
+
+			code, output := judgeIn(t, onBranch(t, "feature"), map[string]string{"GITHUB_REPOSITORY": "owner/repo"})
+			wantCalls := listFeature + "\napi repos/owner/repo/pulls/" + tc.number + "\n"
+			if got := calls(t, dir); got != wantCalls {
+				t.Errorf("gh was asked\n%s\nwant\n%s", got, wantCalls)
+			}
+			if code != 0 || !strings.Contains(output, "owner/repo#"+tc.number+", read from the API just now") {
+				t.Errorf("exit %d, want 0 and owner/repo#%s named\n%s", code, tc.number, output)
+			}
+		})
 	}
 }
 
@@ -474,26 +583,177 @@ func TestDescription_TheTitleTheAPIAnswers_IsJudged(t *testing.T) {
 }
 
 // TestDescription_NoPullRequestOpen_Passes verifies that a branch with no
-// pull request has no description to land, and that the gate says so.
+// pull request has no description to land, and that the gate says so: the
+// listing of the pull requests open from the branch answered, and listed
+// none from a branch of the repository itself, a fork's from a branch of
+// the same name being somebody else's. A list is the only answer read as
+// none, and one of forks' pull requests only while it is shorter than the
+// limit the call names, which the call always names.
 func TestDescription_NoPullRequestOpen_Passes(t *testing.T) {
 	cases := map[string]string{
-		"gh pr view fails":          "",
-		"gh pr view prints nothing": "\n",
+		"gh lists none":                  "[]\n",
+		"gh lists only a fork's, twice":  `[{"isCrossRepository":true,"number":1760},{"isCrossRepository":true,"number":1755}]` + "\n",
+		"gh lists none on a single line": "[]",
+		"gh lists forks' pull requests, one short of the limit the call names": listed(forks(99)...) + "\n",
 	}
 	// sequential: each case points the one gh seam at its own stand-in
-	for name, number := range cases {
+	for name, listing := range cases {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			if number != "" {
-				writeFile(t, filepath.Join(dir, "number"), []byte(number))
-			}
+			writeFile(t, filepath.Join(dir, "listing"), []byte(listing))
 			useGh(t, dir)
 
-			code, output := judge(t, map[string]string{"GITHUB_REPOSITORY": "owner/repo"})
+			code, output := judgeIn(t, onBranch(t, "feature"), map[string]string{"GITHUB_REPOSITORY": "owner/repo"})
 			want := "No pull request is open for this branch, so there is no description to judge.\n" +
 				"Name one with PR_NUMBER=<n>, or rehearse with PR_BODY_FILE=<path>.\n"
 			if code != 0 || output != want {
 				t.Errorf("exit %d, output %q, want 0 and %q", code, output, want)
+			}
+			wantCalls := listFeature + "\n"
+			if got := calls(t, dir); got != wantCalls {
+				t.Errorf("gh was asked %q, want %q", got, wantCalls)
+			}
+		})
+	}
+}
+
+// TestDescription_ALookupThatFails_FailsTheRun verifies that a lookup of the
+// pull request open for the branch that did not answer is a failure that
+// shows why, and never reads as there being no pull request: gh failing the
+// listing the ways it does when GitHub cannot be asked, as gh 2.103.3 prints
+// them, gh answering something that is not a list, null included, a list
+// with an entry that does not say whether it is from a fork or names no pull
+// request, even after the repository's own, which is then never asked for, a
+// listing as long as the limit the call names with no pull request from a
+// branch of the repository, and git unable to name the branch. A lookup gh
+// pr view made answered a branch with no pull request with exit 1 as well,
+// which is why a gh or a git that failed it used to pass with nothing
+// judged.
+func TestDescription_ALookupThatFails_FailsTheRun(t *testing.T) {
+	const listing = "ERROR: gh " + listFeature + ": "
+	cases := []struct {
+		name string
+		// fails is what the stand-in's listing fails with, its exit status
+		// on the first line, and answer what it prints when it does not
+		// fail; both empty, gh is not asked.
+		fails, answer string
+		// checkout is the directory the gate runs in, a repository on the
+		// branch feature when nil.
+		checkout func(t *testing.T) string
+		want     string
+	}{
+		{
+			name:  "gh is not signed in",
+			fails: "4\nTo get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.\n",
+			want:  listing + "exit status 4: To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate",
+		},
+		{
+			name:  "GitHub refuses the token",
+			fails: "1\nHTTP 401: Bad credentials (https://api.github.com/graphql)\nTry authenticating with:  gh auth login -h github.com\n",
+			want:  listing + "exit status 1: HTTP 401: Bad credentials (https://api.github.com/graphql)\n",
+		},
+		{
+			name:  "there is no network",
+			fails: "1\nerror connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n",
+			want:  listing + "exit status 1: error connecting to api.github.com\n",
+		},
+		{
+			name:   "gh answers no list",
+			answer: "\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": unexpected end of JSON input\n",
+		},
+		{
+			name:   "gh answers null",
+			answer: "null\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": null is not a list\n",
+		},
+		{
+			name:   "gh lists an entry that does not say whether it is from a fork",
+			answer: listed(`{"isCrossRepository":true,"number":1001}`, `{"number":12}`) + "\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": entry 2 does not say whether it is from a fork\n",
+		},
+		{
+			name:   "gh lists null as an entry",
+			answer: "[null]\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": entry 1 does not say whether it is from a fork\n",
+		},
+		{
+			name:   "gh lists an entry with no number",
+			answer: listed(`{"isCrossRepository":false}`) + "\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": entry 1 names no pull request, number 0\n",
+		},
+		{
+			name:   "gh lists an entry no pull request has the number of, after the repository's own",
+			answer: listed(`{"isCrossRepository":false,"number":12}`, `{"isCrossRepository":true,"number":-3}`) + "\n",
+			want:   "ERROR: read the answer of gh " + listFeature + ": entry 2 names no pull request, number -3\n",
+		},
+		{
+			name:   "gh lists as many as the limit the call names, every one a fork's",
+			answer: listed(forks(100)...) + "\n",
+			want: "ERROR: gh " + listFeature + " listed 100 pull requests, as many as it was asked for and every one from a fork," +
+				" so one from a branch of owner/repo itself may be past them: name it with PR_NUMBER=<n>\n",
+		},
+		{
+			name: "HEAD is on no branch",
+			checkout: func(t *testing.T) string {
+				t.Helper()
+				dir := onBranch(t, "feature")
+				commit(t, dir, nil)
+				git(t, dir, "checkout", "--quiet", "--detach")
+				return dir
+			},
+			want: "ERROR: HEAD is on no branch, so no pull request can be looked up for it: name one with PR_NUMBER=<n>\n",
+		},
+		{
+			name: "git cannot read the repository",
+			checkout: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				writeFile(t, filepath.Join(dir, ".git"), []byte("gitdir: "+filepath.Join(dir, "nowhere")+"\n"))
+				return dir
+			},
+			// git words this failure differently across versions ("not a git
+			// repository", "gitfile does not point to a valid repository"), so
+			// only its exit status and its fatal: prefix are held.
+			want: "ERROR: git branch --show-current: exit status 128: fatal: ",
+		},
+		{
+			name: "git is not installed",
+			checkout: func(t *testing.T) string {
+				t.Helper()
+				dir := onBranch(t, "feature")
+				t.Setenv("PATH", t.TempDir())
+				return dir
+			},
+			want: "ERROR: git branch --show-current: find git: ",
+		},
+	}
+	// sequential: each case points the one gh seam at its own stand-in
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.fails != "" {
+				writeFile(t, filepath.Join(dir, "listing.fails"), []byte(tc.fails))
+			}
+			if tc.answer != "" {
+				writeFile(t, filepath.Join(dir, "listing"), []byte(tc.answer))
+			}
+			useGh(t, dir)
+			checkout := onBranch(t, "feature")
+			if tc.checkout != nil {
+				checkout = tc.checkout(t)
+			}
+
+			code, output := judgeIn(t, checkout, map[string]string{"GITHUB_REPOSITORY": "owner/repo"})
+			if code != 1 || !strings.HasPrefix(output, tc.want) || strings.Contains(output, "No pull request is open") {
+				t.Errorf("exit %d, want 1 and output starting %q\n%s", code, tc.want, output)
+			}
+			wantCalls := ""
+			if tc.fails != "" || tc.answer != "" {
+				wantCalls = listFeature + "\n"
+			}
+			if got := calls(t, dir); got != wantCalls {
+				t.Errorf("gh was asked %q, want %q", got, wantCalls)
 			}
 		})
 	}
@@ -541,19 +801,22 @@ func TestDescription_AGhCallThatFails_FailsTheRun(t *testing.T) {
 // whichever of its three gh calls is the first to find gh missing: a missing
 // gh is never read as there being no pull request. gh is missing the way it
 // is on a machine without it, the real seam looking it up on a PATH that
-// holds none, so the test changes PATH and does not run in parallel.
+// holds none, while git, found before, still names the branch, so the test
+// changes PATH and does not run in parallel.
 func TestDescription_WithoutGh_FailsAndSaysWhatElseWorks(t *testing.T) {
+	checkout := onBranch(t, "feature")
+	keepGit(t)
 	t.Setenv("PATH", t.TempDir())
 
 	want := "ERROR: gh is needed to read the pull request description.\n" +
 		"Install it, or set PR_TITLE_FILE and PR_BODY_FILE to judge text from disk.\n"
 	for name, vars := range map[string]map[string]string{
 		"gh api":       {"PR_NUMBER": "7", "GITHUB_REPOSITORY": "owner/repo"},
-		"gh pr view":   {"GITHUB_REPOSITORY": "owner/repo"},
+		"gh pr list":   {"GITHUB_REPOSITORY": "owner/repo"},
 		"gh repo view": nil,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if code, output := judge(t, vars); code != 1 || output != want {
+			if code, output := judgeIn(t, checkout, vars); code != 1 || output != want {
 				t.Errorf("exit %d, output %q, want 1 and %q", code, output, want)
 			}
 		})
