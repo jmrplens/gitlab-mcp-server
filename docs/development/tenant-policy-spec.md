@@ -257,6 +257,9 @@ where its value comes from, in three ways:
   nor, on GitLab.com, a group membership answers for, which is Free: that is the truth on
   a CE build and on an unlicensed enterprise one, and an enterprise build that could not
   read its tier warns, naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`, issue 900). A
+  step of the probe GitLab did not answer is no evidence that the caller holds less: it
+  lowers nothing, and leaves the tier provisional, asked again by the HTTP pool until
+  GitLab answers it, kept and warned about on stdio (`AUT-003`, `AUT-010`, issue 1782). A
   fine-grained token's scope list, the single value `granular`, is unknown scopes, and
   its grant decides per action what it is shown and may call, judged against what GitLab
   declares (`AUT-007`, `AUT-008`, ADR-0024); an action the generated table has no row for
@@ -304,11 +307,13 @@ where its value comes from, in three ways:
   (`RTC-001`); the OAuth cache TTL refuses a zero or a negative value through its flag
   and its variable alike, in either authentication mode, since the verifier stamps the
   TTL into every token's expiration, so a zero would expire each token as it is verified
-  (`ADM-005`); and the credential age ceiling and the per-credential watcher ceiling,
-  which no operator sets, keep their default for a Go option's zero, the first because
-  it exists so that every credential is re-checked whatever else is off (`ADM-008`) and
-  the second because off would leave one credential's watchers bounded only by the
-  process's (`HLD-003`). A row whose settings mean different things by zero states each
+  (`ADM-005`); and the credential age ceiling, the provisional tier's wait and the
+  per-credential watcher ceiling, which no operator sets, keep their default for a Go
+  option's zero, the first because it exists so that every credential is re-checked
+  whatever else is off (`ADM-008`), the second because off would leave a provisional
+  tier served for the entry's life, which is what the row exists to end (`AUT-010`,
+  issue 1782), and the third because off would leave one credential's watchers bounded
+  only by the process's (`HLD-003`). A row whose settings mean different things by zero states each
   that differs once (`SettingZeros`), and its own `Zero` is the meaning of the rest.
 - **INV-016 Every limit states its key, mint cost and reason, and the units agree.** The
   reason's unit matches the key, or the mismatch is recorded as a finding before the limit
@@ -615,9 +620,9 @@ ceilings had a reason, `INV-004`'s, written beside some of them in the code; the
 had none a reader could tell from an accident, and the next constant copied whichever
 neighbor it was written beside. A Go option no operator reaches is not configuration and
 departs from nothing in `INV-017`: it is a constant to every operator, and it is held to
-its reason as one is (`ADM-008`, the credential age ceiling, whose option exists for the
-tests, and the watcher manager's ceiling and cadence, `HLD-003` and `HLD-007`, whose
-`Options` fields only the tests set).
+its reason as one is (`ADM-008`, the credential age ceiling, and `AUT-010`, the
+provisional tier's wait, whose options exist for the tests, and the watcher manager's
+ceiling and cadence, `HLD-003` and `HLD-007`, whose `Options` fields only the tests set).
 
 ## Findings
 
@@ -1088,8 +1093,34 @@ each with whether its plan carries a Premium and an Ultimate feature, in pages o
 Ultimate, as the namespace pages are bounded; the higher of the namespace and membership
 answers wins, a read that fails keeps what the namespaces answered and a page GitLab
 answered in part keeps the groups it resolved, the side of the asymmetry `INV-008`
-records. The tier is asked when an entry is built and kept while it lives (`POL-007`), so a changed
-membership reaches a caller when the entry is next built. F-08, that the legacy door and the
+records. Issue 1782 then told a step GitLab answered from one it did not: a production
+deployment on GitLab.com built an entry while the membership query timed out, read the
+timeout as an answer, and served a credential on an Ultimate-equivalent plan the Free
+catalog for hours, since nothing asked the tier again while the entry lived. A refusal, an
+empty page, a fine-grained token's null nodes and the page bound are answers; no status, a
+redirect not followed, `408`, `429`, a `5xx` after the retries, a membership answer with
+no groups connection, and a document refused, or a page with a group null, for anything
+but the caller's permission are not. A step not read lowers nothing
+and leaves the tier provisional, the best known so far, unless it is Ultimate. The
+membership query is retried as a read is under `RTC-006` and runs on a clock of its own,
+`TierMembershipTimeout`, a value `AUT-003` gained, measured from the pool's lifetime or
+the stdio process rather than from what the steps before it left of the entry's budget. A
+pool entry built on a provisional tier is asked again by a sweep of its own (`AUT-010`, a
+new row, `KeyEntry` with no stdio key), after `TierProvisionalRetry` and then twice as long
+each time up to `TierProvisionalRetryMax`, under a credential probe slot taken without
+waiting (`POL-006`), whatever the revalidation interval and whether or not a subscription
+is open. The same tier answered whole clears the mark; a higher tier, or another answered
+whole, replaces the entry on the shape of that tier with its client, identity and
+credential age under a new owner, so its listens end `credential_reset` and its stateful
+sessions get `ADM-007`'s 404; a provisional answer no higher than the entry's keeps it.
+Both values are fixed: the operator's lever is the tier itself, `--tier`, and they bound
+what an instance that keeps failing the probe costs it, one probe per provisional entry
+per wait. A tier answered whole is asked when an entry is built and kept while it lives
+(`POL-007`, which records the issue for the replacement, the only way an entry's tier
+changes after its build, at most twice), so a changed membership reaches a caller when the
+entry is next built. A
+stdio process keeps what it detected at start, a provisional tier included, and warns
+about it; asking again there is left to a follow-up. F-08, that the legacy door and the
 OAuth one admitted different minimum authority, is answered by the same decision, which set
 the admission minimum at `read_api` in legacy HTTP and on stdio as well: the legacy door
 asks the predicate the OAuth door asks (`MeetsMinimum`), and refuses a token GitLab

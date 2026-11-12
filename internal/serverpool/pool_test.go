@@ -6264,7 +6264,12 @@ func surviveAPanickingTierSweep(t *testing.T) {
 	var second *Entry
 	pool := New(cfg, testFactory(),
 		WithTierRetry(10*time.Millisecond),
-		WithOnEvict(func(*Entry, EvictionCause) {
+		WithOnEvict(func(_ *Entry, cause EvictionCause) {
+			// Only the sweep's replacement panics, so the pool's Close at
+			// cleanup, which drops what is left, runs through.
+			if cause != CauseTierResolved {
+				return
+			}
 			// Under the pool's write lock, which guards the mark.
 			second.provisional.due = time.Now()
 			select {
@@ -6273,6 +6278,9 @@ func surviveAPanickingTierSweep(t *testing.T) {
 			}
 			panic("evict callback blew up")
 		}))
+	// Close waits for the sweep goroutine, which canceling its context does
+	// not, so no tick replaces an entry or logs after the subtest ends.
+	t.Cleanup(pool.Close)
 	first, _ := buildTierEntry(t, pool, g, "glpat-tier-panic-1")
 	second, _ = buildTierEntry(t, pool, g, "glpat-tier-panic-2")
 	pool.mu.Lock()
