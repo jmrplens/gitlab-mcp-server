@@ -195,12 +195,14 @@ unresolvable temporary directory, an ancestor of a download path that fails
 to resolve and a short read in `internal/toolutil`. Each is now driven both
 ways by a test every platform runs (the first-run guard through
 `needsFirstRunGuidance` and the `isTerminal` seam, the peers through
-`peersOf`, `--shutdown` through `stopPeers` and a fake peer, the working
-directories through this process and a pid no process can have, `os.Getwd`
-and `filepath.Abs` through the `workingDir` and `absPath` seams, the stale
-socket's lstat and the ancestor through a name holding a NUL byte, which Go
-refuses with `EINVAL` on every system, the rest through the inputs and the
-seams the tests already had), or lives in the file of the platform that uses
+`peersOf`, `--shutdown` through `stopPeers` and a fake peer on the clock of
+`testing/synctest`, which orders the polls and the deadline by their times on
+every run, the working directories through this process and a pid no process
+can have, `os.Getwd` and `filepath.Abs` through the `workingDir` and `absPath`
+seams, the stale socket's lstat and the ancestor through a name holding a NUL
+byte, which Go refuses with `EINVAL` on every system, the rest through the
+inputs and the seams the tests already had), or lives in the file of the
+platform that uses
 it (`stdinIsNullUnder`, in `probe_linux.go`, and `refuseWritableArchive`,
 whose only check is in `file_utils_unix.go`). A socket test that expects a
 refusal builds its path with `socketDir`, which keeps the directory short
@@ -213,19 +215,24 @@ Windows listen's failure; the other four carry none. The `GOBCO_GATE=all` run
 a touched package passes on Linux before it is committed is still local: no
 CI step runs gobco on Linux.
 
-**A whole package on Windows or macOS is measured on demand.** Neither the
-local gate nor the CI legs answer what a package scores on Windows or macOS as
-a whole: the figures for `internal/toolutil` quoted in pull request 1206 were
-taken by hand on a Windows virtual machine, and none could be taken on macOS.
+**Any other package on Windows or macOS is measured on demand.** The CI legs
+above measure `cmd/server` and `internal/toolutil` in full on Windows and
+macOS: under `GOBCO_GATE=all` a leg passes only when every condition of both
+packages is evaluated both ways on its system, and its log carries gobco's
+figure for each. No other package is measured on either system by CI or by the
+local gate, which runs on Linux, and until issue 1212 not even those two were
+held in full: the figures for `internal/toolutil` quoted in pull request 1206
+were taken by hand on a Windows virtual machine, and none could be taken on
+macOS.
 [`.github/workflows/conditions.yml`](../../../.github/workflows/conditions.yml)
-takes them. It runs only when dispatched, never on a push or a pull request,
-and runs `scripts/coverage-conditions.sh` through bash on each runner named,
-exactly as the CI legs and `make coverage-conditions` run it, so every figure
-in its summary is one the gate would compute on that system:
+takes them for any package. It runs only when dispatched, never on a push or a
+pull request, and runs `scripts/coverage-conditions.sh` through bash on each
+runner named, exactly as the CI legs and `make coverage-conditions` run it, so
+every figure in its summary is one the gate would compute on that system:
 
 ```bash
 gh workflow run conditions.yml \
-  -f packages="./cmd/server ./internal/toolutil" \
+  -f packages="./internal/tools/packages" \
   -f systems="windows-latest macos-latest ubuntu-latest" \
   -f gate=all
 ```

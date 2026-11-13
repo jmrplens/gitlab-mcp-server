@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/process"
@@ -93,10 +94,11 @@ func TestShutdownGracePeriod_IsTheFiveSecondsTheReferenceDocuments(t *testing.T)
 // wedged peer that reaches the grace period and the kill cannot be built
 // there from a real process (issue 1212); this one can.
 type fakePeer struct {
-	stopsOnTerm bool
-	running     atomic.Bool
-	terminated  atomic.Bool
-	killed      atomic.Bool
+	stopsOnTerm  bool
+	running      atomic.Bool
+	terminated   atomic.Bool
+	killed       atomic.Bool
+	aliveAnswers atomic.Int32
 }
 
 // newFakePeer is a running fake peer that stops on Terminate or ignores it.
@@ -115,8 +117,15 @@ func (p *fakePeer) Terminate() error {
 	return nil
 }
 
-// IsRunning reports whether the peer is still running.
-func (p *fakePeer) IsRunning() (bool, error) { return p.running.Load(), nil }
+// IsRunning reports whether the peer is still running, and counts the times
+// it answered that it was.
+func (p *fakePeer) IsRunning() (bool, error) {
+	running := p.running.Load()
+	if running {
+		p.aliveAnswers.Add(1)
+	}
+	return running, nil
+}
 
 // Kill records the kill and stops the peer.
 func (p *fakePeer) Kill() error {
@@ -133,26 +142,38 @@ func (p *fakePeer) Kill() error {
 // left alone by the kill and reported terminated. The grace periods are
 // chosen against the 200ms poll: well past it where a poll has to land first,
 // and below it where the deadline has to come before any poll.
+//
+// stopPeers runs in a synctest bubble, whose clock moves only while stopPeers
+// waits, so the polls and the deadline arrive in the order of their times on
+// every run. On the real clock they did not have to: a run that reached its
+// first select only after 450ms found the poll and the deadline both ready,
+// and select picks either, so the wedged peer could be killed without any
+// poll counting it alive. The output read the same, and the poll's condition
+// was left one-way on Windows, where the test of a real wedged peer skips and
+// nothing else reaches its false outcome. The count of the times each peer
+// answered that it was running pins the order: the wedged peer answers at the
+// polls of 200ms and 400ms, then once more to the kill.
 func TestStopPeers_EachWayAPeerGoes_IsReportedAndKilledOnlyWhenWedged(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		stopsOnTerm []bool
-		grace       time.Duration
-		say         string
-		wantKilled  []bool
+		name             string
+		stopsOnTerm      []bool
+		grace            time.Duration
+		say              string
+		wantKilled       []bool
+		wantAliveAnswers []int32
 	}{
 		{
 			name: "every peer stops on the request", stopsOnTerm: []bool{true, true}, grace: time.Minute,
-			say: "shutdown: all instances terminated\n", wantKilled: []bool{false, false},
+			say: "shutdown: all instances terminated\n", wantKilled: []bool{false, false}, wantAliveAnswers: []int32{0, 0},
 		},
 		{
 			name: "a wedged peer is killed after the grace period", stopsOnTerm: []bool{true, false}, grace: 450 * time.Millisecond,
-			say: "shutdown: force-killed 1 instance(s)\n", wantKilled: []bool{false, true},
+			say: "shutdown: force-killed 1 instance(s)\n", wantKilled: []bool{false, true}, wantAliveAnswers: []int32{0, 3},
 		},
 		{
 			name: "a peer gone before the deadline is not killed", stopsOnTerm: []bool{true}, grace: time.Millisecond,
-			say: "shutdown: all instances terminated\n", wantKilled: []bool{false},
+			say: "shutdown: all instances terminated\n", wantKilled: []bool{false}, wantAliveAnswers: []int32{0},
 		},
 	}
 	for _, tt := range tests {
@@ -166,7 +187,11 @@ func TestStopPeers_EachWayAPeerGoes_IsReportedAndKilledOnlyWhenWedged(t *testing
 				peers = append(peers, fake)
 			}
 			var said bytes.Buffer
-			if code := stopPeers(peers, &said, tt.grace); code != 0 {
+			var code int
+			synctest.Test(t, func(*testing.T) {
+				code = stopPeers(peers, &said, tt.grace)
+			})
+			if code != 0 {
 				t.Errorf("stopPeers() = %d, want 0", code)
 			}
 			if said.String() != tt.say {
@@ -178,6 +203,9 @@ func TestStopPeers_EachWayAPeerGoes_IsReportedAndKilledOnlyWhenWedged(t *testing
 				}
 				if got := fake.killed.Load(); got != tt.wantKilled[i] {
 					t.Errorf("peer %d killed: %v, want %v", i, got, tt.wantKilled[i])
+				}
+				if got := fake.aliveAnswers.Load(); got != tt.wantAliveAnswers[i] {
+					t.Errorf("peer %d answered running %d times, want %d", i, got, tt.wantAliveAnswers[i])
 				}
 			}
 		})
