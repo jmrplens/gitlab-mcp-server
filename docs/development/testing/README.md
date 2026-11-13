@@ -481,6 +481,37 @@ days, and TIMED OUT is not part of the gate: it is a reading to explain, as the
 paragraphs below do. The three knobs are seconds written as a plain number,
 and anything else (`2h`) is refused rather than read as its leading digits.
 
+**A mutant's memory is bounded as well as its time.** A mutant can turn a loop
+that ends into one that never does and allocates on every pass: `index + 1` to
+`index - 1` in `cmd/audit_supply_chain`'s make argument reader, or `i++` to
+`i--` in `cmd/audit_tenancy`'s `beforeVerb`, grows the test binary by about
+1 GiB a second, and the deadline does not stop that. On 2026-11-12 test
+binaries of those two packages reached up to 24.1 GiB
+(`cmd/audit_supply_chain`) and 28.5 GiB (`cmd/audit_tenancy`) on the build host
+before the kernel's OOM killer stopped them, and another process with them. The
+script therefore runs gremlins, and every go command and test binary it starts,
+under an address-space ceiling of `MUTANT_MEMORY_MAX` GiB (8 by default,
+`ulimit -v`), an environment variable rather than a fourth argument
+(`make coverage-mutants PKG=... MUTANT_MEMORY_MAX=4`). A runaway ends in
+`fatal error: out of memory` within seconds, its test fails, and gremlins
+reports it KILLED, the verdict any failing test gives a mutant, so the gate
+reads the same. Address space is not resident memory, since the Go runtime
+reserves ahead of what it touches: a 3 GiB ceiling stopped the make reader's
+runaway at 660 MiB resident, and the heaviest suites measured
+(`cmd/audit_readonly_graphql`, `cmd/server`, `internal/tools`) pass under
+8 GiB. The ceiling is per process, so gremlins' four workers can hold four
+times it between them, and a host that runs several sweeps at once still needs
+a bound on all of them together, such as a container's memory limit. `0` sets
+no ceiling, and a tighter limit the run inherited is kept rather than raised to
+the ceiling. A value that is not a whole number of GiB written without a
+leading zero is refused before anything runs, as the coefficient is below, and
+for a like reason: bash arithmetic reads a leading zero as octal, so `010`
+would be 8 and `08` no number at all, which would leave the run with no
+ceiling and nothing but bash's own expansion error to tell of it. So is one
+over 1048576 GiB (1 PiB), which bounds nothing. Outside Linux, the kernel the
+script relies on to enforce `ulimit -v`, and wherever the shell refuses the
+limit, the run goes on without one and says so.
+
 A coefficient fixed in `GREMLINS_FLAGS` (`--timeout-coefficient 20`) is the one
 gremlins applies, so it is the one the script passes and announces, with the
 deadline it gives, and neither the budget nor the ceiling bounds it. The script

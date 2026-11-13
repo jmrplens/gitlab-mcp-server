@@ -1210,7 +1210,9 @@ jobs:
       # which run with every Go package.
       # scripts/coverage_mutants_sh_test.py drives the mutation recipe,
       # scripts/coverage-mutants.sh, against a stand-in go command, and holds
-      # the deadline it hands gremlins to the run gremlins actually times.
+      # the deadline it hands gremlins to the run gremlins actually times, and
+      # gremlins and all it starts to the address-space ceiling (RLIMIT_AS)
+      # MUTANT_MEMORY_MAX sets.
       # scripts/coverage_conditions_sh_test.py drives the condition recipe,
       # scripts/coverage-conditions.sh, against a stand-in go and gobco, and
       # holds it to staging one build context for gobco to read, to measuring

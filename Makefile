@@ -1080,6 +1080,18 @@ coverage-conditions-tree:
 # All three knobs are written in seconds as a plain number; anything else is
 # refused, since awk would read 2h as 2.
 #
+# MUTANT_MEMORY_MAX bounds a mutant's memory where the three above bound its
+# time: gremlins and every process it starts run under that many GiB of
+# address space (ulimit -v), 8 when it is unset and none at 0, so a mutant that
+# turns a loop into one that never ends and allocates on every pass fails its
+# test instead of exhausting the host. The script reads it from the
+# environment rather than as an argument, so it has no default here and is set
+# on the command line like the others: make coverage-mutants
+# PKG=./cmd/audit_tenancy MUTANT_MEMORY_MAX=4. A whole number of GiB without a
+# leading zero, up to 1048576, is the one spelling accepted. Why the ceiling
+# is per process and what it does not bound is in
+# docs/development/testing/README.md.
+#
 # -count=1 is what makes the coefficient mean what the line above says, and it
 # is a second defect rather than the same one. The coefficient is not applied to
 # the baseline measured here: gremlins multiplies it by the elapsed time of ITS

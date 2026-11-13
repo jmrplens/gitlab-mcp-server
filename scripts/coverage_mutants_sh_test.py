@@ -23,7 +23,8 @@ gremlins: the tags every go command before it carries, the command the
 baseline times, the per-mutant command run once to warm the cache, the
 -trimpath and GOROOT every command inherits (issue 1029), the coefficient
 derived from the printed base or the one the caller fixed, the ceiling on the
-deadline, and the refusals that stop a run whose figures would mean nothing.
+deadline, the address-space ceiling gremlins and everything it starts run
+under, and the refusals that stop a run whose figures would mean nothing.
 For a package gremlins cannot resolve where it is (issue 872), it is also
 where the copy the script measures instead is staged, beside the package or,
 when the package imports its own internal/ subtree, below it, and what that
@@ -37,6 +38,7 @@ Run with:
 import json
 import os
 import re
+import resource
 import shutil
 import signal
 import subprocess
@@ -60,6 +62,10 @@ SLEEP = 0.3
 DEFAULT_BUDGET = 300
 DEFAULT_FLOOR = 10
 DEFAULT_CEILING = 3600
+# The address-space ceiling, in GiB, gremlins and what it starts run under
+# when MUTANT_MEMORY_MAX is not set. It is an environment variable rather than
+# a fourth argument, so the Makefile passes nothing for it.
+DEFAULT_MEMORY_MAX = 8
 
 # Stands in for the go command. Configured through STUB_* variables, which
 # the script passes through untouched, and appends one JSON line per call to
@@ -70,6 +76,7 @@ DEFAULT_CEILING = 3600
 # the baseline would then time. The stand-in needs the standard library only.
 STUB_GO = r'''import json
 import os
+import resource
 import sys
 import time
 
@@ -236,6 +243,7 @@ elif args[:1] == ["test"]:
                           "ok  \t%s\t0.912s\tcoverage: 71.4%% of statements" % pattern))
 elif args[:2] == ["run", "github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0"]:
     entry["target_exists"] = os.path.isdir(os.path.join(os.getcwd(), args[-1]))
+    entry["address_space"] = resource.getrlimit(resource.RLIMIT_AS)[0]
     if env.get("STUB_STARTED_ON") == "run":
         open(env["STUB_STARTED"], "w", encoding="utf-8").close()
     time.sleep(float(env.get("STUB_GREMLINS_SLEEP", "0")))
@@ -314,14 +322,17 @@ class CoverageMutantsTest(unittest.TestCase):
         os.chmod(stub, 0o755)
         self.log = os.path.join(self.scratch, "go.log")
 
-    def run_script(self, *args, flags="", env=None):
+    def run_script(self, *args, flags="", env=None, address_space=None):
         """Runs the script from the module root, the way make does, and
-        returns the finished process with the go calls it made."""
+        returns the finished process with the go calls it made. address_space,
+        a (soft, hard) pair in bytes, is the RLIMIT_AS the script inherits, as
+        a caller's own `ulimit -v` would leave it."""
         if os.path.exists(self.log):
             os.remove(self.log)
         open(self.log, "w", encoding="utf-8").close()
         run_env = {k: v for k, v in os.environ.items()
-                   if not k.startswith("GREMLINS_") and k != "GOFLAGS" and not k.startswith("STUB_")}
+                   if not k.startswith("GREMLINS_") and k not in ("GOFLAGS", "MUTANT_MEMORY_MAX")
+                   and not k.startswith("STUB_")}
         run_env.update({
             "PATH": self.bin + os.pathsep + os.environ.get("PATH", ""),
             "STUB_LOG": self.log,
@@ -329,8 +340,13 @@ class CoverageMutantsTest(unittest.TestCase):
             "GREMLINS_FLAGS": flags,
         })
         run_env.update(env or {})
+        preexec = None
+        if address_space is not None:
+            def preexec():
+                resource.setrlimit(resource.RLIMIT_AS, address_space)
         proc = subprocess.run([SCRIPT, *args], cwd=self.root, env=run_env,
-                              capture_output=True, text=True, timeout=120, check=False)
+                              capture_output=True, text=True, timeout=120, check=False,
+                              preexec_fn=preexec)
         with open(self.log, encoding="utf-8") as fh:
             calls = [json.loads(line) for line in fh]
         return proc, calls
@@ -531,6 +547,119 @@ class CoverageMutantsTest(unittest.TestCase):
                 makefile,
                 r"(?m)^\t@scripts/coverage-mutants\.sh \$\(PKG\) \$\(MUTANT_BUDGET\) "
                 r"\$\(MUTANT_BUDGET_FLOOR\) \$\(MUTANT_DEADLINE_MAX\)$")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"),
+                         "the script sets the ceiling only on Linux, the kernel it relies on to enforce it")
+    def test_gremlins_runs_under_the_memory_ceiling(self):
+        # A mutant that turns a loop into one that never ends, and allocates on
+        # every pass, grows by about 1 GiB a second, and gremlins' deadline let
+        # such mutants reach up to 24.1 and 28.5 GiB. gremlins and everything it
+        # starts therefore run under MUTANT_MEMORY_MAX GiB of address space; 0
+        # leaves them under whatever limit the caller already had. The largest
+        # ceiling accepted is set as it is, not wrapped by bash's arithmetic,
+        # unless the run inherited a tighter limit, which is kept.
+        inherited = resource.getrlimit(resource.RLIMIT_AS)[0]
+        if inherited != resource.RLIM_INFINITY and inherited < DEFAULT_MEMORY_MAX << 30:
+            self.skipTest("this process is already held under %d bytes of address space" % inherited)
+        largest = 1048576 << 30
+        cases = [
+            ("the default", {}, DEFAULT_MEMORY_MAX << 30),
+            ("a ceiling of 2 GiB", {"MUTANT_MEMORY_MAX": "2"}, 2 << 30),
+            ("the largest ceiling", {"MUTANT_MEMORY_MAX": "1048576"},
+             largest if inherited == resource.RLIM_INFINITY else min(inherited, largest)),
+            ("no ceiling", {"MUTANT_MEMORY_MAX": "0"}, inherited),
+        ]
+        for name, env, want in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/pkg", env=env)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.gremlins(proc, calls)["address_space"], want)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"),
+                         "the script sets the ceiling only on Linux, the kernel it relies on to enforce it")
+    def test_a_looser_limit_the_run_inherited_is_lowered_to_the_ceiling(self):
+        # A limit the run inherited over the ceiling bounds less than the
+        # ceiling does, so it is lowered to the ceiling, whether only the soft
+        # limit is held there or both.
+        inherited_hard = resource.getrlimit(resource.RLIMIT_AS)[1]
+        looser = 16 << 30
+        if inherited_hard != resource.RLIM_INFINITY and inherited_hard < looser:
+            self.skipTest("this process is already held under %d bytes of address space" % inherited_hard)
+        cases = [
+            ("the soft limit", (looser, inherited_hard)),
+            ("both limits", (looser, looser)),
+        ]
+        for name, limits in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/pkg", address_space=limits)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.gremlins(proc, calls)["address_space"], DEFAULT_MEMORY_MAX << 30)
+                self.assertIn("is held to %d GiB of address space (MUTANT_MEMORY_MAX)" % DEFAULT_MEMORY_MAX,
+                              proc.stdout)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"),
+                         "the script sets the ceiling only on Linux, the kernel it relies on to enforce it")
+    def test_a_tighter_limit_the_run_inherited_is_kept(self):
+        # `ulimit -v` sets the soft limit as well as the hard one, and raising a
+        # soft limit up to the hard one is allowed, so setting the ceiling over
+        # a caller's own tighter limit would loosen it. A limit at or under the
+        # ceiling is kept, whether only the soft limit is held there or both.
+        inherited_hard = resource.getrlimit(resource.RLIMIT_AS)[1]
+        tighter = 4 << 30
+        if inherited_hard != resource.RLIM_INFINITY and inherited_hard < tighter:
+            self.skipTest("this process is already held under %d bytes of address space" % inherited_hard)
+        cases = [
+            ("the soft limit", (tighter, inherited_hard)),
+            ("both limits", (tighter, tighter)),
+        ]
+        for name, limits in cases:
+            with self.subTest(name):
+                proc, calls = self.run_script("./internal/pkg", address_space=limits)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(self.gremlins(proc, calls)["address_space"], tighter)
+                self.assertIn("already held to 4096 MiB of address space, the limit this run inherited",
+                              proc.stdout)
+
+    def test_memory_ceiling_is_not_set_outside_linux(self):
+        # Outside Linux the limit can be accepted and never enforced, so the
+        # script says the run has no ceiling rather than claim one, and leaves
+        # whatever limit the run inherited as it was.
+        inherited = resource.getrlimit(resource.RLIMIT_AS)[0]
+        uname = os.path.join(self.bin, "uname")
+        with open(uname, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\necho Darwin\n")
+        os.chmod(uname, 0o755)
+        proc, calls = self.run_script("./internal/pkg")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(self.gremlins(proc, calls)["address_space"], inherited)
+        self.assertIn("relies on Linux to enforce, so on Darwin a mutant that allocates without end runs "
+                      "until the host stops it", proc.stdout)
+        self.assertNotIn("is held to", proc.stdout)
+
+    def test_memory_ceiling_that_is_not_whole_gibibytes_is_refused(self):
+        # `ulimit -v` takes whole kibibytes, so a ceiling written 8G or 1.5 is
+        # refused before anything runs rather than read as something else. So
+        # is one with a leading zero, which bash arithmetic reads as octal: 010
+        # would be held to 8 GiB, 00 to nothing at all, and 08 or 09 would fail
+        # the expansion and leave gremlins with no ceiling and nothing but
+        # bash's own expansion error to tell of it.
+        for given in ("8G", "1.5", "-1", "eight", "08", "09", "010", "00"):
+            with self.subTest(given):
+                proc, calls = self.run_script("./internal/pkg", env={"MUTANT_MEMORY_MAX": given})
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(calls, [], "a go command ran before the ceiling was read")
+                self.assertIn("MUTANT_MEMORY_MAX=%s is not a whole number of GiB" % given, proc.stderr)
+
+    def test_memory_ceiling_past_any_address_space_is_refused(self):
+        # Over 1048576 GiB the ceiling bounds nothing a host can hold, and
+        # further on its kibibytes overflow bash's arithmetic and wrap, so it
+        # is refused before anything runs rather than set as something else.
+        for given in ("1048577", "99999999", "99999999999999999999"):
+            with self.subTest(given):
+                proc, calls = self.run_script("./internal/pkg", env={"MUTANT_MEMORY_MAX": given})
+                self.assert_refused_before_gremlins(proc, calls)
+                self.assertEqual(calls, [], "a go command ran before the ceiling was read")
+                self.assertIn("MUTANT_MEMORY_MAX=%s GiB is more than 1048576 (1 PiB)" % given, proc.stderr)
 
     def test_build_tags_given_to_gremlins_reach_every_go_command_before_it(self):
         # Every spelling pflag reads a value for -t/--tags in, including a
