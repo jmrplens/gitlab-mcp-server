@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1940,6 +1941,30 @@ func TestCanonicalizeThroughExistingAncestor_NoAncestorExists(t *testing.T) {
 	_, err := canonicalizeThroughExistingAncestor(path)
 	if err == nil || !strings.Contains(err.Error(), "no existing ancestor directory for "+path) {
 		t.Errorf("canonicalizeThroughExistingAncestor() error = %v, want the walk to stop at the root", err)
+	}
+}
+
+// TestCanonicalizeThroughExistingAncestor_ANameNoSystemCallTakes_StopsTheWalk
+// verifies the walk climbs only past an ancestor that is absent, and stops at
+// one whose resolution failed for any other reason, on every platform.
+//
+// Climbing past such an ancestor would rejoin a tail nothing ever examined
+// below whatever ancestor did resolve. The realistic case, a path through a
+// regular file, stops the walk on POSIX only: Windows answers it as not found,
+// so the walk climbs there and joinBelowDirectory refuses it instead, and
+// nothing on Windows evaluated the stop (issue 1212). A NUL byte is refused by
+// Go's syscall package on every system before the kernel is asked, with
+// EINVAL, so the resolution fails the same way on all three. The error is
+// matched by identity, since a walk that took it for an absent ancestor would
+// climb to the temporary directory and succeed.
+func TestCanonicalizeThroughExistingAncestor_ANameNoSystemCallTakes_StopsTheWalk(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nul\x00name", "out.bin")
+	got, err := canonicalizeThroughExistingAncestor(path)
+	if !errors.Is(err, syscall.EINVAL) {
+		t.Fatalf("canonicalizeThroughExistingAncestor() = %q, %v; want the resolution's own EINVAL", got, err)
+	}
+	if got != "" {
+		t.Errorf("canonicalizeThroughExistingAncestor() = %q beside the error, want the empty string", got)
 	}
 }
 
