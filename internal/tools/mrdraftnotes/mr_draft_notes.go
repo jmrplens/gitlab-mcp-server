@@ -89,6 +89,11 @@ type CreateInput struct {
 	InReplyToDiscussionID string               `json:"in_reply_to_discussion_id,omitempty" jsonschema:"Discussion ID to reply to"`
 	ResolveDiscussion     *bool                `json:"resolve_discussion,omitempty"      jsonschema:"Resolve the discussion when published"`
 	Position              *DiffPosition        `json:"position,omitempty"                jsonschema:"Diff position for an inline comment on a line of the diff, a point of an image or a whole file. Omit for general MR comments."`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateInput defines parameters for updating a draft note. It takes a new
@@ -100,6 +105,11 @@ type UpdateInput struct {
 	NoteID    int64                `json:"note_id"    jsonschema:"Draft note ID,required"`
 	Note      string               `json:"note,omitempty" jsonschema:"Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both"`
 	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Updated diff position for inline comments, replacing the current one whole. It needs base_sha, start_sha and head_sha from the merge request's diff_refs and the file's path, and by position_type a line of the diff (text, the default: new_line for an added line, old_line for a removed one, both for an unchanged one), width, height, x and y in whole pixels (image) or both old_path and new_path (file). Send old_path and new_path. A text position on a renamed file needs both too, and a text or image position on a file that was not renamed is taken with one. Omit it to keep the current position. Give note, position or both"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.
@@ -339,6 +349,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Note == "" {
 		return Output{}, errors.New("draftNoteCreate: note is required")
 	}
+	// The draft is asked about when it is written: publishing it carries no
+	// text, and that is when GitLab runs the quick actions in it.
+	if err := toolutil.ConfirmQuickActions(ctx, "draftNoteCreate", input.Note); err != nil {
+		return Output{}, err
+	}
 	if input.Position != nil {
 		if err := validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
 			return Output{}, fmt.Errorf("draftNoteCreate: %w", err)
@@ -402,6 +417,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Note == "" && input.Position == nil {
 		return Output{}, errors.New("draftNoteUpdate: note or position is required. Give the new body, the new position or both, and the draft keeps the one left out")
+	}
+	if err := toolutil.ConfirmQuickActions(ctx, "draftNoteUpdate", input.Note); err != nil {
+		return Output{}, err
 	}
 	if input.Position != nil {
 		if err := validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {

@@ -535,6 +535,11 @@ type CreateInput struct {
 	LinkedItems  *CreateLinkedItems `json:"linked_items,omitempty" tier:"ultimate" jsonschema:"Epics to link to the new one, all with the same link type"`
 	Weight       *int64             `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the epic"`
 	HealthStatus string             `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateInput defines parameters for updating an existing epic.
@@ -569,6 +574,11 @@ type UpdateInput struct {
 	// the weight, 0 is a weight of its own (issue 1390).
 	Weight       toolutil.Nullable[int64] `json:"weight,omitzero" tier:"premium" jsonschema:"Weight of the epic, 0 or higher. 0 is a weight of its own. Pass null to remove the weight. Omit the field to leave it untouched"`
 	HealthStatus *string                  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk). Pass an empty string to remove the health status. Omit the field to leave it untouched"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
@@ -1254,6 +1264,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return Output{}, fmt.Errorf("epicCreate: %w", err)
 	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "epicCreate", input.Description); askErr != nil {
+		return Output{}, askErr
+	}
 	wi, resp, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeEpic, opts, gl.WithContext(ctx))
 	if err != nil {
 		// A creation GitLab ran and answered without the epic, null with no
@@ -1344,6 +1357,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	opts, removals, err := buildUpdateOptions(input)
 	if err != nil {
 		return Output{}, fmt.Errorf("epicUpdate: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActionsOptional(ctx, "epicUpdate", input.Description); askErr != nil {
+		return Output{}, askErr
 	}
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx), removals)
 	if err != nil {

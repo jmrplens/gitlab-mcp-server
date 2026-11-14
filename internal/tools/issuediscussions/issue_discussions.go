@@ -42,6 +42,11 @@ type CreateInput struct {
 	Body      string               `json:"body" jsonschema:"Discussion body (Markdown supported),required"`
 	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // AddNoteInput defines parameters for adding a note to an issue discussion.
@@ -52,6 +57,11 @@ type AddNoteInput struct {
 	Body         string               `json:"body" jsonschema:"Note body (Markdown supported),required"`
 	// CreatedAt backdates the note; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateNoteInput defines parameters for updating an issue discussion note.
@@ -63,6 +73,11 @@ type UpdateNoteInput struct {
 	Body         string               `json:"body" jsonschema:"Updated note body,required"`
 	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteNoteInput defines parameters for deleting an issue discussion note.
@@ -148,6 +163,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return Output{}, fmt.Errorf("issue_discussion_create: %w", err)
 	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "issue_discussion_create", input.Body); askErr != nil {
+		return Output{}, askErr
+	}
 	opts := &gl.CreateIssueDiscussionOptions{
 		Body:      new(input.Body),
 		CreatedAt: createdAt,
@@ -172,6 +190,9 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
 	if err != nil {
 		return NoteOutput{}, fmt.Errorf("issue_discussion_add_note: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "issue_discussion_add_note", input.Body); askErr != nil {
+		return NoteOutput{}, askErr
 	}
 	opts := &gl.AddIssueDiscussionNoteOptions{
 		Body:      new(input.Body),
@@ -200,6 +221,9 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
 	if err != nil {
 		return NoteOutput{}, fmt.Errorf("issue_discussion_update_note: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "issue_discussion_update_note", input.Body); askErr != nil {
+		return NoteOutput{}, askErr
 	}
 	opts := &gl.UpdateIssueDiscussionNoteOptions{
 		Body:      new(input.Body),

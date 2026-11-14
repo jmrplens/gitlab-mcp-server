@@ -567,6 +567,11 @@ type CreateInput struct {
 	CreatedAt      string             `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only"`
 	CreateSource   string             `json:"create_source,omitempty" jsonschema:"Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item"`
 	LinkedItems    *CreateLinkedItems `json:"linked_items,omitempty" jsonschema:"Linked work items to add on creation"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // CreateLinkedItems specifies work items to link during creation.
@@ -580,6 +585,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts, err := buildCreateOptions(input)
 	if err != nil {
 		return GetOutput{}, fmt.Errorf("create_work_item: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "create_work_item", input.Description); askErr != nil {
+		return GetOutput{}, askErr
 	}
 
 	wi, resp, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
@@ -723,7 +731,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the handler reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Pass true only after the user approves"`
 }
 
 // Update modifies an existing work item.
@@ -737,6 +745,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	opts, removals, buildErr := buildUpdateOptions(input)
 	if buildErr != nil {
 		return GetOutput{}, fmt.Errorf("update_work_item: %w", buildErr)
+	}
+	// The description is asked about before the clearing guard, which reads
+	// the work item: a text decides by itself.
+	if err := toolutil.ConfirmQuickActionsOptional(ctx, "update_work_item", input.Description); err != nil {
+		return GetOutput{}, err
 	}
 	if err := confirmListClearing(ctx, client, input); err != nil {
 		return GetOutput{}, err

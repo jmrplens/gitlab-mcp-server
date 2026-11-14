@@ -22,6 +22,11 @@ type CreateInput struct {
 	Body      string               `json:"body"       jsonschema:"Note body (Markdown supported),required"`
 	Internal  *bool                `json:"internal,omitempty"   jsonschema:"Mark note as internal (visible only to project members)"`
 	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise."`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // Output is an issue note: a type of its own over [toolutil.NoteOutput], the
@@ -63,6 +68,11 @@ type UpdateInput struct {
 	IssueIID  int64                `json:"issue_iid"  jsonschema:"Issue internal ID,required"`
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to update,required"`
 	Body      string               `json:"body"       jsonschema:"Updated note body (Markdown supported),required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting an issue note.
@@ -92,6 +102,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.IssueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueNoteCreate", "issue_iid")
+	}
+	if err := toolutil.ConfirmQuickActions(ctx, "issueNoteCreate", input.Body); err != nil {
+		return Output{}, err
 	}
 	opts := &gl.CreateIssueNoteOptions{
 		Body: new(toolutil.NormalizeText(input.Body)),
@@ -199,6 +212,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueNoteUpdate", "note_id")
+	}
+	if err := toolutil.ConfirmQuickActions(ctx, "issueNoteUpdate", input.Body); err != nil {
+		return Output{}, err
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.UpdateIssueNote(string(input.ProjectID), input.IssueIID, input.NoteID, &gl.UpdateIssueNoteOptions{

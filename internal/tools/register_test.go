@@ -1713,6 +1713,10 @@ type effectGuard struct {
 	// which the guard lets through unasked: a guard that asked about every
 	// call would be the destructive bit under another name.
 	harmless map[string]any
+	// harmlessElsewhere is why this test sends no call without the effect,
+	// for an action whose answer the fake GitLab here cannot give, and names
+	// where that call is sent instead.
+	harmlessElsewhere string
 }
 
 // effectClasses are the effects the catalog classifies by what they do.
@@ -1942,6 +1946,105 @@ func effectClasses() []effectClass {
 				},
 			},
 		},
+		{
+			name:   "jobs handed to a runner the call names",
+			reason: "the runner picks up the jobs of the project from then on, with the variables, the job token and the repository each one carries, and unassigning it recalls nothing a job delivered",
+			byName: func(id, _ string) bool {
+				return id == "runner.enable_project"
+			},
+			byRoute: regexp.MustCompile(`^POST /projects/:id/runners$`),
+		},
+		{
+			name:   "text GitLab runs as quick actions",
+			reason: "GitLab runs the lines of a note or a description that begin with a command when it saves the text, and a command moves, merges or hands over the item as the action that asks does",
+			byName: func(id, _ string) bool {
+				_, sends := quickActionTextActions()[id]
+				return sends
+			},
+			byRoute: regexp.MustCompile(`^POST /projects/:id/(issues|merge_requests)$` +
+				`|^PUT /projects/:id/issues/:issue_iid$|^PUT /projects/:id/merge_requests/:merge_request_iid$` +
+				`|^(POST|PUT) /projects/:id/(issues|merge_requests)/:noteable_id/(notes|discussions)(/:note_id|/:discussion_id/notes(/:note_id)?)?$` +
+				`|^(POST|PUT) /projects/:id/merge_requests/:merge_request_iid/draft_notes(/:draft_note_id)?$`),
+			// A text asks only for a line that begins with one of the
+			// commands toolutil.ConfirmQuickActions names, so the bit would
+			// ask before every comment and every description.
+			// The two guided flows that create an issue and a merge request
+			// send the same requests and are not catalog actions: the create
+			// each calls is the handler of issue.create or of
+			// merge_request.create, which asks about the line.
+			guarded: quickActionTextActions(),
+		},
+	}
+}
+
+// quickActionTextActions are the actions that send a text GitLab reads for
+// quick actions, the body of a note or the description of an issue, a merge
+// request, an epic or a work item, each with a call whose text carries a
+// command the guard asks about and one whose text carries none. The notes of
+// a commit and of a snippet are not among them: GitLab runs none of the
+// guarded commands on a commit, and no quick action at all on a snippet.
+func quickActionTextActions() map[string]effectGuard {
+	const (
+		moves  = "Done.\n/move group/app"
+		merges = "LGTM.\n/merge"
+		plain  = "A plain text.\n/label ~done"
+		// graphQL is why the call without the effect is held elsewhere for
+		// the actions that answer through GraphQL.
+		graphQL = "the action writes through GraphQL, whose answers this fake GitLab does not give; the tests of its own package send the text that goes out unasked"
+	)
+	with := func(call map[string]any, key, text string) map[string]any {
+		sent := maps.Clone(call)
+		sent[key] = text
+		return sent
+	}
+	rest := func(call map[string]any, key, text string) effectGuard {
+		return effectGuard{call: with(call, key, text), harmless: with(call, key, plain)}
+	}
+	viaGraphQL := func(call map[string]any, key string) effectGuard {
+		return effectGuard{call: with(call, key, moves), harmlessElsewhere: graphQL}
+	}
+	issue := map[string]any{"project_id": "42", "issue_iid": 7}
+	issueNote := map[string]any{"project_id": "42", "issue_iid": 7, "note_id": 9}
+	issueThread := map[string]any{"project_id": "42", "issue_iid": 7, "discussion_id": "d1"}
+	issueThreadNote := map[string]any{"project_id": "42", "issue_iid": 7, "discussion_id": "d1", "note_id": 9}
+	mr := map[string]any{"project_id": "42", "merge_request_iid": 7}
+	mrNote := map[string]any{"project_id": "42", "merge_request_iid": 7, "note_id": 9}
+	mrThread := map[string]any{"project_id": "42", "merge_request_iid": 7, "discussion_id": "d1"}
+	mrThreadNote := map[string]any{"project_id": "42", "merge_request_iid": 7, "discussion_id": "d1", "note_id": 9}
+	epic := map[string]any{"full_path": "my-group", "epic_iid": 7}
+	epicNote := map[string]any{"full_path": "my-group", "epic_iid": 7, "note_id": 9}
+	epicThread := map[string]any{"full_path": "my-group", "epic_iid": 7, "discussion_id": "d1"}
+	return map[string]effectGuard{
+		"issue.create":                 rest(map[string]any{"project_id": "42", "title": "t"}, "description", moves),
+		"issue.update":                 rest(issue, "description", moves),
+		"issue.note_create":            rest(issue, "body", moves),
+		"issue.note_update":            rest(issueNote, "body", moves),
+		"issue.discussion_create":      rest(issue, "body", moves),
+		"issue.discussion_add_note":    rest(issueThread, "body", moves),
+		"issue.discussion_update_note": rest(issueThreadNote, "body", moves),
+		"merge_request.create": rest(map[string]any{"project_id": "42", "source_branch": "feature", "target_branch": "main", "title": "t"},
+			"description", merges),
+		"merge_request.update":             rest(mr, "description", merges),
+		"mr_review.note_create":            rest(mr, "body", merges),
+		"mr_review.note_update":            rest(mrNote, "body", merges),
+		"mr_review.discussion_create":      rest(mr, "body", merges),
+		"mr_review.discussion_reply":       rest(mrThread, "body", merges),
+		"mr_review.discussion_note_update": rest(mrThreadNote, "body", merges),
+		"mr_review.draft_note_create":      rest(mr, "note", merges),
+		"mr_review.draft_note_update": {
+			call:              with(mrNote, "note", merges),
+			harmlessElsewhere: "the edit reads the draft it keeps the position of before it writes, a read this fake GitLab answers with nothing; the tests of its own package send the text that goes out unasked",
+		},
+		"group.epic_create":                 viaGraphQL(map[string]any{"full_path": "my-group", "title": "t"}, "description"),
+		"group.epic_update":                 viaGraphQL(epic, "description"),
+		"group.epic_note_create":            viaGraphQL(epic, "body"),
+		"group.epic_note_update":            viaGraphQL(epicNote, "body"),
+		"group.epic_discussion_create":      viaGraphQL(epic, "body"),
+		"group.epic_discussion_add_note":    viaGraphQL(epicThread, "body"),
+		"group.epic_discussion_update_note": viaGraphQL(epicNote, "body"),
+		"issue.work_item_create": viaGraphQL(map[string]any{"full_path": "group/project", "work_item_type_id": "gid://gitlab/WorkItems::Type/1", "title": "t"},
+			"description"),
+		"issue.work_item_update": viaGraphQL(map[string]any{"full_path": "group/project", "work_item_iid": 7}, "description"),
 	}
 }
 
@@ -1963,8 +2066,9 @@ func inAnyEffectClass(id, action string) bool {
 // ones [effectClasses] lists: a namespace moved, a credential replaced or
 // revoked, push rules weakened, an object consumed with no way back, a merge
 // request merged, a delivery to a host the call names, access to an account
-// or a repository handed over, a stored value overwritten, and existing
-// content overwritten on request. An action that reaches a class by its
+// or a repository handed over, a stored value overwritten, existing content
+// overwritten on request, the jobs of a project handed to a runner the call
+// names, and a text GitLab runs as quick actions. An action that reaches a class by its
 // name or by a request it sends is destructive, or guarded by its handler, or
 // declared exempt with the reason, and a declaration that stopped describing
 // the catalog fails as an unclassified action does. A guarded action is held
@@ -2179,6 +2283,12 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	} else if guard.current == "" && got != 0 {
 		t.Errorf("%s read GitLab %d time(s) to decide what its arguments alone decide, want 0", id, got)
 	}
+	if guard.harmlessElsewhere != "" {
+		if guard.harmless != nil {
+			t.Errorf("%s declares a call its guard lets through and a reason this test does not send one", id)
+		}
+		return
+	}
 	if guard.harmless == nil {
 		t.Errorf("%s declares no call its guard lets through, so nothing holds it to asking only when the call has the effect", id)
 		return
@@ -2240,6 +2350,7 @@ func TestDestructiveRoutes_ClassifiedByEffect_SayThatTheyAsk(t *testing.T) {
 		"access.deploy_key_add", "access.deploy_key_enable",
 		"user.add_ssh_key", "user.add_ssh_key_for_user", "group.ssh_cert_create",
 		"user.add_email", "user.add_email_for_user",
+		"runner.enable_project",
 	}
 	for _, id := range ids {
 		t.Run(id, func(t *testing.T) {
@@ -2279,7 +2390,7 @@ func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *test
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count in
 	// the canonical action catalog, including GitLab.com Enterprise actions.
-	const minExpectedDestructiveRoutes = 231
+	const minExpectedDestructiveRoutes = 232
 
 	total := len(uniqueActions)
 	if total < minExpectedDestructiveRoutes {

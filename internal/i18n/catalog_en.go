@@ -117,6 +117,7 @@ var english = map[Key]string{
 	ConfirmUserAccessIdentity:          "replaces the external identity the account signs in with",
 	ConfirmHookDelivery:                "Change where webhook {hook} in {target} delivers, or a secret it sends? This call {changes}.",
 	ConfirmHookURL:                     "points it at {url} instead of {current}",
+	ConfirmHookURLSameHost:             "keeps it on {url} and changes the path or the query it delivers to there",
 	ConfirmHookURLUnread:               "may point it at another host, {url} (the webhook could not be read)",
 	ConfirmHookToken:                   "replaces its {token}, which cannot be read back",
 	ConfirmHookValue:                   "replaces the {field} entry {key}, whose current value cannot be read back",
@@ -127,6 +128,14 @@ var english = map[Key]string{
 	ConfirmStatusCheck:                 "Change where external status check {check} in {target} sends merge requests, or its shared secret? This call {changes}.",
 	ConfirmStatusCheckURL:              "points it at {url}",
 	ConfirmStatusCheckSecret:           "replaces its shared secret, which cannot be read back",
+	ConfirmQuickActions:                "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call {effects}.",
+	ConfirmQuickActionMove:             "moves the item to another project or group ({line})",
+	ConfirmQuickActionMerge:            "merges the merge request, at once or when its checks pass ({line})",
+	ConfirmQuickActionPromote:          "closes the issue and makes an epic of it ({line})",
+	ConfirmQuickActionTicket:           "converts the issue to a Service Desk ticket whose author is an outside email address ({line})",
+	ConfirmQuickActionAddEmail:         "adds outside email addresses that receive the comments of the issue ({line})",
+	ConfirmQuickActionPublish:          "publishes the issue on the status page ({line})",
+	ConfirmQuickActionMore:             "runs {count} more quick actions of these kinds",
 
 	CommonListAnd: " and ",
 

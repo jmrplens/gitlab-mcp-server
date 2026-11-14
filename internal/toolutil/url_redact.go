@@ -68,3 +68,22 @@ func RedactURLToOrigin(raw string) string {
 	}
 	return origin
 }
+
+// SameURLOrigin reports whether a and b name one scheme and one host, and
+// returns that origin as [RedactURLToOrigin] renders a's. Two addresses on
+// one origin read the same once their paths are dropped, so a text that shows
+// both has to say that the origin stays and the rest changes, rather than
+// name one origin twice. A host is compared whatever its case, and the parser
+// has already lowered the scheme. Text that does not parse as a URL with a
+// scheme and a host shares an origin with nothing.
+func SameURLOrigin(a, b string) (string, bool) {
+	ua, errA := url.Parse(strings.TrimSpace(a))
+	ub, errB := url.Parse(strings.TrimSpace(b))
+	if errA != nil || errB != nil || ua.Scheme == "" || ua.Host == "" {
+		return "", false
+	}
+	if ua.Scheme != ub.Scheme || !strings.EqualFold(ua.Host, ub.Host) {
+		return "", false
+	}
+	return ua.Scheme + "://" + ua.Host, true
+}

@@ -39,7 +39,9 @@ func statusError(status int) error {
 // a key only when the hook already has it, and a token whenever it is sent,
 // since GitLab does not say whether the hook has one. Every address is shown
 // as its origin alone, whatever its path and query carry, and a key without
-// its value. A hook that does not exist asks nothing, and one that could not
+// its value. An address on the origin the hook already delivers to is named
+// as that, rather than as one origin instead of itself, and another scheme or
+// another port is another origin. A hook that does not exist asks nothing, and one that could not
 // be read asks about the address and every key the edit sends.
 func TestHookEdit_Changes_ByWhatTheHookHolds(t *testing.T) {
 	tests := []struct {
@@ -62,7 +64,22 @@ func TestHookEdit_Changes_ByWhatTheHookHolds(t *testing.T) {
 		{
 			name: "the same host under another path, which is another address", current: heldHook(),
 			edit: HookEdit{URL: "https://old.example/elsewhere"},
-			want: []string{"points it at https://old.example/... instead of https://old.example/..."},
+			want: []string{"keeps it on https://old.example and changes the path or the query it delivers to there"},
+		},
+		{
+			name: "the same host with a trailing slash, in another case and behind a login", current: heldHook(),
+			edit: HookEdit{URL: "HTTPS://user:pass@OLD.example/hooks/{tenant}/?token=secret"},
+			want: []string{"keeps it on https://OLD.example and changes the path or the query it delivers to there"},
+		},
+		{
+			name: "the same host under another scheme, which is another origin", current: heldHook(),
+			edit: HookEdit{URL: "http://old.example/hooks/{tenant}?token=secret"},
+			want: []string{"points it at http://old.example/... instead of https://old.example/..."},
+		},
+		{
+			name: "the same host on another port, which is another origin", current: heldHook(),
+			edit: HookEdit{URL: "https://old.example:8443/hooks/{tenant}?token=secret"},
+			want: []string{"points it at https://old.example:8443/... instead of https://old.example/..."},
 		},
 		{
 			name: "an address that is not a URL, withheld rather than echoed", current: heldHook(),

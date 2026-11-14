@@ -1,0 +1,226 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
+// quick_action_guard.go asks before a text is sent that carries a quick
+// action GitLab runs with the effect of an action that asks. GitLab reads the
+// body of a note and the description of an issue, a merge request, an epic or
+// a work item for lines that begin with a command, and runs them when it
+// saves the text, so a note is another way to move an issue or to merge a
+// merge request, and the actions that send such a text ask here for the lines
+// that do.
+
+package toolutil
+
+import (
+	"context"
+	"strings"
+	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
+)
+
+// QuickActionConfirmID is the question the actions that send a note body or
+// a description ask before a quick action in it is run.
+const QuickActionConfirmID = "quick_action_effect"
+
+// Bounds of what the question shows of the text: the commands it lists, and
+// the length of each line it quotes. A text can carry any number of lines of
+// any length, and the question is read by a person in a dialog.
+const (
+	quickActionLinesShown = 6
+	quickActionLineRunes  = 120
+)
+
+// guardedQuickActions are the quick actions the guard asks about, each with
+// the sentence fragment that says what it does. They are the commands whose
+// effect is one the catalog asks about under its own action, or one that no
+// call takes back or that hands the item to a party outside the instance:
+//
+//   - /move moves the item to another project or group, which issue.move asks
+//     about,
+//   - /merge merges the merge request, at once or when its checks pass, which
+//     merge_request.merge asks about,
+//   - /promote closes the issue and makes an epic of it, and no call makes
+//     the epic an issue again, which is what promoting a label or a milestone
+//     asks about,
+//   - /convert_to_ticket makes the issue a Service Desk ticket whose author
+//     is an outside email address, and no call restores the author,
+//   - /add_email adds outside email addresses as participants, which receive
+//     the comments of the issue from then on, and removing them recalls
+//     nothing that was sent,
+//   - /publish publishes the issue on the status page of the project, where
+//     anybody reads it.
+//
+// The rest of GitLab's commands are left alone. Each does what an action
+// here does unasked, and is undone the same way: /close and /reopen,
+// /assign and /unassign, /label and /unlabel, /milestone, /due, /lock,
+// /confidential, /approve and /unapprove, /spend and /remove_time_spent,
+// /rebase, and the conversions /type, /promote_to and /promote_to_incident,
+// which change the type issue.update changes through issue_type.
+var guardedQuickActions = []string{
+	quickActionMove, quickActionMerge, quickActionPromote, quickActionTicket, quickActionAddEmail, quickActionPublish,
+}
+
+// Names of the guarded quick actions, as GitLab spells them after the slash.
+const (
+	quickActionMove     = "move"
+	quickActionMerge    = "merge"
+	quickActionPromote  = "promote"
+	quickActionTicket   = "convert_to_ticket"
+	quickActionAddEmail = "add_email"
+	quickActionPublish  = "publish"
+)
+
+// quickActionEffect says what a guarded command does, quoting its line. Each
+// key is written out where it is rendered, a chain of ifs rather than a table
+// of keys, so the gates that read the message catalog see which template the
+// line lands in, and each branch is its own statement in a coverage report.
+func quickActionEffect(command, line string) i18n.Message {
+	if command == quickActionMove {
+		return i18n.New(i18n.ConfirmQuickActionMove, i18n.S("line", line))
+	}
+	if command == quickActionMerge {
+		return i18n.New(i18n.ConfirmQuickActionMerge, i18n.S("line", line))
+	}
+	if command == quickActionPromote {
+		return i18n.New(i18n.ConfirmQuickActionPromote, i18n.S("line", line))
+	}
+	if command == quickActionTicket {
+		return i18n.New(i18n.ConfirmQuickActionTicket, i18n.S("line", line))
+	}
+	if command == quickActionAddEmail {
+		return i18n.New(i18n.ConfirmQuickActionAddEmail, i18n.S("line", line))
+	}
+	return i18n.New(i18n.ConfirmQuickActionPublish, i18n.S("line", line))
+}
+
+// QuickActionLine is one line of a text that begins with a quick action the
+// guard asks about: the command, in lower case and without its slash, and
+// the line as the text wrote it, without the space around it.
+type QuickActionLine struct {
+	Command string
+	Line    string
+}
+
+// GuardedQuickActionLines returns the lines of the texts that begin with a
+// quick action the guard asks about, in the order they appear, each distinct
+// line once.
+//
+// It reads a text the way GitLab does, and wider wherever being wider costs a
+// question and being narrower would cost the guard. GitLab drops every
+// carriage return before it looks, so they are dropped here, and a command
+// split by one is found. A command is the slash at the start of a line, the
+// name in any case, and then the end of the line or a space. GitLab compares
+// the name under Unicode case folding, so the Kelvin sign is a k and the long
+// s an s, and so does [strings.EqualFold]. Space before the slash is skipped,
+// which GitLab does not do, and so is a NUL byte, which GitLab refuses the
+// whole request for. A handler that passes its text through [NormalizeText]
+// sends a line end where the call wrote a backslash and an n, so a text is
+// read both as written and as rewritten. A line inside a code block, a quote or an HTML block is
+// read as any other: GitLab does not run those, and telling them apart takes
+// its Markdown parser, so such a line costs a question nobody needed rather
+// than one nobody was asked.
+func GuardedQuickActionLines(texts ...string) []QuickActionLine {
+	var found []QuickActionLine
+	seen := map[string]struct{}{}
+	dropped := strings.NewReplacer("\r", "", "\x00", "")
+	for _, text := range texts {
+		// Both spellings are read: the text as the call wrote it, and as
+		// [NormalizeText] rewrites it, which is what most handlers send.
+		for _, spelling := range []string{text, NormalizeText(text)} {
+			for line := range strings.SplitSeq(dropped.Replace(spelling), "\n") {
+				line = strings.TrimSpace(line)
+				command, ok := guardedQuickAction(line)
+				if !ok {
+					continue
+				}
+				if _, twice := seen[line]; twice {
+					continue
+				}
+				seen[line] = struct{}{}
+				found = append(found, QuickActionLine{Command: command, Line: line})
+			}
+		}
+	}
+	return found
+}
+
+// guardedQuickAction reports the guarded command a trimmed line begins with:
+// a slash, the command's name in any case, and nothing or a space after it.
+func guardedQuickAction(line string) (string, bool) {
+	rest, slash := strings.CutPrefix(line, "/")
+	if !slash {
+		return "", false
+	}
+	name := rest
+	if end := strings.IndexFunc(rest, unicode.IsSpace); end >= 0 {
+		name = rest[:end]
+	}
+	for _, command := range guardedQuickActions {
+		if strings.EqualFold(name, command) {
+			return command, true
+		}
+	}
+	return "", false
+}
+
+// ConfirmQuickActions asks the caller to confirm a call whose text carries a
+// quick action the guard asks about, and returns nil when the call may
+// proceed. op is the operation label the refusals open with, the handler's
+// own, and texts are the note body or the description the call sends, the
+// empty string for one it does not send. A text without such a line asks
+// nothing, which is every ordinary note and description.
+//
+// Sending a note or a description is not destructive, and is deliberately
+// not classified as such: a prompt in front of every comment is one nobody
+// reads. The guard asks only for the lines [GuardedQuickActionLines] finds,
+// because GitLab runs them with the caller's permissions when it saves the
+// text, and what they do is what an action here asks about before it does
+// the same. A text is also the parameter a model most readily fills with
+// something it read, so a command in it need not be one the user wrote.
+//
+// The arguments alone decide, so nothing is read: whether GitLab would run
+// the command depends on the type of the item, its state and the caller's
+// role, and a guard that asked only when it would has to know all three. The
+// question quotes each line, cut to a length a dialog shows and escaped so it
+// cannot pass for the server's own words, and no other part of the text.
+func ConfirmQuickActions(ctx context.Context, op string, texts ...string) error {
+	lines := GuardedQuickActionLines(texts...)
+	if len(lines) == 0 {
+		return nil
+	}
+	shown := lines
+	if len(shown) > quickActionLinesShown {
+		shown = shown[:quickActionLinesShown]
+	}
+	effects := make([]i18n.Message, 0, len(shown)+1)
+	for _, line := range shown {
+		effects = append(effects, quickActionEffect(line.Command, EscapeConsentValue(truncateRunes(line.Line, quickActionLineRunes))))
+	}
+	if more := len(lines) - len(shown); more > 0 {
+		effects = append(effects, i18n.New(i18n.ConfirmQuickActionMore, i18n.N("count", int64(more))))
+	}
+	question := i18n.New(i18n.ConfirmQuickActions, i18n.L("effects", effects...))
+	return ConfirmGuardedCall(ctx, op, QuickActionConfirmID, question,
+		"the user declined running the quick actions in the text; send the text without the lines that begin with them")
+}
+
+// ConfirmQuickActionsOptional is [ConfirmQuickActions] for the one text of an
+// edit that leaves a text out by sending no key: nil is a text the call does
+// not send, which asks nothing.
+func ConfirmQuickActionsOptional(ctx context.Context, op string, text *string) error {
+	if text == nil {
+		return nil
+	}
+	return ConfirmQuickActions(ctx, op, *text)
+}
+
+// truncateRunes cuts s to at most limit runes, marking a cut with an
+// ellipsis, and never splits a rune.
+func truncateRunes(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit]) + "…"
+}

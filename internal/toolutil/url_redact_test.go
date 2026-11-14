@@ -159,6 +159,52 @@ func TestRedactURLToOrigin_CallbackURL_KeepsOnlyTheOrigin(t *testing.T) {
 	}
 }
 
+// TestSameURLOrigin_TwoAddresses_ShareAnOriginOnlyOnOneSchemeAndHost walks
+// the pairs a text that shows two redacted addresses has to tell apart. Two
+// addresses share an origin when their scheme and host are equal whatever
+// their case, their login, their path and their query, and the origin comes
+// back with the host as the first one wrote it and none of those. Another scheme, another
+// host or another port is another origin, and text that is not a URL shares
+// one with nothing, itself included.
+func TestSameURLOrigin_TwoAddresses_ShareAnOriginOnlyOnOneSchemeAndHost(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b string
+		want string
+		same bool
+	}{
+		{name: "one address twice", a: "https://h.example/hook", b: "https://h.example/hook", want: "https://h.example", same: true},
+		{name: "a trailing slash", a: "https://h.example/hook/", b: "https://h.example/hook", want: "https://h.example", same: true},
+		{name: "another path and query", a: "https://h.example/a?token=s3cret", b: "https://h.example/b", want: "https://h.example", same: true},
+		{name: "a login, which is no part of the origin", a: "https://hookuser:hookpass@h.example/a", b: "https://h.example/b", want: "https://h.example", same: true},
+		{name: "another case, the host kept as the first wrote it", a: " HTTPS://H.example/a ", b: "https://h.EXAMPLE/b", want: "https://H.example", same: true},
+		{name: "a port both name", a: "https://h.example:8443/a", b: "https://h.example:8443", want: "https://h.example:8443", same: true},
+		{name: "another scheme", a: "http://h.example/a", b: "https://h.example/a"},
+		{name: "another host", a: "https://h.example/a", b: "https://other.example/a"},
+		{name: "another port", a: "https://h.example:8443/a", b: "https://h.example/a"},
+		{name: "the first is not a URL", a: "not a url", b: "https://h.example/a"},
+		{name: "the second is not a URL", a: "https://h.example/a", b: "not a url"},
+		{name: "neither is a URL", a: "not a url", b: "not a url"},
+		{name: "the parser refuses the first", a: "http://exa\x7fmple.com/hook", b: "https://h.example/a"},
+		{name: "the parser refuses the second", a: "https://h.example/a", b: "http://exa\x7fmple.com/hook"},
+		{name: "a scheme without a host", a: "mailto:ops@example.com", b: "mailto:ops@example.com"},
+		{name: "both empty", a: "", b: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, same := SameURLOrigin(tc.a, tc.b)
+			if got != tc.want || same != tc.same {
+				t.Errorf("SameURLOrigin(%q, %q) = %q, %v, want %q, %v", tc.a, tc.b, got, same, tc.want, tc.same)
+			}
+			for _, secret := range []string{"hookpass", "hookuser", "s3cret"} {
+				if strings.Contains(got, secret) {
+					t.Errorf("SameURLOrigin(%q, %q) = %q, must not contain %q", tc.a, tc.b, got, secret)
+				}
+			}
+		})
+	}
+}
+
 // TestRedactURLToOrigin_LongURL_DoesNotEchoItsPrefix verifies that the
 // renderer never returns a leading slice of the input, which is how the
 // webhook table used to hide a URL and is what leaked the userinfo of a long

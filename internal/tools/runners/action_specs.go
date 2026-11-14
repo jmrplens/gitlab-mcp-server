@@ -87,7 +87,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerUpdateSpec("remove", toolutil.DestructiveAction(client, removeOutput), "gitlab_runner_remove"),
 		runnerReadSpec("jobs", toolutil.RouteAction(client, ListJobs), "gitlab_runner_jobs"),
 		runnerReadSpec("list_project", toolutil.RouteAction(client, ListProject), toolRunnerListProject),
-		runnerCreateSpec("enable_project", toolutil.RouteAction(client, EnableProject), toolRunnerEnableProject),
+		runnerEnableSpec("enable_project", toolutil.RouteAction(client, EnableProject), toolRunnerEnableProject),
 		runnerUpdateSpec("disable_project", toolutil.DestructiveAction(client, disableProjectOutput), toolRunnerDisableProject),
 		runnerReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_runner_list_group"),
 		runnerCreateSpec("register", toolutil.RouteAction(client, Register), "gitlab_runner_register"),
@@ -157,6 +157,22 @@ func runnerCreateSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, runnerOptions(name, individualTool))
+}
+
+// runnerEnableSpec is the create of enable_project, which asks for
+// confirmation. Assigning a runner to a project hands the jobs of the project
+// to the machine behind that runner: from then on it picks them up with the
+// variables, the job token and the repository each job carries, and
+// disable_project ends the assignment and recalls nothing a job already
+// delivered. The runner is a parameter a model can take from text the user
+// never read, so this is the project handed to a party the call names, which
+// the catalog classifies as it does enabling a deploy key. register is not
+// classified: it answers with a token for a runner nobody runs yet, and names
+// no machine. Only the destructive bit is added to the create.
+func runnerEnableSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 // runnerTokenResetSpec is an update that asks for confirmation. A reset ends
@@ -353,10 +369,10 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 		description: "List runners assigned to a project, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_enable_project, gitlab_runner_disable_project, gitlab_runner_list.",
 	},
 	toolRunnerEnableProject: {
-		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first.",
+		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first. Destructive: from then on the machine behind that runner picks up the project's jobs, with the variables, the job token and the repository each one carries, and unassigning it recalls nothing a job delivered, so confirm with the user first.",
 		aliases:     []string{"enable project runner", "assign runner to project", "attach runner to project"},
 		related:     []string{actionRunnerDisableProject, actionRunnerListProject},
-		description: "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
+		description: "Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
 	},
 	toolRunnerDisableProject: {
 		usage:       "Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).",

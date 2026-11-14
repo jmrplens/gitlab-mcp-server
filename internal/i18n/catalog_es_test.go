@@ -18,6 +18,8 @@ import (
 // Spanish conjunction (L), and numbers (N). Each message renders the reviewed
 // translation in Spanish and keeps rendering its English source in English,
 // so the model, which reads English, is never handed the Spanish.
+//
+//nolint:maintidx // one table of data: its length is the number of compositions it renders.
 func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -189,6 +191,15 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and replaces the custom_headers entry Authorization, whose current value cannot be read back.",
 		},
 		{
+			name: "the webhook question for an address on the host the hook already uses",
+			msg: New(ConfirmHookDelivery, S("hook", "7"), M("target", New(ConfirmTargetInstance)),
+				L("changes", New(ConfirmHookURLSameHost, S("url", "https://old.example")))),
+			spanish: "¿Cambiar adónde entrega el webhook 7 en esta instancia de GitLab, o un secreto que envía?" +
+				" Esta llamada lo mantiene en https://old.example y cambia la ruta o la query a la que entrega ahí.",
+			english: "Change where webhook 7 in this GitLab instance delivers, or a secret it sends?" +
+				" This call keeps it on https://old.example and changes the path or the query it delivers to there.",
+		},
+		{
 			name: "the webhook question for a project whose hook could not be read",
 			msg: New(ConfirmHookDelivery, S("hook", "7"), M("target", New(ConfirmTargetProject, S("id", "group/app"))),
 				L("changes",
@@ -209,6 +220,33 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" Esta llamada lo apunta a https://new.example y sustituye su secreto compartido, que no se puede volver a leer.",
 			english: "Change where external status check 3 in project group/app sends merge requests, or its shared secret?" +
 				" This call points it at https://new.example and replaces its shared secret, which cannot be read back.",
+		},
+		{
+			name: "the quick action question, each command a fragment that quotes its line",
+			msg: New(ConfirmQuickActions, L("effects",
+				New(ConfirmQuickActionMove, S("line", "`/move group/app`")),
+				New(ConfirmQuickActionMerge, S("line", "`/merge`")),
+				New(ConfirmQuickActionPromote, S("line", "`/promote`")),
+				New(ConfirmQuickActionTicket, S("line", "`/convert_to_ticket a@example.com`")),
+				New(ConfirmQuickActionAddEmail, S("line", "`/add_email b@example.com`")),
+				New(ConfirmQuickActionPublish, S("line", "`/publish`")),
+				New(ConfirmQuickActionMore, N("count", 2)))),
+			spanish: "¿Enviar este texto con las quick actions que lleva? GitLab las ejecuta al guardar el texto, así que esta llamada" +
+				" mueve el elemento a otro proyecto o grupo (`/move group/app`)" +
+				" y fusiona el merge request, de inmediato o cuando pasen sus comprobaciones (`/merge`)" +
+				" y cierra la issue y hace de ella una épica (`/promote`)" +
+				" y convierte la issue en un ticket de Service Desk cuyo autor es una dirección de correo externa (`/convert_to_ticket a@example.com`)" +
+				" y añade direcciones de correo externas que reciben los comentarios de la issue (`/add_email b@example.com`)" +
+				" y publica la issue en la página de estado (`/publish`)" +
+				" y ejecuta 2 quick actions más de estos tipos.",
+			english: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
+				" moves the item to another project or group (`/move group/app`)" +
+				" and merges the merge request, at once or when its checks pass (`/merge`)" +
+				" and closes the issue and makes an epic of it (`/promote`)" +
+				" and converts the issue to a Service Desk ticket whose author is an outside email address (`/convert_to_ticket a@example.com`)" +
+				" and adds outside email addresses that receive the comments of the issue (`/add_email b@example.com`)" +
+				" and publishes the issue on the status page (`/publish`)" +
+				" and runs 2 more quick actions of these kinds.",
 		},
 		{
 			name: "the import question",

@@ -286,6 +286,10 @@ const (
 	// ConfirmHookURL names the origin {url} a call points a webhook at and
 	// the origin {current} it delivers to now.
 	ConfirmHookURL Key = "confirm.hook.url"
+	// ConfirmHookURLSameHost names the origin {url} a webhook keeps when a
+	// call sends another address on it, since the two addresses shown as
+	// their origins would read as one origin instead of itself.
+	ConfirmHookURLSameHost Key = "confirm.hook.url_same_host"
 	// ConfirmHookURLUnread names the origin {url} a call sends when the
 	// webhook could not be read.
 	ConfirmHookURLUnread Key = "confirm.hook.url_unread"
@@ -316,6 +320,31 @@ const (
 	ConfirmStatusCheckURL Key = "confirm.status_check.url"
 	// ConfirmStatusCheckSecret names the shared secret an edit replaces.
 	ConfirmStatusCheckSecret Key = "confirm.status_check.secret"
+	// ConfirmQuickActions asks before a note body or a description is sent
+	// that carries quick actions GitLab runs when it saves the text,
+	// {effects} each a sentence fragment that continues "this call" and
+	// quotes its line of the text as {line}.
+	ConfirmQuickActions Key = "confirm.quick_action.run"
+	// ConfirmQuickActionMove names a /move line, which moves the item.
+	ConfirmQuickActionMove Key = "confirm.quick_action.move"
+	// ConfirmQuickActionMerge names a /merge line, which merges the merge
+	// request.
+	ConfirmQuickActionMerge Key = "confirm.quick_action.merge"
+	// ConfirmQuickActionPromote names a /promote line, which makes an epic of
+	// the issue.
+	ConfirmQuickActionPromote Key = "confirm.quick_action.promote"
+	// ConfirmQuickActionTicket names a /convert_to_ticket line, which makes
+	// the issue a Service Desk ticket.
+	ConfirmQuickActionTicket Key = "confirm.quick_action.convert_to_ticket"
+	// ConfirmQuickActionAddEmail names an /add_email line, which adds outside
+	// addresses as participants.
+	ConfirmQuickActionAddEmail Key = "confirm.quick_action.add_email"
+	// ConfirmQuickActionPublish names a /publish line, which publishes the
+	// issue on the status page.
+	ConfirmQuickActionPublish Key = "confirm.quick_action.publish"
+	// ConfirmQuickActionMore counts the {count} lines of the same kinds that
+	// the question does not quote.
+	ConfirmQuickActionMore Key = "confirm.quick_action.more"
 )
 
 // CommonListAnd is the conjunction [L] joins a list with.

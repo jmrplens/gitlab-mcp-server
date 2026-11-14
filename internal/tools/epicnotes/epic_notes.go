@@ -294,6 +294,11 @@ type CreateInput struct {
 	FullPath string `json:"full_path" jsonschema:"Full path of the group (e.g. my-group),required"`
 	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	Body     string `json:"body"      jsonschema:"Note body (Markdown supported),required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateInput defines parameters for updating an epic note.
@@ -302,6 +307,11 @@ type UpdateInput struct {
 	IID      int64  `json:"epic_iid"       jsonschema:"Epic IID within the group,required"`
 	NoteID   int64  `json:"note_id"   jsonschema:"ID of the note to update,required"`
 	Body     string `json:"body"      jsonschema:"Updated note body (Markdown supported),required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting an epic note.
@@ -472,6 +482,11 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 // Create adds a new note to an epic via the createNote GraphQL mutation.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+	// Asked before the epic is resolved: the text alone decides, and a call
+	// nobody approved reads nothing.
+	if err := toolutil.ConfirmQuickActions(ctx, "epicNoteCreate", input.Body); err != nil {
+		return Output{}, err
+	}
 	workItemGID, err := epicworkitems.ResolveEpicForNote(ctx, client, "epicNoteCreate", input.FullPath, input.IID, input.Body,
 		"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	if err != nil {
@@ -506,6 +521,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Body == "" {
 		return Output{}, errors.New("epicNoteUpdate: body is required")
+	}
+	if err := toolutil.ConfirmQuickActions(ctx, "epicNoteUpdate", input.Body); err != nil {
+		return Output{}, err
 	}
 	if _, err := epicworkitems.CheckNoteOnEpic(ctx, client, "epicNoteUpdate", input.FullPath, input.IID, input.NoteID); err != nil {
 		return Output{}, err

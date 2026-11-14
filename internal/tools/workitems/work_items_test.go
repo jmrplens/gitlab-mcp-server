@@ -3601,3 +3601,35 @@ func extractText(t *testing.T, result *mcp.CallToolResult) string {
 	}
 	return tc.Text
 }
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that creating and updating a work item refuse a description that carries a
+// quick action the guard asks about, before any request, the read of the
+// clearing guard included, naming what the line does and how to proceed
+// ([toolutil.ConfirmQuickActions]). GitLab runs such a line when it saves the
+// description, so the edit would move the work item unasked, which
+// issue.move asks about.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	text := "Steps to reproduce.\n/move group/app"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{FullPath: "group/project", WorkItemTypeID: "gid://gitlab/WorkItems::Type/1", Title: "t", Description: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: "group/project", IID: 7, Description: &text, AssigneeIDs: []int64{}})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move group/app`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
+}

@@ -74,6 +74,8 @@ func HookEditNeedsRead(ctx context.Context, edit HookEdit) bool {
 //
 // The address is shown as its origin alone, since the path of a webhook URL
 // is where its secret usually lives, and a key is shown without its value.
+// An address on the host the hook already delivers to is named as that: the
+// host stays and the path or the query changes.
 func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 	if IsHTTPStatus(readErr, http.StatusNotFound) {
 		return nil
@@ -84,8 +86,7 @@ func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 		if unread {
 			changes = append(changes, i18n.New(i18n.ConfirmHookURLUnread, i18n.S("url", RedactURLToOrigin(e.URL))))
 		} else if e.URL != current.URL {
-			changes = append(changes, i18n.New(i18n.ConfirmHookURL,
-				i18n.S("url", RedactURLToOrigin(e.URL)), i18n.S("current", RedactURLToOrigin(current.URL))))
+			changes = append(changes, hookURLChange(e.URL, current.URL))
 		}
 	}
 	if e.Token {
@@ -101,6 +102,19 @@ func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 	changes = append(changes, hookKeyChanges(hookFieldURLVariables, e.URLVariableKeys, held.URLVariableKeys, unread)...)
 	changes = append(changes, hookKeyChanges(hookFieldCustomHeaders, e.CustomHeaderKeys, held.CustomHeaderKeys, unread)...)
 	return changes
+}
+
+// hookURLChange names the address an edit points a webhook at, sent, beside
+// the one it delivers to now, held. Both are shown as their origin, so two
+// addresses on one host would read as the same text twice: for those it says
+// that the host stays and the path or the query changes, which is where the
+// secret of a webhook address usually lives and the reason neither is shown.
+func hookURLChange(sent, held string) i18n.Message {
+	if origin, same := SameURLOrigin(sent, held); same {
+		return i18n.New(i18n.ConfirmHookURLSameHost, i18n.S("url", origin))
+	}
+	return i18n.New(i18n.ConfirmHookURL,
+		i18n.S("url", RedactURLToOrigin(sent)), i18n.S("current", RedactURLToOrigin(held)))
 }
 
 // hookKeyChanges names each key of field the edit sends that the hook

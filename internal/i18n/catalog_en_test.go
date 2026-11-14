@@ -293,6 +293,9 @@ func guardedCallQuestionRows() []frozenEnglish {
 		variable = "DEPLOY_URL"
 		address  = "new@example.com"
 		field    = "url_variables"
+		// quoted is a line of a text as a question shows it: fenced in
+		// backticks by the guard, so it cannot pass for the server's words.
+		quoted = "`/move group/app`"
 	)
 	project := New(ConfirmTargetProject, S("id", samplePath))
 	return []frozenEnglish{
@@ -337,6 +340,11 @@ func guardedCallQuestionRows() []frozenEnglish {
 			key: ConfirmHookURL, dotted: "confirm.hook.url",
 			args: []Arg{S("url", origin), S("current", current)},
 			want: "points it at " + origin + " instead of " + current,
+		},
+		{
+			key: ConfirmHookURLSameHost, dotted: "confirm.hook.url_same_host",
+			args: []Arg{S("url", origin)},
+			want: "keeps it on " + origin + " and changes the path or the query it delivers to there",
 		},
 		{
 			key: ConfirmHookURLUnread, dotted: "confirm.hook.url_unread",
@@ -393,6 +401,42 @@ func guardedCallQuestionRows() []frozenEnglish {
 		{
 			key: ConfirmStatusCheckSecret, dotted: "confirm.status_check.secret",
 			want: "replaces its shared secret, which cannot be read back",
+		},
+		{
+			key: ConfirmQuickActions, dotted: "confirm.quick_action.run",
+			args: []Arg{L("effects", New(ConfirmQuickActionMove, S("line", quoted)), New(ConfirmQuickActionMore, N("count", 3)))},
+			want: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
+				" moves the item to another project or group (" + quoted + ") and runs 3 more quick actions of these kinds.",
+		},
+		{
+			key: ConfirmQuickActionMove, dotted: "confirm.quick_action.move",
+			args: []Arg{S("line", quoted)}, want: "moves the item to another project or group (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionMerge, dotted: "confirm.quick_action.merge",
+			args: []Arg{S("line", quoted)}, want: "merges the merge request, at once or when its checks pass (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionPromote, dotted: "confirm.quick_action.promote",
+			args: []Arg{S("line", quoted)}, want: "closes the issue and makes an epic of it (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionTicket, dotted: "confirm.quick_action.convert_to_ticket",
+			args: []Arg{S("line", quoted)},
+			want: "converts the issue to a Service Desk ticket whose author is an outside email address (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionAddEmail, dotted: "confirm.quick_action.add_email",
+			args: []Arg{S("line", quoted)},
+			want: "adds outside email addresses that receive the comments of the issue (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionPublish, dotted: "confirm.quick_action.publish",
+			args: []Arg{S("line", quoted)}, want: "publishes the issue on the status page (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionMore, dotted: "confirm.quick_action.more",
+			args: []Arg{N("count", 3)}, want: "runs 3 more quick actions of these kinds",
 		},
 	}
 }

@@ -123,6 +123,7 @@ var spanish = map[Key]string{
 	ConfirmUserAccessIdentity:          "sustituye la identidad externa con la que la cuenta inicia sesión",
 	ConfirmHookDelivery:                "¿Cambiar adónde entrega el webhook {hook} en {target}, o un secreto que envía? Esta llamada {changes}.",
 	ConfirmHookURL:                     "lo apunta a {url} en lugar de {current}",
+	ConfirmHookURLSameHost:             "lo mantiene en {url} y cambia la ruta o la query a la que entrega ahí",
 	ConfirmHookURLUnread:               "puede apuntarlo a otro host, {url} (no se pudo leer el webhook)",
 	ConfirmHookToken:                   "sustituye su {token}, que no se puede volver a leer",
 	ConfirmHookValue:                   "sustituye la entrada {key} de {field}, cuyo valor actual no se puede volver a leer",
@@ -133,6 +134,14 @@ var spanish = map[Key]string{
 	ConfirmStatusCheck:                 "¿Cambiar adónde envía los merge requests el external status check {check} en {target}, o su secreto compartido? Esta llamada {changes}.",
 	ConfirmStatusCheckURL:              "lo apunta a {url}",
 	ConfirmStatusCheckSecret:           "sustituye su secreto compartido, que no se puede volver a leer",
+	ConfirmQuickActions:                "¿Enviar este texto con las quick actions que lleva? GitLab las ejecuta al guardar el texto, así que esta llamada {effects}.",
+	ConfirmQuickActionMove:             "mueve el elemento a otro proyecto o grupo ({line})",
+	ConfirmQuickActionMerge:            "fusiona el merge request, de inmediato o cuando pasen sus comprobaciones ({line})",
+	ConfirmQuickActionPromote:          "cierra la issue y hace de ella una épica ({line})",
+	ConfirmQuickActionTicket:           "convierte la issue en un ticket de Service Desk cuyo autor es una dirección de correo externa ({line})",
+	ConfirmQuickActionAddEmail:         "añade direcciones de correo externas que reciben los comentarios de la issue ({line})",
+	ConfirmQuickActionPublish:          "publica la issue en la página de estado ({line})",
+	ConfirmQuickActionMore:             "ejecuta {count} quick actions más de estos tipos",
 
 	CommonListAnd: " y ",
 
