@@ -123,12 +123,12 @@ env:
   # Pinned exactly, not by range: goreleaser-action and sbom-action download
   # these binaries at run time into a job that holds the signing identity, so
   # SHA-pinning the action alone leaves the code that actually runs unpinned.
-  GORELEASER_VERSION: "v2.19.0"
-  SYFT_VERSION: "v1.55.0"
+  GORELEASER_VERSION: "v2.20.2"
+  SYFT_VERSION: "v1.57.1"
   # Fetched by hand in the docker job, never through an action (see Install
   # Trivy there). A test of cmd/audit_image_vulns holds it to the weekly scan
   # in image-vulns.yml and to the image make check-image-vulns runs.
-  TRIVY_VERSION: "v0.76.1"
+  TRIVY_VERSION: "v0.76.2"
 
 jobs:
   # The one check that has to run before anything else spends a runner. The
@@ -475,15 +475,15 @@ jobs:
       # SHA256, and cosign proves the checksum file that lists it came from
       # Aqua's release workflow at that tag. The identity names
       # reusable-release.yaml, the workflow release.yaml calls, at
-      # refs/tags/<version>, since Trivy releases from its tag. 0.76.1 is an
-      # immutable release, published seven months after the compromise.
+      # refs/tags/<version>, since Trivy releases from its tag. 0.76.2 is an
+      # immutable release, published eight months after the compromise.
       #
       # Not gated on the rehearsal switch: this step and the four after it
       # read the two smoke images the daemon already holds and push nothing,
       # so a rehearsal runs every one a release does.
       - name: Install Trivy
         env:
-          TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+          TRIVY_SHA256: "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
         run: |
           set -euo pipefail
           TARBALL="trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz"
@@ -708,7 +708,7 @@ jobs:
       # after the image was already pushed.
       - name: Install syft
         env:
-          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+          SYFT_SHA256: "bf52519eb57f675d47c07d43213cb6dff6449f3d6d1147ff6701ed91f44eef0c"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1287,7 +1287,7 @@ jobs:
       # its certificate arrive together as one sigstore bundle.
       - name: Install syft
         env:
-          SYFT_SHA256: "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+          SYFT_SHA256: "bf52519eb57f675d47c07d43213cb6dff6449f3d6d1147ff6701ed91f44eef0c"
         run: |
           set -euo pipefail
           TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
@@ -1703,8 +1703,8 @@ jobs:
       - name: Publish to npm
         env:
           NPM_DIST_TAG: ${{ needs.preflight.outputs.npm_dist_tag }}
-          NPM_VERSION: "12.2.1"
-          NPM_SHA256: "228bd64aaef23270dbdbd2cf3d5ef5c467602ef38c4066246cef1984adab9a67"
+          NPM_VERSION: "12.2.2"
+          NPM_SHA256: "07fecbf753e2c3bc10ebeb3e9ed8738f6a0cc1292998b79e2e9f1dd2a5525e0c"
         run: |
           set -euo pipefail
           TARBALL="${RUNNER_TEMP}/npm-${NPM_VERSION}.tgz"
@@ -1842,13 +1842,13 @@ jobs:
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
       # An exact SDK version rather than 10.0.x: dnx's behaviour is an SDK
-      # property (10.0.403 installs without asking when stdin is not a
+      # property (10.0.404 installs without asking when stdin is not a
       # terminal and accepts --yes without needing it, which the docs rely
       # on), and the digest `make validate-nuget` pins is the container image
       # of this same SDK. Bump the two together.
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: "10.0.403"
+          dotnet-version: "10.0.404"
 
       # A pointer package plus six runtime-identifier packages, each carrying
       # the native binary as the tool's entry point (the .NET 10 tool layout).
@@ -2077,8 +2077,8 @@ jobs:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
           # Bump when a new mcp-publisher release is verified. Server version published comes from
           # the git tag (handled in the previous step by update-server-json-sha.sh).
-          MCP_PUBLISHER_VERSION: "v1.8.6"
-          MCP_PUBLISHER_SHA256: "1fbe93fc0783c2394d8012c8d6e50a59e98cb2cc2d216264cc69f405d0e21340"
+          MCP_PUBLISHER_VERSION: "v1.8.9"
+          MCP_PUBLISHER_SHA256: "4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8"
         run: |
           set -euo pipefail
           TARBALL="mcp-publisher_linux_amd64.tar.gz"
@@ -2118,7 +2118,7 @@ jobs:
             # only errors the registry itself labels transient, plus a
             # not-yet-visible npm, PyPI or NuGet version, which is
             # indistinguishable from registry-side propagation lag. Strings
-            # are quoted from the v1.8.6 validators
+            # are quoted from the v1.8.9 validators
             # (internal/validators/registries/{npm,pypi,nuget,oci}.go); a
             # genuine "not found (status: 404)" is deliberately absent, so a
             # truly unpublished package fails fast. "wait for validation to
@@ -2388,17 +2388,18 @@ jobs:
       # commit installed cargo-binstall from its main branch and then whatever
       # komac release was newest, with no version and no digest, in the job
       # holding WINGET_TOKEN (issue 1232). It is fetched here instead, at a
-      # pinned version (first 2.16.0, the one 3.1.0's submission ran, and
-      # 2.17.1 since 2026-10-20), and held to the SHA-256 of
+      # pinned version (first 2.16.0, the one 3.1.0's submission ran, then
+      # 2.17.1 from 2026-10-20 and 2.17.2 since 2026-11-14), and held to the
+      # SHA-256 of
       # each Windows build, read from the release and checked against its
       # SHA256SUMS when recorded. komac publishes no signature and no build
       # provenance (its release workflow signs nothing and the attestation API
       # holds none for these digests), so the recorded digest is the whole of
       # the check. Dependabot cannot see these lines: a bump is a hand edit of
       # all three.
-      KOMAC_VERSION: "2.17.1"
-      KOMAC_SHA256_X64: "a97c002c5ffa15f232af117efac6774e755d27acc47eba00f1661033267d7438"
-      KOMAC_SHA256_ARM64: "be644ceab89470229d4e21525ccd2adf43de3f5a2f363d1ff848f38f05e1c7b9"
+      KOMAC_VERSION: "2.17.2"
+      KOMAC_SHA256_X64: "38a5a53b2291e959157a46a9ed2f20c1c66e9e238666780519650fcc8d37ad58"
+      KOMAC_SHA256_ARM64: "d3331763e00f301c717095629eaae18e500879187644240da93055d91d0eff7f"
     # Publishes a version-update PR to microsoft/winget-pkgs via the
     # jmrplens/winget-pkgs fork, unless a pull request for the version is
     # already open or merged there.
@@ -2738,7 +2739,7 @@ jobs:
         run: |
           & $env:KOMAC cleanup --only-merged
 
-      # The rehearsal's half: the same command with --dry-run. komac 2.17.1
+      # The rehearsal's half: the same command with --dry-run. komac 2.17.2
       # still reads everything a submission reads, winget-pkgs' versions and
       # the pull requests already open for this one, the previous version's
       # manifests, the release the installers belong to and the installers

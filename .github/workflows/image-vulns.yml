@@ -33,7 +33,7 @@ permissions: {}
 
 env:
   IMAGE: ghcr.io/jmrplens/gitlab-mcp-server
-  TRIVY_VERSION: "v0.76.1"
+  TRIVY_VERSION: "v0.76.2"
 
 jobs:
   scan:
@@ -54,7 +54,7 @@ jobs:
       # The release's Install Trivy step, word for word.
       - name: Install Trivy
         env:
-          TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+          TRIVY_SHA256: "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
         run: |
           set -euo pipefail
           TARBALL="trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz"

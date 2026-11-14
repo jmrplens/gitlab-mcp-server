@@ -463,7 +463,7 @@ category, and an `ignoreUntil` at most six months ahead. The scan enforces the
 rest: OSV-Scanner stops honoring an entry on its `ignoreUntil` date, and the
 make target fails on an entry it reports as an unused ignore, which is how a
 stale one shows. That second check reads the line `<file> has unused ignores:`
-that OSV-Scanner 2.7.0 prints, so a bump of the image checks that the wording
+that OSV-Scanner 2.7.1 prints, so a bump of the image checks that the wording
 still holds.
 
 The allow lists cannot be the last word on a malicious package. OSV-Scanner
