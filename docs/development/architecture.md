@@ -457,7 +457,7 @@ destructive action with no such word is listed in
 and no action that is not
 (`TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions`).
 `TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation` reads effects, in
-nine classes (`effectClasses`): a project or a group moved to another
+eleven classes (`effectClasses`): a project or a group moved to another
 namespace, a credential replaced or revoked, push rules weakened, an object
 consumed with no way back (an issue moved, a label promoted, a project or a
 group archived, a schedule's ownership taken, every to-do marked done), a
@@ -465,8 +465,13 @@ merge request merged, a delivery to a host the call names (a webhook, an
 integration, an external status check, a push mirror, an export uploaded),
 access to an account or a repository handed over (a deploy key, an SSH key,
 a certificate authority, an email address), a stored value overwritten (a
-CI/CD variable) and existing content overwritten on request (an import with
-overwrite, a commit with force). An action belongs to a class by its name or
+CI/CD variable), existing content overwritten on request (an import with
+overwrite, a commit with force), the jobs of a project handed to a runner
+the call names, and a text GitLab runs as quick actions (the body of a note
+and the description of an issue, a merge request, an epic or a work item,
+guarded by `toolutil.ConfirmQuickActions` in
+`internal/toolutil/quick_action_guard.go` for the lines that begin with a
+command whose effect asks). An action belongs to a class by its name or
 by a request it sends, which the test reads from
 `docs/development/action-requests.json`, so a rotation added as
 `foo.cycle_key` that sends `POST .../rotate` fails until it is classified.
