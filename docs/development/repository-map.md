@@ -180,5 +180,5 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 8 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (3.4.0)
+└── VERSION                      # Semantic version (3.5.0)
 ```
