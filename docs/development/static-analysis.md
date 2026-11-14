@@ -263,13 +263,14 @@ module in the build information.
 The module is still a direct requirement, for test code alone:
 `test/e2e/internal/fixture/user.go` imports `golang.org/x/crypto/ssh` to build
 the SSH keys its fixtures need, and the tests of `internal/telemetry` hold the
-key derivation to `golang.org/x/crypto/hkdf` byte for byte. So
-`govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
-results, and will for as long as that is so. There it is information rather
-than a failure, because the source scan gates on what our code calls, and
-nothing in this repository calls into openpgp. What a shipped binary carries
-is a different question, and `make check-binary-vulns` (below) is the gate
-that asks it.
+key derivation to `golang.org/x/crypto/hkdf` byte for byte. Until
+`golang.org/x/crypto` v0.59.0, `govulncheck -show verbose ./...` listed
+`GO-2026-5932` under module results. There it was information rather than a
+failure, because the source scan gates on what our code calls, and nothing in
+this repository called into openpgp. v0.59.0 no longer contains openpgp and is
+past the version the Go vulnerability database names as the fix, so the scan
+of the tree reports it no more. What a shipped binary carries is a different
+question, and `make check-binary-vulns` (below) is the gate that asks it.
 
 That distinction is also why the exit status is the gate rather than the
 printed text. The wrapper's first design scraped advisory IDs out of the
@@ -338,18 +339,20 @@ cores, about thirty seconds of it per build.
 
 #### The OpenVEX document
 
-The two scans above disagree by design about `GO-2026-5932`: the source scan
-lists it at module level and passes, because nothing calls into openpgp, while
-osv-scanner and OpenSSF Scorecard, which read `go.mod`, report it as a
-vulnerability of the project unless the `osv-scanner.toml` beside `go.mod` sets
-it aside, as the root one does
+The two scans above disagreed by design about `GO-2026-5932` for as long as
+`go.mod` required a `golang.org/x/crypto` that contained openpgp: the source
+scan listed it at module level and passed, because nothing calls into openpgp,
+while osv-scanner and OpenSSF Scorecard, which read `go.mod`, reported it as a
+vulnerability of the project until the root `osv-scanner.toml` set it aside
 ([below](#every-lockfile-malicious-packages-included)).
-`vex/gitlab-mcp-server.openvex.json` is where that disagreement is written down
-for a scanner given a release to read: an OpenVEX v0.2.0
-statement that the advisory is `not_affected`, `vulnerable_code_not_present`,
-for this module at every version and for the 3.0.0 and 3.1.0 images, the only
-releases since 3.0.0 whose binaries carry the module, with an impact statement
-that names the evidence. GoReleaser lists it in the signed `checksums.txt`, so the
+`vex/gitlab-mcp-server.openvex.json` is where such a disagreement is written
+down for a scanner given a release to read: an OpenVEX v0.2.0 statement that
+the advisory is `not_affected`, `vulnerable_code_not_present`, with an impact
+statement that names the evidence. It stated that for this module at every
+version until `golang.org/x/crypto` v0.59.0, which no longer contains openpgp,
+took the module out of the advisory's range; it still states it for the 3.0.0
+and 3.1.0 images, the only releases since 3.0.0 whose binaries carry the
+module. GoReleaser lists it in the signed `checksums.txt`, so the
 provenance attestation over that file covers it, and attaches it to every
 GitHub release as `gitlab-mcp-server.openvex.json`. The allow list and the
 document give the advisory the same justification, one for a scan of the
@@ -438,9 +441,10 @@ whose entries are the `MAL-` ids.
 
 It reads at module grain, as `make check-binary-vulns` reads a binary: Go call
 analysis is off (`--no-call-analysis=go`), so an advisory against a module
-counts whether or not this repository's code calls it. That is what reports
+counts whether or not this repository's code calls it. That is what reported
 `GO-2026-5932` against `golang.org/x/crypto`, which `go.mod` requires for test
-code alone (above), and the root `osv-scanner.toml` sets it aside.
+code alone (above), until v0.59.0 took the module out of the advisory's range
+and the root `osv-scanner.toml` stopped setting it aside.
 
 A finding of any severity fails the run unless the `osv-scanner.toml` beside
 the lockfile it was found in sets it aside, so the allow lists are
