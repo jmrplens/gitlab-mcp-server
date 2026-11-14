@@ -8,6 +8,7 @@
     "no-raw-characters": "off",
     "no-redundant-role": "off",
     "prefer-native-element": "off",
+    "presentation-role-style": ["error", { "prefer": "presentation" }],
     "text-content": "off",
     "unique-landmark": "off",
     "valid-id": "off",
