@@ -37,8 +37,11 @@ func TestGuardedQuickActionLines_ReadsATextAsGitLabDoesAndWider(t *testing.T) {
 		{name: "no text at all"},
 		{name: "an empty text", texts: []string{""}},
 		{name: "an ordinary note", texts: []string{"Looks good to me.\nSee /projects/42 and https://gitlab.example/a/b."}},
-		{name: "commands the guard leaves alone", texts: []string{"/label ~bug\n/assign @dev\n/close\n/rebase\n/promote_to incident\n/type task"}},
-		{name: "a word that begins like a command", texts: []string{"/merged\n/mover a/b\n/merge_when_ready\n/publisher"}},
+		{
+			name:  "commands the guard leaves alone",
+			texts: []string{"/label ~bug\n/assign @dev\n/unassign\n/close\n/rebase\n/approve\n/remove_time_spent\n/remove_estimate\n/promote_to incident\n/type task"},
+		},
+		{name: "a word that begins like a command", texts: []string{"/merged\n/mover a/b\n/merge_when_ready\n/publisher\n/unlinked\n/unapproved\n/remove_children\n/remove_parents"}},
 		{name: "a command that does not open its line", texts: []string{"please /merge\n- /move a/b\n> /promote\n`/publish`"}},
 		{name: "a slash alone and a path", texts: []string{"/\n/ merge\n/usr/bin/merge"}},
 		{
@@ -46,8 +49,11 @@ func TestGuardedQuickActionLines_ReadsATextAsGitLabDoesAndWider(t *testing.T) {
 			want: []QuickActionLine{{Command: "merge", Line: "/merge"}},
 		},
 		{
-			name:  "every guarded command, with its arguments",
-			texts: []string{"/move group/app\n/merge\n/promote\n/convert_to_ticket a@example.com\n/add_email b@example.com c@example.com\n/publish"},
+			name: "every guarded command, with its arguments",
+			texts: []string{
+				"/move group/app\n/merge\n/promote\n/convert_to_ticket a@example.com\n/add_email b@example.com c@example.com\n/publish" +
+					"\n/unapprove\n/unlink #3\n/remove_epic\n/remove_parent\n/remove_parent_epic\n/remove_child #4\n/remove_child_epic &5",
+			},
 			want: []QuickActionLine{
 				{Command: "move", Line: "/move group/app"},
 				{Command: "merge", Line: "/merge"},
@@ -55,7 +61,18 @@ func TestGuardedQuickActionLines_ReadsATextAsGitLabDoesAndWider(t *testing.T) {
 				{Command: "convert_to_ticket", Line: "/convert_to_ticket a@example.com"},
 				{Command: "add_email", Line: "/add_email b@example.com c@example.com"},
 				{Command: "publish", Line: "/publish"},
+				{Command: "unapprove", Line: "/unapprove"},
+				{Command: "unlink", Line: "/unlink #3"},
+				{Command: "remove_epic", Line: "/remove_epic"},
+				{Command: "remove_parent", Line: "/remove_parent"},
+				{Command: "remove_parent_epic", Line: "/remove_parent_epic"},
+				{Command: "remove_child", Line: "/remove_child #4"},
+				{Command: "remove_child_epic", Line: "/remove_child_epic &5"},
 			},
+		},
+		{
+			name: "inside a quote block fenced with >>>, read as any other line", texts: []string{">>>\n/unapprove\n>>>"},
+			want: []QuickActionLine{{Command: "unapprove", Line: "/unapprove"}},
 		},
 		{
 			name: "among the lines of a note", texts: []string{"Done, thanks.\n\n/label ~done\n/move group/app\n"},
@@ -155,6 +172,21 @@ func TestConfirmQuickActions_AsksOnlyForATextThatCarriesOne(t *testing.T) {
 				" and converts the issue to a Service Desk ticket whose author is an outside email address (`/convert_to_ticket b@example.com`)" +
 				" and closes the issue and makes an epic of it (`/promote`)" +
 				" and publishes the issue on the status page (`/publish`).",
+		},
+		{
+			name:  "a note that takes back what an action asks before it takes back",
+			texts: []string{"/unapprove\n/unlink #3\n/remove_epic\n/remove_parent\n/remove_parent_epic\n/remove_child #4"},
+			want: "withdraws the caller's approval of the merge request (`/unapprove`)" +
+				" and removes the link between this item and another (`/unlink #3`)" +
+				" and takes the item out of its epic or its parent (`/remove_epic`)" +
+				" and takes the item out of its epic or its parent (`/remove_parent`)" +
+				" and takes the item out of its epic or its parent (`/remove_parent_epic`)" +
+				" and takes a child out of the item (`/remove_child #4`).",
+		},
+		{
+			name:  "a note that takes a child epic out",
+			texts: []string{"/remove_child_epic &5"},
+			want:  "takes a child out of the item (`/remove_child_epic &5`).",
 		},
 		{
 			name:  "a line that tries to pass for the question, fenced and with its link defanged",

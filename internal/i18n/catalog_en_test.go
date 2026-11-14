@@ -435,6 +435,22 @@ func guardedCallQuestionRows() []frozenEnglish {
 			args: []Arg{S("line", quoted)}, want: "publishes the issue on the status page (" + quoted + ")",
 		},
 		{
+			key: ConfirmQuickActionUnapprove, dotted: "confirm.quick_action.unapprove",
+			args: []Arg{S("line", quoted)}, want: "withdraws the caller's approval of the merge request (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionUnlink, dotted: "confirm.quick_action.unlink",
+			args: []Arg{S("line", quoted)}, want: "removes the link between this item and another (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveParent, dotted: "confirm.quick_action.remove_parent",
+			args: []Arg{S("line", quoted)}, want: "takes the item out of its epic or its parent (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveChild, dotted: "confirm.quick_action.remove_child",
+			args: []Arg{S("line", quoted)}, want: "takes a child out of the item (" + quoted + ")",
+		},
+		{
 			key: ConfirmQuickActionMore, dotted: "confirm.quick_action.more",
 			args: []Arg{N("count", 3)}, want: "runs 3 more quick actions of these kinds",
 		},

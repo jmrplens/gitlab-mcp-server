@@ -135,6 +135,10 @@ var english = map[Key]string{
 	ConfirmQuickActionTicket:           "converts the issue to a Service Desk ticket whose author is an outside email address ({line})",
 	ConfirmQuickActionAddEmail:         "adds outside email addresses that receive the comments of the issue ({line})",
 	ConfirmQuickActionPublish:          "publishes the issue on the status page ({line})",
+	ConfirmQuickActionUnapprove:        "withdraws the caller's approval of the merge request ({line})",
+	ConfirmQuickActionUnlink:           "removes the link between this item and another ({line})",
+	ConfirmQuickActionRemoveParent:     "takes the item out of its epic or its parent ({line})",
+	ConfirmQuickActionRemoveChild:      "takes a child out of the item ({line})",
 	ConfirmQuickActionMore:             "runs {count} more quick actions of these kinds",
 
 	CommonListAnd: " and ",

@@ -1687,8 +1687,10 @@ type effectClass struct {
 	// reads the name, and one whose members are named for their domain
 	// (create_project, add) reads the ID.
 	byName func(id, action string) bool
-	// byRoute reads "METHOD /route" of a REST request other than a GET or a
-	// HEAD, in the spelling of docs/development/action-requests.json.
+	// byRoute reads a request an action can send that writes, in the spelling
+	// of docs/development/action-requests.json: "METHOD /route" for a REST
+	// request other than a GET or a HEAD, and "MUTATION field" for each root
+	// field of a GraphQL mutation.
 	byRoute *regexp.Regexp
 	// guarded are the actions, by canonical ID, that are not destructive and
 	// whose handler asks instead, because only some of their calls have the
@@ -1958,13 +1960,21 @@ func effectClasses() []effectClass {
 			name:   "text GitLab runs as quick actions",
 			reason: "GitLab runs the lines of a note or a description that begin with a command when it saves the text, and a command moves, merges or hands over the item as the action that asks does",
 			byName: func(id, _ string) bool {
-				_, sends := quickActionTextActions()[id]
-				return sends
+				if _, sends := quickActionTextActions()[id]; sends {
+					return true
+				}
+				_, hierarchy := quickActionTextExempt()[id]
+				return hierarchy
 			},
+			// The GraphQL half is what holds the actions that write through
+			// a mutation: the name is read from the table below, so a text
+			// action added without a row is found by the mutation it sends
+			// and by nothing else.
 			byRoute: regexp.MustCompile(`^POST /projects/:id/(issues|merge_requests)$` +
 				`|^PUT /projects/:id/issues/:issue_iid$|^PUT /projects/:id/merge_requests/:merge_request_iid$` +
 				`|^(POST|PUT) /projects/:id/(issues|merge_requests)/:noteable_id/(notes|discussions)(/:note_id|/:discussion_id/notes(/:note_id)?)?$` +
-				`|^(POST|PUT) /projects/:id/merge_requests/:merge_request_iid/draft_notes(/:draft_note_id)?$`),
+				`|^(POST|PUT) /projects/:id/merge_requests/:merge_request_iid/draft_notes(/:draft_note_id|/bulk_publish)?$` +
+				`|^MUTATION (createNote|updateNote|workItemCreate|workItemUpdate)$`),
 			// A text asks only for a line that begins with one of the
 			// commands toolutil.ConfirmQuickActions names, so the bit would
 			// ask before every comment and every description.
@@ -1973,7 +1983,20 @@ func effectClasses() []effectClass {
 			// each calls is the handler of issue.create or of
 			// merge_request.create, which asks about the line.
 			guarded: quickActionTextActions(),
+			exempt:  quickActionTextExempt(),
 		},
+	}
+}
+
+// quickActionTextExempt are the actions that send a mutation a text travels
+// in and send no text with it: the hierarchy widget of workItemUpdate alone.
+// group.epic_issue_remove sends the same mutation and is destructive, which
+// answers for it.
+func quickActionTextExempt() map[string]string {
+	const hierarchy = "the workItemUpdate it sends carries the hierarchy widget alone, no description, so no text GitLab reads for quick actions"
+	return map[string]string{
+		"group.epic_issue_assign": hierarchy,
+		"group.epic_issue_update": hierarchy,
 	}
 }
 
@@ -2031,6 +2054,9 @@ func quickActionTextActions() map[string]effectGuard {
 		"mr_review.discussion_reply":       rest(mrThread, "body", merges),
 		"mr_review.discussion_note_update": rest(mrThreadNote, "body", merges),
 		"mr_review.draft_note_create":      rest(mr, "note", merges),
+		// The summary note of a review is created after the drafts are
+		// published, as any other note of the merge request is.
+		"mr_review.draft_note_publish_all": rest(mr, "note", merges),
 		"mr_review.draft_note_update": {
 			call:              with(mrNote, "note", merges),
 			harmlessElsewhere: "the edit reads the draft it keeps the position of before it writes, a read this fake GitLab answers with nothing; the tests of its own package send the text that goes out unasked",
@@ -2164,15 +2190,24 @@ func assertEffectClassesByName(t *testing.T, catalog *actioncatalog.Catalog, cla
 	}
 }
 
-// effectClassRequest is a REST request other than a GET or a HEAD that an
-// action can send, as the committed request record spells it.
+// effectClassRequest is a request that writes and that an action can send, as
+// the committed request record spells it: a REST request other than a GET or
+// a HEAD by its method and route, and a GraphQL mutation by each of its root
+// fields, as "MUTATION field".
 type effectClassRequest struct {
 	action string
 	route  string
 }
 
-// recordedWriteRequests reads the REST requests other than a GET or a HEAD
-// out of docs/development/action-requests.json.
+// mutationRoutePrefix opens the spelling of a GraphQL mutation's root field
+// among the requests the effect classes read.
+const mutationRoutePrefix = "MUTATION "
+
+// recordedWriteRequests reads the requests that write out of
+// docs/development/action-requests.json: the REST requests other than a GET
+// or a HEAD, and the root fields of the GraphQL mutations. A class that read
+// REST alone could not see an action that writes through GraphQL, and held
+// such an action by its name only, which the action's author chooses.
 func recordedWriteRequests(t *testing.T) []effectClassRequest {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "development", "action-requests.json"))
@@ -2183,8 +2218,10 @@ func recordedWriteRequests(t *testing.T) []effectClassRequest {
 		Actions []struct {
 			ID       string `json:"id"`
 			Requests []struct {
-				Kind  string `json:"kind"`
-				Route string `json:"route"`
+				Kind       string   `json:"kind"`
+				Route      string   `json:"route"`
+				Operation  string   `json:"operation"`
+				RootFields []string `json:"root_fields"`
 			} `json:"requests"`
 		} `json:"actions"`
 	}
@@ -2194,6 +2231,12 @@ func recordedWriteRequests(t *testing.T) []effectClassRequest {
 	var requests []effectClassRequest
 	for _, entry := range record.Actions {
 		for _, request := range entry.Requests {
+			if request.Kind == "graphql" && strings.HasPrefix(request.Operation, "mutation ") {
+				for _, field := range request.RootFields {
+					requests = append(requests, effectClassRequest{action: entry.ID, route: mutationRoutePrefix + field})
+				}
+				continue
+			}
 			if request.Kind != "rest" || strings.HasPrefix(request.Route, "GET ") || strings.HasPrefix(request.Route, "HEAD ") {
 				continue
 			}

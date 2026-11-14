@@ -342,6 +342,19 @@ const (
 	// ConfirmQuickActionPublish names a /publish line, which publishes the
 	// issue on the status page.
 	ConfirmQuickActionPublish Key = "confirm.quick_action.publish"
+	// ConfirmQuickActionUnapprove names an /unapprove line, which withdraws
+	// the caller's approval of the merge request.
+	ConfirmQuickActionUnapprove Key = "confirm.quick_action.unapprove"
+	// ConfirmQuickActionUnlink names an /unlink line, which removes the link
+	// between the item and another.
+	ConfirmQuickActionUnlink Key = "confirm.quick_action.unlink"
+	// ConfirmQuickActionRemoveParent names a /remove_epic, /remove_parent or
+	// /remove_parent_epic line, which takes the item out of its epic or its
+	// parent.
+	ConfirmQuickActionRemoveParent Key = "confirm.quick_action.remove_parent"
+	// ConfirmQuickActionRemoveChild names a /remove_child or
+	// /remove_child_epic line, which takes a child out of the item.
+	ConfirmQuickActionRemoveChild Key = "confirm.quick_action.remove_child"
 	// ConfirmQuickActionMore counts the {count} lines of the same kinds that
 	// the question does not quote.
 	ConfirmQuickActionMore Key = "confirm.quick_action.more"

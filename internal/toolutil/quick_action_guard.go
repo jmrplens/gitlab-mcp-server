@@ -49,26 +49,47 @@ const (
 //     the comments of the issue from then on, and removing them recalls
 //     nothing that was sent,
 //   - /publish publishes the issue on the status page of the project, where
-//     anybody reads it.
+//     anybody reads it,
+//   - /unapprove withdraws the caller's approval of the merge request, which
+//     merge_request.unapprove asks about,
+//   - /unlink removes the link between the item and another, which
+//     issue.link_delete asks about,
+//   - /remove_epic, /remove_parent and /remove_parent_epic take the item out
+//     of its epic or its parent, and /remove_child and /remove_child_epic
+//     take a child out of the item, which group.epic_issue_remove asks about.
+//
+// The last three groups are undone by the opposite command. They are guarded
+// all the same, because the rule is the catalog's and not this file's: the
+// action that does the same asks, so the text that does it asks.
 //
 // The rest of GitLab's commands are left alone. Each does what an action
 // here does unasked, and is undone the same way: /close and /reopen,
 // /assign and /unassign, /label and /unlabel, /milestone, /due, /lock,
-// /confidential, /approve and /unapprove, /spend and /remove_time_spent,
-// /rebase, and the conversions /type, /promote_to and /promote_to_incident,
-// which change the type issue.update changes through issue_type.
+// /confidential, /approve, /spend and /remove_time_spent, /rebase, and the
+// conversions /type, /promote_to and /promote_to_incident, which change the
+// type issue.update changes through issue_type.
 var guardedQuickActions = []string{
 	quickActionMove, quickActionMerge, quickActionPromote, quickActionTicket, quickActionAddEmail, quickActionPublish,
+	quickActionUnapprove, quickActionUnlink,
+	quickActionRemoveEpic, quickActionRemoveParent, quickActionRemoveParentEpic,
+	quickActionRemoveChild, quickActionRemoveChildEpic,
 }
 
 // Names of the guarded quick actions, as GitLab spells them after the slash.
 const (
-	quickActionMove     = "move"
-	quickActionMerge    = "merge"
-	quickActionPromote  = "promote"
-	quickActionTicket   = "convert_to_ticket"
-	quickActionAddEmail = "add_email"
-	quickActionPublish  = "publish"
+	quickActionMove             = "move"
+	quickActionMerge            = "merge"
+	quickActionPromote          = "promote"
+	quickActionTicket           = "convert_to_ticket"
+	quickActionAddEmail         = "add_email"
+	quickActionPublish          = "publish"
+	quickActionUnapprove        = "unapprove"
+	quickActionUnlink           = "unlink"
+	quickActionRemoveEpic       = "remove_epic"
+	quickActionRemoveParent     = "remove_parent"
+	quickActionRemoveParentEpic = "remove_parent_epic"
+	quickActionRemoveChild      = "remove_child"
+	quickActionRemoveChildEpic  = "remove_child_epic"
 )
 
 // quickActionEffect says what a guarded command does, quoting its line. Each
@@ -91,7 +112,19 @@ func quickActionEffect(command, line string) i18n.Message {
 	if command == quickActionAddEmail {
 		return i18n.New(i18n.ConfirmQuickActionAddEmail, i18n.S("line", line))
 	}
-	return i18n.New(i18n.ConfirmQuickActionPublish, i18n.S("line", line))
+	if command == quickActionPublish {
+		return i18n.New(i18n.ConfirmQuickActionPublish, i18n.S("line", line))
+	}
+	if command == quickActionUnapprove {
+		return i18n.New(i18n.ConfirmQuickActionUnapprove, i18n.S("line", line))
+	}
+	if command == quickActionUnlink {
+		return i18n.New(i18n.ConfirmQuickActionUnlink, i18n.S("line", line))
+	}
+	if command == quickActionRemoveChild || command == quickActionRemoveChildEpic {
+		return i18n.New(i18n.ConfirmQuickActionRemoveChild, i18n.S("line", line))
+	}
+	return i18n.New(i18n.ConfirmQuickActionRemoveParent, i18n.S("line", line))
 }
 
 // QuickActionLine is one line of a text that begins with a quick action the
@@ -116,10 +149,12 @@ type QuickActionLine struct {
 // which GitLab does not do, and so is a NUL byte, which GitLab refuses the
 // whole request for. A handler that passes its text through [NormalizeText]
 // sends a line end where the call wrote a backslash and an n, so a text is
-// read both as written and as rewritten. A line inside a code block, a quote or an HTML block is
-// read as any other: GitLab does not run those, and telling them apart takes
-// its Markdown parser, so such a line costs a question nobody needed rather
-// than one nobody was asked.
+// read both as written and as rewritten. A line inside a code block, a quote
+// block fenced with >>> or an HTML block is read as any other: GitLab does not
+// run those, and telling them apart takes its Markdown parser, so such a line
+// costs a question nobody needed rather than one nobody was asked. A line
+// quoted with a > of its own does not begin with the slash, and is not a
+// command here or in GitLab.
 func GuardedQuickActionLines(texts ...string) []QuickActionLine {
 	var found []QuickActionLine
 	seen := map[string]struct{}{}

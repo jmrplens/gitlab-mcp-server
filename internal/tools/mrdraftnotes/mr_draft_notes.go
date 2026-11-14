@@ -93,7 +93,7 @@ type CreateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateInput defines parameters for updating a draft note. It takes a new
@@ -109,7 +109,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting a draft note.
@@ -136,6 +136,11 @@ type PublishAllInput struct {
 	Note          string               `json:"note,omitempty" jsonschema:"Summary comment GitLab posts on the merge request after publishing the drafts. Markdown is supported"`
 	Internal      *bool                `json:"internal,omitempty" jsonschema:"Whether the summary note is internal, visible only to members who can see internal notes. Defaults to false and applies only together with note"`
 	ReviewerState string               `json:"reviewer_state,omitempty" jsonschema:"Review state to record for the caller as a reviewer after publishing: requested_changes or reviewed. It does not record a formal approval"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the summary note carries. Pass true only after the user approves that. Only required when a line of note begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the note. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +644,11 @@ func Publish(ctx context.Context, client *gitlabclient.Client, input PublishInpu
 // the one empty body Grape parses to the parameter set it means; a nil
 // pointer would reach the body as the `null` recorded in
 // docs/development/upstream-bugs.md.
+//
+// The drafts themselves were asked about when they were written. The summary
+// note is text this call sends: GitLab creates it as a note on the merge
+// request after the drafts and runs the quick actions it carries, so it is
+// asked about here, as the note of any other action is.
 func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishAllInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -648,6 +658,9 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	}
 	if input.MRIID <= 0 {
 		return toolutil.ErrRequiredInt64("draftNotePublishAll", "merge_request_iid")
+	}
+	if err := toolutil.ConfirmQuickActions(ctx, "draftNotePublishAll", input.Note); err != nil {
+		return err
 	}
 	opts := &gl.PublishAllDraftNotesOptions{Internal: input.Internal}
 	if input.Note != "" {

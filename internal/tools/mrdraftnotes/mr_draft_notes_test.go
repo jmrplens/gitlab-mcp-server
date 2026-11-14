@@ -2520,8 +2520,9 @@ func TestWrites_IncompletePosition_IsRefusedBeforeAnyRequest(t *testing.T) {
 // that the two writes of a draft note refuse a body that carries a quick
 // action the guard asks about, before any request, naming what the line does
 // and how to proceed ([toolutil.ConfirmQuickActions]). GitLab runs such a
-// line when the draft is published, a call that carries no text, so the draft
-// is asked about when it is written.
+// line when the draft is published, so the draft is asked about when it is
+// written. Publishing every draft asks as well, for the one text that call
+// sends itself: the summary note GitLab creates after the drafts.
 func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
 	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
 	t.Setenv("AUTOPILOT", "")
@@ -2536,12 +2537,42 @@ func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testin
 			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 7, Note: text})
 			return err
 		},
+		"publish all, with a summary note": func() error {
+			return PublishAll(t.Context(), client, PublishAllInput{ProjectID: "42", MRIID: 1, Note: text})
+		},
 	}
 	for name, write := range writes {
 		t.Run(name, func(t *testing.T) {
 			err := write()
 			if err == nil || !strings.Contains(err.Error(), "merges the merge request, at once or when its checks pass (`/merge`)") || !strings.Contains(err.Error(), "confirm=true") {
 				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
+}
+
+// TestPublishAll_SummaryNoteWithoutAQuickActionThatAsks_GoesOutUnasked is the
+// other half of the guard on the summary note: a call that names no note, and
+// one whose note carries only commands the guard leaves alone, are published
+// with the one request and nobody is asked.
+func TestPublishAll_SummaryNoteWithoutAQuickActionThatAsks_GoesOutUnasked(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	for name, note := range map[string]string{"no note": "", "an ordinary note": "Reviewed, two nits.\n/label ~reviewed"} {
+		t.Run(name, func(t *testing.T) {
+			var writes atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathDraftNotes+"/bulk_publish" {
+					t.Errorf("GitLab was sent %s %s, want the bulk publish alone", r.Method, r.URL.Path)
+				}
+				writes.Add(1)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			if err := PublishAll(t.Context(), client, PublishAllInput{ProjectID: "42", MRIID: 1, Note: note}); err != nil {
+				t.Errorf("PublishAll() error = %v, want the drafts published unasked", err)
+			}
+			if got := writes.Load(); got != 1 {
+				t.Errorf("GitLab was sent %d request(s), want 1", got)
 			}
 		})
 	}

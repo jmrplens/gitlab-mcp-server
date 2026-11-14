@@ -230,14 +230,22 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				New(ConfirmQuickActionTicket, S("line", "`/convert_to_ticket a@example.com`")),
 				New(ConfirmQuickActionAddEmail, S("line", "`/add_email b@example.com`")),
 				New(ConfirmQuickActionPublish, S("line", "`/publish`")),
+				New(ConfirmQuickActionUnapprove, S("line", "`/unapprove`")),
+				New(ConfirmQuickActionUnlink, S("line", "`/unlink #3`")),
+				New(ConfirmQuickActionRemoveParent, S("line", "`/remove_epic`")),
+				New(ConfirmQuickActionRemoveChild, S("line", "`/remove_child #4`")),
 				New(ConfirmQuickActionMore, N("count", 2)))),
 			spanish: "¿Enviar este texto con las quick actions que lleva? GitLab las ejecuta al guardar el texto, así que esta llamada" +
 				" mueve el elemento a otro proyecto o grupo (`/move group/app`)" +
 				" y fusiona el merge request, de inmediato o cuando pasen sus comprobaciones (`/merge`)" +
-				" y cierra la issue y hace de ella una épica (`/promote`)" +
-				" y convierte la issue en un ticket de Service Desk cuyo autor es una dirección de correo externa (`/convert_to_ticket a@example.com`)" +
-				" y añade direcciones de correo externas que reciben los comentarios de la issue (`/add_email b@example.com`)" +
-				" y publica la issue en la página de estado (`/publish`)" +
+				" y cierra el issue y hace de él una épica (`/promote`)" +
+				" y convierte el issue en un ticket de Service Desk cuyo autor es una dirección de correo externa (`/convert_to_ticket a@example.com`)" +
+				" y añade direcciones de correo externas que reciben los comentarios del issue (`/add_email b@example.com`)" +
+				" y publica el issue en la página de estado (`/publish`)" +
+				" y retira la aprobación del merge request de quien llama (`/unapprove`)" +
+				" y quita el enlace entre este elemento y otro (`/unlink #3`)" +
+				" y saca el elemento de su épica o de su padre (`/remove_epic`)" +
+				" y saca un hijo del elemento (`/remove_child #4`)" +
 				" y ejecuta 2 quick actions más de estos tipos.",
 			english: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
 				" moves the item to another project or group (`/move group/app`)" +
@@ -246,6 +254,10 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and converts the issue to a Service Desk ticket whose author is an outside email address (`/convert_to_ticket a@example.com`)" +
 				" and adds outside email addresses that receive the comments of the issue (`/add_email b@example.com`)" +
 				" and publishes the issue on the status page (`/publish`)" +
+				" and withdraws the caller's approval of the merge request (`/unapprove`)" +
+				" and removes the link between this item and another (`/unlink #3`)" +
+				" and takes the item out of its epic or its parent (`/remove_epic`)" +
+				" and takes a child out of the item (`/remove_child #4`)" +
 				" and runs 2 more quick actions of these kinds.",
 		},
 		{
