@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+# syntax=docker/dockerfile:1.29.0@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
 # Copyright (c) 2026 José M. Requena Plens
 # SPDX-License-Identifier: MIT
 
@@ -70,7 +70,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	-targets "${TARGETOS}/${TARGETARCH}" /out/gitlab-mcp-server
 
 # --- Runtime stage ---
-FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 # hadolint ignore=DL3018
 # The licences' directory is made here, 0755, because a COPY --chmod that has

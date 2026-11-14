@@ -43,7 +43,7 @@ PKGS=./cmd/... ./internal/...
 # Keep in lockstep with MCP_PUBLISHER_VERSION in .github/workflows/release.yml:
 # this one validates the manifest, that one publishes it. check-server-json
 # refuses to run when the two disagree.
-MCP_PUBLISHER_VERSION=v1.8.6
+MCP_PUBLISHER_VERSION=v1.8.9
 # The publisher is installed once per pinned version into a directory named
 # after that version, so a stale binary can never validate with another
 # release, and CI caches that directory by version instead of resolving the
@@ -1193,8 +1193,8 @@ check-site-headers:
 # a test of cmd/audit_image_vulns holds the two to one version. Its signature
 # verifies against Aqua's release workflow at that tag:
 #   cosign verify $(TRIVY_IMAGE) --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-#     --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1
-TRIVY_IMAGE=ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+#     --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.2
+TRIVY_IMAGE=ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
 IMAGE_VULNS_PLATFORMS ?= linux/amd64,linux/arm64
 IMAGE_VULNS_DIR=dist/image-vulns
 
@@ -1239,7 +1239,7 @@ check-image-vulns: image-vulns-images
 # lockfile read from the line "Scanned /src/<path> file", and a malicious
 # package from the JSON report, where its MAL- id, or the CWE-506 GitHub
 # classifies embedded malware under, is a string of its own.
-OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
+OSV_SCANNER_IMAGE=ghcr.io/google/osv-scanner:v2.7.1@sha256:a70ffffc2bfd33482953e5d6b64c6fcdb30239717a07b0f0d3ab2859ce3e4cde
 # The pip locks, which OSV-Scanner does not recognize by their names, handed to
 # it as requirements files; every other lockfile it finds by walking the tree.
 DEPENDENCY_VULNS_PIP_LOCKS=$(wildcard .github/requirements/*.txt)
@@ -1871,10 +1871,10 @@ gen-nuget:
 ## token, binary magic and executable bit for all six, plus a real
 ## `dotnet tool install`, a `dnx` run and an MCP initialize handshake for the
 ## container's native platform. The image is pinned by digest because dnx's
-## behaviour is an SDK property (10.0.403 is what was verified); bump the
+## behaviour is an SDK property (10.0.404 is what was verified); bump the
 ## digest deliberately.
 ##   make validate-nuget NUGET_BINARIES=dist
-NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.403@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b
+NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.404@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb
 validate-nuget:
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
@@ -1923,7 +1923,7 @@ publish-nuget:
 # Pinned: the CLI has already changed its verb contract under this target
 # once (publish -> update, a new positional gitUrl); bump deliberately after
 # verifying `plugin update --dir` still holds.
-LOBEHUB_MARKET_CLI_VERSION := 0.0.44
+LOBEHUB_MARKET_CLI_VERSION := 0.0.46
 
 publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
