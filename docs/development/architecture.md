@@ -446,6 +446,39 @@ are constants, the committed manifests are generated from a listing and must
 not depend on a variable the generating machine happens to export, and
 `confirm=true` still works with the switch on.
 
+#### Which actions are destructive
+
+An action is classified by what it does to GitLab, not by its verb, and two
+tests in `internal/tools/register_test.go` hold that between them.
+`TestDestructiveRoutes_NameHeuristic_ClassifiesActions` reads names: a name
+carrying `delete`, `remove`, `revoke` and the like must be destructive, and a
+destructive action with no such word is listed in
+`knownNonKeywordDestructive`, each of whose entries names a destructive action
+and no action that is not
+(`TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions`).
+`TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation` reads effects, in
+three classes (`effectClasses`): a project or a group moved to another
+namespace, a credential replaced or revoked, and push rules weakened. An
+action belongs to a class by its name or by a request it sends, which the
+test reads from `docs/development/action-requests.json`, so a rotation added
+as `foo.cycle_key` that sends `POST .../rotate` fails until it is classified.
+Every member is destructive, or guarded by its handler and declared so, or
+declared exempt with the reason, and a declaration that stopped describing the
+catalog fails like a missing one.
+
+A guarded action is one whose arguments decide whether the call has the
+effect, so the bit would put a question in front of every ordinary call. It
+stays non-destructive, declares a `confirm` field on its input, since the
+individual tool's schema is closed, and asks in its handler on the precedence
+above: `toolutil.IsYOLOMode()` and
+`toolutil.ExplicitConfirmFromRequest(toolutil.RequestFromContext(ctx))` before
+any read, then an elicitation, then a refusal that quotes the question in
+English. `internal/tools/projects/pull_mirror_guard.go`,
+`internal/tools/workitems/clear_guard.go` and
+`internal/toolutil/push_rule_guard.go`, which the project's and the group's
+push rule edits share, are the three. A guard that reads GitLab to decide asks
+when the read fails, rather than assume the call is harmless.
+
 ### Dual response
 
 A handler returns a typed output; the dispatcher turns it into both halves of
