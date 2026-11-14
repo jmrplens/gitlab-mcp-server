@@ -1573,9 +1573,10 @@ jobs:
       # measured it both ways. Each of those conditions is now evaluated both
       # ways on every platform by a test that runs there, or sits in a file
       # only the platform that uses it builds, so a condition this leg leaves
-      # one-way is one nothing measures on this platform, and fails it. The
-      # figure for a whole package on any system is conditions.yml's,
-      # dispatched by hand, which runs this same script and fails on no figure.
+      # one-way is one nothing measures on this platform, and fails it. A
+      # green leg therefore measures both packages in full on its system; the
+      # figure for any other package is conditions.yml's, dispatched by hand,
+      # which runs this same script and fails on no figure.
       #
       # Through bash and the script itself rather than make, which
       # windows-latest does not promise. The timeout is gobco's go test's, whose
