@@ -14888,6 +14888,10 @@
                 "boolean"
               ]
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "create_source": {
               "description": "Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic",
               "type": "string"
@@ -15036,6 +15040,10 @@
               "description": "Note body (Markdown supported)",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "discussion_id": {
               "description": "Discussion ID to reply to",
               "type": "string"
@@ -15094,6 +15102,10 @@
             "body": {
               "description": "Discussion body (Markdown supported)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "epic_iid": {
               "description": "Epic IID within the group",
@@ -15290,6 +15302,10 @@
             "body": {
               "description": "Updated note body",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "epic_iid": {
               "description": "Epic IID within the group",
@@ -15893,6 +15909,10 @@
               "description": "Note body (Markdown supported)",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "epic_iid": {
               "description": "Epic IID within the group",
               "type": "integer"
@@ -16091,6 +16111,10 @@
               "description": "Updated note body (Markdown supported)",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "epic_iid": {
               "description": "Epic IID within the group",
               "type": "integer"
@@ -16171,6 +16195,10 @@
             "color": {
               "description": "Epic color (hex format)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "description": {
               "description": "Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
@@ -27836,6 +27864,10 @@
                 "boolean"
               ]
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "created_at": {
               "description": "Creation date override (ISO 8601, requires admin permissions)",
               "type": "string"
@@ -28038,6 +28070,10 @@
               "description": "Note body (Markdown supported)",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "created_at": {
               "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
               "type": "string"
@@ -28103,6 +28139,10 @@
             "body": {
               "description": "Discussion body (Markdown supported)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "created_at": {
               "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -28348,6 +28388,10 @@
             "body": {
               "description": "Updated note body",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "created_at": {
               "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -30487,6 +30531,10 @@
               "description": "Note body (Markdown supported)",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "created_at": {
               "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
               "type": "string"
@@ -30736,6 +30784,10 @@
             "body": {
               "description": "Updated note body (Markdown supported)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "issue_iid": {
               "description": "Issue internal ID",
@@ -31465,6 +31517,10 @@
                 "boolean"
               ]
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "description": {
               "description": "New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
               "type": [
@@ -31640,6 +31696,10 @@
                 "null",
                 "boolean"
               ]
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "create_source": {
               "description": "Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item",
@@ -33774,7 +33834,7 @@
               "type": "string"
             },
             "confirm": {
-              "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted",
+              "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Pass true only after the user approves",
               "type": "boolean"
             },
             "crm_contact_ids": {
@@ -36780,6 +36840,10 @@
                 "array"
               ]
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "description": {
               "description": "Merge request description (Markdown supported)",
               "type": "string"
@@ -39458,6 +39522,10 @@
                 "array"
               ]
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "description": {
               "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
               "type": [
@@ -40333,6 +40401,10 @@
               "description": "SHA of the commit to anchor the discussion to (optional).",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "created_at": {
               "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
               "type": "string"
@@ -40736,6 +40808,10 @@
               "description": "New body text (Markdown). Leave empty to keep current body.",
               "type": "string"
             },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "created_at": {
               "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
               "type": "string"
@@ -40815,6 +40891,10 @@
             "body": {
               "description": "Reply body",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "created_at": {
               "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -40946,6 +41026,10 @@
             "commit_id": {
               "description": "SHA of the commit to comment on",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "in_reply_to_discussion_id": {
               "description": "Discussion ID to reply to",
@@ -41466,6 +41550,10 @@
             }
           ],
           "properties": {
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
+            },
             "merge_request_iid": {
               "description": "Merge request internal ID",
               "type": "integer"
@@ -41680,6 +41768,10 @@
             "body": {
               "description": "Comment body (Markdown supported)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "created_at": {
               "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
@@ -41934,6 +42026,10 @@
             "body": {
               "description": "Updated comment body",
               "type": "string"
+            },
+            "confirm": {
+              "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+              "type": "boolean"
             },
             "merge_request_iid": {
               "description": "Merge request IID (project-scoped, not 'merge_request_id')",
@@ -59489,7 +59585,7 @@
   },
   {
     "name": "gitlab_runner",
-    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_runner.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so runner.list is {\"action\":\"list\"} on this one.\nAction guidance:\n- controller_create: Register a new runner controller with an optional description and initial state (enabled, disabled, or dry_run). admin-only, experimental API. Use to onboard a controller into the agentic runner control plane before it connects.\n- controller_delete: Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane. Verify the controller_id with runner.controller_list first.\n- controller_get: Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after runner.controller_list to inspect a specific controller before updating or deleting it.\n- controller_list: List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one. Supports offset pagination for large fleets.\n- controller_scope_add_instance: Grant a runner controller the instance-level scope so it may operate the entire shared instance runner fleet.\n- controller_scope_add_runner: Scope a runner controller to one specific instance runner by runner ID so it may operate only that runner.\n- controller_scope_list: List the instance-level and runner-level scopes assigned to a runner controller to see which runners it may operate.\n- controller_scope_remove_instance: Revoke a runner controller's instance-level scope so it can no longer operate the shared instance runner fleet.\n- controller_scope_remove_runner: Remove a specific runner from a runner controller's scope by runner ID so the controller can no longer operate that runner.\n- controller_token_create: Create a new authentication token for a runner controller (admin-only). Use when provisioning a runner controller or adding an additional credential. The secret token value is returned only once at creation.\n- controller_token_get: Retrieve a single runner controller token by its id (admin-only). Use after a list result or when the prompt already names a concrete runner controller token id.\n- controller_token_list: List every authentication token issued for a runner controller (admin-only). Use when the prompt asks to audit, enumerate, or review the tokens belonging to a known runner controller before rotating or revoking one.\n- controller_token_revoke: Permanently revoke a runner controller token (admin-only). Destructive and irreversible. Confirm controller_id and token_id before calling, as any runner controller using the token will lose access.\n- controller_token_rotate: Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Destructive: the controller stops authenticating until it is given the new secret, so confirm with the user first. Use to roll a credential without changing the token id. The new secret value is returned only once.\n- controller_update: Update an existing runner controller's description or state (enabled, disabled, or dry_run) by controller_id. admin-only, experimental API. Use to pause (disabled), resume (enabled), or stage (dry_run) a controller in the runner control plane.\n- delete_by_token: Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not. Prefer runner.delete_registered when you have the runner_id.\n- delete_registered: Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id. Prefer runner.delete_by_token when only the authentication token is known.\n- disable_project: Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).\n- enable_project: Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first.\n- get: Get the full configuration of one runner by its numeric runner_id. Use after a runner.list result or when the prompt names a concrete runner to inspect tags, lock state, access level, and timeout.\n- jobs: List the CI jobs processed by a runner, identified by runner_id. Use status, order_by, and sort filters when the prompt asks which jobs a specific runner has executed.\n- list: List runners owned by the authenticated user. Use type, status, tag_list, and scope filters to narrow results when the prompt asks for the caller's own runners. Prefer runner.list_all for an instance-wide admin view.\n- list_all: List every runner registered on the instance (requires an admin token). Use when the prompt asks for a fleet-wide or instance-level inventory rather than the caller's own runners.\n- list_group: List the runners available to a group, identified by group_id, including group-specific and shared runners. Use type and status filters when the prompt scopes runners to a group or subgroup.\n- list_managers: List the managers (individual runner processes/hosts) of a runner by runner_id. Use to see each manager's system id, version, platform, architecture, status, and contact IP for a single runner.\n- list_project: List the runners assigned to a project, identified by project_id. Use when the prompt scopes runners to one project. Use runner.enable_project or runner.disable_project to change those assignments.\n- register: Register a new runner using a registration token. Provide the token plus optional description, tag_list, locked, run_untagged, and access_level. The response includes the runner's authentication token needed to configure the runner agent.\n- remove: Remove (unregister) a runner by its numeric runner_id. Use runner.list or runner.list_project to obtain the runner_id first. Destructive: the runner is permanently deleted.\n- reset_group_reg_token: Reset a group's runner registration token by group_id (deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy group-scoped runner registration. Modern flows use runner.register with a created token.\n- reset_instance_reg_token: Reset the instance-wide runner registration token (admin only, deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy instance-level runner registration. Modern flows use runner.register with a created token.\n- reset_project_reg_token: Reset a project's runner registration token by project_id (deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy project-scoped runner registration. Modern flows use runner.register with a created token.\n- reset_token: Reset a runner's authentication token by runner_id, invalidating the previous token. Destructive: the runner stops authenticating until it is given the new token, so confirm with the user first. Use when a runner token is compromised or must be rotated. The response returns the new token.\n- reset_token_by_token: Reset a runner's authentication token with the current token instead of a runner_id, invalidating the current one. Destructive: the runner stops authenticating until it is given the new token, so confirm with the user first. GitLab finds the runner by the token passed, which is how a runner rotates its own token. The response returns the new token. Prefer runner.reset_token when you have the runner_id.\n- router_discovery: Discover the Job Router URL a runner connects to, authenticated by the runner's authentication token. Needs GitLab 18.7 or later with the Job Router on: it sits behind the job_router and job_router_instance_runners feature flags, disabled by default, and GitLab answers 501 while it is off.\n- update: Update a runner's configuration by runner_id. Set description, paused, tag_list, locked, access_level, or maximum_timeout. Pass only the fields the prompt asks to change (e.g. paused to pause or resume a runner).\n- verify: Verify that a runner authentication token is valid without registering or modifying anything. Use to check a token before configuring a runner agent or after runner.reset_token.\nParameter guidance:\n- delete_registered.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- disable_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- disable_project.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- enable_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- enable_project.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- get.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- jobs.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- list_group.group_id: scope_owner_group. Source: Use group.get or group.list outputs. Accepts numeric ID or full group path.\n- list_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- remove.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- reset_group_reg_token.group_id: scope_owner_group. Source: Use group.get or group.list outputs. Accepts numeric ID or full group path.\n- reset_project_reg_token.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- reset_token.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- update.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n\nManage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive. Revoking the registration token only invalidates future registrations. already-registered runners keep operating using their existing runner authentication tokens.\nValid actions: controller_create, controller_delete, controller_get, controller_list, controller_scope_add_instance, controller_scope_add_runner, controller_scope_list, controller_scope_remove_instance, controller_scope_remove_runner, controller_token_create, controller_token_get, controller_token_list, controller_token_revoke, controller_token_rotate, controller_update, delete_by_token, delete_registered, disable_project, enable_project, get, jobs, list, list_all, list_group, list_managers, list_project, register, remove, reset_group_reg_token, reset_instance_reg_token, reset_project_reg_token, reset_token, update, verify\n\nWhen to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.\nNOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitlab_job), CI variables (use gitlab_ci_variable), CI lint or templates (use gitlab_template), self-hosted GitLab Runner installation (out of scope, install via the GitLab Runner CLI).\n\nReturns:\n- list / list_all / list_project / list_group / list_managers / jobs / controller_list / controller_scope_list / controller_token_list: arrays with pagination {page, per_page, total, next_page}.\n- get / update / register / reset_*_token / enable_project / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE. Store it securely.\n- verify / remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.\nErrors: 401/403 (hint: list_all / register with admin token / runner controller actions require admin), 404 (hint: runner_id and controller_id are global, project / group context only filters), 400 (hint: access_level is not_protected or ref_protected. tag_list is a comma-separated string. Deprecated reset_*_reg_token endpoints. Prefer controller_token_create).\n\nParam conventions: * = required. List actions accept page, per_page. Runner IDs are integers.\n\nRunner CRUD:\n- list: type, status, paused, tag_list (comma-separated)\n- list_all: (admin) type, status, paused, tag_list\n- get / remove: runner_id*\n- update: runner_id*, description, paused, tag_list, run_untagged, locked, access_level, maximum_timeout, maintenance_note\n- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort, page, per_page\n\nProject/Group runners:\n- list_project: project_id*, type, status, tag_list\n- enable_project: project_id*, runner_id*\n- disable_project: project_id*, runner_id*\n- list_group: group_id*, type, status, tag_list\n\nRegistration and tokens:\n- register: token*, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note\n- delete_registered: runner_id*\n- delete_by_token: token*\n- verify: token*\n- reset_token: runner_id*\n- reset_instance_reg_token: (deprecated, no params)\n- reset_group_reg_token: group_id* (deprecated)\n- reset_project_reg_token: project_id* (deprecated)\n- list_managers: runner_id*\n\nRunner controllers (admin, experimental):\n- controller_list\n- controller_get / controller_delete: controller_id*\n- controller_create: description, state (enabled/disabled/dry_run)\n- controller_update: controller_id*, description, state\n\nController scopes:\n- controller_scope_list / controller_scope_add_instance / controller_scope_remove_instance: controller_id*\n- controller_scope_add_runner / controller_scope_remove_runner: controller_id*, runner_id*\n\nController tokens:\n- controller_token_list: controller_id*\n- controller_token_get / controller_token_rotate / controller_token_revoke: controller_id*, token_id*\n- controller_token_create: controller_id*, description\n\nSee also: gitlab_pipeline, gitlab_job",
+    "description": "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_runner.\u003caction\u003e. A domain.action ID below is the action after the dot on the gitlab_\u003cdomain\u003e tool, or that tool itself where it takes no action, so runner.list is {\"action\":\"list\"} on this one.\nAction guidance:\n- controller_create: Register a new runner controller with an optional description and initial state (enabled, disabled, or dry_run). admin-only, experimental API. Use to onboard a controller into the agentic runner control plane before it connects.\n- controller_delete: Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane. Verify the controller_id with runner.controller_list first.\n- controller_get: Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after runner.controller_list to inspect a specific controller before updating or deleting it.\n- controller_list: List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one. Supports offset pagination for large fleets.\n- controller_scope_add_instance: Grant a runner controller the instance-level scope so it may operate the entire shared instance runner fleet.\n- controller_scope_add_runner: Scope a runner controller to one specific instance runner by runner ID so it may operate only that runner.\n- controller_scope_list: List the instance-level and runner-level scopes assigned to a runner controller to see which runners it may operate.\n- controller_scope_remove_instance: Revoke a runner controller's instance-level scope so it can no longer operate the shared instance runner fleet.\n- controller_scope_remove_runner: Remove a specific runner from a runner controller's scope by runner ID so the controller can no longer operate that runner.\n- controller_token_create: Create a new authentication token for a runner controller (admin-only). Use when provisioning a runner controller or adding an additional credential. The secret token value is returned only once at creation.\n- controller_token_get: Retrieve a single runner controller token by its id (admin-only). Use after a list result or when the prompt already names a concrete runner controller token id.\n- controller_token_list: List every authentication token issued for a runner controller (admin-only). Use when the prompt asks to audit, enumerate, or review the tokens belonging to a known runner controller before rotating or revoking one.\n- controller_token_revoke: Permanently revoke a runner controller token (admin-only). Destructive and irreversible. Confirm controller_id and token_id before calling, as any runner controller using the token will lose access.\n- controller_token_rotate: Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Destructive: the controller stops authenticating until it is given the new secret, so confirm with the user first. Use to roll a credential without changing the token id. The new secret value is returned only once.\n- controller_update: Update an existing runner controller's description or state (enabled, disabled, or dry_run) by controller_id. admin-only, experimental API. Use to pause (disabled), resume (enabled), or stage (dry_run) a controller in the runner control plane.\n- delete_by_token: Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not. Prefer runner.delete_registered when you have the runner_id.\n- delete_registered: Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id. Prefer runner.delete_by_token when only the authentication token is known.\n- disable_project: Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).\n- enable_project: Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first. Destructive: from then on the machine behind that runner picks up the project's jobs, with the variables, the job token and the repository each one carries, and unassigning it recalls nothing a job delivered, so confirm with the user first.\n- get: Get the full configuration of one runner by its numeric runner_id. Use after a runner.list result or when the prompt names a concrete runner to inspect tags, lock state, access level, and timeout.\n- jobs: List the CI jobs processed by a runner, identified by runner_id. Use status, order_by, and sort filters when the prompt asks which jobs a specific runner has executed.\n- list: List runners owned by the authenticated user. Use type, status, tag_list, and scope filters to narrow results when the prompt asks for the caller's own runners. Prefer runner.list_all for an instance-wide admin view.\n- list_all: List every runner registered on the instance (requires an admin token). Use when the prompt asks for a fleet-wide or instance-level inventory rather than the caller's own runners.\n- list_group: List the runners available to a group, identified by group_id, including group-specific and shared runners. Use type and status filters when the prompt scopes runners to a group or subgroup.\n- list_managers: List the managers (individual runner processes/hosts) of a runner by runner_id. Use to see each manager's system id, version, platform, architecture, status, and contact IP for a single runner.\n- list_project: List the runners assigned to a project, identified by project_id. Use when the prompt scopes runners to one project. Use runner.enable_project or runner.disable_project to change those assignments.\n- register: Register a new runner using a registration token. Provide the token plus optional description, tag_list, locked, run_untagged, and access_level. The response includes the runner's authentication token needed to configure the runner agent.\n- remove: Remove (unregister) a runner by its numeric runner_id. Use runner.list or runner.list_project to obtain the runner_id first. Destructive: the runner is permanently deleted.\n- reset_group_reg_token: Reset a group's runner registration token by group_id (deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy group-scoped runner registration. Modern flows use runner.register with a created token.\n- reset_instance_reg_token: Reset the instance-wide runner registration token (admin only, deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy instance-level runner registration. Modern flows use runner.register with a created token.\n- reset_project_reg_token: Reset a project's runner registration token by project_id (deprecated registration flow). Destructive: the previous registration token stops working, so confirm with the user first. Use only for legacy project-scoped runner registration. Modern flows use runner.register with a created token.\n- reset_token: Reset a runner's authentication token by runner_id, invalidating the previous token. Destructive: the runner stops authenticating until it is given the new token, so confirm with the user first. Use when a runner token is compromised or must be rotated. The response returns the new token.\n- reset_token_by_token: Reset a runner's authentication token with the current token instead of a runner_id, invalidating the current one. Destructive: the runner stops authenticating until it is given the new token, so confirm with the user first. GitLab finds the runner by the token passed, which is how a runner rotates its own token. The response returns the new token. Prefer runner.reset_token when you have the runner_id.\n- router_discovery: Discover the Job Router URL a runner connects to, authenticated by the runner's authentication token. Needs GitLab 18.7 or later with the Job Router on: it sits behind the job_router and job_router_instance_runners feature flags, disabled by default, and GitLab answers 501 while it is off.\n- update: Update a runner's configuration by runner_id. Set description, paused, tag_list, locked, access_level, or maximum_timeout. Pass only the fields the prompt asks to change (e.g. paused to pause or resume a runner).\n- verify: Verify that a runner authentication token is valid without registering or modifying anything. Use to check a token before configuring a runner agent or after runner.reset_token.\nParameter guidance:\n- delete_registered.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- disable_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- disable_project.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- enable_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- enable_project.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- get.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- jobs.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- list_group.group_id: scope_owner_group. Source: Use group.get or group.list outputs. Accepts numeric ID or full group path.\n- list_project.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- remove.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- reset_group_reg_token.group_id: scope_owner_group. Source: Use group.get or group.list outputs. Accepts numeric ID or full group path.\n- reset_project_reg_token.project_id: scope_owner_project. Source: Use project.get or project.list outputs. Accepts numeric ID or namespace/project path. Avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.\n- reset_token.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n- update.runner_id: runner_identifier. Source: Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID. Avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.\n\nManage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. Remove/delete/revoke and reset_token actions are destructive. Revoking the registration token only invalidates future registrations. already-registered runners keep operating using their existing runner authentication tokens.\nValid actions: controller_create, controller_delete, controller_get, controller_list, controller_scope_add_instance, controller_scope_add_runner, controller_scope_list, controller_scope_remove_instance, controller_scope_remove_runner, controller_token_create, controller_token_get, controller_token_list, controller_token_revoke, controller_token_rotate, controller_update, delete_by_token, delete_registered, disable_project, enable_project, get, jobs, list, list_all, list_group, list_managers, list_project, register, remove, reset_group_reg_token, reset_instance_reg_token, reset_project_reg_token, reset_token, update, verify\n\nWhen to use: register or pause runners, change runner tags / access_level / maximum_timeout, attach or detach runners from a project / group, rotate registration tokens, drive runner controllers (CRUD + scopes + tokens) for admins.\nNOT for: pipeline runs (use gitlab_pipeline), job logs / retry / play (use gitlab_job), CI variables (use gitlab_ci_variable), CI lint or templates (use gitlab_template), self-hosted GitLab Runner installation (out of scope, install via the GitLab Runner CLI).\n\nReturns:\n- list / list_all / list_project / list_group / list_managers / jobs / controller_list / controller_scope_list / controller_token_list: arrays with pagination {page, per_page, total, next_page}.\n- get / update / register / reset_*_token / enable_project / controller_get / controller_create / controller_update / controller_scope_add_* / controller_token_get / controller_token_create / controller_token_rotate: runner / controller / token object. register and reset_*_token / controller_token_create / controller_token_rotate include the cleartext token only ONCE. Store it securely.\n- verify / remove / delete_registered / delete_by_token / disable_project / controller_delete / controller_scope_remove_* / controller_token_revoke: {success, message}.\nErrors: 401/403 (hint: list_all / register with admin token / runner controller actions require admin), 404 (hint: runner_id and controller_id are global, project / group context only filters), 400 (hint: access_level is not_protected or ref_protected. tag_list is a comma-separated string. Deprecated reset_*_reg_token endpoints. Prefer controller_token_create).\n\nParam conventions: * = required. List actions accept page, per_page. Runner IDs are integers.\n\nRunner CRUD:\n- list: type, status, paused, tag_list (comma-separated)\n- list_all: (admin) type, status, paused, tag_list\n- get / remove: runner_id*\n- update: runner_id*, description, paused, tag_list, run_untagged, locked, access_level, maximum_timeout, maintenance_note\n- jobs: runner_id*, status (running/success/failed/canceled), order_by, sort, page, per_page\n\nProject/Group runners:\n- list_project: project_id*, type, status, tag_list\n- enable_project: project_id*, runner_id*\n- disable_project: project_id*, runner_id*\n- list_group: group_id*, type, status, tag_list\n\nRegistration and tokens:\n- register: token*, description, paused, locked, run_untagged, tag_list, access_level, maximum_timeout, maintenance_note\n- delete_registered: runner_id*\n- delete_by_token: token*\n- verify: token*\n- reset_token: runner_id*\n- reset_instance_reg_token: (deprecated, no params)\n- reset_group_reg_token: group_id* (deprecated)\n- reset_project_reg_token: project_id* (deprecated)\n- list_managers: runner_id*\n\nRunner controllers (admin, experimental):\n- controller_list\n- controller_get / controller_delete: controller_id*\n- controller_create: description, state (enabled/disabled/dry_run)\n- controller_update: controller_id*, description, state\n\nController scopes:\n- controller_scope_list / controller_scope_add_instance / controller_scope_remove_instance: controller_id*\n- controller_scope_add_runner / controller_scope_remove_runner: controller_id*, runner_id*\n\nController tokens:\n- controller_token_list: controller_id*\n- controller_token_get / controller_token_rotate / controller_token_revoke: controller_id*, token_id*\n- controller_token_create: controller_id*, description\n\nSee also: gitlab_pipeline, gitlab_job",
     "inputSchema": {
       "$defs": {
         "controller_create": {
@@ -59896,6 +59992,10 @@
         "enable_project": {
           "additionalProperties": false,
           "properties": {
+            "confirm": {
+              "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+              "type": "boolean"
+            },
             "project_id": {
               "description": "Project ID or URL-encoded path",
               "type": [
@@ -59913,6 +60013,7 @@
             "runner_id"
           ],
           "type": "object",
+          "x_destructive": true,
           "x_parameter_guidance": {
             "project_id": {
               "common_confusions": [

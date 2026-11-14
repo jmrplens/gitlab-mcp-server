@@ -3061,6 +3061,10 @@
           "description": "Note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "discussion_id": {
           "description": "Discussion ID to reply to",
           "type": "string"
@@ -3476,6 +3480,10 @@
         "body": {
           "description": "Note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -16200,6 +16208,10 @@
           "description": "Discussion body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -18086,6 +18098,10 @@
         "body": {
           "description": "Discussion body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -21029,6 +21045,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "create_source": {
           "description": "Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item",
@@ -34974,6 +34994,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "create_source": {
           "description": "Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic",
           "type": "string"
@@ -37498,6 +37522,10 @@
           "description": "Note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -38306,6 +38334,10 @@
           "description": "Updated note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -38563,6 +38595,10 @@
         "color": {
           "description": "Epic color (hex format)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
@@ -86915,6 +86951,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Creation date override (ISO 8601, requires admin permissions)",
           "type": "string"
@@ -98538,6 +98578,10 @@
           "description": "Note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
@@ -100176,6 +100220,10 @@
         "body": {
           "description": "Updated note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "issue_iid": {
           "description": "Issue internal ID",
@@ -103540,6 +103588,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
@@ -137769,6 +137821,10 @@
             "array"
           ]
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Merge request description (Markdown supported)",
           "type": "string"
@@ -142168,6 +142224,10 @@
           "description": "SHA of the commit to anchor the discussion to (optional).",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
@@ -143573,6 +143633,10 @@
           "description": "New body text (Markdown). Leave empty to keep current body.",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
@@ -143916,6 +143980,10 @@
         "body": {
           "description": "Reply body",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -144620,6 +144688,10 @@
         "commit_id": {
           "description": "SHA of the commit to comment on",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "in_reply_to_discussion_id": {
           "description": "Discussion ID to reply to",
@@ -145571,6 +145643,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
@@ -153646,6 +153722,10 @@
           "description": "Comment body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
@@ -154879,6 +154959,10 @@
         "body": {
           "description": "Updated comment body",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
@@ -159911,6 +159995,10 @@
             "null",
             "array"
           ]
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
@@ -220342,10 +220430,14 @@
   },
   {
     "name": "gitlab_runner_enable_project",
-    "description": "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
+    "description": "Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -220362,7 +220454,8 @@
         "project_id",
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -220472,7 +220565,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -236708,6 +236801,10 @@
           "description": "Updated note body",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -237383,6 +237480,10 @@
         "body": {
           "description": "Updated note body",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -239248,7 +239349,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted",
+          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Pass true only after the user approves",
           "type": "boolean"
         },
         "crm_contact_ids": {

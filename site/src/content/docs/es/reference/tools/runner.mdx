@@ -368,14 +368,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `runner.enable_project`
 
-> Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: [`runner.disable_project`](#runnerdisable_project), [`runner.list_project`](#runnerlist_project).
+> Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: [`runner.disable_project`](#runnerdisable_project), [`runner.list_project`](#runnerlist_project).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `enable_project`
 - **Herramienta individual**: `gitlab_runner_enable_project`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner: Assign en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
 | ------------ | ---------------- | --------- | ------------------------------ |

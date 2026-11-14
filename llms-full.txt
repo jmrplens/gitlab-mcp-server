@@ -9885,7 +9885,7 @@ Action guidance:
 - delete_by_token: Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not. Prefer runner.delete_registered when you have the runner_id.
 - delete_registered: Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id. Prefer runner.delete_by_token when only the authentication token is known.
 - disable_project: Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).
-- enable_project: Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first.
+- enable_project: Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first. Destructive: from then on the machine behind that runner picks up the project's jobs, with the variables, the job token and the repository each one carries, and unassigning it recalls nothing a job delivered, so confirm with the user first.
 - get: Get the full configuration of one runner by its numeric runner_id. Use after a runner.list result or when the prompt names a concrete runner to inspect tags, lock state, access level, and timeout.
 - jobs: List the CI jobs processed by a runner, identified by runner_id. Use status, order_by, and sort filters when the prompt asks which jobs a specific runner has executed.
 - list: List runners owned by the authenticated user. Use type, status, tag_list, and scope filters to narrow results when the prompt asks for the caller's own runners. Prefer runner.list_all for an instance-wide admin view.
@@ -13840,6 +13840,7 @@ Add a reply note to an existing epic discussion thread. Returns: the created not
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `discussion_id` (string) (required): Discussion ID to reply to
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
@@ -13898,6 +13899,7 @@ Add a reply note to an existing issue discussion thread. Returns: the created no
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID to reply to
 - `issue_iid` (integer) (required): Issue internal ID
@@ -14841,6 +14843,7 @@ Create a new discussion thread on a group epic with an initial note. Returns: th
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 
@@ -14990,6 +14993,7 @@ Create a new discussion thread on an issue with an initial note. Returns: the cr
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `issue_iid` (integer) (required): Issue internal ID
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -15212,6 +15216,7 @@ Create a new work item under a namespace. Returns: the created work item with id
 - `assignee_ids` (array of integers): Global IDs of assignees
 - `color` (string): Color hex code (e.g. #fefefe)
 - `confidential` (boolean): Whether the work item is confidential
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `create_source` (string): Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item
 - `created_at` (string): Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only
 - `crm_contact_ids` (array of integers): CRM contact IDs to attach to the new work item
@@ -16508,6 +16513,7 @@ Create a new epic in a group, optionally under a parent epic and already linked 
 - `assignee_ids` (array of integers): Global IDs of assignees
 - `color` (string): Epic color (hex format, e.g. #FF0000)
 - `confidential` (boolean): Whether the epic is confidential
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `create_source` (string): Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic
 - `created_at` (string): Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z, or a date read as midnight UTC). Honored for group owners and administrators only. A value that does not parse is refused
 - `description` (string): Epic description (Markdown supported)
@@ -16669,6 +16675,7 @@ Add a comment (note) to an epic. Returns: the created note with id, author, body
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 
@@ -16719,6 +16726,7 @@ Update an epic note's body. Returns: the updated note with new body and updated_
 **Parameters:**
 
 - `body` (string) (required): Updated note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `note_id` (integer) (required): ID of the note to update
@@ -16734,6 +16742,7 @@ Update an existing epic. Supports close/reopen via state_event. Returns: the upd
 - `add_label_ids` (array of integers): Global IDs of labels to add
 - `assignee_ids` (array of integers): Global IDs of assignees (empty array to remove all)
 - `color` (string): Epic color (hex format)
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched
 - `due_date` (string): Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched
 - `epic_iid` (integer) (required): Epic IID within the group
@@ -20048,6 +20057,7 @@ Create a new issue in a project. Returns: the created issue with IID, state, lab
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (array of integers): User IDs to assign. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first
 - `confidential` (boolean): Mark issue as confidential
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Creation date override (ISO 8601, requires admin permissions)
 - `description` (string): Issue description (Markdown supported)
 - `discussion_to_resolve` (string): Discussion ID to mark as resolved by this issue
@@ -20476,6 +20486,7 @@ Add a comment (note) to an issue. Returns: the created note with id, author, bod
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.
 - `internal` (boolean): Mark note as internal (visible only to project members)
 - `issue_iid` (integer) (required): Issue internal ID
@@ -20586,6 +20597,7 @@ Update an issue note's body. Returns: the updated note with new body and updated
 **Parameters:**
 
 - `body` (string) (required): Updated note body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `issue_iid` (integer) (required): Issue internal ID
 - `note_id` (integer) (required): ID of the note to update
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -20735,6 +20747,7 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched
 - `assignee_ids` (array of integers): User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched
 - `confidential` (boolean): Update confidential flag
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched
 - `discussion_locked` (boolean): Lock discussions on this issue
 - `due_date` (string): New due date in YYYY-MM-DD format. Pass an empty string to remove the due date. Omit the field to leave it untouched
@@ -22754,6 +22767,7 @@ Open a new merge request from a source branch into a target branch. Returns: the
 - `approvals_before_merge` (integer): Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (array of integers): User IDs to assign
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Merge request description (Markdown supported)
 - `labels` (array of strings): Label names to apply
 - `merge_after` (string): Earliest instant the merge request can be merged, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC. GitLab reads it from 17.8
@@ -22878,6 +22892,7 @@ Create a new discussion thread on a merge request, optionally as an inline diff 
 
 - `body` (string) (required): Discussion body
 - `commit_id` (string): SHA of the commit to anchor the discussion to (optional).
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `position` (object): Diff position for inline comments. Omit for general MR discussions.
@@ -22933,6 +22948,7 @@ Update the body or resolved state of a note in a merge request discussion thread
 **Parameters:**
 
 - `body` (string): New body text (Markdown). Leave empty to keep current body.
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): ID of the discussion containing the note
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
@@ -22949,6 +22965,7 @@ Add a reply note to an existing merge request discussion thread. Returns: the cr
 **Parameters:**
 
 - `body` (string) (required): Reply body
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): ID of the discussion to reply to
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
@@ -22976,6 +22993,7 @@ Create a pending draft note on a merge request. Returns: the created draft note 
 **Parameters:**
 
 - `commit_id` (string): SHA of the commit to comment on
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `in_reply_to_discussion_id` (string): Discussion ID to reply to
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string) (required): Note body text (Markdown)
@@ -23057,6 +23075,7 @@ Update a pending draft note's body, position or both, keeping the one left out. 
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `note` (string): Updated note body text (Markdown). Omit it to keep the current body. Give note, position or both
 - `note_id` (integer) (required): Draft note ID
@@ -23401,6 +23420,7 @@ Add a general comment (note) to a merge request. Returns: the created note with 
 **Parameters:**
 
 - `body` (string) (required): Comment body (Markdown supported)
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.
 - `internal` (boolean): Mark note as internal (visible only to project members)
 - `merge_request_diff_head_sha` (string): Required for the deduplication of system notes: SHA referencing the most recent diff version of the merge request.
@@ -23497,6 +23517,7 @@ Update a merge request note's body. Returns: the updated note with new body and 
 **Parameters:**
 
 - `body` (string) (required): Updated comment body
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to update
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -23727,6 +23748,7 @@ Update an existing merge request's fields or state. Returns: the updated MR with
 - `allow_collaboration` (boolean): Allow commits from upstream members who can merge to target branch
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched
 - `assignee_ids` (array of integers): User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched
+- `confirm` (boolean): Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): New description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `discussion_locked` (boolean): Lock discussions on the merge request
 - `labels` (array of strings): Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched
@@ -27614,14 +27636,15 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_enable_project
 
-Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.
+Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `runner_id` (integer) (required): Runner ID to assign
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_runner_get
 
@@ -28954,6 +28977,7 @@ Update the body of a note in an epic discussion thread. Returns: the updated not
 **Parameters:**
 
 - `body` (string) (required): Updated note body
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `note_id` (integer) (required): Note ID to update
@@ -29034,6 +29058,7 @@ Update the body of a note in an issue discussion thread. Returns: the updated no
 **Parameters:**
 
 - `body` (string) (required): Updated note body
+- `confirm` (boolean): Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID
 - `issue_iid` (integer) (required): Issue internal ID
@@ -29202,7 +29227,7 @@ Update an existing work item by namespace path and IID. Returns: the updated wor
 - `add_label_ids` (array of integers): Global IDs of labels to add
 - `assignee_ids` (array of integers): Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched
 - `color` (string): Color hex code (e.g. #fefefe)
-- `confirm` (boolean): Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted
+- `confirm` (boolean): Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email or /publish, which GitLab runs when it saves the text. Pass true only after the user approves
 - `crm_contact_ids` (array of integers): CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched
 - `description` (string): New description. Pass an empty string to remove the description. Omit the field to leave it untouched
 - `due_date` (string): Due date (YYYY-MM-DD). Pass an empty string to remove the due date. Omit the field to leave it untouched
