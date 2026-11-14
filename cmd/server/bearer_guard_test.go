@@ -1265,6 +1265,93 @@ func TestBearerGuard_InsufficientScopeWithoutACache_IsForbiddenUncharged(t *test
 	assertSpendsNoBudget(t, g)
 }
 
+// TestBearerGuard_InsufficientScope_SendsASelfRegisteredClientToTheClientID
+// covers what the insufficient-scope refusal tells a client that registered
+// itself with GitLab (issue 1592). GitLab grants such a client its mcp scope
+// whatever it asks for, so the reauthorization the refusal recommends returns
+// another mcp token: the refusal also says so, and points at the client ID on
+// the resource documentation page, which it names as the RFC 6750 error_uri
+// when the guard holds one.
+//
+// Both answers are held, the fresh one and the one the rejected-token cache
+// gives the next request, since the second is the one a person retrying reads.
+// A guard holding no page names none: no error_uri, and the message points at
+// the metadata document only. The leading sentence stays the one the register
+// pins, so the refusal is still told apart from its siblings by its prefix.
+func TestBearerGuard_InsufficientScope_SendsASelfRegisteredClientToTheClientID(t *testing.T) {
+	t.Parallel()
+
+	const page = "https://ops.example.com/our-oauth-app"
+	tests := []struct {
+		name       string
+		page       string
+		wantURI    bool
+		wantWhere  string
+		unwantText string
+	}{
+		{
+			name: "with a documentation page", page: page, wantURI: true,
+			wantWhere: "named as error_uri in the WWW-Authenticate challenge and as resource_documentation in the protected-resource metadata.",
+		},
+		{
+			name: "without one", wantWhere: "named as resource_documentation in the protected-resource metadata.",
+			unwantText: "error_uri",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, oauth.ErrInsufficientScope
+			})
+			g.documentationURL = tt.page
+
+			// sequential: the second attempt is answered from the
+			// rejected-token cache the first one filled.
+			for _, attempt := range []string{"fresh", "answered from the rejected-token cache"} {
+				failure := g.check(guardRequest(t, "gloas-mcp-only"))
+				if failure == nil || failure.status != http.StatusForbidden {
+					t.Fatalf("%s: want the 403, got %+v", attempt, failure)
+				}
+				assertSelfRegisteredClientHint(t, attempt, failure, tt.wantWhere, tt.unwantText)
+				challenge := failure.header.Get(headerWWWAuthenticate)
+				if got := strings.Contains(challenge, `error_uri="`+page+`"`); got != tt.wantURI {
+					t.Errorf("%s: challenge %q names the page as error_uri: %v, want %v", attempt, challenge, got, tt.wantURI)
+				}
+				if !tt.wantURI && strings.Contains(challenge, "error_uri") {
+					t.Errorf("%s: challenge %q carries an error_uri with no page to point at", attempt, challenge)
+				}
+				if !strings.Contains(challenge, `error="insufficient_scope"`) || !strings.Contains(challenge, `scope="read_api"`) {
+					t.Errorf("%s: challenge %q lost the insufficient_scope code or the minimum scope", attempt, challenge)
+				}
+			}
+		})
+	}
+}
+
+// assertSelfRegisteredClientHint checks the words of the insufficient-scope
+// refusal: the pinned leading sentence, the reauthorization it recommends, the
+// sentence for a client that registered itself, and where the page is named.
+func assertSelfRegisteredClientHint(t *testing.T, attempt string, failure *gateFailure, where, unwanted string) {
+	t.Helper()
+	for _, want := range []string{
+		"GitLab rejected this token for lacking the scope this request needs. ",
+		"Reauthorize granting api for the full tool surface, or read_api for a read-only one. The token itself is valid. ",
+		"A client that registered itself with GitLab is granted only GitLab's mcp scope, whatever it asks for, so reauthorizing it changes nothing",
+		"configure it with the client ID of the OAuth application the resource documentation describes, " + where,
+	} {
+		if !strings.Contains(failure.message, want) {
+			t.Errorf("%s: message %q does not say %q", attempt, failure.message, want)
+		}
+	}
+	if !strings.HasPrefix(failure.message, "GitLab rejected this token for lacking the scope") {
+		t.Errorf("%s: message %q lost the leading sentence the register pins", attempt, failure.message)
+	}
+	if unwanted != "" && strings.Contains(failure.message, unwanted) {
+		t.Errorf("%s: message %q names %q with no page to point at", attempt, failure.message, unwanted)
+	}
+}
+
 // TestBearerGuard_RefusalsWithoutACache_AreAnsweredAndAskedAgain covers the
 // two other refusals the guard writes into its rejected-token cache, on a
 // guard that has none: a token issued to an OAuth application the deployment

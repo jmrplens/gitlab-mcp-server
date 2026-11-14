@@ -527,18 +527,38 @@ func (g *bearerGuard) permissionMissingFailure(sentence string) *gateFailure {
 // insufficientScopeFailure builds the 403 shared by a token GitLab refused its
 // own user for want of a scope and one answered from the rejected-token cache,
 // with the insufficient_scope challenge naming the minimum.
+//
+// It is the refusal a client that registered itself with GitLab meets, so it
+// also says what reauthorizing cannot fix for that client (issue 1592). GitLab
+// grants a dynamically registered client its own mcp scope whatever the client
+// asks for, a token with only that scope cannot read GET /api/v4/user, and
+// GitLab answers that request 403 insufficient_scope, the verdict that lands
+// here. Reauthorizing returns another mcp token, so the way out is the client
+// ID of a pre-registered application, which is what the resource
+// documentation describes. The page is named as error_uri for the reason
+// [bearerGuard.unacceptedRecipientFailure] names it: the remedy is on that
+// page rather than in the protocol. The leading sentence stays as it was,
+// since the register pins it (ADM-002).
 func (g *bearerGuard) insufficientScopeFailure() *gateFailure {
+	params := []string{
+		"error", "insufficient_scope",
+		"error_description", g.missingScopeDescription(),
+	}
+	where := "named as resource_documentation in the protected-resource metadata"
+	if g.documentationURL != "" {
+		params = append(params, "error_uri", g.documentationURL)
+		where = "named as error_uri in the WWW-Authenticate challenge and as resource_documentation in the protected-resource metadata"
+	}
 	return &gateFailure{
 		status: http.StatusForbidden,
 		code:   errCodeForbidden,
 		message: "GitLab rejected this token for lacking the scope this request needs. " +
 			"Reauthorize granting " + g.advertisedScope + " for the full tool surface, or " +
-			g.minimumScope + " for a read-only one. The token itself is valid.",
-		header: newHeader(headerWWWAuthenticate, oauthChallenge(
-			g.minimumScope, g.metadataURL,
-			"error", "insufficient_scope",
-			"error_description", g.missingScopeDescription(),
-		)),
+			g.minimumScope + " for a read-only one. The token itself is valid. " +
+			"A client that registered itself with GitLab is granted only GitLab's mcp scope, whatever it asks for, " +
+			"so reauthorizing it changes nothing: configure it with the client ID of the OAuth application " +
+			"the resource documentation describes, " + where + ".",
+		header: newHeader(headerWWWAuthenticate, oauthChallenge(g.minimumScope, g.metadataURL, params...)),
 	}
 }
 
@@ -656,12 +676,21 @@ func (g *bearerGuard) missingScopeDescription() string {
 // describeScopeShortfall explains why a genuine token is not enough, naming
 // what it does carry.
 //
-// What the token holds matters to the reader more than what it lacks. GitLab
-// issues an "mcp" scope for its own MCP server, and a client registering
-// dynamically against gitlab.com receives exactly that, from a consent screen
-// reading "Grants read-write access to MCP server". Somebody who authorized
-// that has every reason to believe they granted the right thing, and a message
-// naming only api and read_api leaves them to work out what went wrong.
+// What the token holds matters to the reader more than what it lacks, and this
+// is the one refusal that knows it: the verifier read the token's scopes and
+// GitLab answered GET /api/v4/user, so the token carries a scope that reads its
+// own user (read_user, say) and nothing that reads the API.
+//
+// A token carrying only GitLab's "mcp" scope, the scope a client registering
+// dynamically receives from a consent screen reading "Grants read-write access
+// to MCP server", never reaches this function: GitLab refuses it its own user
+// with 403 insufficient_scope, and that verdict is answered by
+// [bearerGuard.insufficientScopeFailure], which says what such a client should
+// do. The mcp aside below is for a token that carries mcp beside a scope that
+// reads the user, from an application with both checked: somebody who
+// authorized that has every reason to believe they granted the right thing,
+// and a message naming only api and read_api leaves them to work out what
+// went wrong.
 func describeScopeShortfall(granted []string, minimum, advertised string) string {
 	held := "no GitLab API scope"
 	if len(granted) == 1 {

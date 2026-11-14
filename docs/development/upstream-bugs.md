@@ -136,6 +136,7 @@ for the fork, branch, fix, test and MR workflow.
   - [No endpoint reports the instance plan to a non-administrator](#no-endpoint-reports-the-instance-plan-to-a-non-administrator)
   - [403 responses carry no WWW-Authenticate header](#403-responses-carry-no-www-authenticate-header)
   - [No resource_indicators_supported in authorization-server metadata](#no-resource_indicators_supported-in-authorization-server-metadata)
+  - [No Client ID Metadata Documents, and the planned ones grant only the mcp scope](#no-client-id-metadata-documents-and-the-planned-ones-grant-only-the-mcp-scope)
   - [The merge request approvals GET answers 24 keys on EE under a four-key annotation](#the-merge-request-approvals-get-answers-24-keys-on-ee-under-a-four-key-annotation)
   - [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity)
   - [The context commit list is annotated with Commit and presents CommitWithLink](#the-context-commit-list-is-annotated-with-commit-and-presents-commitwithlink)
@@ -430,6 +431,7 @@ readable without opening the tracker:
 | 158 | client-go | [Eighteen methods take an int64 where GitLab takes a name or a path](#eighteen-methods-take-an-int64-where-gitlab-takes-a-name-or-a-path) | No | No | No | No | Yes, `admin.custom_attr_*` and the six `storage_move.*` actions that name a project or a group read a name into its ID with one more request first |
 | 159 | client-go | [`PositionOptions` types the image coordinates as floats, and `NotePosition` carries no image fields](#positionoptions-types-the-image-coordinates-as-floats-and-noteposition-carries-no-image-fields) | No | No | No | No | Yes, the three merge request position writes take `x` and `y` as integers and convert them, and the commit discussion create refuses an image position before the request |
 | 160 | gitlab-org/gitlab | [A draft note update needs its body, and before 19.5 clears a position it is not sent](#a-draft-note-update-needs-its-body-and-before-195-clears-a-position-it-is-not-sent) | The position half yes, by another user, [gitlab-org/gitlab#631434](https://gitlab.com/gitlab-org/gitlab/-/work_items/631434), closed; the body half no | The position half yes, theirs, [gitlab-org/gitlab!258695](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/258695), merged; the body half no | The position half **yes, 19.5.0**; the body half no | No | Yes, `mr_review.draft_note_update` reads the draft first and sends back its body when only a position is given, and its position when only a body is given to an instance not known to run 19.5 or later |
+| 161 | gitlab-org/gitlab | [No Client ID Metadata Documents, and the planned ones grant only the `mcp` scope](#no-client-id-metadata-documents-and-the-planned-ones-grant-only-the-mcp-scope) | Yes, by GitLab, [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069), in development for milestone 19.7 | Yes, theirs, [gitlab-org/gitlab!268163](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/268163), merged, and [gitlab-org/gitlab!268912](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/268912), open | No: the `cimd_url` column of !268163 is in 19.6 and resolves nothing | No | Yes, a pre-registered OAuth application with `api` or `read_api`, whose client ID is configured in each client; the insufficient-scope refusal sends a client that registered itself there |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -11839,6 +11841,69 @@ it as a separate decision.
 **Effort**: large (a feature flag, migrations, patches to Doorkeeper 5.9
 request classes, `aud` in two endpoints and the matching change in the IAM
 service's copy of the discovery document), and a product decision first.
+
+### No Client ID Metadata Documents, and the planned ones grant only the mcp scope
+
+- **Reported**: yes, by GitLab:
+  [gitlab-org/gitlab#585069](https://gitlab.com/gitlab-org/gitlab/-/work_items/585069)
+  ("Implement Client ID Metadata Documents (CIMD) for MCP Authorization
+  (SEP-991)"), opened 2026-01-06, `workflow::in dev` and in milestone 19.7 when
+  read on 2026-11-08.
+- **In review**: yes, theirs.
+  [gitlab-org/gitlab!268163](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/268163)
+  ("Add cimd_url column to OAuth applications") merged on 2026-11-06 in 19.6,
+  and [gitlab-org/gitlab!268912](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/268912)
+  ("Resolve Client ID Metadata Document URLs in OAuth flows") is open, behind
+  the default-off `oauth_client_id_metadata_documents` flag. Fetching the
+  document, creating the application and advertising
+  `client_id_metadata_document_supported` are follow-ups it lists.
+- **Merged**: no. The column alone is in 19.6, and nothing reads it there.
+- **Blocking**: no.
+- **Workaround**: yes, the one this server already needs for Dynamic Client
+  Registration: a pre-registered OAuth application with `api` or `read_api`,
+  whose client ID is configured in each client. The insufficient-scope refusal
+  of the bearer guard (`bearerGuard.insufficientScopeFailure` in
+  `cmd/server/bearer_guard.go`) tells a client that registered itself so, and
+  names the resource documentation page, the one that carries the client ID, as
+  its `error_uri` (issue 1592).
+
+**Where**: GitLab's authorization server, `/oauth/authorize` and `/oauth/token`,
+and its discovery documents.
+
+**What**: the MCP authorization specification of 2025-11-25 prefers Client ID
+Metadata Documents (SEP-991) to Dynamic Client Registration, which it
+deprecates: the client's `client_id` is a URL serving a JSON document the
+client manages, which the authorization server fetches. GitLab implements
+neither the document nor the discovery member today. The design is moving the
+way its DCR already works: !268912 states that CIMD applications are public
+clients like DCR applications and "get the same rules: PKCE is required on both
+endpoints, and the token is limited to the MCP scope when another scope is
+requested". A token with only GitLab's `mcp` scope cannot read
+`GET /api/v4/user` (`lib/api/users.rb` admits `read_user` and the API scopes,
+and `mcp` is neither), so the bearer guard refuses it with `403` and
+`insufficient_scope`, as it refuses a DCR token.
+
+**Retirement condition**: CIMD retires this row only if a CIMD client can be
+granted `api` or `read_api`. GitLab shipping CIMD as !268912 describes it does
+not, since the client would be given the `mcp` scope as a DCR client is, and the
+pre-registered application would stay the only path. When it ships, the OAuth
+application page says that CIMD is supported and still yields only `mcp`.
+
+**`--oauth-client-uid`**: a deployment that pins its applications would refuse
+a CIMD client even if GitLab granted it a usable scope. GitLab keeps one OAuth
+application per CIMD URL and organization, created on the client's first
+connection, so its `uid` is not one the operator listed, and the verifier
+answers its token as an unaccepted recipient (`401`, `invalid_token`). Admitting
+CIMD clients there would need a pin on the CIMD URL, which `/oauth/token/info`
+does not report today.
+
+**Consequence for us**: none in code while the row stands. The
+[OAuth application page](https://docs.jmrp.io/gitlab-mcp-server/operations/oauth-app/#dynamic-client-registration-and-the-mcp-scope)
+links the work item in English and Spanish, and the guard's refusal names the
+client ID page.
+
+**Effort**: not ours. GitLab is building it; what is ours is re-reading the
+scope rule when the flag is enabled on GitLab.com.
 
 ### The merge request approvals GET answers 24 keys on EE under a four-key annotation
 
