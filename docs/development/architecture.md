@@ -472,9 +472,13 @@ and the description of an issue, a merge request, an epic or a work item,
 guarded by `toolutil.ConfirmQuickActions` in
 `internal/toolutil/quick_action_guard.go` for the lines that begin with a
 command whose effect asks). An action belongs to a class by its name or
-by a request it sends, which the test reads from
+by a request it sends, a REST route or the root field of a GraphQL
+mutation, which the test reads from
 `docs/development/action-requests.json`, so a rotation added as
-`foo.cycle_key` that sends `POST .../rotate` fails until it is classified.
+`foo.cycle_key` that sends `POST .../rotate` fails until it is classified,
+and so does a note added over `createNote` under any name. A guard's
+question fences every value the call wrote with
+`toolutil.EscapeConsentValue`, so the value cannot pass for the question.
 Every member is destructive, or guarded by its handler and declared so, or
 declared exempt with the reason, and a declaration that stopped describing the
 catalog fails like a missing one. An action classified for its effect under
