@@ -4537,11 +4537,12 @@ Rotate a group access token, generating a new token value. Optionally set a new 
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_group_access_token_rotate_self
 
@@ -4549,10 +4550,11 @@ Rotate the group access token used for the current request. Returns the new toke
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_group_add_push_rule
 
@@ -4793,7 +4795,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_edit_push_rule
 
-Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.
+Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.
 
 **Parameters:**
 
@@ -4803,6 +4805,7 @@ Edit a GitLab group's push rules. Returns: the updated push-rule configuration. 
 - `commit_committer_name_check` (boolean): Reject commits where committer name does not match user name
 - `commit_message_negative_regex` (string): Regex that commit messages must NOT match
 - `commit_message_regex` (string): Regex that commit messages must match
+- `confirm` (boolean): Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `deny_delete_tag` (boolean): Deny tag deletion
 - `file_name_regex` (string): Regex for disallowed file names
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
@@ -5908,18 +5911,19 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_service_account_pat_rotate
 
-Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).
+Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role). Requires confirmation.
 Returns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).
 See also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): Expiration date for the new token (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `service_account_id` (integer) (required): Service account user ID
 - `token_id` (integer) (required): Personal access token ID to rotate
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_service_account_update
 
@@ -6019,14 +6023,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer
 
-Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
+Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path of the group to move
 - `parent_id` (integer): ID of the new parent group. Omit to turn the subgroup into a top-level group
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer_locations
 
@@ -6045,14 +6050,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_transfer_project
 
-Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.
+Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `project_id` (string or integer) (required): Project ID or URL-encoded path to transfer
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_unarchive
 
@@ -10753,10 +10759,11 @@ Rotate a personal access token, generating a new token value. Optionally set a n
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_personal_access_token_rotate_self
 
@@ -10764,9 +10771,10 @@ Rotate the personal access token used for the current request. Returns the new t
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### pipeline (30 tools)
 
@@ -11261,11 +11269,12 @@ Rotate a project access token, generating a new token value. Optionally set a ne
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `token_id` (integer) (required): Access token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_project_access_token_rotate_self
 
@@ -11273,10 +11282,11 @@ Rotate the project access token used for the current request. Returns the new to
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiry date in YYYY-MM-DD format
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_project_add_push_rule
 
@@ -11706,7 +11716,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_edit_push_rule
 
-Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.
+Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.
 
 **Parameters:**
 
@@ -11716,6 +11726,7 @@ Edit a project's push rules. Returns: the updated push-rule configuration. See a
 - `commit_committer_name_check` (boolean): Reject commits where committer name does not match user name
 - `commit_message_negative_regex` (string): Regex that commit messages must NOT match
 - `commit_message_regex` (string): Regex that commit messages must match
+- `confirm` (boolean): Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `deny_delete_tag` (boolean): Deny tag deletion
 - `file_name_regex` (string): Regex for disallowed file names
 - `max_file_size` (integer): Maximum file size (MB). 0 means unlimited
@@ -12539,16 +12550,17 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_pat_rotate
 
-Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.
+Rotate a personal access token for a GitLab project service account. Requires confirmation. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): New expiration date in YYYY-MM-DD format
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `service_account_id` (integer) (required): Service account user ID
 - `token_id` (integer) (required): Personal access token ID to rotate
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_project_service_account_update
 
@@ -13522,13 +13534,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_renew_application_secret
 
-Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.
+Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `id` (integer) (required): Application ID whose secret should be renewed
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### repair (1 tool)
 
@@ -13998,14 +14011,15 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_controller_token_rotate
 
-Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.
+Rotate a runner controller token (admin-only). Requires confirmation. Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `controller_id` (integer) (required): Runner controller ID
 - `token_id` (integer) (required): Token ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_controller_update
 
@@ -14206,49 +14220,57 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_reset_group_reg_token
 
-Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.
+Reset a group's runner registration token by group_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_reset_instance_reg_token
 
-Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.
+Reset the instance-level runner registration token (deprecated, admin only). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_reset_project_reg_token
 
-Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.
+Reset a project's runner registration token by project_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_reset_token
 
-Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.
+Reset a runner's authentication token by runner_id. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `runner_id` (integer) (required): Runner ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_reset_token_by_token
 
-Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.
+Reset a runner's authentication token with its current authentication token. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `token` (string) (required): Current runner authentication token, which the reset invalidates
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_runner_router_discovery
 

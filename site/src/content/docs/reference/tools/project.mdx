@@ -2696,31 +2696,32 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `project.push_rule_edit`
 
-> Edit a project's push rules. Returns: the updated push-rule configuration. See also: [`project.push_rule_get`](#projectpush_rule_get), [`project.push_rule_add`](#projectpush_rule_add).
+> Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: [`project.push_rule_get`](#projectpush_rule_get), [`project.push_rule_add`](#projectpush_rule_add).
 
 - **Meta-tool**: `gitlab_project`, action `push_rule_edit`
 - **Individual tool**: `gitlab_project_edit_push_rule`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Push Rule: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
+- **Fine-grained token**: Push Rule: Update at project. Some calls also need: Push Rule: Read at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, idempotent
 
-| Parameter                       | Type             | Mandatory | Description                                                  |
-| ------------------------------- | ---------------- | --------- | ------------------------------------------------------------ |
-| `project_id`                    | `string/integer` | yes       | Project ID or URL-encoded path                               |
-| `author_email_regex`            | `string`         | no        | Regex to validate author email addresses                     |
-| `branch_name_regex`             | `string`         | no        | Regex to validate branch names                               |
-| `commit_committer_check`        | `boolean`        | no        | Reject commits where committer is not a project member       |
-| `commit_committer_name_check`   | `boolean`        | no        | Reject commits where committer name does not match user name |
-| `commit_message_negative_regex` | `string`         | no        | Regex that commit messages must NOT match                    |
-| `commit_message_regex`          | `string`         | no        | Regex that commit messages must match                        |
-| `deny_delete_tag`               | `boolean`        | no        | Deny tag deletion                                            |
-| `file_name_regex`               | `string`         | no        | Regex for disallowed file names                              |
-| `max_file_size`                 | `integer`        | no        | Maximum file size (MB). 0 means unlimited                    |
-| `member_check`                  | `boolean`        | no        | Only allow commits from project members                      |
-| `prevent_secrets`               | `boolean`        | no        | Reject files that are likely to contain secrets              |
-| `reject_non_dco_commits`        | `boolean`        | no        | Reject commits without DCO certification                     |
-| `reject_unsigned_commits`       | `boolean`        | no        | Reject commits that are not GPG signed                       |
+| Parameter                       | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`                    | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                                                                                                              |
+| `author_email_regex`            | `string`         | no        | Regex to validate author email addresses                                                                                                                                                                                                                                                                                                                                                                                    |
+| `branch_name_regex`             | `string`         | no        | Regex to validate branch names                                                                                                                                                                                                                                                                                                                                                                                              |
+| `commit_committer_check`        | `boolean`        | no        | Reject commits where committer is not a project member                                                                                                                                                                                                                                                                                                                                                                      |
+| `commit_committer_name_check`   | `boolean`        | no        | Reject commits where committer name does not match user name                                                                                                                                                                                                                                                                                                                                                                |
+| `commit_message_negative_regex` | `string`         | no        | Regex that commit messages must NOT match                                                                                                                                                                                                                                                                                                                                                                                   |
+| `commit_message_regex`          | `string`         | no        | Regex that commit messages must match                                                                                                                                                                                                                                                                                                                                                                                       |
+| `confirm`                       | `boolean`        | no        | Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `deny_delete_tag`               | `boolean`        | no        | Deny tag deletion                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `file_name_regex`               | `string`         | no        | Regex for disallowed file names                                                                                                                                                                                                                                                                                                                                                                                             |
+| `max_file_size`                 | `integer`        | no        | Maximum file size (MB). 0 means unlimited                                                                                                                                                                                                                                                                                                                                                                                   |
+| `member_check`                  | `boolean`        | no        | Only allow commits from project members                                                                                                                                                                                                                                                                                                                                                                                     |
+| `prevent_secrets`               | `boolean`        | no        | Reject files that are likely to contain secrets                                                                                                                                                                                                                                                                                                                                                                             |
+| `reject_non_dco_commits`        | `boolean`        | no        | Reject commits without DCO certification                                                                                                                                                                                                                                                                                                                                                                                    |
+| `reject_unsigned_commits`       | `boolean`        | no        | Reject commits that are not GPG signed                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### `project.push_rule_get`
 
@@ -2938,14 +2939,14 @@ Also needs at least one of: `user_id`; `username`.
 
 ### `project.service_account_pat_rotate`
 
-> Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: [`project.service_account_pat_list`](#projectservice_account_pat_list), [`project.service_account_pat_revoke`](#projectservice_account_pat_revoke).
+> Rotate a personal access token for a GitLab project service account. Requires confirmation. Returns: the rotated token record and token value when GitLab returns it. See also: [`project.service_account_pat_list`](#projectservice_account_pat_list), [`project.service_account_pat_revoke`](#projectservice_account_pat_revoke).
 
 - **Meta-tool**: `gitlab_project`, action `service_account_pat_rotate`
 - **Individual tool**: `gitlab_project_service_account_pat_rotate`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Service Account Personal Access Token: Rotate at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter            | Type             | Mandatory | Description                              |
 | -------------------- | ---------------- | --------- | ---------------------------------------- |

@@ -699,14 +699,14 @@ Sin parámetros.
 
 ### `access.token_group_rotate`
 
-> Use for GitLab group access tokens: this action rotates a group-scoped API token.
+> Use for GitLab group access tokens: this action rotates a group-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_group_rotate`
 - **Herramienta individual**: `gitlab_group_access_token_rotate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Resource Access Token: Rotate en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                          |
 | ------------ | ---------------- | --------- | ------------------------------------ |
@@ -716,14 +716,14 @@ Sin parámetros.
 
 ### `access.token_group_rotate_self`
 
-> Use for GitLab group access tokens: this action rotates the group-scoped token that authenticates this request itself, with no token_id parameter.
+> Use for GitLab group access tokens: this action rotates the group-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_group_rotate_self`
 - **Herramienta individual**: `gitlab_group_access_token_rotate_self`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; no un token OAuth, que GitLab rechaza en `POST /groups/:id/access_tokens/self/rotate`
 - **Token de grano fino**: Resource Access Token: Rotate en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                          |
 | ------------ | ---------------- | --------- | ------------------------------------ |
@@ -803,14 +803,14 @@ Sin parámetros.
 
 ### `access.token_personal_rotate`
 
-> Use for GitLab personal access tokens: this action rotates a personal-scoped API token.
+> Use for GitLab personal access tokens: this action rotates a personal-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_personal_rotate`
 - **Herramienta individual**: `gitlab_personal_access_token_rotate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Personal Access Token: Rotate en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo      | Requerido | Descripción                          |
 | ------------ | --------- | --------- | ------------------------------------ |
@@ -819,14 +819,14 @@ Sin parámetros.
 
 ### `access.token_personal_rotate_self`
 
-> Use for GitLab personal access tokens: this action rotates the personal-scoped token that authenticates this request itself, with no token_id parameter.
+> Use for GitLab personal access tokens: this action rotates the personal-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_personal_rotate_self`
 - **Herramienta individual**: `gitlab_personal_access_token_rotate_self`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; no un token OAuth, que GitLab rechaza en `POST /personal_access_tokens/self/rotate`
 - **Token de grano fino**: Personal Access Token: Rotate en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo     | Requerido | Descripción                          |
 | ------------ | -------- | --------- | ------------------------------------ |
@@ -906,14 +906,14 @@ Sin parámetros.
 
 ### `access.token_project_rotate`
 
-> Use for GitLab project access tokens: this action rotates a project-scoped API token.
+> Use for GitLab project access tokens: this action rotates a project-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_project_rotate`
 - **Herramienta individual**: `gitlab_project_access_token_rotate`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Resource Access Token: Rotate en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                          |
 | ------------ | ---------------- | --------- | ------------------------------------ |
@@ -923,14 +923,14 @@ Sin parámetros.
 
 ### `access.token_project_rotate_self`
 
-> Use for GitLab project access tokens: this action rotates the project-scoped token that authenticates this request itself, with no token_id parameter.
+> Use for GitLab project access tokens: this action rotates the project-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
 
 - **Meta-herramienta**: `gitlab_access`, acción `token_project_rotate_self`
 - **Herramienta individual**: `gitlab_project_access_token_rotate_self`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`; no un token OAuth, que GitLab rechaza en `POST /projects/:id/access_tokens/self/rotate`
 - **Token de grano fino**: Resource Access Token: Rotate en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#access))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                          |
 | ------------ | ---------------- | --------- | ------------------------------------ |

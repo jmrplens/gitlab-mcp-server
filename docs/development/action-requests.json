@@ -12493,6 +12493,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/push_rule",
+          "placeholders": {
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmPushRuleRelaxation"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupPushRules"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/push_rule",
           "placeholders": {
             "id": "group_id"
@@ -12509,7 +12524,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -26495,6 +26510,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/push_rule",
+          "placeholders": {
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.confirmPushRuleRelaxation"
+          ],
+          "sdk_methods": [
+            "Projects.GetProjectPushRules"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/push_rule",
           "placeholders": {
             "id": "project_id"
@@ -26511,7 +26541,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

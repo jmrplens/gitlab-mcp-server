@@ -289,14 +289,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `runner.controller_token_rotate`
 
-> Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: [`runner.controller_token_get`](#runnercontroller_token_get), [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
+> Rotate a runner controller token (admin-only). Requires confirmation. Returns: the token with its newly issued one-time secret value and unchanged id. See also: [`runner.controller_token_get`](#runnercontroller_token_get), [`runner.controller_token_list`](#runnercontroller_token_list), [`runner.controller_token_revoke`](#runnercontroller_token_revoke).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `controller_token_rotate`
 - **Herramienta individual**: `gitlab_runner_controller_token_rotate`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner Controller Token: Rotate en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción          |
 | --------------- | --------- | --------- | -------------------- |
@@ -568,14 +568,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `runner.reset_group_reg_token`
 
-> Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
+> Reset a group's runner registration token by group_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `reset_group_reg_token`
 - **Herramienta individual**: `gitlab_runner_reset_group_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner Registration Token: Reset en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                  |
 | ---------- | ---------------- | --------- | ---------------------------- |
@@ -583,27 +583,27 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `runner.reset_instance_reg_token`
 
-> Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: [`runner.reset_group_reg_token`](#runnerreset_group_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
+> Reset the instance-level runner registration token (deprecated, admin only). Requires confirmation. Returns: the new registration token and its expiry. See also: [`runner.reset_group_reg_token`](#runnerreset_group_reg_token), [`runner.reset_project_reg_token`](#runnerreset_project_reg_token).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `reset_instance_reg_token`
 - **Herramienta individual**: `gitlab_runner_reset_instance_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner Registration Token: Reset en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 Sin parámetros.
 
 ### `runner.reset_project_reg_token`
 
-> Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_group_reg_token`](#runnerreset_group_reg_token).
+> Reset a project's runner registration token by project_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: [`runner.reset_instance_reg_token`](#runnerreset_instance_reg_token), [`runner.reset_group_reg_token`](#runnerreset_group_reg_token).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `reset_project_reg_token`
 - **Herramienta individual**: `gitlab_runner_reset_project_reg_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner Registration Token: Reset en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
 | ------------ | ---------------- | --------- | ------------------------------ |
@@ -611,14 +611,14 @@ Sin parámetros.
 
 ### `runner.reset_token`
 
-> Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.get`](#runnerget).
+> Reset a runner's authentication token by runner_id. Requires confirmation. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.get`](#runnerget).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `reset_token`
 - **Herramienta individual**: `gitlab_runner_reset_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Runner: Update en proyecto o grupo o instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro   | Tipo      | Requerido | Descripción |
 | ----------- | --------- | --------- | ----------- |
@@ -626,14 +626,14 @@ Sin parámetros.
 
 ### `runner.reset_token_by_token`
 
-> Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.reset_token`](#runnerreset_token).
+> Reset a runner's authentication token with its current authentication token. Requires confirmation. Returns: the new token and its expiry. See also: [`runner.verify`](#runnerverify), [`runner.reset_token`](#runnerreset_token).
 
 - **Meta-herramienta**: `gitlab_runner`, acción `reset_token_by_token`
 - **Herramienta individual**: `gitlab_runner_reset_token_by_token`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`); GitLab autentica el token que esta acción envía como parámetro y no juzga el scope de este
 - **Token de grano fino**: una petición que GitLab no juzga por la concesión ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#runner))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro | Tipo     | Requerido | Descripción                                                      |
 | --------- | -------- | --------- | ---------------------------------------------------------------- |

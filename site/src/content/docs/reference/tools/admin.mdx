@@ -321,14 +321,14 @@ No parameters.
 
 ### `admin.application_renew_secret`
 
-> Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: [`admin.application_list`](#adminapplication_list), [`admin.application_create`](#adminapplication_create).
+> Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: [`admin.application_list`](#adminapplication_list), [`admin.application_create`](#adminapplication_create).
 
 - **Meta-tool**: `gitlab_admin`, action `application_renew_secret`
 - **Individual tool**: `gitlab_renew_application_secret`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`; this server lists the group only to a token that also carries `admin_mode`
 - **Fine-grained token**: OAuth Application: Renew Secret at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#admin))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter | Type      | Mandatory | Description                                   |
 | --------- | --------- | --------- | --------------------------------------------- |

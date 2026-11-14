@@ -2602,31 +2602,32 @@ Also needs exactly one of: `cn`; `filter`.
 
 ### `group.push_rule_edit`
 
-> Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: [`group.push_rule_get`](#grouppush_rule_get), [`group.push_rule_add`](#grouppush_rule_add).
+> Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: [`group.push_rule_get`](#grouppush_rule_get), [`group.push_rule_add`](#grouppush_rule_add).
 
 - **Meta-tool**: `gitlab_group`, action `push_rule_edit`
 - **Individual tool**: `gitlab_group_edit_push_rule`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
-- **Fine-grained token**: Push Rule: Update at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
+- **Fine-grained token**: Push Rule: Update at group. Some calls also need: Push Rule: Read at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
 - **Behavior**: writes, idempotent
 
-| Parameter                       | Type             | Mandatory | Description                                                  |
-| ------------------------------- | ---------------- | --------- | ------------------------------------------------------------ |
-| `group_id`                      | `string/integer` | yes       | Group ID or URL-encoded path                                 |
-| `author_email_regex`            | `string`         | no        | Regex to validate author email addresses                     |
-| `branch_name_regex`             | `string`         | no        | Regex to validate branch names                               |
-| `commit_committer_check`        | `boolean`        | no        | Reject commits where committer is not a group member         |
-| `commit_committer_name_check`   | `boolean`        | no        | Reject commits where committer name does not match user name |
-| `commit_message_negative_regex` | `string`         | no        | Regex that commit messages must NOT match                    |
-| `commit_message_regex`          | `string`         | no        | Regex that commit messages must match                        |
-| `deny_delete_tag`               | `boolean`        | no        | Deny tag deletion                                            |
-| `file_name_regex`               | `string`         | no        | Regex for disallowed file names                              |
-| `max_file_size`                 | `integer`        | no        | Maximum file size (MB). 0 means unlimited                    |
-| `member_check`                  | `boolean`        | no        | Only allow commits from group members                        |
-| `prevent_secrets`               | `boolean`        | no        | Reject files that are likely to contain secrets              |
-| `reject_non_dco_commits`        | `boolean`        | no        | Reject commits without DCO certification                     |
-| `reject_unsigned_commits`       | `boolean`        | no        | Reject commits that are not GPG signed                       |
+| Parameter                       | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `group_id`                      | `string/integer` | yes       | Group ID or URL-encoded path                                                                                                                                                                                                                                                                                                                                                                                                |
+| `author_email_regex`            | `string`         | no        | Regex to validate author email addresses                                                                                                                                                                                                                                                                                                                                                                                    |
+| `branch_name_regex`             | `string`         | no        | Regex to validate branch names                                                                                                                                                                                                                                                                                                                                                                                              |
+| `commit_committer_check`        | `boolean`        | no        | Reject commits where committer is not a group member                                                                                                                                                                                                                                                                                                                                                                        |
+| `commit_committer_name_check`   | `boolean`        | no        | Reject commits where committer name does not match user name                                                                                                                                                                                                                                                                                                                                                                |
+| `commit_message_negative_regex` | `string`         | no        | Regex that commit messages must NOT match                                                                                                                                                                                                                                                                                                                                                                                   |
+| `commit_message_regex`          | `string`         | no        | Regex that commit messages must match                                                                                                                                                                                                                                                                                                                                                                                       |
+| `confirm`                       | `boolean`        | no        | Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `deny_delete_tag`               | `boolean`        | no        | Deny tag deletion                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `file_name_regex`               | `string`         | no        | Regex for disallowed file names                                                                                                                                                                                                                                                                                                                                                                                             |
+| `max_file_size`                 | `integer`        | no        | Maximum file size (MB). 0 means unlimited                                                                                                                                                                                                                                                                                                                                                                                   |
+| `member_check`                  | `boolean`        | no        | Only allow commits from group members                                                                                                                                                                                                                                                                                                                                                                                       |
+| `prevent_secrets`               | `boolean`        | no        | Reject files that are likely to contain secrets                                                                                                                                                                                                                                                                                                                                                                             |
+| `reject_non_dco_commits`        | `boolean`        | no        | Reject commits without DCO certification                                                                                                                                                                                                                                                                                                                                                                                    |
+| `reject_unsigned_commits`       | `boolean`        | no        | Reject commits that are not GPG signed                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### `group.push_rule_get`
 
@@ -2943,7 +2944,7 @@ Also needs exactly one of: `cn`; `filter`.
 
 ### `group.service_account_pat_rotate`
 
-> Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).
+> Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role). Requires confirmation.
 > Returns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).
 > See also: [`group.service_account_pat_create`](#groupservice_account_pat_create), [`group.service_account_pat_revoke`](#groupservice_account_pat_revoke), [`group.service_account_pat_list`](#groupservice_account_pat_list).
 
@@ -2952,7 +2953,7 @@ Also needs exactly one of: `cn`; `filter`.
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Service Account Personal Access Token: Rotate at group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter            | Type      | Mandatory | Description                                    |
 | -------------------- | --------- | --------- | ---------------------------------------------- |
@@ -3152,14 +3153,14 @@ Also needs exactly one of: `cn`; `filter`.
 
 ### `group.transfer`
 
-> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
+> Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.subgroups`](#groupsubgroups).
 
 - **Meta-tool**: `gitlab_group`, action `transfer`
 - **Individual tool**: `gitlab_group_transfer`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Group: Transfer at group. Some calls also need: Group: Read at group; Todo: Read at user; Metadata: Read at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter   | Type             | Mandatory | Description                                                                  |
 | ----------- | ---------------- | --------- | ---------------------------------------------------------------------------- |
@@ -3188,14 +3189,14 @@ Also needs exactly one of: `cn`; `filter`.
 
 ### `group.transfer_project`
 
-> Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.projects`](#groupprojects).
+> Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: [`group.transfer_locations`](#grouptransfer_locations), [`group.get`](#groupget), [`group.projects`](#groupprojects).
 
 - **Meta-tool**: `gitlab_group`, action `transfer_project`
 - **Individual tool**: `gitlab_group_transfer_project`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Project: Transfer at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#group))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter    | Type             | Mandatory | Description                                |
 | ------------ | ---------------- | --------- | ------------------------------------------ |
