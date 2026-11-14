@@ -67,7 +67,7 @@
         ""
       ]
     },
-    "SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65": {
+    "SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4": {
       "metadata": "action.yml",
       "lines": [
         "name: Official SonarQube Scan",
@@ -91,7 +91,7 @@
         "    description: Version of the Sonar Scanner CLI to use",
         "    required: false",
         "    # to be kept in sync with sonar-scanner-version",
-        "    default: 8.3.1.16491",
+        "    default: 8.4.0.16527",
         "  scannerBinariesUrl:",
         "    description: URL to download the Sonar Scanner CLI binaries from",
         "    required: false",
