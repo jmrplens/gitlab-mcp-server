@@ -110,12 +110,13 @@ type SAMLUserOutput struct {
 	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
 	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
-	// The keys lib/api/entities/user_public.rb sends that client-go's User
-	// does not model, read from the captured response beside the SDK's own
-	// decode (ADR-0021) and described on toolutil.UserExtra. GitLab presents
-	// GET /groups/:id/saml_users with UserPublic, so the seven profile keys
-	// are on every response and the three counts on one whose caller may read
-	// the profile.
+	// The keys lib/api/entities/user_public.rb adds to the user it inherits.
+	// GitLab presents GET /groups/:id/saml_users with UserPublic, so the seven
+	// profile keys, which client-go's User models since v3.47.0, are on every
+	// response, and the three counts, which it does not model and which are
+	// read from the captured response beside the SDK's own decode (ADR-0021)
+	// and described on toolutil.UserExtra, on one whose caller may read the
+	// profile.
 	CommitEmail       string `json:"commit_email,omitempty"`
 	Discord           string `json:"discord,omitempty"`
 	GitHub            string `json:"github,omitempty"`
@@ -195,13 +196,13 @@ func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 		NamespaceID:                    u.NamespaceID,
 		SharedRunnersMinutesLimit:      u.SharedRunnersMinutesLimit,
 		ExtraSharedRunnersMinutesLimit: u.ExtraSharedRunnersMinutesLimit,
-		CommitEmail:                    extra.CommitEmail,
-		Discord:                        extra.Discord,
-		GitHub:                         extra.GitHub,
-		LocalTime:                      extra.LocalTime,
-		PreferredLanguage:              extra.PreferredLanguage,
-		Pronouns:                       extra.Pronouns,
-		WorkInformation:                extra.WorkInformation,
+		CommitEmail:                    u.CommitEmail,
+		Discord:                        u.Discord,
+		GitHub:                         u.Github,
+		LocalTime:                      u.LocalTime,
+		PreferredLanguage:              u.PreferredLanguage,
+		Pronouns:                       u.Pronouns,
+		WorkInformation:                u.WorkInformation,
 		Followers:                      extra.Followers,
 		Following:                      extra.Following,
 		IsFollowed:                     extra.IsFollowed,

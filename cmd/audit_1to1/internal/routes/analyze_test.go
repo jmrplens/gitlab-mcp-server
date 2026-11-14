@@ -1013,7 +1013,7 @@ func TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto(t *testing.T)
 // ai_workflows_token_auth. Their classes add the ai_workflows scope to the
 // api scope every API class allows and only authenticate the user, so a
 // user's token calls them and the fourteen no exception takes out are
-// tracked by the Duo domain's row on v3.46.1; the three whose handler checks
+// tracked by the Duo domain's row on v3.49.0; the three whose handler checks
 // the Duo flow's composite identity are taken out by an exception that cites
 // it.
 func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *testing.T) {
@@ -1084,7 +1084,7 @@ var protocolDownloads = map[string]string{
 
 // TestRun_Repository_AdjudicatesEveryRouteNoActionReaches fixes the triage of
 // the routes no action reaches on the pinned record (19.5.0) and client-go
-// v3.46.1, where the two placeholder reassignment routes have left the tracked
+// v3.49.0, where the two placeholder reassignment routes have left the tracked
 // count, inherited from the decision on the service v3.37.0 added for them,
 // and so have a group's Markdown upload and the removal of a project shared
 // with a group, which v3.42.0 models and group.group_upload and

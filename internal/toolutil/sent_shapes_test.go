@@ -855,18 +855,13 @@ const userPublicBody = `{
 }`
 
 // TestCapturedUser_ReadsWhatTheSDKDoesNotModel verifies the user reader decodes
-// the ten keys UserPublic sends that client-go's User declares on no field, and
-// reports a capture nothing ran under.
+// the three keys UserPublic sends that client-go's User declares on no field,
+// out of an answer that also carries the seven profile keys User models since
+// v3.47.0, and reports a capture nothing ran under.
 func TestCapturedUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	extra, err := CapturedUser(gitlabclient.CapturedBody([]byte(userPublicBody)))
 	if err != nil {
 		t.Fatalf("CapturedUser() unexpected error: %v", err)
-	}
-	if extra.CommitEmail != "c@example.com" || extra.Discord != "jdoe#1" || extra.GitHub != "jdoe" {
-		t.Errorf("extra = %+v, want the commit address and the two account names", extra)
-	}
-	if extra.LocalTime != "2:30 PM" || extra.PreferredLanguage != "en" || extra.Pronouns != "she/her" || extra.WorkInformation != "Org" {
-		t.Errorf("extra = %+v, want the four profile keys", extra)
 	}
 	if extra.Followers == nil || *extra.Followers != 12 || extra.Following == nil || *extra.Following != 34 {
 		t.Errorf("counts = %v/%v, want 12 and 34", extra.Followers, extra.Following)
@@ -911,8 +906,8 @@ func TestCapturedInstanceUser_ReadsTheFiveKeysBesideThem(t *testing.T) {
 		t.Fatalf("CapturedInstanceUser() unexpected error: %v", err)
 	}
 	// The embedded shape is read through the same decode.
-	if extra.CommitEmail != "c@example.com" || extra.Followers == nil || *extra.Followers != 12 {
-		t.Errorf("embedded UserExtra = %+v, want the commit address and the count", extra.UserExtra)
+	if extra.Followers == nil || *extra.Followers != 12 {
+		t.Errorf("embedded UserExtra = %+v, want the count", extra.UserExtra)
 	}
 	if extra.BioHTML != "<p>bio</p>" || extra.UnconfirmedEmail != "new@example.com" {
 		t.Errorf("extra = %+v, want the rendered bio and the pending address", extra)
@@ -943,8 +938,8 @@ func TestCapturedInstanceUser_ReadsTheFiveKeysBesideThem(t *testing.T) {
 // pair extras by position and refuse a count other than the SDK's, naming both
 // numbers.
 func TestCapturedUserListReaders_HoldTheCountToTheSDKs(t *testing.T) {
-	extras, err := CapturedUsers(gitlabclient.CapturedBody([]byte(`[{"id":1,"pronouns":"he/him"},{"id":2}]`)), 2)
-	if err != nil || len(extras) != 2 || extras[0].Pronouns != "he/him" || extras[1].Pronouns != "" {
+	extras, err := CapturedUsers(gitlabclient.CapturedBody([]byte(`[{"id":1,"followers":5},{"id":2}]`)), 2)
+	if err != nil || len(extras) != 2 || extras[0].Followers == nil || *extras[0].Followers != 5 || extras[1].Followers != nil {
 		t.Errorf("CapturedUsers() = %+v, %v; want two extras in order", extras, err)
 	}
 	if _, err = CapturedUsers(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2); err == nil ||

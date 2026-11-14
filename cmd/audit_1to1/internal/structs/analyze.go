@@ -728,61 +728,36 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 
 	// users: what GitLab's user entities send on a user that client-go's User
 	// declares on no field of its own, read from the captured response
-	// (ADR-0021, toolutil.CapturedUser and CapturedInstanceUser). The ten
-	// UserPublic keys are on all four types that publish a user, since every
-	// route filling them presents that entity. The five beside them are on
-	// internal/tools/users alone, which is the only package serving the routes
-	// that send them: bio_html on GET /users/:id, the licensed trio on the two
-	// administrator routes, and unconfirmed_email on POST /service_accounts.
-	// The three group-scoped types are held to those same five by the audit and
-	// answered in cmd/audit_1to1/internal/paths/sent_declarations.go instead.
-	// Recorded in docs/development/upstream-bugs.md.
-	"users.Output.commit_email":                       docUsers,
-	"users.Output.discord":                            docUsers,
-	"users.Output.github":                             docUsers,
-	"users.Output.local_time":                         docUsers,
-	"users.Output.preferred_language":                 docUsers,
-	"users.Output.pronouns":                           docUsers,
-	"users.Output.work_information":                   docUsers,
-	"users.Output.followers":                          docUsers,
-	"users.Output.following":                          docUsers,
-	"users.Output.is_followed":                        docUsers,
-	"users.Output.bio_html":                           docUsers,
-	"users.Output.unconfirmed_email":                  docServiceAccounts,
-	"users.Output.enterprise_group_id":                docUsersEnterpriseGroup,
-	"users.Output.enterprise_group_associated_at":     docUsersEnterpriseGroup,
-	"users.Output.provisioned_by_group_id":            docUsers,
-	"users.Output.provisioned_by_project_id":          docUsers,
-	"enterpriseusers.Output.commit_email":             docUsers,
-	"enterpriseusers.Output.discord":                  docUsers,
-	"enterpriseusers.Output.github":                   docUsers,
-	"enterpriseusers.Output.local_time":               docUsers,
-	"enterpriseusers.Output.preferred_language":       docUsers,
-	"enterpriseusers.Output.pronouns":                 docUsers,
-	"enterpriseusers.Output.work_information":         docUsers,
-	"enterpriseusers.Output.followers":                docUsers,
-	"enterpriseusers.Output.following":                docUsers,
-	"enterpriseusers.Output.is_followed":              docUsers,
-	"groups.ProvisionedUserOutput.commit_email":       docUsers,
-	"groups.ProvisionedUserOutput.discord":            docUsers,
-	"groups.ProvisionedUserOutput.github":             docUsers,
-	"groups.ProvisionedUserOutput.local_time":         docUsers,
-	"groups.ProvisionedUserOutput.preferred_language": docUsers,
-	"groups.ProvisionedUserOutput.pronouns":           docUsers,
-	"groups.ProvisionedUserOutput.work_information":   docUsers,
-	"groups.ProvisionedUserOutput.followers":          docUsers,
-	"groups.ProvisionedUserOutput.following":          docUsers,
-	"groups.ProvisionedUserOutput.is_followed":        docUsers,
-	"groupsaml.SAMLUserOutput.commit_email":           docUsers,
-	"groupsaml.SAMLUserOutput.discord":                docUsers,
-	"groupsaml.SAMLUserOutput.github":                 docUsers,
-	"groupsaml.SAMLUserOutput.local_time":             docUsers,
-	"groupsaml.SAMLUserOutput.preferred_language":     docUsers,
-	"groupsaml.SAMLUserOutput.pronouns":               docUsers,
-	"groupsaml.SAMLUserOutput.work_information":       docUsers,
-	"groupsaml.SAMLUserOutput.followers":              docUsers,
-	"groupsaml.SAMLUserOutput.following":              docUsers,
-	"groupsaml.SAMLUserOutput.is_followed":            docUsers,
+	// (ADR-0021, toolutil.CapturedUser and CapturedInstanceUser). The three
+	// UserPublic counts are on all four types that publish a user, since every
+	// route filling them presents that entity; the seven profile keys that
+	// entity exposes beside them are fields of User since client-go v3.47.0.
+	// The other six are on internal/tools/users alone, the only package
+	// serving the routes that send them: bio_html on GET /users/:id, the
+	// licensed trio on the two administrator routes, provisioned_by_project_id
+	// wherever an administrator is answered, and unconfirmed_email on
+	// POST /service_accounts. The three group-scoped types are held to those
+	// same six by the audit and answered in
+	// cmd/audit_1to1/internal/paths/sent_declarations.go instead. Recorded in
+	// docs/development/upstream-bugs.md.
+	"users.Output.followers":                      docUsers,
+	"users.Output.following":                      docUsers,
+	"users.Output.is_followed":                    docUsers,
+	"users.Output.bio_html":                       docUsers,
+	"users.Output.unconfirmed_email":              docServiceAccounts,
+	"users.Output.enterprise_group_id":            docUsersEnterpriseGroup,
+	"users.Output.enterprise_group_associated_at": docUsersEnterpriseGroup,
+	"users.Output.provisioned_by_group_id":        docUsers,
+	"users.Output.provisioned_by_project_id":      docUsers,
+	"enterpriseusers.Output.followers":            docUsers,
+	"enterpriseusers.Output.following":            docUsers,
+	"enterpriseusers.Output.is_followed":          docUsers,
+	"groups.ProvisionedUserOutput.followers":      docUsers,
+	"groups.ProvisionedUserOutput.following":      docUsers,
+	"groups.ProvisionedUserOutput.is_followed":    docUsers,
+	"groupsaml.SAMLUserOutput.followers":          docUsers,
+	"groupsaml.SAMLUserOutput.following":          docUsers,
+	"groupsaml.SAMLUserOutput.is_followed":        docUsers,
 
 	// issuelinks: what API::Entities::RelatedIssue sends on a related issue
 	// that client-go's IssueRelation declares on no field of its own, read
@@ -1281,7 +1256,7 @@ func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string, through []str
 
 // keysetListFields are the two parameters of gl.ListOptions that ask GitLab
 // for a keyset page, pagination and page_token, which client-go declares on
-// ListOptions and on no other struct (gitlab.go at v3.46.1).
+// ListOptions and on no other struct (gitlab.go at v3.49.0).
 //
 // R-INPUT leaves both to the keyset half of R-PAGE (issue 1165), which asks
 // at the action's grain, from the routes the live record says it sends,

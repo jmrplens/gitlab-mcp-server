@@ -204,13 +204,17 @@ func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 }
 
 // TestProvisionedUserToOutput_CopiesEveryCapturedKey verifies the converter
-// writes all ten keys of the captured extra onto the output. A key added to
-// toolutil.UserExtra and not copied here would be a schema field nothing fills.
+// writes the seven profile keys of the SDK's user and all three keys of the
+// captured extra onto the output. A key added to toolutil.UserExtra and not
+// copied here would be a schema field nothing fills, and so would a profile
+// key read from the extra after client-go v3.47.0 moved it onto User.
 func TestProvisionedUserToOutput_CopiesEveryCapturedKey(t *testing.T) {
 	followers, following, followed := int64(3), int64(4), true
-	out := ProvisionedUserToOutput(&gl.User{ID: 7, Username: "u"}, toolutil.UserExtra{
-		CommitEmail: "c@x.com", Discord: "d#1", GitHub: "gh", LocalTime: "9:00 AM",
+	out := ProvisionedUserToOutput(&gl.User{
+		ID: 7, Username: "u",
+		CommitEmail: "c@x.com", Discord: "d#1", Github: "gh", LocalTime: "9:00 AM",
 		PreferredLanguage: "es", Pronouns: "they/them", WorkInformation: "org",
+	}, toolutil.UserExtra{
 		Followers: &followers, Following: &following, IsFollowed: &followed,
 	})
 	if out.CommitEmail != "c@x.com" || out.Discord != "d#1" || out.GitHub != "gh" {
@@ -252,11 +256,13 @@ func TestProvisionedUserToOutput_NilTimes(t *testing.T) {
 }
 
 // TestListProvisionedUsers_PairsTheCapturedKeysByPosition verifies the ten keys
-// lib/api/entities/user_public.rb sends that client-go's User declares on no
-// field of its own reach the output, one captured extra per row in order, and
-// that a row GitLab sent no follow counts on leaves them absent rather than
-// zero. GitLab presents this endpoint `with: ::API::Entities::UserPublic`, so
-// these ten are the whole set it can carry.
+// lib/api/entities/user_public.rb adds to the user it inherits reach the
+// output: the seven profile keys through client-go's User, which models them
+// since v3.47.0, and the three counts it declares on no field of its own
+// through one captured extra per row in order, a row GitLab sent no follow
+// counts on leaving them absent rather than zero. GitLab presents this
+// endpoint `with: ::API::Entities::UserPublic`, so these ten are the whole
+// set it can carry.
 func TestListProvisionedUsers_PairsTheCapturedKeysByPosition(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/42/provisioned_users", func(w http.ResponseWriter, _ *http.Request) {

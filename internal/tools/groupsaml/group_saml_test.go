@@ -24,10 +24,11 @@ import (
 // TestToSAMLUserOutput_AllFields verifies the user conversion surfaces every
 // key UserPublic renders, formats all timestamp fields, maps the identities,
 // scim_identities, custom_attributes, and created_by sub-objects, skips nil
-// slice element pointers while mapping valid ones, and copies every key of the
-// captured extra onto the output. The extra is checked here rather than in its
-// own test because a key added to toolutil.UserExtra and not copied would be a
-// schema field nothing fills. The SDK user also carries the six keys client-go
+// slice element pointers while mapping valid ones, and copies the seven profile
+// keys client-go's User models since v3.47.0 and every key of the captured
+// extra onto the output. The extra is checked here rather than in its own test
+// because a key added to toolutil.UserExtra and not copied would be a schema
+// field nothing fills. The SDK user also carries the six keys client-go
 // models and UserPublic never renders (skype, provider, extern_uid,
 // can_create_organization and the two sign-in addresses), and the comparison
 // against the whole struct holds that none of them is published.
@@ -47,6 +48,8 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
 		Skype: "sk", Linkedin: "li", Twitter: "tw", Provider: "saml", ExternUID: "ext-uid-7",
 		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
+		CommitEmail: "commit@example.com", Discord: "jdoe#1", Github: "jdoe",
+		LocalTime: "2:30 PM", PreferredLanguage: "en", Pronouns: "she/her", WorkInformation: "Org",
 		TwoFactorEnabled: true, External: false, Locked: false, PrivateProfile: true,
 		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true, CanCreateOrganization: true,
 		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
@@ -88,10 +91,7 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 		IsFollowed: &followed,
 	}
 	extra := toolutil.UserExtra{
-		CommitEmail: "commit@example.com", Discord: "jdoe#1", GitHub: "jdoe",
-		LocalTime: "2:30 PM", PreferredLanguage: "en", Pronouns: "she/her",
-		WorkInformation: "Org", Followers: &followers, Following: &following,
-		IsFollowed: &followed,
+		Followers: &followers, Following: &following, IsFollowed: &followed,
 	}
 	if out := toSAMLUserOutput(u, extra); !reflect.DeepEqual(out, want) {
 		t.Errorf("toSAMLUserOutput mismatch:\n got %+v\nwant %+v", out, want)
@@ -229,11 +229,13 @@ func TestSAMLUsersList_Success(t *testing.T) {
 }
 
 // TestSAMLUsersList_PairsTheCapturedKeysByPosition verifies the ten keys
-// lib/api/entities/user_public.rb sends that client-go's User declares on no
-// field of its own reach the output, one captured extra per row in order, and
-// that a row GitLab sent no follow counts on leaves them absent rather than
-// zero. GitLab presents this endpoint `with: ::API::Entities::UserPublic`, so
-// these ten are the whole set it can carry.
+// lib/api/entities/user_public.rb adds to the user it inherits reach the
+// output: the seven profile keys through client-go's User, which models them
+// since v3.47.0, and the three counts it declares on no field of its own
+// through one captured extra per row in order, a row GitLab sent no follow
+// counts on leaving them absent rather than zero. GitLab presents this
+// endpoint `with: ::API::Entities::UserPublic`, so these ten are the whole
+// set it can carry.
 func TestSAMLUsersList_PairsTheCapturedKeysByPosition(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/saml_users" {

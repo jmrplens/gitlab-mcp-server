@@ -85,7 +85,7 @@ type UpdateOutput struct {
 // Update modifies application settings (admin-only).
 //
 // It accepts a map of setting keys and values and sends them through
-// client-go's UpdateSettingsOptions. At client-go v3.46.1 that struct models
+// client-go's UpdateSettingsOptions. At client-go v3.49.0 that struct models
 // 448 of the 677 top-level params GitLab 19.5.0's PUT route declares (447 at
 // v3.30.0 and v3.40.3, and v3.41.0 added search_rate_limit_allowlist_raw), and
 // encoding/json drops a member the target does not carry without a word, so a
@@ -213,7 +213,7 @@ func unsendableSettingKeys(patch map[string]any) (unmodeled, undeclared []string
 
 // undeclaredSettingKeys are the settings client-go's update options model and
 // GitLab's PUT /application/settings does not declare, as the pinned live
-// record of GitLab 19.5.0 and client-go v3.46.1 have them (upstream register
+// record of GitLab 19.5.0 and client-go v3.49.0 have them (upstream register
 // row 135). GitLab's handler reads the declared params alone, so a patch
 // naming one of these beside a setting it takes is applied without it and
 // answered 200.
