@@ -457,14 +457,26 @@ destructive action with no such word is listed in
 and no action that is not
 (`TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions`).
 `TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation` reads effects, in
-three classes (`effectClasses`): a project or a group moved to another
-namespace, a credential replaced or revoked, and push rules weakened. An
-action belongs to a class by its name or by a request it sends, which the
-test reads from `docs/development/action-requests.json`, so a rotation added
-as `foo.cycle_key` that sends `POST .../rotate` fails until it is classified.
+nine classes (`effectClasses`): a project or a group moved to another
+namespace, a credential replaced or revoked, push rules weakened, an object
+consumed with no way back (an issue moved, a label promoted, a project or a
+group archived, a schedule's ownership taken, every to-do marked done), a
+merge request merged, a delivery to a host the call names (a webhook, an
+integration, an external status check, a push mirror, an export uploaded),
+access to an account or a repository handed over (a deploy key, an SSH key,
+a certificate authority, an email address), a stored value overwritten (a
+CI/CD variable) and existing content overwritten on request (an import with
+overwrite, a commit with force). An action belongs to a class by its name or
+by a request it sends, which the test reads from
+`docs/development/action-requests.json`, so a rotation added as
+`foo.cycle_key` that sends `POST .../rotate` fails until it is classified.
 Every member is destructive, or guarded by its handler and declared so, or
 declared exempt with the reason, and a declaration that stopped describing the
-catalog fails like a missing one.
+catalog fails like a missing one. An action classified for its effect under
+a name that reads as an ordinary write says so where a model reads it, which
+`TestDestructiveRoutes_ClassifiedByEffect_SayThatTheyAsk` holds: a
+`Destructive:` sentence in its `Usage` and `Requires confirmation.` in the
+individual tool's description.
 
 A guarded action is one whose arguments decide whether the call has the
 effect, so the bit would put a question in front of every ordinary call. It
@@ -476,8 +488,29 @@ any read, then an elicitation, then a refusal that quotes the question in
 English. `internal/tools/projects/pull_mirror_guard.go`,
 `internal/tools/workitems/clear_guard.go` and
 `internal/toolutil/push_rule_guard.go`, which the project's and the group's
-push rule edits share, are the three. A guard that reads GitLab to decide asks
-when the read fails, rather than assume the call is harmless.
+push rule edits share, each carry that chain themselves. The guards written
+after them share it: `toolutil.ConfirmGuardedCall` in
+`internal/toolutil/guarded_call.go` takes the operation label, the key of the
+question, the question as an `i18n.Message` and what to say after a no, and
+`toolutil.GuardedCallAnswered` is the check a guard makes before it reads.
+The same file holds the guards the arguments alone decide (a variable's value
+replaced, an import that overwrites, a commit with force, an export uploaded
+to a URL), `internal/toolutil/hook_guard.go` the rule the three kinds of
+webhook share, with one read in each domain package's `hook_guard.go`, and
+`internal/tools/users/modify_guard.go` and
+`confirmStatusCheckDelivery` in `internal/tools/externalstatuschecks` the two
+that belong to one action. A guard that reads GitLab to decide asks when the
+read fails, rather than assume the call is harmless, and a question never
+carries a secret: a variable's value, a token and a password are left out,
+and a URL is shown as its origin alone (`toolutil.RedactURLToOrigin`).
+
+The class test holds each guarded action to three things, on a fake GitLab
+that counts what it is sent (`effectGuard`): a call that has the effect is
+refused with the way to confirm before any write, after a read when the guard
+declares the state it reads and without one when the arguments decide, and a
+call of the same action that does not have the effect is written unasked. The
+last is what keeps a guard from becoming the destructive bit under another
+name.
 
 ### Dual response
 
