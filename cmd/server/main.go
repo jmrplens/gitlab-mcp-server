@@ -443,8 +443,7 @@ func main() {
 	// exact outcome this screen exists to prevent, reached by a path that used
 	// to bypass it.
 	config.LoadEnvFiles()
-	if !useHTTP && isInteractiveTerminal() &&
-		(os.Getenv("GITLAB_TOKEN") == "" || os.Getenv("GITLAB_URL") == "") {
+	if needsFirstRunGuidance(useHTTP, isInteractiveTerminal, os.Getenv) {
 		firstRunGuidance(os.Stderr, os.Stdin, version)
 		return
 	}

@@ -6,11 +6,15 @@ package main
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestFirstRunGuidance_BlocksUntilALineArrives is the assertion the screen
@@ -169,6 +173,136 @@ func TestIsInteractiveTerminal_ACygwinTerminal_IsAPerson(t *testing.T) {
 	}
 	if want := []uintptr{os.Stdin.Fd()}; len(asked) != 1 || asked[0] != want[0] {
 		t.Errorf("the Cygwin test was asked about %v, want stdin's descriptor %v once", asked, want)
+	}
+}
+
+// TestIsInteractiveTerminal_ATerminal_IsAPerson covers the first half of the
+// guard, the character-device test, on every platform (issue 1212). Only a
+// pseudo-terminal makes it true, and a test can open one only on Linux, so on
+// Windows and macOS it was never true. The answer is supplied through the seam,
+// and the Cygwin test is not asked once the first one has said yes.
+func TestIsInteractiveTerminal_ATerminal_IsAPerson(t *testing.T) {
+	heldOpenStdin(t)
+	originalTerminal, originalCygwin := isTerminal, isCygwinTerminal
+	t.Cleanup(func() { isTerminal, isCygwinTerminal = originalTerminal, originalCygwin })
+
+	var asked []uintptr
+	isTerminal = func(fd uintptr) bool {
+		asked = append(asked, fd)
+		return true
+	}
+	isCygwinTerminal = func(uintptr) bool {
+		t.Error("the Cygwin test was asked after the terminal test had answered yes")
+		return false
+	}
+
+	if !isInteractiveTerminal() {
+		t.Error("a terminal was not reported as interactive; a double-click would start a server nobody can use")
+	}
+	if want := []uintptr{os.Stdin.Fd()}; len(asked) != 1 || asked[0] != want[0] {
+		t.Errorf("the terminal test was asked about %v, want stdin's descriptor %v once", asked, want)
+	}
+}
+
+// TestMain_ATerminalWithoutCredentials_ShowsTheScreenOnEveryPlatform covers
+// main's guard in front of the guidance screen where a test cannot hand the
+// process a terminal (issue 1212). The Linux tests give it a pseudo-terminal;
+// on Windows and macOS only pipes reached main, so the guard was false on every
+// run there. Here the terminal test answers through its seam, and stdin is a
+// pipe that already holds the Enter the screen waits for. A retired variable
+// that refuses startup is set as well, so a run that wrongly skips the screen
+// ends with exit 1 instead of starting a server.
+func TestMain_ATerminalWithoutCredentials_ShowsTheScreenOnEveryPlatform(t *testing.T) {
+	withFreshFlagSet(t)
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+	t.Setenv(config.EnvFileVar, "")
+	t.Setenv("GITLAB_READ_ONLY", "true")
+	withBuildIdentity(t, "9.8.7-any-platform", "c0mm1t-any-platform")
+
+	originalTerminal := isTerminal
+	isTerminal = func(uintptr) bool { return true }
+	t.Cleanup(func() { isTerminal = originalTerminal })
+
+	enter := pipedStdin(t)
+	if _, err := enter.WriteString("\n"); err != nil {
+		t.Fatalf("pressing Enter: %v", err)
+	}
+
+	originalArgs, originalLogger, originalBase := os.Args, slog.Default(), baseLogHandler
+	os.Args = []string{"gitlab-mcp-server"}
+	t.Cleanup(func() {
+		os.Args = originalArgs
+		slog.SetDefault(originalLogger)
+		baseLogHandler = originalBase
+		toolutil.SetLocalFilesystemAccess(true)
+	})
+	var exits []int
+	originalExit := exitProcess
+	exitProcess = func(code int) { exits = append(exits, code) }
+	t.Cleanup(func() { exitProcess = originalExit })
+	stderr := captureStderr(t)
+
+	main()
+
+	said := stderr()
+	if len(exits) != 0 {
+		t.Errorf("exit codes = %v, want none: the screen returns rather than failing; stderr = %q", exits, said)
+	}
+	for _, want := range []string{"gitlab-mcp-server 9.8.7-any-platform\n", "Press Enter to close."} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(said, want) {
+				t.Errorf("stderr = %q, want it to carry %q", said, want)
+			}
+		})
+	}
+}
+
+// TestNeedsFirstRunGuidance_DecidesFromTheTransportTheTerminalAndBothValues
+// covers the guard main runs before anything else, on every platform (issue
+// 1212). It used to be inline in main, where only the Linux test that gives
+// the process a pseudo-terminal reached its two environment checks, so on
+// Windows and macOS neither was ever evaluated. The screen is for a person
+// who started stdio mode by hand without the two values it needs: either one
+// missing is enough, HTTP mode never shows it, and a pipe never does.
+func TestNeedsFirstRunGuidance_DecidesFromTheTransportTheTerminalAndBothValues(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		useHTTP     bool
+		interactive bool
+		env         map[string]string
+		want        bool
+		// asksTerminal is whether the terminal is asked at all: HTTP mode
+		// decides without it.
+		asksTerminal bool
+	}{
+		{name: "a person, nothing configured", interactive: true, asksTerminal: true, want: true},
+		{name: "a person, only the token", interactive: true, asksTerminal: true, env: map[string]string{"GITLAB_TOKEN": "glpat-x"}, want: true},
+		{name: "a person, only the URL", interactive: true, asksTerminal: true, env: map[string]string{"GITLAB_URL": "https://gitlab.example.com"}, want: true},
+		{
+			name: "a person, both configured", interactive: true, asksTerminal: true,
+			env: map[string]string{"GITLAB_TOKEN": "glpat-x", "GITLAB_URL": "https://gitlab.example.com"},
+		},
+		{name: "a client on a pipe, nothing configured", asksTerminal: true},
+		{name: "HTTP mode, nothing configured", useHTTP: true, interactive: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			asked := false
+			interactive := func() bool {
+				asked = true
+				return tt.interactive
+			}
+			getenv := func(name string) string { return tt.env[name] }
+			if got := needsFirstRunGuidance(tt.useHTTP, interactive, getenv); got != tt.want {
+				t.Errorf("needsFirstRunGuidance() = %v, want %v", got, tt.want)
+			}
+			if asked != tt.asksTerminal {
+				t.Errorf("the terminal was asked: %v, want %v", asked, tt.asksTerminal)
+			}
+		})
 	}
 }
 

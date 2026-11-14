@@ -43,7 +43,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -471,17 +470,33 @@ func livePeers() ([]probePeer, error) {
 	if err != nil {
 		return nil, err
 	}
+	return peersOf(found, processCommandLine), nil
+}
+
+// processCommandLine is a listed process's pid and the command line it was
+// started with.
+func processCommandLine(p *process.Process) (pid int32, args []string, err error) {
+	args, err = p.CmdlineSlice()
+	return p.Pid, args, err
+}
+
+// peersOf keeps the listed processes whose command line could be read, with
+// it. It takes the reading as a function so a test can hand it processes that
+// vanished or hide their command line on any platform: a real one the test
+// can make on Windows or macOS always answers, so the branch that skips the
+// others was never evaluated there (issue 1212).
+func peersOf[P any](found []P, commandLine func(P) (int32, []string, error)) []probePeer {
 	peers := make([]probePeer, 0, len(found))
 	for _, p := range found {
-		args, argsErr := p.CmdlineSlice()
-		if argsErr != nil || len(args) == 0 {
+		pid, args, err := commandLine(p)
+		if err != nil || len(args) == 0 {
 			// A process that vanished between the listing and the read, or
 			// one whose command line this user may not see.
 			continue
 		}
-		peers = append(peers, probePeer{pid: p.Pid, args: args})
+		peers = append(peers, probePeer{pid: pid, args: args})
 	}
-	return peers, nil
+	return peers
 }
 
 // peerWorkingDir is a running process's working directory, read through the
@@ -536,14 +551,4 @@ func peerPath(pid int32, flagName, path string, workingDir func(int32) (string, 
 		return "", fmt.Errorf("%s %q is relative to the working directory of pid %d, which could not be read (%w); give --probe the target", flagName, path, pid, err)
 	}
 	return filepath.Join(dir, path), nil
-}
-
-// stdinIsNullUnder reports whether the process's file descriptor 0, as
-// published under procRoot (/proc on Linux), is the null device.
-func stdinIsNullUnder(procRoot string, pid int32) (bool, error) {
-	link, err := os.Readlink(filepath.Join(procRoot, strconv.Itoa(int(pid)), "fd", "0"))
-	if err != nil {
-		return false, err
-	}
-	return link == os.DevNull, nil
 }

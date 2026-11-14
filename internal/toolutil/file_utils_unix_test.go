@@ -4,16 +4,52 @@
 //go:build unix
 
 // file_utils_unix_test.go contains Unix-only unit tests for file_utils.go that
-// need OS-level resource-limit control unavailable on Windows.
+// need OS-level resource-limit control unavailable on Windows, and for the
+// Unix half in file_utils_unix.go.
 package toolutil
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 )
+
+// TestRefuseWritableArchive_GroupOrWorldWritable_IsRefused verifies an import
+// archive its group or the world may write is refused, and one only its owner
+// writes is accepted under its canonical path. The modes are given rather than
+// made on disk, so neither the umask nor the user the tests run as decides
+// which bits a case carries.
+func TestRefuseWritableArchive_GroupOrWorldWritable_IsRefused(t *testing.T) {
+	t.Parallel()
+	const canonical = "/srv/imports/project-export.tar.gz"
+	for _, tt := range []struct {
+		mode    os.FileMode
+		refused bool
+	}{
+		{mode: 0o666, refused: true},
+		{mode: 0o620, refused: true},
+		{mode: 0o602, refused: true},
+		{mode: 0o644},
+		{mode: 0o600},
+	} {
+		t.Run(fmt.Sprintf("%#o", tt.mode), func(t *testing.T) {
+			t.Parallel()
+			got, err := refuseWritableArchive(canonical, modeOnlyInfo{mode: tt.mode})
+			if tt.refused {
+				if got != "" || err == nil || !strings.Contains(err.Error(), "group/world-writable") {
+					t.Errorf("refuseWritableArchive(%#o) = %q, %v; want the group/world-writable refusal", tt.mode, got, err)
+				}
+				return
+			}
+			if got != canonical || err != nil {
+				t.Errorf("refuseWritableArchive(%#o) = %q, %v; want %q accepted", tt.mode, got, err, canonical)
+			}
+		})
+	}
+}
 
 // TestOpenAndValidateFile_FileDescriptorLimitReached_ReturnsOpenError
 // verifies that OpenAndValidateFile surfaces the os.Open error when the

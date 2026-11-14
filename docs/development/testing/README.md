@@ -179,16 +179,39 @@ The Windows and non-Linux halves of `cmd/server` (four source files:
 `descriptor_limit_other.go`) and the non-Unix halves of `internal/toolutil`
 (two) build only on a platform other than Linux, so the Windows and macOS legs
 of CI's cross-platform job run the script on both packages through bash with
-`GOBCO_GATE=beyond:linux/amd64`. A condition left one-way in a file only that
-leg builds fails the leg; one in a file Linux builds too is printed and passed,
-since the `GOBCO_GATE=all` run a touched package passes on Linux before it is
-committed measures it, and a test the platform skips would otherwise fail a leg
-over a condition already decided both ways. That run is local: no CI step runs
-gobco on Linux, so the shared files are held by it and not by CI. Two of those
-files carry conditions, the two operands of the Windows connection-refused
-check and the Windows listen's failure; the other four carry none. macOS
-builds only `probe_other.go` beyond Linux, which carries none, so its leg holds
-nothing today and is there for the next file only it builds.
+`GOBCO_GATE=all`, which fails the leg on any condition of either package left
+one-way there, in a platform half or in a file Linux builds too. Until issue
+1212 the legs ran with `GOBCO_GATE=beyond:linux/amd64` and only printed a
+condition in a shared file, because tests that skipped on Windows or macOS
+left a few such conditions one-way there while Linux measured them both ways:
+the first-run guard and the terminal test behind it, the peers a probe keeps
+and the working directory it reads of one, the two phases of `--shutdown` and
+the name it reads of a listed process, the pipe and the null-device comparison
+of `--transport auto`, the unix socket bind, the stale socket's lstat and the
+procfs read in `cmd/server`, and an archive's permission bits, the working
+directory and the absolute path a relative path is resolved with, the
+filesystem root as the working directory, an open that fails, an
+unresolvable temporary directory, an ancestor of a download path that fails
+to resolve and a short read in `internal/toolutil`. Each is now driven both
+ways by a test every platform runs (the first-run guard through
+`needsFirstRunGuidance` and the `isTerminal` seam, the peers through
+`peersOf`, `--shutdown` through `stopPeers` and a fake peer, the working
+directories through this process and a pid no process can have, `os.Getwd`
+and `filepath.Abs` through the `workingDir` and `absPath` seams, the stale
+socket's lstat and the ancestor through a name holding a NUL byte, which Go
+refuses with `EINVAL` on every system, the rest through the inputs and the
+seams the tests already had), or lives in the file of the platform that uses
+it (`stdinIsNullUnder`, in `probe_linux.go`, and `refuseWritableArchive`,
+whose only check is in `file_utils_unix.go`). A socket test that expects a
+refusal builds its path with `socketDir`, which keeps the directory short
+whatever `TMPDIR` is, and matches the refusal it was written for by identity:
+under `t.TempDir` on macOS the address length check refused first, and the
+probe, chmod and stat refusals of the bind passed there without being
+reached. Two of the platform-only files carry
+conditions, the two operands of the Windows connection-refused check and the
+Windows listen's failure; the other four carry none. The `GOBCO_GATE=all` run
+a touched package passes on Linux before it is committed is still local: no
+CI step runs gobco on Linux.
 
 **A whole package on Windows or macOS is measured on demand.** Neither the
 local gate nor the CI legs answer what a package scores on Windows or macOS as

@@ -18200,10 +18200,10 @@ branch nor a merged results pipeline.
   platform halves the copy leaves out (four source files of `cmd/server`, two
   of `internal/toolutil`) are measured on the platforms that build them: the
   Windows and macOS legs of CI's cross-platform job run the same script on
-  both packages and fail on a condition left one-way in a file Linux does not
-  build. It retires when a gobco release carries the fix and the pin,
-  `github.com/rillig/gobco@v1.3.4` in `scripts/coverage-conditions.sh`
-  (its `GOBCO` constant), moves to it. That change, once the release exists,
+  both packages and fail on any condition left one-way there, in a file Linux
+  does not build or in one it does (issue 1212). It retires when a gobco
+  release carries the fix and the pin, `github.com/rillig/gobco@v1.3.4` in
+  `scripts/coverage-conditions.sh` (its `GOBCO` constant), moves to it. That change, once the release exists,
   does four things. It moves the pin and measures
   `test/e2e/internal/harness` directly with `TAGS=e2e`, which under the pull
   request's build gave 863 of 1162 conditions; once measurable, the harness is held to the gate like any

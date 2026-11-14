@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1016,6 +1017,38 @@ func TestAllowedLocalDirs_ImplicitRootsThatCannotBeResolved_AreSkipped(t *testin
 	}
 }
 
+// TestAllowedLocalDirs_ATempDirThatDoesNotExist_IsSkippedSilently covers the
+// temporary directory dropping out of the allow-list, on every platform
+// (issue 1212): the test above needs a working directory Linux alone lets it
+// remove, so on Windows and macOS an implicit root that cannot be resolved was
+// never reached. The variable os.TempDir reads is TMPDIR on Unix and TMP, then
+// TEMP, on Windows, so all three name a directory that is not there. An
+// implicit root the operator never named is dropped without a warning; only a
+// configured one is warned about.
+func TestAllowedLocalDirs_ATempDirThatDoesNotExist_IsSkippedSilently(t *testing.T) {
+	missingTemp := filepath.Join(t.TempDir(), "no-such-temp")
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, missingTemp)
+	}
+	t.Setenv(UploadDirAllowlistEnv, "")
+	if got := os.TempDir(); got != missingTemp { //nolint:usetesting // What os.TempDir reads is the premise under test, not a directory to write into.
+		t.Fatalf("os.TempDir() = %q, want %q from the variables this test set", got, missingTemp)
+	}
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+
+	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
+		if strings.Contains(dir, "no-such-temp") {
+			t.Errorf("allowedLocalDirs() kept %q, a temporary directory that does not exist", dir)
+		}
+	}
+	if strings.Contains(logged.String(), "skipping invalid allowlist directory") {
+		t.Errorf("an implicit root the operator never named was warned about:\n%s", logged.String())
+	}
+}
+
 // TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError is the same deleted
 // working directory put to the upload and download resolvers, which make a
 // relative path absolute the same way and must refuse the same way rather
@@ -1036,6 +1069,54 @@ func TestCanonicalLocalPaths_DeletedCwd_ReturnsResolveError(t *testing.T) {
 	}
 	if _, err := canonicalDownloadOutputPath("artifact.bin"); err == nil || !strings.HasPrefix(err.Error(), "resolve output path: ") {
 		t.Errorf("canonicalDownloadOutputPath(relative, deleted cwd) error = %v, want the 'resolve output path' refusal", err)
+	}
+}
+
+// errNoWorkingDir stands in for the answer os.Getwd gives, and filepath.Abs
+// with it, once the working directory has been removed under the process.
+var errNoWorkingDir = errors.New("getwd: no such file or directory")
+
+// TestLocalPaths_AWorkingDirectoryThatCannotBeRead_AreRefused verifies each
+// resolver refuses a relative path, under its own prefix, when it cannot be
+// made absolute, on every platform (issue 1212). The two deleted-cwd tests
+// above remove the working directory, which only Linux turns into an error,
+// so on Windows and macOS these branches were never taken. Here filepath.Abs
+// answers through its seam with the error Linux gives.
+func TestLocalPaths_AWorkingDirectoryThatCannotBeRead_AreRefused(t *testing.T) {
+	replaceForTest(t, &absPath, func(string) (string, error) { return "", errNoWorkingDir })
+	for _, tt := range []struct {
+		name    string
+		resolve func() error
+		prefix  string
+	}{
+		{name: "a file to upload", resolve: func() error { _, err := CanonicalLocalFilePath("upload.txt"); return err }, prefix: "resolve file path: "},
+		{name: "a download destination", resolve: func() error { _, err := canonicalDownloadOutputPath("artifact.bin"); return err }, prefix: "resolve output path: "},
+		{name: "an import archive", resolve: func() error { _, err := CanonicalImportArchivePath("export.tar.gz"); return err }, prefix: "resolve archive path: "},
+		{name: "an allow-list directory", resolve: func() error { _, err := canonicalDirPath("relative-allowlist-dir"); return err }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.resolve(); !errors.Is(err, errNoWorkingDir) || !strings.HasPrefix(err.Error(), tt.prefix) {
+				t.Errorf("error = %v, want the working directory's failure under %q", err, tt.prefix)
+			}
+		})
+	}
+}
+
+// TestAllowedLocalDirs_AWorkingDirectoryThatCannotBeRead_IsLeftOut verifies
+// the working directory drops out of the allow-list when it cannot be read,
+// leaving the temporary directory, on every platform (issue 1212): only Linux
+// fails os.Getwd for a removed working directory, so elsewhere the working
+// directory was always read. os.Getwd answers through its seam here.
+func TestAllowedLocalDirs_AWorkingDirectoryThatCannotBeRead_IsLeftOut(t *testing.T) {
+	t.Setenv(UploadDirAllowlistEnv, "")
+	temp, err := canonicalDirPath(os.TempDir()) //nolint:usetesting // The implicit root itself is what the allow-list is compared with.
+	if err != nil {
+		t.Fatalf("canonicalDirPath(os.TempDir()) error = %v", err)
+	}
+	replaceForTest(t, &workingDir, func() (string, error) { return "", errNoWorkingDir })
+
+	if got := allowedLocalDirs(uploadDirAllowlistSetting); len(got) != 1 || got[0] != temp {
+		t.Errorf("allowedLocalDirs() = %v, want only the temporary directory %q", got, temp)
 	}
 }
 
@@ -1498,16 +1579,23 @@ func TestCanonicalLocalDirPath_Containment(t *testing.T) {
 // TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory verifies that a
 // server started with the filesystem root as its working directory — which is
 // what Claude Desktop does — does not thereby allow-list the whole disk.
+//
+// The root is the one of the volume the test runs on, "/" on Unix and the
+// drive's root on Windows, where the root is spelled per volume; it used to
+// skip there, so the root was never a working directory a Windows test had
+// (issue 1212).
 func TestAllowedLocalDirs_SkipsFilesystemRootWorkingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the filesystem root is spelled per volume on Windows")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
 	}
+	root := filepath.VolumeName(wd) + string(filepath.Separator)
 	testutil.IsolateTempDir(t, t.TempDir())
-	t.Chdir("/")
+	t.Chdir(root)
 
 	for _, dir := range allowedLocalDirs(uploadDirAllowlistSetting) {
-		if dir == "/" {
-			t.Fatal(`allowedLocalDirs() included "/", want the filesystem root skipped`)
+		if dir == root {
+			t.Fatalf("allowedLocalDirs() included %q, want the filesystem root skipped", root)
 		}
 	}
 }
@@ -1750,29 +1838,15 @@ func TestLocalFilesystemAllowedFor_FollowsTheTransport(t *testing.T) {
 	}
 }
 
-// TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt verifies a
-// group- and world-writable archive is unsafe on an operating system whose
-// permission bits describe access, and not on Windows, where Go synthesizes
-// them from the read-only attribute.
-func TestArchiveHasUnsafePermissions_OnlyWherePermissionBitsMeanIt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "archive.tar.gz")
-	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
-		t.Fatalf("write archive: %v", err)
-	}
-	if err := os.Chmod(path, 0o666); err != nil { //nolint:gosec // The group- and world-writable mode is the fixture under judgement.
-		t.Fatalf("chmod archive: %v", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat archive: %v", err)
-	}
-	if !archiveHasUnsafePermissions("linux", info) {
-		t.Error("archiveHasUnsafePermissions(linux, 0666) = false, want true")
-	}
-	if archiveHasUnsafePermissions("windows", info) {
-		t.Error("archiveHasUnsafePermissions(windows, 0666) = true, want false")
-	}
+// modeOnlyInfo is a FileInfo carrying only a mode, for a judgement that reads
+// nothing else.
+type modeOnlyInfo struct {
+	os.FileInfo
+	mode os.FileMode
 }
+
+// Mode returns the mode the case gives.
+func (i modeOnlyInfo) Mode() os.FileMode { return i.mode }
 
 // replaceForTest sets a package seam for the rest of the test and restores it
 // afterwards. A test calling it must not run in parallel, since the seam is
@@ -1819,6 +1893,15 @@ func TestOpenAndValidateFile_TheFileChangesAfterItWasResolved(t *testing.T) {
 			t.Errorf("OpenAndValidateFile() error = %v, want the stat failure", openErr)
 		}
 	})
+	// The open's own refusal, on every platform (issue 1212): the tests that
+	// make a real open fail need permission bits Windows does not enforce or a
+	// descriptor limit only Unix sets.
+	t.Run("removed before the open", func(t *testing.T) {
+		replaceForTest(t, &openResolved, func(string) (*os.File, error) { return nil, errRaced })
+		if f, info, openErr := OpenAndValidateFile(path, 0); f != nil || info != nil || !errors.Is(openErr, errRaced) || !strings.HasPrefix(openErr.Error(), "open ") {
+			t.Errorf("OpenAndValidateFile() = %v, %v, %v; want no file and the open failure", f, info, openErr)
+		}
+	})
 	for _, tt := range []struct {
 		name   string
 		opened func(string) (*os.File, error)
@@ -1858,6 +1941,30 @@ func TestCanonicalizeThroughExistingAncestor_NoAncestorExists(t *testing.T) {
 	_, err := canonicalizeThroughExistingAncestor(path)
 	if err == nil || !strings.Contains(err.Error(), "no existing ancestor directory for "+path) {
 		t.Errorf("canonicalizeThroughExistingAncestor() error = %v, want the walk to stop at the root", err)
+	}
+}
+
+// TestCanonicalizeThroughExistingAncestor_ANameNoSystemCallTakes_StopsTheWalk
+// verifies the walk climbs only past an ancestor that is absent, and stops at
+// one whose resolution failed for any other reason, on every platform.
+//
+// Climbing past such an ancestor would rejoin a tail nothing ever examined
+// below whatever ancestor did resolve. The realistic case, a path through a
+// regular file, stops the walk on POSIX only: Windows answers it as not found,
+// so the walk climbs there and joinBelowDirectory refuses it instead, and
+// nothing on Windows evaluated the stop (issue 1212). A NUL byte is refused by
+// Go's syscall package on every system before the kernel is asked, with
+// EINVAL, so the resolution fails the same way on all three. The error is
+// matched by identity, since a walk that took it for an absent ancestor would
+// climb to the temporary directory and succeed.
+func TestCanonicalizeThroughExistingAncestor_ANameNoSystemCallTakes_StopsTheWalk(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nul\x00name", "out.bin")
+	got, err := canonicalizeThroughExistingAncestor(path)
+	if !errors.Is(err, syscall.EINVAL) {
+		t.Fatalf("canonicalizeThroughExistingAncestor() = %q, %v; want the resolution's own EINVAL", got, err)
+	}
+	if got != "" {
+		t.Errorf("canonicalizeThroughExistingAncestor() = %q beside the error, want the empty string", got)
 	}
 }
 

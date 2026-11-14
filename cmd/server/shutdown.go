@@ -37,32 +37,59 @@ func runShutdown() int {
 	}
 
 	fmt.Fprintf(os.Stderr, "shutdown: found %d running instance(s)\n", len(peers))
+	return stopPeers(shutdownPeersOf(peers), os.Stderr, shutdownGracePeriod)
+}
 
+// shutdownPeer is what stopping a peer asks of it, which *process.Process
+// answers for a real one.
+//
+// It is an interface so the two phases can be driven on every platform
+// (issue 1212). Windows ends a real peer with TerminateProcess, which no
+// process can decline, so a peer that outlives the grace period, the poll
+// that finds it alive and the kill that follows could not be reached there
+// with a real process, and their conditions were never evaluated on it.
+type shutdownPeer interface {
+	Terminate() error
+	IsRunning() (bool, error)
+	Kill() error
+}
+
+// shutdownPeersOf is the listed processes as the peers stopPeers stops.
+func shutdownPeersOf(procs []*process.Process) []shutdownPeer {
+	peers := make([]shutdownPeer, 0, len(procs))
+	for _, p := range procs {
+		peers = append(peers, p)
+	}
+	return peers
+}
+
+// stopPeers asks every peer to terminate, polls until all have gone or grace
+// has lapsed, then force-kills what is left, and reports on stderr. It
+// returns the exit code, which is success either way: a peer that had to be
+// killed is gone all the same.
+func stopPeers(peers []shutdownPeer, stderr io.Writer, grace time.Duration) int {
 	// Phase 1: graceful termination (SIGTERM on Unix, TerminateProcess on Windows).
 	for _, p := range peers {
 		_ = p.Terminate()
 	}
 
 	// Phase 2: poll until all exit or deadline.
-	deadline := time.After(shutdownGracePeriod)
+	deadline := time.After(grace)
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-deadline:
-			goto forceKill
+			forceKillPeers(peers, stderr)
+			return 0
 		case <-ticker.C:
 			if countAlive(peers) == 0 {
-				fmt.Fprintf(os.Stderr, "shutdown: all instances terminated\n")
+				fmt.Fprintf(stderr, "shutdown: all instances terminated\n")
 				return 0
 			}
 		}
 	}
-
-forceKill:
-	forceKillPeers(peers, os.Stderr)
-	return 0
 }
 
 // forceKillPeers kills every peer still running once the grace period has
@@ -71,7 +98,7 @@ forceKill:
 // Zero kills is a possible outcome rather than a contradiction: a peer can
 // exit between the last poll and the deadline, and then there is nothing left
 // to kill and nothing to complain about.
-func forceKillPeers(peers []*process.Process, stderr io.Writer) {
+func forceKillPeers(peers []shutdownPeer, stderr io.Writer) {
 	var killed int
 	for _, p := range peers {
 		running, _ := p.IsRunning()
@@ -135,7 +162,7 @@ func canonicalBinaryName(name string) string {
 }
 
 // countAlive returns how many processes in the list are still running.
-func countAlive(procs []*process.Process) int {
+func countAlive(procs []shutdownPeer) int {
 	var n int
 	for _, p := range procs {
 		running, _ := p.IsRunning()

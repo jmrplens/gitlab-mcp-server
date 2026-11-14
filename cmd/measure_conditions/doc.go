@@ -8,15 +8,17 @@
 //
 // The condition gate is gobco, run through scripts/coverage-conditions.sh,
 // which is the recipe behind `make coverage-conditions`. It runs on Linux
-// before a commit, and on the Windows and macOS legs of CI only over the files
-// those systems alone build. A figure for a whole package on Windows or macOS
-// had no way to be taken except by hand on a machine of that system, so the
-// figures quoted for internal/toolutil in pull request 1206 came from a
-// Windows virtual machine and nobody could repeat them on macOS at all. Nor
-// was there a figure for the tree as a whole, which is what the OpenSSF Best
-// Practices criterion test_branch_coverage80 asks for. The workflow runs the
-// same script on each runner a dispatch names, and this command is everything
-// around that script:
+// before a commit, and on the Windows and macOS legs of CI over every
+// condition of cmd/server and internal/toolutil, the two packages whose files
+// split by platform (until issue 1212 the legs held only the files those
+// systems alone build). Before this command, a figure for a whole package on
+// Windows or macOS had no way to be taken except by hand on a machine of that
+// system, so the figures quoted for internal/toolutil in pull request 1206
+// came from a Windows virtual machine and nobody could repeat them on macOS at
+// all. Nor was there a figure for the tree as a whole, which is what the
+// OpenSSF Best Practices criterion test_branch_coverage80 asks for. The
+// workflow runs the same script on each runner a dispatch names, and this
+// command is everything around that script:
 //
 //	measure_conditions plan -packages <list> -systems <list> -gate <gate> [-mode <mode>] [-tree]
 //	measure_conditions measure -packages <list> -system <runner> -records <dir>

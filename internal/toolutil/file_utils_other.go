@@ -12,6 +12,15 @@ package toolutil
 
 import "os"
 
+// refuseWritableArchive returns canonicalPath. The permission bits Go reports
+// on Windows are synthesized from the read-only attribute, so a file anybody
+// may write and a file only its owner may write both read 0666: they say
+// nothing about who else can write the archive, and there is nothing to refuse
+// on them.
+func refuseWritableArchive(canonicalPath string, _ os.FileInfo) (string, error) {
+	return canonicalPath, nil
+}
+
 // openLeafNoFollow opens path for reading.
 //
 // Windows has no O_NOFOLLOW, so the leaf swap [openLeafNoFollow] refuses on

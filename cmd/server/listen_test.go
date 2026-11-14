@@ -19,26 +19,59 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
+// socketDirMaxLen is the longest directory socketDir hands out. A socket path
+// is the directory, a slash and a name, and bindUnixSocket first builds the
+// socket thirteen bytes below the directory, so 64 leaves room for both within
+// the 103 bytes of path a macOS address holds, the shortest of the systems this
+// runs on, with a name of up to 38 bytes.
+const socketDirMaxLen = 64
+
 // socketDir returns a temporary directory short enough to hold a unix socket
 // path, and removes it when the test ends.
 //
 // Not [testing.T.TempDir], which embeds the test's own name: a unix address
 // holds at most 103 bytes of path, and on macOS the temporary directory alone
-// is already 52 of them, so a name like
-// TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault puts the socket 30
-// bytes over the limit before the file name is appended. The server is right to
+// is close to 50 of them, so a name like
+// TestListenHTTP_UnixSocketWithoutAMode_TakesTheDefault puts the directory
+// past the limit before the file name is appended. The server is right to
 // refuse such a path and says so precisely; the tests were the ones asking for
-// something no client could reach.
+// something no client could reach. A test that expects a refusal is the worse
+// case, because the length refusal comes first and such a test passed without
+// reaching the refusal it was written for, which is how three conditions of
+// socket_mode_unix.go went unmeasured on macOS (issue 1212).
+//
+// The length is held here rather than left to the system, so it does not
+// depend on what TMPDIR happens to be: a temporary directory too long for a
+// socket falls back to /tmp where there is one, and a directory that is still
+// too long fails the test, naming the cause, instead of handing every test
+// below it the length refusal.
 func socketDir(t *testing.T) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "s") //nolint:usetesting // t.TempDir embeds the test name, which puts a unix socket path over its 103-byte limit
+	dir := newSocketDir(t, "")
+	if len(dir) > socketDirMaxLen && runtime.GOOS != "windows" {
+		dir = newSocketDir(t, "/tmp")
+	}
+	if len(dir) > socketDirMaxLen {
+		t.Fatalf("the temporary directory %q is %d bytes, more than the %d a unix socket path leaves room for; point TMPDIR at a shorter one",
+			dir, len(dir), socketDirMaxLen)
+	}
+	return dir
+}
+
+// newSocketDir creates a temporary directory in base, the system's own when
+// base is empty, and removes it when the test ends.
+func newSocketDir(t *testing.T, base string) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp(base, "s") //nolint:usetesting // t.TempDir embeds the test name, which puts a unix socket path over its 103-byte limit
 	if err != nil {
 		t.Fatalf("temp dir: %v", err)
 	}
@@ -137,6 +170,29 @@ func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 
 	if err := clearStaleSocket(t.Context(), filepath.Join(t.TempDir(), "absent.sock")); err != nil {
 		t.Errorf("clearStaleSocket() error = %v, want nil", err)
+	}
+}
+
+// TestClearStaleSocket_APathNoSystemCallTakes_IsRefused verifies that an lstat
+// failing for any reason but absence refuses the path, on every platform.
+//
+// listen_unix_test.go builds the realistic case, a socket under a regular file,
+// but only POSIX answers that with ENOTDIR: Windows answers it as not found, so
+// nothing on Windows evaluated the refusal (issue 1212). A path holding a NUL
+// byte is refused by Go's syscall package on every system before the kernel is
+// asked, with EINVAL, so the lstat fails the same way on all three. The refusal
+// is matched by that error, so a path that came back absent, and was cleared,
+// cannot pass here.
+func TestClearStaleSocket_APathNoSystemCallTakes_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "nul\x00.sock")
+	err := clearStaleSocket(t.Context(), path)
+	if !errors.Is(err, syscall.EINVAL) {
+		t.Fatalf("clearStaleSocket() = %v, want the lstat's own EINVAL", err)
+	}
+	if !strings.HasPrefix(err.Error(), "--http-addr ") {
+		t.Errorf("error = %q, want it to name the flag the operator typed", err)
 	}
 }
 
@@ -456,14 +512,12 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 		name    string
 		path    string
 		wantErr string
-		// posixOnly marks a case whose premise the platform has to supply, and
-		// which therefore cannot be built everywhere. The refusal each one
-		// pins is still a property of this server; what is POSIX-specific is
-		// the way the case arranges for it. Kept in the table rather than
-		// split into a constrained file, because these four are one question,
-		// "which paths must listenUnix refuse", and reading them apart is
-		// worse than reading them with a skip.
-		posixOnly string
+		// wantErrWindows is what Windows refuses the same path with, where
+		// it differs. Each of these paths is refused there too, by the bind
+		// rather than by a check of ours, and running them there is what
+		// evaluates the bind's failure on Windows at all (issue 1212): they
+		// used to be skipped, and no other test makes that bind fail.
+		wantErrWindows string
 	}{
 		{
 			name:    "its directory does not exist",
@@ -476,10 +530,10 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			wantErr: "--http-addr",
 			// Windows reports a path under a regular file as ERROR_PATH_NOT_FOUND,
 			// which Errno.Is maps to fs.ErrNotExist, so lstat answers "nothing
-			// there" rather than the ENOTDIR this leans on. Answering an absent
-			// path with "nothing to clear" is correct; it just cannot be told
-			// apart from the case being built here.
-			posixOnly: "only POSIX distinguishes ENOTDIR from ENOENT, so a path under a file reads as simply absent here",
+			// there" rather than the ENOTDIR this leans on, and the directory,
+			// a file, stats. Answering an absent path with "nothing to clear" is
+			// correct; the bind under a file is what refuses it there.
+			wantErrWindows: "listening on unix socket",
 		},
 		{
 			name:    "the path is already something else",
@@ -500,15 +554,16 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 			// with "bind: invalid argument" rather than our sentence. Nothing
 			// is bound that should not be; the operator just gets the worse
 			// message.
-			posixOnly: "the length guard exists to cover a staging-and-link bind that only the POSIX path does",
+			wantErrWindows: "listening on unix socket",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if tt.posixOnly != "" && runtime.GOOS == "windows" {
-				t.Skip(tt.posixOnly)
+			want := tt.wantErr
+			if tt.wantErrWindows != "" && runtime.GOOS == "windows" {
+				want = tt.wantErrWindows
 			}
 
 			listener, err := listenHTTP(t.Context(), tt.path, config.DefaultSocketMode)
@@ -517,10 +572,30 @@ func TestListenUnix_RefusesAPathItCannotOwn(t *testing.T) {
 				_ = listener.Close()
 				t.Fatalf("listenHTTP(%q) bound a path it must refuse", tt.path)
 			}
-			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("error = %q, want it to say %q", err, tt.wantErr)
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to say %q", err, want)
 			}
 		})
+	}
+}
+
+// TestListenHTTP_UnixSocketWithoutAMode_BindsOnEveryPlatform covers the zero
+// mode, which a Config assembled without the flag carries, on every platform
+// (issue 1212): the default is taken and the socket is bound. What the mode
+// then is on disk is a POSIX property, held in listen_unix_test.go; Windows
+// has no bits to compare, and was the platform on which the zero case was
+// never evaluated.
+func TestListenHTTP_UnixSocketWithoutAMode_BindsOnEveryPlatform(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(socketDir(t), "zero.sock")
+	listener, err := listenHTTP(t.Context(), path, 0)
+	if err != nil {
+		t.Fatalf("listenHTTP with a zero mode: %v", err)
+	}
+	defer listener.Close()
+	if info, statErr := os.Stat(path); statErr != nil || info.Mode()&fs.ModeSocket == 0 {
+		t.Fatalf("the bound path is not a socket: %v", statErr)
 	}
 }
 

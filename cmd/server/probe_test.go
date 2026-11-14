@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -196,53 +197,34 @@ func TestParseProbeTarget_AcceptsTheDocumentedForms(t *testing.T) {
 	}
 }
 
-// TestStdinIsNullUnder_ReadsTheDescriptorLink covers the procfs read with a
-// fake root: a link to the null device, a link elsewhere, and no process.
-func TestStdinIsNullUnder_ReadsTheDescriptorLink(t *testing.T) {
-	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks to the null device are a Unix shape")
-	}
-	root := t.TempDir()
-	mk := func(pid, target string) {
-		dir := filepath.Join(root, pid, "fd")
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(target, filepath.Join(dir, "0")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mk("10", os.DevNull)
-	mk("11", "pipe:[12345]")
+// listedProcess is a process as peersOf sees it, its command line scripted.
+type listedProcess struct {
+	pid  int32
+	args []string
+	err  error
+}
 
-	cases := []struct {
-		name    string
-		pid     int32
-		want    bool
-		wantErr bool
-	}{
-		{name: "the null device", pid: 10, want: true},
-		{name: "a pipe", pid: 11, want: false},
-		{name: "no such process", pid: 12, wantErr: true},
+// TestPeersOf_KeepsOnlyTheProcessesWhoseCommandLineCanBeRead covers the
+// listing behind discovery on every platform (issue 1212): a process whose
+// command line reads is kept with it, and one that vanished between the
+// listing and the read, or whose command line is empty because this user may
+// not see it, is skipped rather than failing the probe.
+func TestPeersOf_KeepsOnlyTheProcessesWhoseCommandLineCanBeRead(t *testing.T) {
+	t.Parallel()
+	found := []listedProcess{
+		{pid: 10, args: []string{"gitlab-mcp-server", "--http", "--http-addr=:9090"}},
+		{pid: 11, err: errors.New("process vanished")},
+		{pid: 12},
+		{pid: 13, args: []string{}},
+		{pid: 14, args: []string{"gitlab-mcp-server"}},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := stdinIsNullUnder(root, tc.pid)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("stdinIsNullUnder(%d) = %v, want an error", tc.pid, got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("stdinIsNullUnder(%d): %v", tc.pid, err)
-			}
-			if got != tc.want {
-				t.Errorf("stdinIsNullUnder(%d) = %v, want %v", tc.pid, got, tc.want)
-			}
-		})
+	got := peersOf(found, func(p listedProcess) (int32, []string, error) { return p.pid, p.args, p.err })
+	want := []probePeer{
+		{pid: 10, args: []string{"gitlab-mcp-server", "--http", "--http-addr=:9090"}},
+		{pid: 14, args: []string{"gitlab-mcp-server"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("peersOf() = %+v, want %+v", got, want)
 	}
 }
 
@@ -258,11 +240,11 @@ func healthMux(status int) http.Handler {
 
 // serveOnUnixSocket serves the handler on a socket under the test's temp dir
 // and returns the path.
+//
+// Windows binds AF_UNIX sockets too, as the listener tests do there, so the
+// probe's socket targets are driven on every platform (issue 1212).
 func serveOnUnixSocket(t *testing.T, handler http.Handler) string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("unix sockets are not exercised on Windows")
-	}
 	path := filepath.Join(socketDir(t), "s.sock")
 	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", path)
 	if err != nil {
@@ -672,6 +654,36 @@ func TestPeerWorkingDir_ReadsARunningProcess(t *testing.T) {
 	}
 	if goneDir, goneErr := peerWorkingDir(pid32(t, gone.Process.Pid)); goneErr == nil {
 		t.Errorf("peerWorkingDir of a reaped process = %q, want an error", goneDir)
+	}
+}
+
+// TestPeerWorkingDir_ThisProcessAndAPidNoProcessCanHave covers the same read
+// on every platform (issue 1212). The test above starts /bin/sleep, which
+// Windows does not have, so there the read was never made at all. This
+// process is running on every system, and its working directory is the one
+// os.Getwd reports; a negative pid names no process anywhere, and the lookup
+// refuses it before reading anything. The two directories are compared as
+// files, since a platform may spell the same one differently (a trailing
+// separator on Windows, a resolved symbolic link on macOS).
+func TestPeerWorkingDir_ThisProcessAndAPidNoProcessCanHave(t *testing.T) {
+	t.Parallel()
+	want, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	got, err := peerWorkingDir(pid32(t, os.Getpid()))
+	if err != nil {
+		t.Fatalf("peerWorkingDir of this process: %v", err)
+	}
+	gotInfo, gotErr := os.Stat(got)
+	wantInfo, wantErr := os.Stat(want)
+	if gotErr != nil || wantErr != nil || !os.SameFile(gotInfo, wantInfo) {
+		t.Errorf("peerWorkingDir of this process = %q, want %q (stat errors: %v, %v)", got, want, gotErr, wantErr)
+	}
+
+	if dir, impossibleErr := peerWorkingDir(-1); impossibleErr == nil {
+		t.Errorf("peerWorkingDir(-1) = %q, want an error", dir)
 	}
 }
 

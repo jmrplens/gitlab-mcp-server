@@ -20,13 +20,34 @@ import (
 // because mintty on Windows is not a character device and a double-click there
 // is exactly the case this exists for.
 func isInteractiveTerminal() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
+	return isTerminal(os.Stdin.Fd()) || isCygwinTerminal(os.Stdin.Fd())
 }
 
-// isCygwinTerminal is isatty's Cygwin test, held as a variable because it is
-// false on every platform but Windows, so the half of the guard that answers
-// for mintty can only be driven there or through this seam.
-var isCygwinTerminal = isatty.IsCygwinTerminal
+// needsFirstRunGuidance reports whether a start is somebody running stdio mode
+// by hand without the two values it needs: not HTTP mode, a terminal on
+// stdin, and GITLAB_TOKEN or GITLAB_URL missing. Either value missing is
+// enough (see main). The terminal is asked only for stdio mode.
+//
+// It takes the terminal test and the environment as functions so every
+// platform's tests drive all of it (issue 1212). Inline in main, only the
+// Linux test that gives the process a pseudo-terminal reached the two
+// environment checks, and on Windows and macOS neither was ever evaluated.
+func needsFirstRunGuidance(useHTTP bool, interactive func() bool, getenv func(string) string) bool {
+	return !useHTTP && interactive() &&
+		(getenv("GITLAB_TOKEN") == "" || getenv("GITLAB_URL") == "")
+}
+
+// isTerminal and isCygwinTerminal are isatty's two terminal tests, held as
+// variables so every platform's tests can answer them. A test can hand the
+// process a terminal only on Linux, through a pseudo-terminal, so elsewhere the
+// first test was never true and main's guard never let the screen through
+// (issue 1212). The Cygwin test is false on every platform but Windows, so the
+// half of the guard that answers for mintty can only be driven there or
+// through its seam.
+var (
+	isTerminal       = isatty.IsTerminal
+	isCygwinTerminal = isatty.IsCygwinTerminal
+)
 
 // firstRunGuidance explains what this program is to somebody who has started it
 // by hand, and waits before returning.

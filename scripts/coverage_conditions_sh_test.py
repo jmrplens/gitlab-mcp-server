@@ -1345,13 +1345,16 @@ class CoverageConditionsTest(unittest.TestCase):
 
     def test_one_install_lets_every_later_run_of_the_job_measure_without_the_network(self):
         # What the cross-platform legs do: install once while the network
-        # comes and goes, then measure both packages after it has gone.
+        # comes and goes, then measure both packages after it has gone, under
+        # the gate they run with, here over a report that names no condition.
         proc, calls = self.run_script("--install", env={"GOBCO_INSTALL_PAUSE": "0", "STUB_INSTALL_FAILURES": "1"})
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         for pkg in ("./cmd/tool", "./internal/plain"):
             with self.subTest(pkg):
                 proc, calls = self.run_script(pkg, env={"STUB_NETWORK": "unreachable",
-                                                        "GOBCO_GATE": "beyond:linux/amd64"})
+                                                        "GOBCO_GATE": "all",
+                                                        "STUB_GOBCO_REPORT": "4/4",
+                                                        "STUB_GOBCO_CONDITIONS": ""})
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertEqual(self.fetches(calls), [])
                 self.assertEqual([run["tool"] for run in self.gobco(calls)], ["gobco"])
@@ -1359,17 +1362,18 @@ class CoverageConditionsTest(unittest.TestCase):
     def test_cross_platform_legs_run_the_gate_through_bash(self):
         # The Windows and macOS legs run the script itself through bash, not
         # make, which windows-latest does not promise, on the two packages
-        # whose files split by platform, gated beyond the platform the local
-        # gate is applied on, with the timeout cmd/server needs on Windows.
+        # whose files split by platform, held to every condition as the local
+        # gate holds them on Linux (issue 1212), with the timeout cmd/server
+        # needs on Windows.
         with open(CI_WORKFLOW, encoding="utf-8") as fh:
             text = fh.read()
-        step = re.search(r"^      - name: Condition coverage of the platform halves\n((?:        .*\n|\n)+)",
+        step = re.search(r"^      - name: Condition coverage of cmd/server and internal/toolutil\n((?:        .*\n|\n)+)",
                          text, re.MULTILINE)
         self.assertIsNotNone(step, "the cross-platform gobco step is missing")
         body = step.group(1)
         self.assertIn("if: matrix.os != 'ubuntu-latest'", body)
         self.assertIn("shell: bash", body)
-        self.assertIn("GOBCO_GATE: beyond:linux/amd64", body)
+        self.assertIn("GOBCO_GATE: all", body)
         self.assertIn("GOBCO_TEST_FLAGS: -timeout=30m", body)
         for pkg in ("./cmd/server", "./internal/toolutil"):
             self.assertIn(pkg, body)

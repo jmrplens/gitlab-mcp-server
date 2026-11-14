@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/iotest"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -462,6 +463,35 @@ func TestResilientStdio_AFinalLineWithoutANewline_IsStillDelivered(t *testing.T)
 	}
 	if out.Len() != 0 {
 		t.Errorf("a valid message produced output on the response stream: %q", out.String())
+	}
+}
+
+// TestResilientStdio_AReadThatFailsOtherThanEOF_IsNotAClosedClient covers the
+// other way a read of stdin ends: with an error that is not io.EOF, such as a
+// descriptor closed under the read. The error reaches the SDK as it is, and the
+// reader does not record a client that closed its end, so serveStdio reports
+// the failure instead of a clean shutdown.
+//
+// The tests that point os.Stdin at a pipe reach this only when a read lands
+// after the pipe was released, which is a matter of timing, so the condition
+// the Windows and macOS legs hold both ways is driven here on every run
+// (issue 1212).
+func TestResilientStdio_AReadThatFailsOtherThanEOF_IsNotAClosedClient(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("read |0: file already closed")
+	var out bytes.Buffer
+	reader, _ := resilientStdio(iotest.ErrReader(failure), &out)
+
+	n, err := reader.Read(make([]byte, 16))
+	if n != 0 || !errors.Is(err, failure) {
+		t.Errorf("Read = (%d, %v), want (0, %v)", n, err, failure)
+	}
+	if reader.clientClosed() {
+		t.Error("a read that failed was recorded as the client closing its end, so the exit status would report a clean shutdown")
+	}
+	if out.Len() != 0 {
+		t.Errorf("a failed read produced output on the response stream: %q", out.String())
 	}
 }
 

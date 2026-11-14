@@ -441,23 +441,35 @@ func TestBindUnixSocket_UnwritableDirectoryIsRefused(t *testing.T) {
 // filesystem every current Mac uses is covered by inference. The probe replaces
 // that inference with a connect. Its failure branch is stubbed because no
 // filesystem this runs on is known to produce it.
+//
+// The directory comes from socketDir and the refusal is matched by identity,
+// because a refusal of any other kind used to pass here: on macOS t.TempDir
+// put the staging path past the address limit, bindUnixSocket refused it
+// before the probe ran, and the length error's own wording happened to contain
+// the text this test looked for.
 func TestBindUnixSocket_UnreachablePublishedPathIsRefused(t *testing.T) {
 	// Deliberately not parallel: it swaps a package-level seam.
+	errUnreachable := errors.New("the stubbed probe could not connect")
+	var probed []string
 	original := probeUnixSocket
 	t.Cleanup(func() { probeUnixSocket = original })
-	probeUnixSocket = func(context.Context, string) error {
-		return errors.New("no client could reach it")
+	probeUnixSocket = func(_ context.Context, path string) error {
+		probed = append(probed, path)
+		return errUnreachable
 	}
 
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "unreachable.sock")
 	listener, err := bindUnixSocket(t.Context(), path, 0o660)
 	if err == nil {
 		_ = listener.Close()
 		t.Fatal("bindUnixSocket() served a socket that failed its own reachability probe")
 	}
-	if !strings.Contains(err.Error(), "no client could reach it") {
-		t.Errorf("error = %v, want the probe's own reason", err)
+	if !errors.Is(err, errUnreachable) {
+		t.Errorf("error = %v, want the probe's own refusal", err)
+	}
+	if len(probed) != 1 || probed[0] != path {
+		t.Errorf("the probe was asked about %q, want exactly the published path %q", probed, path)
 	}
 	// A socket left at the path would be a dead address the next start would
 	// then have to decide whether to remove.
@@ -825,12 +837,20 @@ func TestBindUnixSocket_AStagingFailure_IsReportedWithThePath(t *testing.T) {
 // cannot read on every platform it ships to. So it is proven once per start
 // with a real connect rather than assumed, and this is the failing half of
 // that proof.
+//
+// The refusal has to be the one for a path with nothing at it: under
+// t.TempDir the path was too long for an address on macOS, and the dial failed
+// with EINVAL before it looked for anything.
 func TestConfirmReachable_APathNothingIsServing_IsReported(t *testing.T) {
 	// Deliberately not parallel: see the note on the binding tests.
-	absent := filepath.Join(t.TempDir(), "nothing.sock")
+	absent := filepath.Join(socketDir(t), "nothing.sock")
 
-	if err := confirmReachable(t.Context(), absent); err == nil {
+	err := confirmReachable(t.Context(), absent)
+	if err == nil {
 		t.Fatal("confirmReachable() reported a path nothing is serving as reachable")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("error = %v, want the refusal for a path nothing is at", err)
 	}
 }
 
@@ -866,20 +886,31 @@ func TestPublishStagedSocket_AListenerThatIsNotUnix_IsRefused(t *testing.T) {
 // The order matters more than the error: the mode is applied and confirmed
 // BEFORE the link, so a failure here means the path was never created at all,
 // rather than created and then repaired.
+//
+// The refusal is matched by identity and the seam's calls are counted, so a
+// bind refused before the chmod (an over-long path, as t.TempDir produces on
+// macOS) fails here instead of passing for a reason the test does not name.
 func TestPublishStagedSocket_AChmodThatFails_LeavesNothingPublished(t *testing.T) {
 	// Deliberately not parallel: see the note on the binding tests.
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "published.sock")
 
+	errRefused := errors.New("the filesystem refused the mode")
+	calls := 0
 	original := chmodStagedSocket
 	t.Cleanup(func() { chmodStagedSocket = original })
 	chmodStagedSocket = func(string, os.FileMode) error {
-		return errors.New("the filesystem refused the mode")
+		calls++
+		return errRefused
 	}
 
-	_, err := bindUnixSocket(t.Context(), path, 0o660)
+	listener, err := bindUnixSocket(t.Context(), path, 0o660)
 	if err == nil {
+		_ = listener.Close()
 		t.Fatal("bindUnixSocket() published a socket whose mode was never applied")
+	}
+	if !errors.Is(err, errRefused) || calls != 1 {
+		t.Errorf("error = %v after %d chmod call(s), want the chmod's own refusal after exactly one", err, calls)
 	}
 	if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) {
 		t.Errorf("the path exists after a failed chmod, so a socket with an unknown mode was published")
@@ -945,19 +976,33 @@ func (n notADirInfo) IsDir() bool { return false }
 
 // TestPublishStagedSocket_AStatThatFails_IsRefused verifies that a mode which
 // cannot be read back is treated as a mode that was not applied.
+//
+// Matched by identity and counted for the reason given on the chmod test: a
+// bind refused before the stat must fail here, not pass.
 func TestPublishStagedSocket_AStatThatFails_IsRefused(t *testing.T) {
 	// Deliberately not parallel: see the note on the binding tests.
-	dir := t.TempDir()
+	dir := socketDir(t)
 	path := filepath.Join(dir, "unstattable.sock")
 
+	errUnanswered := errors.New("the filesystem would not answer")
+	calls := 0
 	original := lstatStagedSocket
 	t.Cleanup(func() { lstatStagedSocket = original })
 	lstatStagedSocket = func(string) (os.FileInfo, error) {
-		return nil, errors.New("the filesystem would not answer")
+		calls++
+		return nil, errUnanswered
 	}
 
-	if _, err := bindUnixSocket(t.Context(), path, 0o660); err == nil {
+	listener, err := bindUnixSocket(t.Context(), path, 0o660)
+	if err == nil {
+		_ = listener.Close()
 		t.Fatal("bindUnixSocket() published a socket whose mode it never read back")
+	}
+	if !errors.Is(err, errUnanswered) || calls != 1 {
+		t.Errorf("error = %v after %d stat call(s), want the stat's own refusal after exactly one", err, calls)
+	}
+	if _, statErr := os.Lstat(path); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("the path exists after a failed stat, so a socket with an unconfirmed mode was published")
 	}
 }
 
