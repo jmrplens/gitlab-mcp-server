@@ -37,14 +37,15 @@ import (
 // external UID cannot be compared with what GitLab holds, and asking about
 // an address that happens to be the current one costs a question rather than
 // a read on every edit. The question names the address, which the person
-// approving has to judge, and never the password or the external UID.
+// approving has to judge, fenced as a value so it cannot pass for the server's
+// own words, and never the password or the external UID.
 func confirmAccessReplaced(ctx context.Context, input ModifyInput) error {
 	var changes []i18n.Message
 	if input.Password != "" {
 		changes = append(changes, i18n.New(i18n.ConfirmUserAccessPassword))
 	}
 	if input.Email != "" {
-		changes = append(changes, i18n.New(i18n.ConfirmUserAccessEmail, i18n.S("email", input.Email)))
+		changes = append(changes, i18n.New(i18n.ConfirmUserAccessEmail, i18n.S("email", toolutil.EscapeConsentValue(input.Email))))
 	}
 	if input.Provider != "" || input.ExternUID != "" {
 		changes = append(changes, i18n.New(i18n.ConfirmUserAccessIdentity))

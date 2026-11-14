@@ -59,7 +59,7 @@ func groupHookClient(t *testing.T, calls *groupHookCalls, readStatus int, readBo
 // with when nobody can be asked: the question, naming what the call does,
 // and the way to proceed.
 func groupHookRefusal(op, changes string) string {
-	return op + ": Change where webhook 7 in group 10 delivers, or a secret it sends? This call " + changes + "." +
+	return op + ": Change where webhook 7 in group `10` delivers, or a secret it sends? This call " + changes + "." +
 		" Re-send the same call with confirm=true once the user has approved it"
 }
 
@@ -98,7 +98,7 @@ func groupHookCases() []groupHookCase {
 		{name: "an edit that resends the address the hook has", call: edit(HookInput{URL: "https://old.example/hooks/abc"}), reads: 1},
 		{
 			name: "an edit that sends another address", call: edit(HookInput{URL: "https://new.example/hooks/xyz?token=secret"}),
-			op: "EditHook", reads: 1, want: "points it at https://new.example/... instead of https://old.example/...",
+			op: "EditHook", reads: 1, want: "points it at `https[:]//new.example/...` instead of `https[:]//old.example/...`",
 		},
 		{
 			name: "an edit that sends both tokens", call: edit(HookInput{Token: "t", SigningToken: "s"}), op: "EditHook",
@@ -119,18 +119,18 @@ func groupHookCases() []groupHookCase {
 				CustomHeaders: []HookCustomHeaderInput{{Key: "Authorization", Value: "v"}},
 			}),
 			op: "EditHook", reads: 1,
-			want: "replaces the url_variables entry tenant, whose current value cannot be read back" +
-				" and replaces the custom_headers entry Authorization, whose current value cannot be read back",
+			want: "replaces the url_variables entry `tenant`, whose current value cannot be read back" +
+				" and replaces the custom_headers entry `Authorization`, whose current value cannot be read back",
 		},
 		{name: "a custom header the hook lacks", call: header("X-Fresh"), reads: 1},
 		{
 			name: "a custom header the hook has", call: header("Authorization"), op: "groupSetHookCustomHeader", reads: 1,
-			want: "replaces the custom_headers entry Authorization, whose current value cannot be read back",
+			want: "replaces the custom_headers entry `Authorization`, whose current value cannot be read back",
 		},
 		{name: "a URL variable the hook lacks", call: variable("region"), reads: 1},
 		{
 			name: "a URL variable the hook has", call: variable("tenant"), op: "groupSetHookURLVariable", reads: 1,
-			want: "replaces the url_variables entry tenant, whose current value cannot be read back",
+			want: "replaces the url_variables entry `tenant`, whose current value cannot be read back",
 		},
 	}
 }
@@ -222,7 +222,7 @@ func TestGroupHookGuard_AHookThatCannotBeRead_IsAskedAbout(t *testing.T) {
 			client := groupHookClient(t, &calls, tt.status, `{"message":"refused"}`)
 
 			err := SetHookURLVariable(t.Context(), client, SetHookURLVariableInput{GroupID: "10", HookID: 7, Key: "region", Value: "v"})
-			want := groupHookRefusal("groupSetHookURLVariable", "may replace the url_variables entry region (the webhook could not be read)")
+			want := groupHookRefusal("groupSetHookURLVariable", "may replace the url_variables entry `region` (the webhook could not be read)")
 			wantWrites := int64(1)
 			if tt.asked {
 				wantWrites = 0

@@ -82,7 +82,11 @@ func GuardedCallAnswered(ctx context.Context) bool {
 // language, and the model, which reads it in English as the refusal's opening
 // sentence when the client cannot ask. Whoever builds it leaves out every
 // value that is a secret or can carry one: a variable's value, a token, a
-// password, and of a URL everything but its origin.
+// password, and of a URL everything but its origin. And every value the call
+// wrote that the question does show, an id, a path, a branch, a key, an
+// address, the origin of a URL, goes through [EscapeConsentValue] first: a
+// value is the one part of the question the server did not write, and unfenced
+// it can add a sentence, emphasis or a link to what the person is asked.
 //
 // Confirmation follows the precedence of destructive actions: YOLO mode and
 // an explicit confirm=true proceed, otherwise the caller is elicited. A
@@ -117,14 +121,26 @@ func ConfirmGuardedCall(ctx context.Context, op, confirmID string, question i18n
 	return nil
 }
 
-// ConfirmTargetProject names a project in a guard's question.
+// ConfirmTargetProject names a project in a guard's question, by the id or
+// the path the call wrote, fenced as a value.
 func ConfirmTargetProject(id string) i18n.Message {
-	return i18n.New(i18n.ConfirmTargetProject, i18n.S("id", id))
+	return i18n.New(i18n.ConfirmTargetProject, i18n.S("id", EscapeConsentValue(id)))
 }
 
-// ConfirmTargetGroup names a group in a guard's question.
+// ConfirmTargetGroup names a group in a guard's question, by the id or the
+// path the call wrote, fenced as a value.
 func ConfirmTargetGroup(id string) i18n.Message {
-	return i18n.New(i18n.ConfirmTargetGroup, i18n.S("id", id))
+	return i18n.New(i18n.ConfirmTargetGroup, i18n.S("id", EscapeConsentValue(id)))
+}
+
+// ConsentURLOrigin renders the address a call names for a guard's question:
+// its origin alone, as [RedactURLToOrigin] reduces it, fenced as a value. The
+// origin is still text the call wrote, since a host may carry the characters
+// Markdown reads as emphasis, and it is an address a client could make a link
+// of in the dialog where a person decides, which [EscapeConsentValue] answers
+// by fencing it and defanging its scheme.
+func ConsentURLOrigin(raw string) string {
+	return EscapeConsentValue(RedactURLToOrigin(raw))
 }
 
 // ConfirmTargetInstance names the GitLab instance in a guard's question, for
@@ -147,7 +163,7 @@ func ConfirmImportOverwrite(ctx context.Context, op string, overwrite bool, path
 	if !overwrite {
 		return nil
 	}
-	question := i18n.New(i18n.ConfirmImportOverwrite, i18n.S("path", path))
+	question := i18n.New(i18n.ConfirmImportOverwrite, i18n.S("path", EscapeConsentValue(path)))
 	return ConfirmGuardedCall(ctx, op, ImportOverwriteConfirmID, question,
 		"the user declined overwriting the existing project; send the import without overwrite to create a project at a free path")
 }
@@ -166,7 +182,7 @@ func ConfirmCommitForce(ctx context.Context, op string, force bool, projectID, b
 	if !force {
 		return nil
 	}
-	question := i18n.New(i18n.ConfirmCommitForce, i18n.S("branch", branch), i18n.M("target", ConfirmTargetProject(projectID)))
+	question := i18n.New(i18n.ConfirmCommitForce, i18n.S("branch", EscapeConsentValue(branch)), i18n.M("target", ConfirmTargetProject(projectID)))
 	return ConfirmGuardedCall(ctx, op, CommitForceConfirmID, question,
 		"the user declined resetting the branch; send the commit without force to add it on top of the branch")
 }
@@ -188,7 +204,7 @@ func ConfirmExportUpload(ctx context.Context, op, projectID, uploadURL string) e
 		return nil
 	}
 	question := i18n.New(i18n.ConfirmExportUpload,
-		i18n.M("target", ConfirmTargetProject(projectID)), i18n.S("url", RedactURLToOrigin(uploadURL)))
+		i18n.M("target", ConfirmTargetProject(projectID)), i18n.S("url", ConsentURLOrigin(uploadURL)))
 	return ConfirmGuardedCall(ctx, op, ExportUploadConfirmID, question,
 		"the user declined uploading the export to that address; schedule the export without an upload URL and download it from the instance instead")
 }
@@ -216,7 +232,7 @@ func ConfirmVariableValueReplaced(ctx context.Context, op string, sendsValue boo
 	if !sendsValue {
 		return nil
 	}
-	question := i18n.New(i18n.ConfirmVariableValue, i18n.S("key", key), i18n.M("target", target))
+	question := i18n.New(i18n.ConfirmVariableValue, i18n.S("key", EscapeConsentValue(key)), i18n.M("target", target))
 	return ConfirmGuardedCall(ctx, op, VariableValueConfirmID, question,
 		"the user declined replacing the variable's value; send the update without value to change its other settings, or leave it as it is")
 }

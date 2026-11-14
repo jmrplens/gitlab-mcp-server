@@ -57,7 +57,7 @@ func TestUpdate_SendingAValue_IsRefusedBeforeAnyRequest(t *testing.T) {
 		t.Errorf("GitLab was sent %s %s before the update was confirmed", r.Method, r.URL.Path)
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	}))
-	const want = "update group variable: Replace the value of the CI/CD variable DEPLOY_URL in group acme?" +
+	const want = "update group variable: Replace the value of the CI/CD variable `DEPLOY_URL` in group `acme`?" +
 		" The value it holds now is overwritten and no call restores it." +
 		" Re-send the same call with confirm=true once the user has approved it"
 	for name, value := range map[string]string{"a value": "https://deploy.example/secret", "an empty value": ""} {

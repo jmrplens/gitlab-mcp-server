@@ -386,11 +386,11 @@ type UpdateProjectInput struct {
 // the project's list, so telling an address that differs from the current
 // one would cost a paged read on every such update, and an update that names
 // the address is in practice the one that changes it. The question shows the
-// address as its origin alone and never the secret.
+// address as its origin alone, fenced as a value, and never the secret.
 func confirmStatusCheckDelivery(ctx context.Context, input UpdateProjectInput) error {
 	var changes []i18n.Message
 	if input.ExternalURL != "" {
-		changes = append(changes, i18n.New(i18n.ConfirmStatusCheckURL, i18n.S("url", toolutil.RedactURLToOrigin(input.ExternalURL))))
+		changes = append(changes, i18n.New(i18n.ConfirmStatusCheckURL, i18n.S("url", toolutil.ConsentURLOrigin(input.ExternalURL))))
 	}
 	if input.SharedSecret != "" {
 		changes = append(changes, i18n.New(i18n.ConfirmStatusCheckSecret))

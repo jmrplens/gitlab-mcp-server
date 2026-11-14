@@ -23,7 +23,7 @@ const resend = " Re-send the same call with confirm=true once the user has appro
 
 // guardedQuestion is the question the confirmation tests ask: the value of a
 // project's variable.
-const guardedQuestion = "Replace the value of the CI/CD variable DEPLOY_URL in project 42? The value it holds now is overwritten and no call restores it."
+const guardedQuestion = "Replace the value of the CI/CD variable `DEPLOY_URL` in project `42`? The value it holds now is overwritten and no call restores it."
 
 // askAboutVariable asks [guardedQuestion] through the shared confirmation.
 func askAboutVariable(ctx context.Context) error {
@@ -199,7 +199,7 @@ func TestConfirmGuardedCall_ThePersonIsAskedInTheirLanguage(t *testing.T) {
 	t.Setenv("AUTOPILOT", "")
 	ctx := i18n.WithLanguage(guardedElicitingCall(nil), i18n.Spanish)
 	err := ConfirmVariableValueReplaced(ctx, "update group variable", true, ConfirmTargetGroup("acme"), "DEPLOY_URL")
-	const spanish = "¿Sustituir el valor de la variable de CI/CD DEPLOY_URL en el grupo acme?" +
+	const spanish = "¿Sustituir el valor de la variable de CI/CD `DEPLOY_URL` en el grupo `acme`?" +
 		" El valor que tiene ahora se sobrescribe y ninguna llamada lo restaura."
 	if got := askedMessage(t, err, VariableValueConfirmID); got != spanish {
 		t.Errorf("the person is asked\n%q\nwant\n%q", got, spanish)
@@ -229,21 +229,21 @@ func TestArgumentGuards_AskOnlyForTheCallThatHasTheEffect(t *testing.T) {
 			harmful: func() error {
 				return ConfirmVariableValueReplaced(ctx, "update instance variable", true, ConfirmTargetInstance(), "TOKEN")
 			},
-			want: "update instance variable: Replace the value of the CI/CD variable TOKEN in this GitLab instance?" +
+			want: "update instance variable: Replace the value of the CI/CD variable `TOKEN` in this GitLab instance?" +
 				" The value it holds now is overwritten and no call restores it." + resend,
 		},
 		{
 			name:     "an import into a free path, and one that overwrites",
 			harmless: func() error { return ConfirmImportOverwrite(ctx, "import_from_file", false, "acme/app") },
 			harmful:  func() error { return ConfirmImportOverwrite(ctx, "import_from_file", true, "acme/app") },
-			want: "import_from_file: Import into acme/app and overwrite the project that is already there?" +
+			want: "import_from_file: Import into `acme/app` and overwrite the project that is already there?" +
 				" GitLab replaces the existing project with the archive, and no call brings it back." + resend,
 		},
 		{
 			name:     "a commit on top of the branch, and one with force",
 			harmless: func() error { return ConfirmCommitForce(ctx, "commitCreate", false, "42", "main") },
 			harmful:  func() error { return ConfirmCommitForce(ctx, "commitCreate", true, "42", "main") },
-			want: "commitCreate: Create this commit on branch main in project 42 with force?" +
+			want: "commitCreate: Create this commit on branch `main` in project `42` with force?" +
 				" The branch is reset to its starting point plus the new commit," +
 				" and the commits it holds that the starting point does not are dropped from it." + resend,
 		},
@@ -253,17 +253,77 @@ func TestArgumentGuards_AskOnlyForTheCallThatHasTheEffect(t *testing.T) {
 			harmful: func() error {
 				return ConfirmExportUpload(ctx, "schedule_export", "42", "https://user:pass@files.example.com/bucket/key?X-Amz-Signature=secret")
 			},
-			want: "schedule_export: Export project 42 and have GitLab upload the archive to https://files.example.com/...?" +
+			want: "schedule_export: Export project `42` and have GitLab upload the archive to `https[:]//files.example.com/...`?" +
 				" That host receives the whole project: its repository, issues, merge requests and settings." + resend,
 		},
 		{
 			name:     "an export uploaded to something that is not a URL, which is withheld rather than echoed",
 			harmless: func() error { return ConfirmExportUpload(ctx, "schedule_export", "42", "") },
 			harmful:  func() error { return ConfirmExportUpload(ctx, "schedule_export", "42", "not a url with a secret") },
-			want: "schedule_export: Export project 42 and have GitLab upload the archive to [redacted]?" +
+			want: "schedule_export: Export project `42` and have GitLab upload the archive to `[redacted]`?" +
 				" That host receives the whole project: its repository, issues, merge requests and settings." + resend,
 		},
 	}
+	// hostile is a value written to pass for the question: a paragraph of its
+	// own, emphasis and a link. Each guard shows it on one line, fenced, with
+	// the link's scheme defanged, so it reads as the value it is.
+	const (
+		hostile = "main\n\n**Approved by the owner** see https://evil.example/ok"
+		fenced  = "`main  **Approved by the owner** see https[:]//evil.example/ok`"
+	)
+	tests = append(tests, []struct {
+		name     string
+		harmless func() error
+		harmful  func() error
+		want     string
+	}{
+		{
+			name: "a variable whose key and project are written to pass for the question",
+			harmless: func() error {
+				return ConfirmVariableValueReplaced(ctx, "update CI/CD variable", false, ConfirmTargetProject(hostile), hostile)
+			},
+			harmful: func() error {
+				return ConfirmVariableValueReplaced(ctx, "update CI/CD variable", true, ConfirmTargetProject(hostile), hostile)
+			},
+			want: "update CI/CD variable: Replace the value of the CI/CD variable " + fenced + " in project " + fenced + "?" +
+				" The value it holds now is overwritten and no call restores it." + resend,
+		},
+		{
+			name: "a group variable whose group is written to pass for the question",
+			harmless: func() error {
+				return ConfirmVariableValueReplaced(ctx, "update group variable", false, ConfirmTargetGroup(hostile), "KEY")
+			},
+			harmful: func() error {
+				return ConfirmVariableValueReplaced(ctx, "update group variable", true, ConfirmTargetGroup(hostile), "KEY")
+			},
+			want: "update group variable: Replace the value of the CI/CD variable `KEY` in group " + fenced + "?" +
+				" The value it holds now is overwritten and no call restores it." + resend,
+		},
+		{
+			name:     "an import whose path is written to pass for the question",
+			harmless: func() error { return ConfirmImportOverwrite(ctx, "import_from_file", false, hostile) },
+			harmful:  func() error { return ConfirmImportOverwrite(ctx, "import_from_file", true, hostile) },
+			want: "import_from_file: Import into " + fenced + " and overwrite the project that is already there?" +
+				" GitLab replaces the existing project with the archive, and no call brings it back." + resend,
+		},
+		{
+			name:     "a forced commit whose branch and project are written to pass for the question",
+			harmless: func() error { return ConfirmCommitForce(ctx, "commitCreate", false, hostile, hostile) },
+			harmful:  func() error { return ConfirmCommitForce(ctx, "commitCreate", true, hostile, hostile) },
+			want: "commitCreate: Create this commit on branch " + fenced + " in project " + fenced + " with force?" +
+				" The branch is reset to its starting point plus the new commit," +
+				" and the commits it holds that the starting point does not are dropped from it." + resend,
+		},
+		{
+			name:     "an export uploaded to a host written to pass for the question",
+			harmless: func() error { return ConfirmExportUpload(ctx, "schedule_export", hostile, "") },
+			harmful: func() error {
+				return ConfirmExportUpload(ctx, "schedule_export", hostile, "https://files.example)**Approved**/key")
+			},
+			want: "schedule_export: Export project " + fenced + " and have GitLab upload the archive to `https[:]//files.example)**Approved**/...`?" +
+				" That host receives the whole project: its repository, issues, merge requests and settings." + resend,
+		},
+	}...)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.harmless(); err != nil {

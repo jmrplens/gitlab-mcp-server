@@ -75,7 +75,9 @@ func HookEditNeedsRead(ctx context.Context, edit HookEdit) bool {
 // The address is shown as its origin alone, since the path of a webhook URL
 // is where its secret usually lives, and a key is shown without its value.
 // An address on the host the hook already delivers to is named as that: the
-// host stays and the path or the query changes.
+// host stays and the path or the query changes. Each origin and each key is
+// fenced as a value, since the call wrote it, or whoever configured the hook
+// did.
 func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 	if IsHTTPStatus(readErr, http.StatusNotFound) {
 		return nil
@@ -84,7 +86,7 @@ func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 	unread := readErr != nil || current == nil
 	if e.URL != "" {
 		if unread {
-			changes = append(changes, i18n.New(i18n.ConfirmHookURLUnread, i18n.S("url", RedactURLToOrigin(e.URL))))
+			changes = append(changes, i18n.New(i18n.ConfirmHookURLUnread, i18n.S("url", ConsentURLOrigin(e.URL))))
 		} else if e.URL != current.URL {
 			changes = append(changes, hookURLChange(e.URL, current.URL))
 		}
@@ -111,10 +113,10 @@ func (e HookEdit) Changes(current *HookState, readErr error) []i18n.Message {
 // secret of a webhook address usually lives and the reason neither is shown.
 func hookURLChange(sent, held string) i18n.Message {
 	if origin, same := SameURLOrigin(sent, held); same {
-		return i18n.New(i18n.ConfirmHookURLSameHost, i18n.S("url", origin))
+		return i18n.New(i18n.ConfirmHookURLSameHost, i18n.S("url", EscapeConsentValue(origin)))
 	}
 	return i18n.New(i18n.ConfirmHookURL,
-		i18n.S("url", RedactURLToOrigin(sent)), i18n.S("current", RedactURLToOrigin(held)))
+		i18n.S("url", ConsentURLOrigin(sent)), i18n.S("current", ConsentURLOrigin(held)))
 }
 
 // hookKeyChanges names each key of field the edit sends that the hook
@@ -123,9 +125,9 @@ func hookKeyChanges(field string, sent, held []string, unread bool) []i18n.Messa
 	var changes []i18n.Message
 	for _, key := range sent {
 		if unread {
-			changes = append(changes, i18n.New(i18n.ConfirmHookValueUnread, i18n.S("field", field), i18n.S("key", key)))
+			changes = append(changes, i18n.New(i18n.ConfirmHookValueUnread, i18n.S("field", field), i18n.S("key", EscapeConsentValue(key))))
 		} else if slices.Contains(held, key) {
-			changes = append(changes, i18n.New(i18n.ConfirmHookValue, i18n.S("field", field), i18n.S("key", key)))
+			changes = append(changes, i18n.New(i18n.ConfirmHookValue, i18n.S("field", field), i18n.S("key", EscapeConsentValue(key))))
 		}
 	}
 	return changes

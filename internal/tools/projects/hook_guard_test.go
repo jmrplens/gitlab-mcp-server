@@ -59,7 +59,7 @@ func hookClient(t *testing.T, calls *hookCalls, readStatus int, readBody string)
 // when nobody can be asked: the question, naming what the call does, and the
 // way to proceed.
 func hookRefusal(op, changes string) string {
-	return op + ": Change where webhook 7 in project 42 delivers, or a secret it sends? This call " + changes + "." +
+	return op + ": Change where webhook 7 in project `42` delivers, or a secret it sends? This call " + changes + "." +
 		" Re-send the same call with confirm=true once the user has approved it"
 }
 
@@ -102,7 +102,7 @@ func hookCallCases() []struct {
 		{name: "an edit that resends the address the hook has", call: edit(EditHookInput{URL: "https://old.example/hooks/abc"}), reads: 1},
 		{
 			name: "an edit that sends another address", call: edit(EditHookInput{URL: "https://new.example/hooks/xyz?token=secret"}),
-			op: "projectEditHook", reads: 1, want: "points it at https://new.example/... instead of https://old.example/...",
+			op: "projectEditHook", reads: 1, want: "points it at `https[:]//new.example/...` instead of `https[:]//old.example/...`",
 		},
 		{
 			name: "an edit that sends a token", call: edit(EditHookInput{Token: "t"}),
@@ -127,18 +127,18 @@ func hookCallCases() []struct {
 				CustomHeaders: []HookCustomHeaderInput{{Key: "Authorization", Value: "v"}},
 			}),
 			op: "projectEditHook", reads: 1,
-			want: "replaces the url_variables entry tenant, whose current value cannot be read back" +
-				" and replaces the custom_headers entry Authorization, whose current value cannot be read back",
+			want: "replaces the url_variables entry `tenant`, whose current value cannot be read back" +
+				" and replaces the custom_headers entry `Authorization`, whose current value cannot be read back",
 		},
 		{name: "a custom header the hook lacks", call: header("X-Fresh"), reads: 1},
 		{
 			name: "a custom header the hook has", call: header("Authorization"), op: "projectSetCustomHeader", reads: 1,
-			want: "replaces the custom_headers entry Authorization, whose current value cannot be read back",
+			want: "replaces the custom_headers entry `Authorization`, whose current value cannot be read back",
 		},
 		{name: "a URL variable the hook lacks", call: variable("region"), reads: 1},
 		{
 			name: "a URL variable the hook has", call: variable("tenant"), op: "projectSetWebhookURLVariable", reads: 1,
-			want: "replaces the url_variables entry tenant, whose current value cannot be read back",
+			want: "replaces the url_variables entry `tenant`, whose current value cannot be read back",
 		},
 	}
 }
@@ -240,8 +240,8 @@ func TestProjectHookGuard_AHookThatCannotBeRead_IsAskedAbout(t *testing.T) {
 			client := hookClient(t, &calls, tt.status, tt.body)
 
 			_, err := EditHook(t.Context(), client, input)
-			want := hookRefusal("projectEditHook", "may point it at another host, https://old.example/... (the webhook could not be read)"+
-				" and may replace the custom_headers entry X-Fresh (the webhook could not be read)")
+			want := hookRefusal("projectEditHook", "may point it at another host, `https[:]//old.example/...` (the webhook could not be read)"+
+				" and may replace the custom_headers entry `X-Fresh` (the webhook could not be read)")
 			wantWrites := int64(1)
 			if tt.asked {
 				wantWrites = 0

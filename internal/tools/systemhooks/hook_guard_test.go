@@ -94,7 +94,7 @@ func systemHookCases() []systemHookCase {
 		{name: "an edit that resends the address the hook has", call: edit(EditInput{URL: "https://old.example/hooks/abc"}), reads: 1},
 		{
 			name: "an edit that sends another address", call: edit(EditInput{URL: "https://new.example/hooks/xyz?token=secret"}),
-			op: "system_hook_edit", reads: 1, want: "points it at https://new.example/... instead of https://old.example/...",
+			op: "system_hook_edit", reads: 1, want: "points it at `https[:]//new.example/...` instead of `https[:]//old.example/...`",
 		},
 		{
 			name: "an edit that sends a token", call: edit(EditInput{Token: "t"}), op: "system_hook_edit",
@@ -107,7 +107,7 @@ func systemHookCases() []systemHookCase {
 		{name: "a URL variable the hook lacks", call: variable("region"), reads: 1},
 		{
 			name: "a URL variable the hook has", call: variable("tenant"), op: "system_hook_set_url_variable", reads: 1,
-			want: "replaces the url_variables entry tenant, whose current value cannot be read back",
+			want: "replaces the url_variables entry `tenant`, whose current value cannot be read back",
 		},
 	}
 }
@@ -200,7 +200,7 @@ func TestSystemHookGuard_AHookThatCannotBeRead_IsAskedAbout(t *testing.T) {
 			client := countingSystemHookClient(t, &calls, tt.status, `{"message":"refused"}`)
 
 			_, err := Edit(t.Context(), client, EditInput{ID: 7, URL: "https://old.example/hooks/abc"})
-			want := systemHookRefusal("system_hook_edit", "may point it at another host, https://old.example/... (the webhook could not be read)")
+			want := systemHookRefusal("system_hook_edit", "may point it at another host, `https[:]//old.example/...` (the webhook could not be read)")
 			wantWrites := int64(1)
 			if tt.asked {
 				wantWrites = 0

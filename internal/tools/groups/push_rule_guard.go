@@ -38,7 +38,7 @@ func confirmPushRuleRelaxation(ctx context.Context, client *gitlabclient.Client,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	target := i18n.New(i18n.ConfirmPushRuleGroup, i18n.S("id", string(input.GroupID)))
+	target := i18n.New(i18n.ConfirmPushRuleGroup, i18n.S("id", toolutil.EscapeConsentValue(string(input.GroupID))))
 	return toolutil.ConfirmPushRuleRelaxation(ctx, "groupEditPushRule", target,
 		edit.RelaxationsAfterRead(pushRuleState(rule), readErr))
 }
