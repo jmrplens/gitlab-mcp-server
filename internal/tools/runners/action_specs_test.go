@@ -190,23 +190,69 @@ func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) 
 // TestActionSpecs_TokenActions_Classification holds the two runner-token
 // actions client-go v3.18.0 added to what they do: the reset by token writes,
 // like the reset by ID it mirrors, and the Job Router discovery only reads.
-// Neither is destructive, and both are Free.
+// The reset is destructive as every reset is, since it ends the token it is
+// given; the discovery is not. Both are Free.
 func TestActionSpecs_TokenActions_Classification(t *testing.T) {
 	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
 	tests := []struct {
-		tool     string
-		name     string
-		readOnly bool
+		tool        string
+		name        string
+		readOnly    bool
+		destructive bool
 	}{
-		{tool: "gitlab_runner_reset_token_by_token", name: "reset_token_by_token"},
+		{tool: "gitlab_runner_reset_token_by_token", name: "reset_token_by_token", destructive: true},
 		{tool: "gitlab_runner_router_discovery", name: "router_discovery", readOnly: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
 			spec := byTool[tt.tool]
-			if spec.Name != tt.name || spec.ReadOnly != tt.readOnly || spec.Destructive || spec.Edition != "" {
-				t.Errorf("%s = name %q read-only %v destructive %v edition %q, want %s, read-only %v, not destructive, Free",
-					tt.tool, spec.Name, spec.ReadOnly, spec.Destructive, spec.Edition, tt.name, tt.readOnly)
+			if spec.Name != tt.name || spec.ReadOnly != tt.readOnly || spec.Destructive != tt.destructive || spec.Edition != "" {
+				t.Errorf("%s = name %q read-only %v destructive %v edition %q, want %s, read-only %v, destructive %v, Free",
+					tt.tool, spec.Name, spec.ReadOnly, spec.Destructive, spec.Edition, tt.name, tt.readOnly, tt.destructive)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_TokenResets_AreDestructive holds the five resets to the
+// answer a revocation gives. A reset ends the token it replaces: the runner
+// is locked out until it is given the new authentication token, and nobody
+// registers with the old registration token. The spec, its route and the
+// individual tool's annotation say so, the usage tells a model which of the
+// two happens, and the rest of the update is as it was.
+func TestActionSpecs_TokenResets_AreDestructive(t *testing.T) {
+	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
+	tests := []struct {
+		tool    string
+		warning string
+	}{
+		{tool: "gitlab_runner_reset_token", warning: runnerAuthTokenResetWarning},
+		{tool: "gitlab_runner_reset_token_by_token", warning: runnerAuthTokenResetWarning},
+		{tool: "gitlab_runner_reset_instance_reg_token", warning: runnerRegTokenResetWarning},
+		{tool: "gitlab_runner_reset_group_reg_token", warning: runnerRegTokenResetWarning},
+		{tool: "gitlab_runner_reset_project_reg_token", warning: runnerRegTokenResetWarning},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec, ok := byTool[tt.tool]
+			if !ok {
+				t.Fatalf("no action spec projects %s", tt.tool)
+			}
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", tt.tool, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || !spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want the update it was", tt.tool, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, tt.warning) || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation. Returns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", tt.tool, spec.Usage, spec.IndividualTool.Description)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("%s: destructiveHint is not true: %+v", tt.tool, tool.Annotations)
 			}
 		})
 	}

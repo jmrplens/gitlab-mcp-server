@@ -224,7 +224,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("db_migration_mark", ownerDBMigrations, toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
 		adminReadSpec("application_list", ownerApplications, toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", ownerApplications, toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
-		adminCreateSpec("application_renew_secret", ownerApplications, toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
+		adminSecretRenewSpec("application_renew_secret", ownerApplications, toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
 		adminDeleteSpec("application_delete", ownerApplications, toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
 		adminApplicationStatisticsGetSpec(client),
 		adminMetadataGetSpec(client),
@@ -290,6 +290,19 @@ func adminListSpec(name, owner string, route toolutil.ActionRoute, individualToo
 
 func adminCreateSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, adminOptions(owner, individualTool))
+}
+
+// adminSecretRenewSpec is a create that asks for confirmation. Renewing an
+// OAuth application's secret invalidates the previous one at once and no call
+// brings it back, so every client configured with it stops authenticating
+// until it is given the new value: a credential revoked with another issued
+// in its place, which the catalog classifies as it does a revocation. Only
+// the destructive bit is added. The constructor stays the create's, since a
+// renewal repeated issues another secret.
+func adminSecretRenewSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := adminOptions(owner, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func adminUpdateSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -949,10 +962,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		},
 	},
 	"gitlab_renew_application_secret": {
-		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.",
+		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). Destructive: the previous secret is invalidated immediately, so confirm with the user first, and update every client that uses it with the new value returned.",
 		aliases:     []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"},
 		related:     []string{actionApplicationList, actionApplicationCreate},
-		description: "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+		description: "Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
 		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceOAuthApplicationID},
 	},
 	"gitlab_delete_application": {

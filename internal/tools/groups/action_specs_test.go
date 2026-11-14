@@ -72,6 +72,52 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	}
 }
 
+// assertDestructiveHint fails unless the individual tool projected from spec
+// tells a client the action is destructive.
+func assertDestructiveHint(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+		t.Errorf("%s: destructiveHint is not true: %+v", spec.IndividualTool.Name, tool.Annotations)
+	}
+}
+
+// TestActionSpecs_Transfers_AreDestructive holds the two transfers this
+// package owns to the answer project.transfer gives. Each moves a project or
+// a group to another namespace, which changes its path, its URLs and who
+// inherits access to it, the effect the project's own transfer is destructive
+// for. The spec, its route and the individual tool's annotation say so, the
+// usage tells a model why, and the rest of the update is as it was.
+func TestActionSpecs_Transfers_AreDestructive(t *testing.T) {
+	byTool := groupSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, name := range []string{"gitlab_group_transfer", "gitlab_group_transfer_project"} {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := byTool[name]
+			if !ok {
+				t.Fatalf("no action spec projects %s", name)
+			}
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || !spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want the update it was", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, "Destructive: ") || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation. Returns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", name, spec.Usage, spec.IndividualTool.Description)
+			}
+			assertDestructiveHint(t, spec)
+		})
+	}
+	t.Run("gitlab_group_transfer_locations", func(t *testing.T) {
+		if spec := byTool["gitlab_group_transfer_locations"]; spec.Destructive || !spec.ReadOnly {
+			t.Errorf("gitlab_group_transfer_locations: destructive %v read-only %v, want the read it is", spec.Destructive, spec.ReadOnly)
+		}
+	})
+}
+
 // TestActionSpecs_PrimaryMetadata validates the PrimaryMetadata route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

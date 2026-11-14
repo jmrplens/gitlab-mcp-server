@@ -249,3 +249,57 @@ func TestAccessTokenOptions_EmptyScopeShortCircuit(t *testing.T) {
 		t.Errorf("expected default Usage for unknown scope, got %q", got.Usage)
 	}
 }
+
+// assertDestructiveHint fails unless the individual tool projected from spec
+// tells a client the action is destructive.
+func assertDestructiveHint(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{Description: "Rotate an access token."})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+		t.Errorf("%s: destructiveHint is not true: %+v", spec.IndividualTool.Name, tool.Annotations)
+	}
+}
+
+// TestActionSpecs_Rotations_AreDestructive holds the six rotations to the
+// answer the revocations give. GitLab revokes the rotated token in the same
+// request, so whatever still holds the old value stops authenticating, which
+// is the effect token_*_revoke is destructive for. The spec, its route and
+// the individual tool's annotation all say so, the usage tells a model why,
+// and nothing else about the action moved: a rotation repeated issues another
+// token, so it stays non-idempotent.
+func TestActionSpecs_Rotations_AreDestructive(t *testing.T) {
+	byTool := accessTokenSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NotFoundHandler())))
+	tools := []string{
+		"gitlab_project_access_token_rotate", "gitlab_project_access_token_rotate_self",
+		"gitlab_group_access_token_rotate", "gitlab_group_access_token_rotate_self",
+		"gitlab_personal_access_token_rotate", "gitlab_personal_access_token_rotate_self",
+	}
+	for _, name := range tools {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := byTool[name]
+			if !ok {
+				t.Fatalf("no action spec projects %s", name)
+			}
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want neither", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, accessTokenRotationWarning) {
+				t.Errorf("%s usage = %q, want it to carry %q", name, spec.Usage, accessTokenRotationWarning)
+			}
+			assertDestructiveHint(t, spec)
+		})
+	}
+	for _, name := range []string{"gitlab_project_access_token_create", "gitlab_group_access_token_create"} {
+		t.Run(name, func(t *testing.T) {
+			if spec := byTool[name]; spec.Destructive || strings.Contains(spec.Usage, accessTokenRotationWarning) {
+				t.Errorf("%s: destructive %v, usage %q, want a create that ends no token", name, spec.Destructive, spec.Usage)
+			}
+		})
+	}
+}

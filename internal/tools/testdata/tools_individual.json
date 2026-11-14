@@ -54662,6 +54662,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -54683,7 +54687,8 @@
         "group_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -54802,7 +54807,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -54814,6 +54819,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -54830,7 +54839,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -54949,7 +54959,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -75546,10 +75556,14 @@
   },
   {
     "name": "gitlab_group_service_account_pat_rotate",
-    "description": "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.",
+    "description": "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role). Requires confirmation.\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "Expiration date for the new token (YYYY-MM-DD)",
           "format": "date",
@@ -75573,7 +75587,8 @@
         "service_account_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -75685,7 +75700,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -76988,10 +77003,14 @@
   },
   {
     "name": "gitlab_group_transfer",
-    "description": "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
+    "description": "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path of the group to move",
           "type": [
@@ -77010,7 +77029,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -77876,7 +77896,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -78029,10 +78049,14 @@
   },
   {
     "name": "gitlab_group_transfer_project",
-    "description": "Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
+    "description": "Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -78052,7 +78076,8 @@
         "group_id",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -78914,7 +78939,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -165985,6 +166010,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -165998,7 +166027,8 @@
       "required": [
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -166117,7 +166147,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -166129,13 +166159,18 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
           "type": "string"
         }
       },
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -166254,7 +166289,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -173055,6 +173090,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -173076,7 +173115,8 @@
         "project_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -173195,7 +173235,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -173207,6 +173247,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -173223,7 +173267,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -173342,7 +173387,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -198242,10 +198287,14 @@
   },
   {
     "name": "gitlab_project_service_account_pat_rotate",
-    "description": "Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.",
+    "description": "Rotate a personal access token for a GitLab project service account. Requires confirmation. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiration date in YYYY-MM-DD format",
           "format": "date",
@@ -198272,7 +198321,8 @@
         "service_account_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -198384,7 +198434,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -214604,10 +214654,14 @@
   },
   {
     "name": "gitlab_renew_application_secret",
-    "description": "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+    "description": "Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Application ID whose secret should be renewed",
           "type": "integer"
@@ -214616,7 +214670,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -214669,7 +214724,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -219821,10 +219876,14 @@
   },
   {
     "name": "gitlab_runner_controller_token_rotate",
-    "description": "Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
+    "description": "Rotate a runner controller token (admin-only). Requires confirmation. Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -219838,7 +219897,8 @@
         "controller_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -219882,7 +219942,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222410,10 +222470,14 @@
   },
   {
     "name": "gitlab_runner_reset_group_reg_token",
-    "description": "Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.",
+    "description": "Reset a group's runner registration token by group_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -222425,7 +222489,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222452,7 +222517,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222460,11 +222525,17 @@
   },
   {
     "name": "gitlab_runner_reset_instance_reg_token",
-    "description": "Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
+    "description": "Reset the instance-level runner registration token (deprecated, admin only). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
-      "type": "object"
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222491,7 +222562,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222499,10 +222570,14 @@
   },
   {
     "name": "gitlab_runner_reset_project_reg_token",
-    "description": "Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.",
+    "description": "Reset a project's runner registration token by project_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -222514,7 +222589,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222541,7 +222617,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222549,10 +222625,14 @@
   },
   {
     "name": "gitlab_runner_reset_token",
-    "description": "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
+    "description": "Reset a runner's authentication token by runner_id. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "runner_id": {
           "description": "Runner ID",
           "type": "integer"
@@ -222561,7 +222641,8 @@
       "required": [
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222588,7 +222669,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222596,10 +222677,14 @@
   },
   {
     "name": "gitlab_runner_reset_token_by_token",
-    "description": "Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
+    "description": "Reset a runner's authentication token with its current authentication token. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "token": {
           "description": "Current runner authentication token, which the reset invalidates",
           "type": "string",
@@ -222609,7 +222694,8 @@
       "required": [
         "token"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222636,7 +222722,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false

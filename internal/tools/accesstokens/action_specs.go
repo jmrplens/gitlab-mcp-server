@@ -68,6 +68,10 @@ func PersonalRevokeSelfOutput(ctx context.Context, client *gitlabclient.Client, 
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted personal access token."}, nil
 }
 
+// accessTokenRotationWarning is what every rotation's usage says about the
+// token it replaces.
+const accessTokenRotationWarning = "Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first."
+
 func accessTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
@@ -76,8 +80,16 @@ func accessTokenCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
+// accessTokenRotateSpec is a create that asks for confirmation. GitLab revokes
+// the rotated token in the same request and no call brings it back, which is
+// what token_*_revoke does and why those are destructive: whatever still
+// holds the old value stops authenticating at once. Only the destructive bit
+// is added. The constructor stays the create's, since a rotation repeated
+// issues another token rather than the same one.
 func accessTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
+	options := accessTokenOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -101,6 +113,9 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		// itself; without this sentence they read identically to their
 		// token_id-taking siblings and a model has no signal to pick one.
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens: this action %s the %s-scoped token that authenticates this request itself, with no token_id parameter.", scope, accessTokenOperationPhrase(operation), scope)
+	}
+	if operation == "rotate" || operation == "rotate_self" {
+		options.Usage += " " + accessTokenRotationWarning
 	}
 	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {

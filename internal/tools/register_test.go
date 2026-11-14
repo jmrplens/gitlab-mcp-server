@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -1498,15 +1499,22 @@ func validateDestructiveMetadataMatches(t *testing.T, routeMap map[string][]dest
 
 // Actions that are destructive but do NOT contain a destructive keyword.
 // These are known edge cases verified manually.
+//
+// Every name here is the name of a destructive action and of no action that
+// is not, which TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions holds:
+// a name two actions share with different classifications would say either
+// is acceptable. A transfer, a rotation, a token reset and a secret renewal
+// are not listed, because they are destructive for the effect they have and
+// [effectClasses] both permits and demands that.
 var knownNonKeywordDestructive = map[string]struct{}{
 	"merge": {}, "erase": {}, "stop": {}, "ban": {},
 	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
 	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
-	"unshare": {}, "disable_project": {}, "import_from_file": {},
+	"disable_project":      {},
 	"group_member_unshare": {}, "unshare_from_group": {},
-	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
-	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
-	"transfer": {}, "detach": {},
+	"mirror_force_push": {},
+	"db_migration_mark": {}, "terraform_state_unlock": {},
+	"detach": {},
 	// mirror_add creates something and deletes nothing, which is why the name
 	// heuristic cannot see it. What makes it destructive is where the data
 	// goes: the host named in the url parameter receives a continuous copy of
@@ -1550,6 +1558,11 @@ func isRouteDestructiveException(id string) bool {
 // destructive wrappers, and that safe action names (list, get, search, create,
 // update) never use destructive wrappers. This test prevents accidental
 // misclassification when adding new routes.
+//
+// It reads verbs and nothing else, so it is one of two nets: an action whose
+// effect asks for confirmation under a verb this list does not hold is caught
+// by TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation, which reads the
+// request the action sends as well as its name.
 func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 	// routeEntry captures a single action definition found in source code.
 	type routeEntry struct {
@@ -1613,8 +1626,10 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 2: Action with safe keyword MUST NOT be marked destructive,
 		// UNLESS it also contains a destructive keyword or is a known exception.
+		// An action of an effect class is one: the class that demands it be
+		// destructive is what permits it to be, whatever its verb.
 		_, isKnownException := knownNonKeywordDestructive[r.action]
-		isKnownException = isKnownException || isRouteDestructiveException(r.id)
+		isKnownException = isKnownException || isRouteDestructiveException(r.id) || inAnyEffectClass(r.action)
 		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s action %q contains safe keyword but is destructive", r.id, r.action)
 			failures++
@@ -1622,12 +1637,349 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 
 		// Rule 3: Destructive actions without keyword must be in the known exceptions list.
 		if r.destructive && !hasDestructiveKw && !isKnownException {
-			t.Errorf("%s action %q is destructive but has no destructive keyword and is not in known exceptions; add it to knownNonKeywordDestructive", r.id, r.action)
+			t.Errorf("%s action %q is destructive but has no destructive keyword, belongs to no effect class and is not in known exceptions; add it to knownNonKeywordDestructive", r.id, r.action)
 			failures++
 		}
 	}
 
 	t.Logf("scanned %d routes (%d failures)", len(allRoutes), failures)
+}
+
+// TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions holds
+// knownNonKeywordDestructive to the catalog. An entry that names no
+// destructive action excuses nothing, and one that names a destructive action
+// beside a non-destructive one of the same name says either classification is
+// acceptable. Both read as a decision somebody verified, so neither is kept.
+func TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	destructive := map[string]bool{}
+	for _, action := range catalog.Actions() {
+		if action.Route.Destructive {
+			destructive[action.Name] = true
+		}
+	}
+	for name := range knownNonKeywordDestructive {
+		if !destructive[name] {
+			t.Errorf("knownNonKeywordDestructive holds %q, which no destructive action of the catalog is named; remove the entry", name)
+		}
+	}
+	for _, action := range catalog.Actions() {
+		if _, listed := knownNonKeywordDestructive[action.Name]; listed && !action.Route.Destructive {
+			t.Errorf("%s is named %q, which knownNonKeywordDestructive lists as destructive, and is not; classify it or stop listing the name", action.ID, action.Name)
+		}
+	}
+}
+
+// effectClass is one effect on GitLab that asks for confirmation whatever the
+// action that has it is called. The name heuristic above reads verbs, and a
+// verb is the author's choice: a rotation ends a credential as a revocation
+// does and is called neither delete nor revoke. A class is recognized twice
+// over the whole catalog, by the action's name and by the request it sends,
+// so an action added under another verb is held to its siblings by its route.
+type effectClass struct {
+	name string
+	// reason is why the effect asks for confirmation, which the failure
+	// message gives to whoever added the action.
+	reason string
+	// byName reads the bare name of an action that writes.
+	byName func(action string) bool
+	// byRoute reads "METHOD /route" of a REST request other than a GET or a
+	// HEAD, in the spelling of docs/development/action-requests.json.
+	byRoute *regexp.Regexp
+	// guarded are the actions, by canonical ID, that are not destructive and
+	// whose handler asks instead, because only some of their calls have the
+	// effect and the arguments decide which.
+	guarded map[string]effectGuard
+	// exempt are the actions, by canonical ID, that reach the class by name
+	// or by route and cannot have its effect, each with the reason.
+	exempt map[string]string
+}
+
+// effectGuard is what a guarded action is held to: a call that has the
+// effect, and the state GitLab answers the guard's read with.
+type effectGuard struct {
+	// current is the body the fake GitLab answers every GET with.
+	current string
+	// call is a call that has the effect against that state.
+	call map[string]any
+}
+
+// effectClasses are the effects the catalog classifies by what they do.
+func effectClasses() []effectClass {
+	containsAny := func(action string, words ...string) bool {
+		for _, word := range words {
+			if strings.Contains(action, word) {
+				return true
+			}
+		}
+		return false
+	}
+	return []effectClass{
+		{
+			name:   "namespace transfer",
+			reason: "a transfer changes the path and the URLs of the project or group and of everything under it, and who inherits access to it",
+			byName: func(action string) bool {
+				return action == "transfer" || strings.HasPrefix(action, "transfer_")
+			},
+			byRoute: regexp.MustCompile(`^(PUT|POST) /(projects|groups)/:id/transfer$|^POST /groups/:id/projects/:project_id$`),
+		},
+		{
+			name:   "credential replaced or revoked",
+			reason: "the previous credential stops working at once and no call brings it back",
+			byName: func(action string) bool {
+				return containsAny(action, "rotate", "revoke", "renew_secret", "regenerate") ||
+					(strings.Contains(action, "reset") && strings.Contains(action, "token"))
+			},
+			byRoute: regexp.MustCompile(`/rotate$|/renew-secret$|/reset_(registration|authentication)_token$`),
+		},
+	}
+}
+
+// inAnyEffectClass reports whether a write action of this name belongs to an
+// effect class, which is what allows it to be destructive without a
+// destructive verb in its name: the class that permits it is the one that
+// demands it.
+func inAnyEffectClass(action string) bool {
+	for _, class := range effectClasses() {
+		if class.byName(action) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation holds every action
+// of one effect to one answer about confirmation. Two effects are read: a
+// project or a group moved to another namespace, and a credential replaced or
+// revoked. An action that reaches a class by its name or by a request it
+// sends is destructive, or guarded by its handler, or declared exempt with
+// the reason, and a declaration that stopped describing the catalog fails as
+// an unclassified action does.
+//
+// The name heuristic cannot hold this: it knew transfer as a name that may be
+// destructive, which project.transfer was and group.transfer was not, and it
+// had no word for a rotation at all.
+func TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	classes := effectClasses()
+
+	t.Run("by name", func(t *testing.T) { assertEffectClassesByName(t, catalog, classes) })
+	t.Run("by route", func(t *testing.T) { assertEffectClassesByRoute(t, catalog, classes) })
+	t.Run("guarded actions hold their guard", func(t *testing.T) {
+		for _, class := range classes {
+			for id, guard := range class.guarded {
+				t.Run(id, func(t *testing.T) { assertEffectGuardHolds(t, id, guard) })
+			}
+		}
+	})
+	t.Run("declarations describe the catalog", func(t *testing.T) {
+		for _, class := range classes {
+			assertEffectDeclarationsDescribeTheCatalog(t, catalog, class)
+		}
+	})
+}
+
+// answers reports whether the catalog answers for action's membership of the
+// class: the action is destructive, or guarded, or declared exempt.
+func (class effectClass) answers(action actioncatalog.Action) bool {
+	if action.Route.Destructive {
+		return true
+	}
+	if _, guarded := class.guarded[string(action.ID)]; guarded {
+		return true
+	}
+	_, exempt := class.exempt[string(action.ID)]
+	return exempt
+}
+
+// siblings names a few destructive members of the class, the pattern an
+// unclassified action is told to copy.
+func (class effectClass) siblings(catalog *actioncatalog.Catalog) string {
+	var ids []string
+	for _, action := range catalog.Actions() {
+		if !action.ReadOnly && action.Route.Destructive && class.byName(action.Name) {
+			ids = append(ids, string(action.ID))
+		}
+	}
+	slices.Sort(ids)
+	// A few names are enough to find the pattern to copy; the credential
+	// class alone has more than twenty destructive members.
+	const shown = 3
+	if len(ids) > shown {
+		return fmt.Sprintf("%s and %d more", strings.Join(ids[:shown], ", "), len(ids)-shown)
+	}
+	return strings.Join(ids, ", ")
+}
+
+// reportUnansweredEffect fails for an action that belongs to class and asks
+// for no confirmation, saying how it was recognized and what to do about it.
+func reportUnansweredEffect(t *testing.T, catalog *actioncatalog.Catalog, class effectClass, action actioncatalog.Action, how string) {
+	t.Helper()
+	t.Errorf("%s belongs to the effect class %q (%s) and asks for no confirmation: %s. "+
+		"Declare it destructive in its ActionSpec, as its siblings are (%s), or guard its handler and declare it in effectClasses, or declare why it cannot have the effect",
+		action.ID, class.name, how, class.reason, class.siblings(catalog))
+}
+
+// assertEffectClassesByName holds every action that writes and whose name
+// belongs to a class to that class's answer.
+func assertEffectClassesByName(t *testing.T, catalog *actioncatalog.Catalog, classes []effectClass) {
+	t.Helper()
+	members := 0
+	for _, action := range catalog.Actions() {
+		if action.ReadOnly {
+			continue
+		}
+		for _, class := range classes {
+			if !class.byName(action.Name) {
+				continue
+			}
+			members++
+			if !class.answers(action) {
+				reportUnansweredEffect(t, catalog, class, action, "by its name")
+			}
+		}
+	}
+	if members == 0 {
+		t.Fatal("no action belongs to any effect class by name, so the classes read nothing")
+	}
+}
+
+// effectClassRequest is a REST request other than a GET or a HEAD that an
+// action can send, as the committed request record spells it.
+type effectClassRequest struct {
+	action string
+	route  string
+}
+
+// recordedWriteRequests reads the REST requests other than a GET or a HEAD
+// out of docs/development/action-requests.json.
+func recordedWriteRequests(t *testing.T) []effectClassRequest {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "development", "action-requests.json"))
+	if err != nil {
+		t.Fatalf("read the action request record: %v", err)
+	}
+	var record struct {
+		Actions []struct {
+			ID       string `json:"id"`
+			Requests []struct {
+				Kind  string `json:"kind"`
+				Route string `json:"route"`
+			} `json:"requests"`
+		} `json:"actions"`
+	}
+	if err = json.Unmarshal(raw, &record); err != nil {
+		t.Fatalf("decode the action request record: %v", err)
+	}
+	var requests []effectClassRequest
+	for _, entry := range record.Actions {
+		for _, request := range entry.Requests {
+			if request.Kind != "rest" || strings.HasPrefix(request.Route, "GET ") || strings.HasPrefix(request.Route, "HEAD ") {
+				continue
+			}
+			requests = append(requests, effectClassRequest{action: entry.ID, route: request.Route})
+		}
+	}
+	return requests
+}
+
+// assertEffectClassesByRoute holds every action that sends a request of a
+// class to that class's answer, whatever the action is called.
+func assertEffectClassesByRoute(t *testing.T, catalog *actioncatalog.Catalog, classes []effectClass) {
+	t.Helper()
+	// The requests are read from a committed generated record, so a stack
+	// layer below the one that regenerates it defers the comparison.
+	freshness.SkipIfDeferred(t)
+	members := 0
+	for _, request := range recordedWriteRequests(t) {
+		action, ok := catalog.Action(actioncatalog.ActionID(request.action))
+		if !ok {
+			continue
+		}
+		for _, class := range classes {
+			if !class.byRoute.MatchString(request.route) {
+				continue
+			}
+			members++
+			if !class.answers(action) {
+				reportUnansweredEffect(t, catalog, class, action, "by sending "+request.route)
+			}
+		}
+	}
+	if members == 0 {
+		t.Fatal("no recorded request belongs to any effect class, so the route patterns read nothing")
+	}
+}
+
+// assertEffectGuardHolds holds a guarded action to its guard: it is not
+// destructive, it declares the confirm parameter its guard asks for, and a
+// call that has the effect is refused before any write reaches GitLab, on
+// what the guard read there.
+func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
+	t.Helper()
+	var reads, writes atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes.Add(1)
+			testutil.RespondJSON(w, http.StatusOK, `{}`)
+			return
+		}
+		reads.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, guard.current)
+	}))
+	served := mustBuildActionCatalog(t, client, ActionCatalogOptions{Enterprise: true})
+	action, ok := served.Action(actioncatalog.ActionID(id))
+	if !ok {
+		t.Fatalf("the catalog holds no action %s", id)
+	}
+	if action.Route.Destructive {
+		t.Errorf("%s is guarded by its handler and destructive as well: the destructive gate would ask before a call that adds or tightens a rule", id)
+	}
+	properties, _ := action.Route.InputSchema["properties"].(map[string]any)
+	if _, declared := properties["confirm"]; !declared {
+		t.Errorf("%s declares no confirm parameter, so the individual tool's closed schema refuses the confirmation its guard asks for", id)
+	}
+	_, err := action.Route.Handler(context.Background(), guard.call)
+	if err == nil || !strings.Contains(err.Error(), "confirm=true") {
+		t.Errorf("%s(%v) error = %v, want a refusal asking for confirm=true", id, guard.call, err)
+	}
+	if got := writes.Load(); got != 0 {
+		t.Errorf("%s sent %d write(s) before it was confirmed, want 0", id, got)
+	}
+	if got := reads.Load(); got == 0 {
+		t.Errorf("%s read nothing, so its refusal was not decided by the rule GitLab holds", id)
+	}
+}
+
+// assertEffectDeclarationsDescribeTheCatalog fails on a guarded or exempt
+// declaration of class that stopped describing the catalog: an action that is
+// gone, that left the class, or that is destructive and so needs no
+// declaration.
+func assertEffectDeclarationsDescribeTheCatalog(t *testing.T, catalog *actioncatalog.Catalog, class effectClass) {
+	t.Helper()
+	declared := map[string]string{}
+	for id := range class.guarded {
+		declared[id] = "guarded"
+	}
+	for id := range class.exempt {
+		if _, twice := declared[id]; twice {
+			t.Errorf("%s is declared both guarded and exempt in the effect class %q", id, class.name)
+		}
+		declared[id] = "exempt"
+	}
+	for id, how := range declared {
+		action, ok := catalog.Action(actioncatalog.ActionID(id))
+		if !ok {
+			t.Errorf("the effect class %q declares %s as %s, and the catalog holds no such action", class.name, id, how)
+			continue
+		}
+		if action.ReadOnly || !class.byName(action.Name) {
+			t.Errorf("the effect class %q declares %s as %s, and the action no longer belongs to the class", class.name, id, how)
+		}
+		if action.Route.Destructive {
+			t.Errorf("the effect class %q declares %s as %s, and the action is destructive, so the declaration answers nothing", class.name, id, how)
+		}
+	}
 }
 
 // TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification verifies
@@ -1646,7 +1998,7 @@ func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *test
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count in
 	// the canonical action catalog, including GitLab.com Enterprise actions.
-	const minExpectedDestructiveRoutes = 163
+	const minExpectedDestructiveRoutes = 208
 
 	total := len(uniqueActions)
 	if total < minExpectedDestructiveRoutes {

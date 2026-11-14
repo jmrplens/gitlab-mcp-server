@@ -87,8 +87,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupUpdateSpec("unarchive", toolutil.RouteAction(client, UnarchiveOutput), "gitlab_group_unarchive"),
 		// gitlab_group_search — search for groups by name or path.
 		groupReadSpec(paramSearch, toolutil.RouteAction(client, Search), "gitlab_group_search"),
-		// gitlab_group_transfer_project — transfer a project into a group.
-		groupUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
+		// gitlab_group_transfer_project: transfer a project into a group (destructive).
+		groupTransferSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
 		// gitlab_group_projects — list the projects that belong to a group.
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
 		// gitlab_group_members_list — list the members of a group.
@@ -131,8 +131,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupReadSpec("shared_projects", toolutil.RouteAction(client, ListSharedProjects), "gitlab_group_shared_projects_list"),
 		// gitlab_group_shared_project_delete: remove a project shared with a group, from the group's side (destructive).
 		groupDeleteSpec("shared_project_delete", toolutil.DestructiveVoidAction(client, DeleteSharedProject), toolGroupSharedProjectDelete),
-		// gitlab_group_transfer — move a group under a new parent group or to top level.
-		groupUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
+		// gitlab_group_transfer: move a group under a new parent group or to top level (destructive).
+		groupTransferSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
 		// gitlab_group_upload_avatar — upload or replace a group's avatar image.
 		groupUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadAvatar), "gitlab_group_upload_avatar"),
 		// gitlab_group_list_provisioned_users — list users provisioned via SAML/SCIM (Premium/Ultimate).
@@ -226,6 +226,19 @@ func groupCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func groupUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(individualTool))
+}
+
+// groupTransferSpec is an update that asks for confirmation. A transfer
+// changes the path and the URLs of the project or the group and of everything
+// under it, and who inherits access to it, and the members and tokens the old
+// namespace granted stop reaching it. project.transfer makes the same move
+// through PUT /projects/:id/transfer and is destructive, so the three actions
+// that move a namespace answer alike. Only the destructive bit changes: the
+// constructor, and with it the idempotency hint, stays the update's.
+func groupTransferSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupOptionsForAction(individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func groupDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -604,7 +617,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 		}
 		options.IndividualTool.Description = "Remove a project shared with a GitLab group, from the group's side. Returns: a success confirmation. See also: gitlab_group_shared_projects_list, gitlab_project_delete_shared_group, gitlab_project_share_with_group, gitlab_group_get."
 	case "gitlab_group_transfer":
-		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
+		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Destructive: the move changes the path and URLs of everything under the group and who inherits access to it, so confirm with the user first. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends.GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}
 		options.RelatedActions = []string{actionGroupTransferLocs, actionGroupGet, actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -614,7 +627,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"parent_id is the destination. group_id is the group being moved. Omit parent_id to make the group top-level."},
 			},
 		}
-		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
+		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
 	default:
 		return applyGroupPushRuleMetadata(individualTool, options)
 	}
@@ -664,7 +677,7 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
 	switch individualTool {
 	case "gitlab_group_transfer_project":
-		options.Usage = "Move an existing project into this group's namespace, as an administrator. GitLab refuses this route to anyone else, the project's owner included, who moves a project with project.transfer instead. The move is applied before GitLab answers, and the answer is the destination group rather than the project: read the project with project.get to see its new path. To discover which groups a group itself can be transferred into, use group.transfer_locations instead."
+		options.Usage = "Move an existing project into this group's namespace, as an administrator. Destructive: the move changes the project's path and URLs and who inherits access to it, so confirm with the user first. GitLab refuses this route to anyone else, the project's owner included, who moves a project with project.transfer instead.The move is applied before GitLab answers, and the answer is the destination group rather than the project: read the project with project.get to see its new path. To discover which groups a group itself can be transferred into, use group.transfer_locations instead."
 		options.Aliases = []string{"transfer project to group", "move project into group", "relocate project namespace"}
 		options.RelatedActions = []string{actionGroupGet, actionGroupTransferLocs, actionGroupProjects, "project.transfer"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -675,7 +688,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				CommonConfusions: []string{"project_id is the project being moved. group_id is the destination group."},
 			},
 		}
-		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
+		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
 	case "gitlab_group_shared_with_list":
 		options.Usage = "List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups."
 		options.Aliases = []string{"groups shared with this group", "list shared groups", "group share grants", "who shares this group"}

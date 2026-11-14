@@ -30,6 +30,7 @@ import (
 	"go/token"
 	"io"
 	"log/slog"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
@@ -17471,4 +17472,132 @@ func TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost(t *testin
 			}
 		})
 	}
+}
+
+// confirmedCall is one action whose effect asks for confirmation, as each of
+// the three surfaces is asked for it.
+type confirmedCall struct {
+	action     string
+	metaTool   string
+	metaAction string
+	individual string
+	params     map[string]any
+	// confirmInParams is where the dynamic surface takes the confirmation: a
+	// destructive action takes it beside params, where the execute gate reads
+	// it, and an action its own handler guards takes it inside them, where
+	// the handler does.
+	confirmInParams bool
+}
+
+// confirmedCalls are one action of each family the catalog classifies by its
+// effect rather than its verb: a namespace transfer, a token rotation and a
+// runner token reset.
+func confirmedCalls() []confirmedCall {
+	return []confirmedCall{
+		{
+			action: "group.transfer_project", metaTool: "gitlab_group", metaAction: "transfer_project",
+			individual: "gitlab_group_transfer_project",
+			params:     map[string]any{"group_id": "10", "project_id": 42},
+		},
+		{
+			action: "access.token_project_rotate", metaTool: "gitlab_access", metaAction: "token_project_rotate",
+			individual: "gitlab_project_access_token_rotate",
+			params:     map[string]any{"project_id": "42", "token_id": 3},
+		},
+		{
+			action: "runner.reset_token", metaTool: "gitlab_runner", metaAction: "reset_token",
+			individual: "gitlab_runner_reset_token",
+			params:     map[string]any{"runner_id": 7},
+		},
+	}
+}
+
+// arguments builds the tools/call of this action on one surface, with the
+// confirmation where that surface takes it when confirm is set.
+func (c confirmedCall) arguments(surface string, confirm bool) (tool string, args map[string]any) {
+	params := maps.Clone(c.params)
+	switch surface {
+	case config.ToolSurfaceIndividual:
+		if confirm {
+			params["confirm"] = true
+		}
+		return c.individual, params
+	case config.ToolSurfaceMeta:
+		if confirm {
+			params["confirm"] = true
+		}
+		return c.metaTool, map[string]any{"action": c.metaAction, "params": params}
+	default:
+		args = map[string]any{"action": c.action, "params": params}
+		if confirm && c.confirmInParams {
+			params["confirm"] = true
+		}
+		if confirm && !c.confirmInParams {
+			args["confirm"] = true
+		}
+		return "gitlab_execute_action", args
+	}
+}
+
+// TestCreateServer_EffectClassActions_AskOnEverySurface drives the real
+// server on each of its three surfaces against a GitLab that counts what it
+// is sent. An action that moves a namespace, replaces a credential or relaxes
+// a push rule sends no write until the call carries the confirmation, on a
+// client that cannot be asked, and sends its one write once it does. The
+// catalog test holds the classification; this holds that every dispatcher
+// acts on it.
+func TestCreateServer_EffectClassActions_AskOnEverySurface(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			var writes atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					writes.Add(1)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"prevent_secrets":true,"max_file_size":50}`)
+			}))
+			server := createServerWithin(t, client, &config.ServerConfig{
+				ToolSurface:       surface,
+				CapabilitySurface: config.CapabilitySurfaceMinimal,
+				Tier:              edition.Ultimate,
+				TierExplicit:      true,
+			})
+			session := newInMemorySession(t, server)
+			// sequential: each action is refused first and confirmed second, against one counter.
+			for _, action := range confirmedCalls() {
+				before := writes.Load()
+				tool, args := action.arguments(surface, false)
+				if answer := toolAnswer(t, session, tool, args); !strings.Contains(answer, "confirm=true") {
+					t.Errorf("%s without confirm answered %q, want a refusal asking for confirm=true", action.action, answer)
+				}
+				if sent := writes.Load() - before; sent != 0 {
+					t.Errorf("%s without confirm sent %d write(s) to GitLab, want 0", action.action, sent)
+				}
+				tool, args = action.arguments(surface, true)
+				answer := toolAnswer(t, session, tool, args)
+				if sent := writes.Load() - before; sent != 1 {
+					t.Errorf("%s with confirm sent %d write(s) to GitLab, want 1; it answered %q", action.action, sent, answer)
+				}
+			}
+		})
+	}
+}
+
+// toolAnswer calls a tool and returns what the model reads: the text of the
+// result, or the protocol error the call was answered with.
+func toolAnswer(t *testing.T, session *mcp.ClientSession, tool string, args map[string]any) string {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: tool, Arguments: args})
+	if err != nil {
+		return err.Error()
+	}
+	var text strings.Builder
+	for _, content := range result.Content {
+		if block, ok := content.(*mcp.TextContent); ok {
+			text.WriteString(block.Text)
+		}
+	}
+	return text.String()
 }

@@ -21,7 +21,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupServiceAccountReadSpec("service_account_pat_list", toolutil.RouteAction(client, ListPATs), "gitlab_group_service_account_pat_list"),
 		groupServiceAccountCreateSpec("service_account_pat_create", toolutil.RouteAction(client, CreatePAT), "gitlab_group_service_account_pat_create"),
 		groupServiceAccountDeleteSpec("service_account_pat_revoke", toolutil.DestructiveVoidAction(client, RevokePAT), "gitlab_group_service_account_pat_revoke"),
-		groupServiceAccountUpdateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_group_service_account_pat_rotate"),
+		groupServiceAccountRotateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_group_service_account_pat_rotate"),
 	}
 }
 
@@ -46,6 +46,17 @@ func groupServiceAccountUpdateSpec(name string, route toolutil.ActionRoute, indi
 	return toolutil.NewUpdateActionSpec(name, route, groupServiceAccountOptions(name, individualTool))
 }
 
+// groupServiceAccountRotateSpec is an update that asks for confirmation.
+// GitLab revokes the rotated token in the same request and no call brings it
+// back, which is what service_account_pat_revoke does and why that one is
+// destructive: whatever runs as the service account with the old value stops
+// authenticating at once. Only the destructive bit is added to the update.
+func groupServiceAccountRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupServiceAccountOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
 func groupServiceAccountDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, groupServiceAccountOptions(name, individualTool))
 }
@@ -63,7 +74,7 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 		"service_account_pat_list":   "List the personal access tokens of one group service account.",
 		"service_account_pat_create": "Create a personal access token for a group service account.",
 		"service_account_pat_revoke": "Revoke one of a group service account's personal access tokens.",
-		"service_account_pat_rotate": "Rotate a group service account's personal access token.",
+		"service_account_pat_rotate": "Rotate a group service account's personal access token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.",
 	}
 	options := toolutil.ActionSpecOptions{
 		Aliases:        groupServiceAccountAliases(actionName),
@@ -75,7 +86,7 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if individualTool == "gitlab_group_service_account_pat_rotate" {
-		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
+		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role). Requires confirmation.\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
 	}
 	if individualTool == "gitlab_group_service_account_get" {
 		// The other actions' descriptions are the curated ones the golden

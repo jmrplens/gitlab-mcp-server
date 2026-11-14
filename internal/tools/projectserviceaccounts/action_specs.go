@@ -20,7 +20,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		projectServiceAccountDeleteSpec("service_account_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_project_service_account_delete"),
 		projectServiceAccountReadSpec("service_account_pat_list", toolutil.RouteAction(client, ListPATs), "gitlab_project_service_account_pat_list"),
 		projectServiceAccountCreateSpec("service_account_pat_create", toolutil.RouteAction(client, CreatePAT), "gitlab_project_service_account_pat_create"),
-		projectServiceAccountCreateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_project_service_account_pat_rotate"),
+		projectServiceAccountRotateSpec("service_account_pat_rotate", toolutil.RouteAction(client, RotatePAT), "gitlab_project_service_account_pat_rotate"),
 		projectServiceAccountDeleteSpec("service_account_pat_revoke", toolutil.DestructiveVoidAction(client, RevokePAT), "gitlab_project_service_account_pat_revoke"),
 	}
 }
@@ -40,6 +40,18 @@ func projectServiceAccountReadSpec(name string, route toolutil.ActionRoute, indi
 
 func projectServiceAccountCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, projectServiceAccountOptions(name, individualTool))
+}
+
+// projectServiceAccountRotateSpec is a create that asks for confirmation.
+// GitLab revokes the rotated token in the same request and no call brings it
+// back, which is what service_account_pat_revoke does and why that one is
+// destructive: whatever runs as the service account with the old value stops
+// authenticating at once. Only the destructive bit is added. The constructor
+// stays the create's, since a rotation repeated issues another token.
+func projectServiceAccountRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := projectServiceAccountOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func projectServiceAccountUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -96,6 +108,9 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 				"last_used_asc", "last_used_desc", "name_asc", "name_desc"),
 		}
 	}
+	if actionName == "service_account_pat_rotate" {
+		options.Usage += " Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first."
+	}
 	if actionName == "service_account_pat_create" || actionName == "service_account_pat_rotate" {
 		options.Usage += " Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
@@ -119,7 +134,7 @@ func projectServiceAccountDescription(actionName string) string {
 	case "service_account_pat_create":
 		return "Create a personal access token for a GitLab project service account. Returns: the created token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_rotate."
 	case "service_account_pat_rotate":
-		return "Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke."
+		return "Rotate a personal access token for a GitLab project service account. Requires confirmation. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke."
 	case "service_account_pat_revoke":
 		return "Revoke a personal access token for a GitLab project service account. Returns: a success status confirming revocation. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_create."
 	default:

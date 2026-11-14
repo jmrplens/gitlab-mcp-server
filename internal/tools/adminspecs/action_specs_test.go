@@ -126,6 +126,43 @@ func TestActionSpecs_DestructiveActions_AreProjectedAsDestructive(t *testing.T) 
 	}
 }
 
+// TestActionSpecs_RenewSecret_IsDestructive holds the renewal of an OAuth
+// application's secret to the answer a revocation gives: the previous secret
+// is invalidated at once, so every client configured with it stops
+// authenticating. The spec, its route and the individual tool's annotation
+// say so, the usage tells a model why, and the action stays the
+// non-idempotent create it was, since a renewal repeated issues another
+// secret.
+func TestActionSpecs_RenewSecret_IsDestructive(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+	for _, name := range []string{"application_renew_secret"} {
+		t.Run(name, func(t *testing.T) {
+			spec := specs[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want neither", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, "Destructive: ") || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation. Returns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", name, spec.Usage, spec.IndividualTool.Description)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("%s: destructiveHint is not true: %+v", name, tool.Annotations)
+			}
+		})
+	}
+	t.Run("application_create", func(t *testing.T) {
+		if spec := specs["application_create"]; spec.Destructive {
+			t.Error("application_create is destructive, want a create that ends no secret")
+		}
+	})
+}
+
 // TestActionSpecs_Tags_CarryTheDomainTagsOfTheirOwnerPackage verifies every
 // admin action is tagged with the domain tags its owner package contributes,
 // and that adminOwnerTags describes the tree in both directions.
