@@ -24606,6 +24606,9 @@
         "draft_note_publish_all": {
           "additionalProperties": true,
           "properties": {
+            "confirm": {
+              "type": "boolean"
+            },
             "internal": {
               "type": [
                 "null",

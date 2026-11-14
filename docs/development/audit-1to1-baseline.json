@@ -4031,6 +4031,7 @@
       "mr_review.draft_note_list | page",
       "mr_review.draft_note_list | per_page",
       "mr_review.draft_note_list | sort",
+      "mr_review.draft_note_publish_all | confirm",
       "mr_review.draft_note_update | confirm",
       "mr_review.note_create | confirm",
       "mr_review.note_update | confirm",

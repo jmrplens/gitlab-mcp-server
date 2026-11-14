@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,021 |
-| Unit test functions                                   | 22,238 |
+| Total test functions                                  | 24,022 |
+| Unit test functions                                   | 22,239 |
 | E2E test functions                                    |  1,783 |
 | cmd test functions                                    |  6,018 |
 | Test files (internal/)                                |    775 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,800 | 57.4% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,322 | 38.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,323 | 38.8% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,347 |        272 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            456 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,417 |        486 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,418 |        486 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,783 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,018 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,021** |  **1,719** |                                                                                                 |
+| **Total**               |     **24,022** |  **1,719** |                                                                                                 |
 
 ### Core Packages
 
@@ -250,7 +250,7 @@
 | mrchanges               |         48 |          2 |   100.0% |         4 |
 | mrcontextcommits        |         39 |          3 |   100.0% |         3 |
 | mrdiscussions           |         79 |          1 |   100.0% |         7 |
-| mrdraftnotes            |         99 |          3 |   100.0% |         7 |
+| mrdraftnotes            |        100 |          3 |   100.0% |         7 |
 | mrnotes                 |         52 |          4 |   100.0% |         5 |
 | namespaces              |         52 |          2 |   100.0% |         4 |
 | notifications           |         41 |          2 |   100.0% |         6 |
@@ -314,7 +314,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        143 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,417** |    **486** |          | **1,198** |
+| **Total**               | **11,418** |    **486** |          | **1,198** |
 
 </details>
 
