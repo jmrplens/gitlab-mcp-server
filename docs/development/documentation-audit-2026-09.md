@@ -642,6 +642,26 @@ second peer on, the stated bound over-promises. And `cli.md:273` documents exit
 path, so `--probe 'ht!tp://x'` exits 1 with a `dial unix` error rather than 2.
 Exit 2 is reachable only for an empty target or an unparseable `http://` URL.
 
+**Resolved by issue 529, part D4.** `parseProbeTarget` reads a path that is
+empty or ends in `/` as the directory the health endpoint is under, which is
+the fix above made general: a base URL behind a proxy prefix has the same
+trailing slash.
+
+```text
+--probe http://127.0.0.1:8080/        ->  asks /health
+--probe https://mcp.internal/gitlab/  ->  asks /gitlab/health
+--probe http://127.0.0.1:8080/health  ->  asks /health, as written
+```
+
+`TestParseProbeTarget_AcceptsTheDocumentedForms` holds the forms, and
+`TestProbe_ExplicitTarget` in `test/e2e/http` probes the real binary's listener
+by its URL with the trailing slash. The site's CLI reference states the rule in
+both languages. Of the two smaller findings, the page already stated the
+four-second bound on the whole run beside the three on each attempt. The other
+held until the same change: a target naming a scheme other than `http://` or
+`https://`, `ht!tp://x` among them, is now refused before its slashes read it
+as a socket path, so it exits `2` as the page says.
+
 ### D5: the shipped image updates itself while the page says nothing does
 
 | Side | Location                                                                 |
