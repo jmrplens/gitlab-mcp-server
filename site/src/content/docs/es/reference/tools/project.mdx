@@ -331,14 +331,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `project.archive`
 
-> Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: [`project.unarchive`](#projectunarchive), [`project.get`](#projectget).
+> Archive a project, making it read-only in GitLab. Requires confirmation. Returns: the project with archived set to true. See also: [`project.unarchive`](#projectunarchive), [`project.get`](#projectget).
 
 - **Meta-herramienta**: `gitlab_project`, acción `archive`
 - **Herramienta individual**: `gitlab_project_archive`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Project: Archive en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
 | ------------ | ---------------- | --------- | ------------------------------ |
@@ -945,7 +945,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.export_schedule`
 
-> Schedule an asynchronous project export. Returns: a confirmation message. See also: [`project.export_status`](#projectexport_status), [`project.export_download`](#projectexport_download).
+> Schedule an asynchronous project export. Uploading it to a URL requires confirmation. Returns: a confirmation message. See also: [`project.export_status`](#projectexport_status), [`project.export_download`](#projectexport_download).
 
 - **Meta-herramienta**: `gitlab_project`, acción `export_schedule`
 - **Herramienta individual**: `gitlab_schedule_project_export`
@@ -954,13 +954,14 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Token de grano fino**: Export: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro            | Tipo                     | Requerido | Descripción                                                                                          |
-| -------------------- | ------------------------ | --------- | ---------------------------------------------------------------------------------------------------- |
-| `project_id`         | `string/integer`         | sí        | Project ID or URL-encoded path                                                                       |
-| `description`        | `string`                 | no        | Override the project description in the export                                                       |
-| `upload`             | `object`                 | no        | Optional upload destination for the generated export archive (mirrors the GitLab upload\[\] options) |
-| `upload_http_method` | `string` (`PUT`, `POST`) | no        | Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)                  |
-| `upload_url`         | `string`                 | no        | Deprecated: use upload.url. URL to upload the exported project to after export completes             |
+| Parámetro            | Tipo                     | Requerido | Descripción                                                                                                                                                                                                                                                                                                           |
+| -------------------- | ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id`         | `string/integer`         | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                        |
+| `confirm`            | `boolean`                | no        | Confirms having GitLab upload the export archive, the whole project, to the URL the call names. Pass true only after the user approves that. Only required when the call names an upload URL. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `description`        | `string`                 | no        | Override the project description in the export                                                                                                                                                                                                                                                                        |
+| `upload`             | `object`                 | no        | Optional upload destination for the generated export archive (mirrors the GitLab upload\[\] options)                                                                                                                                                                                                                  |
+| `upload_http_method` | `string` (`PUT`, `POST`) | no        | Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)                                                                                                                                                                                                                                   |
+| `upload_url`         | `string`                 | no        | Deprecated: use upload.url. URL to upload the exported project to after export completes                                                                                                                                                                                                                              |
 
 ### `project.export_status`
 
@@ -1021,14 +1022,14 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.hook_add`
 
-> Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: [`project.hook_list`](#projecthook_list), [`project.hook_test`](#projecthook_test).
+> Add a webhook to a project. Requires confirmation. Returns: the created webhook with id, URL, and enabled events. See also: [`project.hook_list`](#projecthook_list), [`project.hook_test`](#projecthook_test).
 
 - **Meta-herramienta**: `gitlab_project`, acción `hook_add`
 - **Herramienta individual**: `gitlab_project_hook_add`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Webhook: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro                      | Tipo             | Requerido | Descripción                                                                                                                                                |
 | ------------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1115,48 +1116,49 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.hook_edit`
 
-> Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: [`project.hook_get`](#projecthook_get), [`project.hook_test`](#projecthook_test).
+> Edit a project webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated webhook with URL and enabled events. See also: [`project.hook_get`](#projecthook_get), [`project.hook_test`](#projecthook_test).
 
 - **Meta-herramienta**: `gitlab_project`, acción `hook_edit`
 - **Herramienta individual**: `gitlab_project_hook_edit`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
+- **Token de grano fino**: Webhook: Update en proyecto. Algunas llamadas también necesitan: Webhook: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro                      | Tipo             | Requerido | Descripción                                                                                                                                                |
-| ------------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hook_id`                      | `integer`        | sí        | Webhook ID to edit                                                                                                                                         |
-| `project_id`                   | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                             |
-| `branch_filter_strategy`       | `string`         | no        | Branch filter strategy (wildcard, regex, all_branches)                                                                                                     |
-| `confidential_issues_events`   | `boolean`        | no        | Trigger on confidential issue events                                                                                                                       |
-| `confidential_note_events`     | `boolean`        | no        | Trigger on confidential note events                                                                                                                        |
-| `custom_headers`               | `object[]`       | no        | Custom HTTP headers sent with each webhook request (key/value pairs)                                                                                       |
-| `custom_webhook_template`      | `string`         | no        | Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                       |
-| `deployment_events`            | `boolean`        | no        | Trigger on deployment events                                                                                                                               |
-| `description`                  | `string`         | no        | Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                   |
-| `emoji_events`                 | `boolean`        | no        | Trigger on emoji events                                                                                                                                    |
-| `enable_ssl_verification`      | `boolean`        | no        | Enable SSL verification for webhook                                                                                                                        |
-| `feature_flag_events`          | `boolean`        | no        | Trigger on feature flag events                                                                                                                             |
-| `issues_events`                | `boolean`        | no        | Trigger on issue events                                                                                                                                    |
-| `job_events`                   | `boolean`        | no        | Trigger on CI job events                                                                                                                                   |
-| `merge_requests_events`        | `boolean`        | no        | Trigger on merge request events                                                                                                                            |
-| `milestone_events`             | `boolean`        | no        | Trigger on milestone events                                                                                                                                |
-| `name`                         | `string`         | no        | Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                          |
-| `note_events`                  | `boolean`        | no        | Trigger on note/comment events                                                                                                                             |
-| `pipeline_events`              | `boolean`        | no        | Trigger on pipeline events                                                                                                                                 |
-| `push_events`                  | `boolean`        | no        | Trigger on push events                                                                                                                                     |
-| `push_events_branch_filter`    | `string`         | no        | Branch filter for push events. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                         |
-| `releases_events`              | `boolean`        | no        | Trigger on release events                                                                                                                                  |
-| `resource_access_token_events` | `boolean`        | no        | Trigger on resource access token events                                                                                                                    |
-| `resource_deploy_token_events` | `boolean`        | no        | Trigger on resource deploy token events                                                                                                                    |
-| `signing_token`                | `string`         | no        | Write-only signing token for webhook signature validation                                                                                                  |
-| `tag_push_events`              | `boolean`        | no        | Trigger on tag push events                                                                                                                                 |
-| `token`                        | `string`         | no        | Secret token for validation                                                                                                                                |
-| `url`                          | `string`         | no        | Updated webhook URL                                                                                                                                        |
-| `url_variables`                | `object[]`       | no        | Values for the \{name\} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept |
-| `vulnerability_events`         | `boolean`        | no        | Trigger on vulnerability events                                                                                                                            |
-| `wiki_page_events`             | `boolean`        | no        | Trigger on wiki page events                                                                                                                                |
+| Parámetro                      | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook_id`                      | `integer`        | sí        | Webhook ID to edit                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `project_id`                   | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `branch_filter_strategy`       | `string`         | no        | Branch filter strategy (wildcard, regex, all_branches)                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `confidential_issues_events`   | `boolean`        | no        | Trigger on confidential issue events                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `confidential_note_events`     | `boolean`        | no        | Trigger on confidential note events                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `confirm`                      | `boolean`        | no        | Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `custom_headers`               | `object[]`       | no        | Custom HTTP headers sent with each webhook request (key/value pairs)                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `custom_webhook_template`      | `string`         | no        | Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                                                                                                            |
+| `deployment_events`            | `boolean`        | no        | Trigger on deployment events                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `description`                  | `string`         | no        | Webhook description. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                                                                                                                        |
+| `emoji_events`                 | `boolean`        | no        | Trigger on emoji events                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `enable_ssl_verification`      | `boolean`        | no        | Enable SSL verification for webhook                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `feature_flag_events`          | `boolean`        | no        | Trigger on feature flag events                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `issues_events`                | `boolean`        | no        | Trigger on issue events                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `job_events`                   | `boolean`        | no        | Trigger on CI job events                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `merge_requests_events`        | `boolean`        | no        | Trigger on merge request events                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `milestone_events`             | `boolean`        | no        | Trigger on milestone events                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `name`                         | `string`         | no        | Webhook name. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                                                                                                                               |
+| `note_events`                  | `boolean`        | no        | Trigger on note/comment events                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `pipeline_events`              | `boolean`        | no        | Trigger on pipeline events                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `push_events`                  | `boolean`        | no        | Trigger on push events                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `push_events_branch_filter`    | `string`         | no        | Branch filter for push events. On an edit, pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                                                                                                              |
+| `releases_events`              | `boolean`        | no        | Trigger on release events                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `resource_access_token_events` | `boolean`        | no        | Trigger on resource access token events                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `resource_deploy_token_events` | `boolean`        | no        | Trigger on resource deploy token events                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `signing_token`                | `string`         | no        | Write-only signing token for webhook signature validation                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `tag_push_events`              | `boolean`        | no        | Trigger on tag push events                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `token`                        | `string`         | no        | Secret token for validation                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `url`                          | `string`         | no        | Updated webhook URL                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `url_variables`                | `object[]`       | no        | Values for the \{name\} placeholders of the webhook URL, one key and value each. On an edit, each one named is set and the hook's other variables are kept                                                                                                                                                                                                                                                                                                                                      |
+| `vulnerability_events`         | `boolean`        | no        | Trigger on vulnerability events                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `wiki_page_events`             | `boolean`        | no        | Trigger on wiki page events                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### `project.hook_get`
 
@@ -1195,39 +1197,41 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.hook_set_custom_header`
 
-> Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: [`project.hook_delete_custom_header`](#projecthook_delete_custom_header), [`project.hook_get`](#projecthook_get).
+> Set a custom header on a project webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation naming the header and webhook. See also: [`project.hook_delete_custom_header`](#projecthook_delete_custom_header), [`project.hook_get`](#projecthook_get).
 
 - **Meta-herramienta**: `gitlab_project`, acción `hook_set_custom_header`
 - **Herramienta individual**: `gitlab_project_hook_set_custom_header`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
+- **Token de grano fino**: Webhook: Update en proyecto. Algunas llamadas también necesitan: Webhook: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                    |
-| ------------ | ---------------- | --------- | ------------------------------ |
-| `hook_id`    | `integer`        | sí        | Webhook ID                     |
-| `key`        | `string`         | sí        | Custom header key name         |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path |
-| `value`      | `string`         | sí        | Custom header value            |
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                              |
+| ------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook_id`    | `integer`        | sí        | Webhook ID                                                                                                                                                                                                                                                                                                                               |
+| `key`        | `string`         | sí        | Custom header key name                                                                                                                                                                                                                                                                                                                   |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                           |
+| `value`      | `string`         | sí        | Custom header value                                                                                                                                                                                                                                                                                                                      |
+| `confirm`    | `boolean`        | no        | Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
 
 ### `project.hook_set_url_variable`
 
-> Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: [`project.hook_delete_url_variable`](#projecthook_delete_url_variable), [`project.hook_get`](#projecthook_get).
+> Set a URL variable on a project webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation naming the variable and webhook. See also: [`project.hook_delete_url_variable`](#projecthook_delete_url_variable), [`project.hook_get`](#projecthook_get).
 
 - **Meta-herramienta**: `gitlab_project`, acción `hook_set_url_variable`
 - **Herramienta individual**: `gitlab_project_hook_set_url_variable`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: Webhook: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
+- **Token de grano fino**: Webhook: Update en proyecto. Algunas llamadas también necesitan: Webhook: Read en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro    | Tipo             | Requerido | Descripción                                                                                |
-| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------ |
-| `hook_id`    | `integer`        | sí        | Webhook ID                                                                                 |
-| `key`        | `string`         | sí        | URL variable key name. Letters and underscores only. GitLab rejects keys containing digits |
-| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                             |
-| `value`      | `string`         | sí        | URL variable value. Must be non-empty                                                      |
+| Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook_id`    | `integer`        | sí        | Webhook ID                                                                                                                                                                                                                                                                                                                                                                            |
+| `key`        | `string`         | sí        | URL variable key name. Letters and underscores only. GitLab rejects keys containing digits                                                                                                                                                                                                                                                                                            |
+| `project_id` | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                                                                        |
+| `value`      | `string`         | sí        | URL variable value. Must be non-empty                                                                                                                                                                                                                                                                                                                                                 |
+| `confirm`    | `boolean`        | no        | Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
 
 ### `project.hook_test`
 
@@ -1248,7 +1252,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.import_from_file`
 
-> Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: [`project.import_status`](#projectimport_status), [`project.export_download`](#projectexport_download).
+> Import a project from an export archive. Overwriting an existing project requires confirmation. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: [`project.import_status`](#projectimport_status), [`project.export_download`](#projectexport_download).
 
 - **Meta-herramienta**: `gitlab_project`, acción `import_from_file`
 - **Herramienta individual**: `gitlab_import_project_from_file`
@@ -1257,15 +1261,16 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Token de grano fino**: Import: Create en grupo o usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro         | Tipo      | Requerido | Descripción                                                                                                                                                                                                                                               |
-| ----------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `path`            | `string`  | sí        | URL path for the imported project                                                                                                                                                                                                                         |
-| `content_base64`  | `string`  | no        | Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.                                                                                                                                                        |
-| `file_path`       | `string`  | no        | Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided. |
-| `name`            | `string`  | no        | Name for the imported project                                                                                                                                                                                                                             |
-| `namespace`       | `string`  | no        | Namespace to import the project into (user or group path)                                                                                                                                                                                                 |
-| `override_params` | `object`  | no        | Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params\[\])                                                                                                                   |
-| `overwrite`       | `boolean` | no        | If true, overwrite an existing project with the same path                                                                                                                                                                                                 |
+| Parámetro         | Tipo      | Requerido | Descripción                                                                                                                                                                                                                                                                                         |
+| ----------------- | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`            | `string`  | sí        | URL path for the imported project                                                                                                                                                                                                                                                                   |
+| `confirm`         | `boolean` | no        | Confirms overwriting the project that is already at the path, which no call brings back. Pass true only after the user approves that. Only required when overwrite is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `content_base64`  | `string`  | no        | Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.                                                                                                                                                                                                  |
+| `file_path`       | `string`  | no        | Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided.                                           |
+| `name`            | `string`  | no        | Name for the imported project                                                                                                                                                                                                                                                                       |
+| `namespace`       | `string`  | no        | Namespace to import the project into (user or group path)                                                                                                                                                                                                                                           |
+| `override_params` | `object`  | no        | Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params\[\])                                                                                                                                                             |
+| `overwrite`       | `boolean` | no        | If true, overwrite an existing project with the same path, which replaces it whole. Needs the user's approval: confirm=true once they approve, or an elicitation prompt                                                                                                                             |
 
 ### `project.import_status`
 
@@ -1444,7 +1449,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 >
 > Common slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.
 >
-> The `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`).
+> The `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`). Requires confirmation.
 >
 > Returns: JSON with the resulting integration details.
 >
@@ -1455,7 +1460,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                   |
 | ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1467,7 +1472,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 > Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).
 >
-> The `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.
+> The `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields. Requires confirmation.
 >
 > Returns: JSON with the resulting group integration details.
 >
@@ -1478,7 +1483,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro  | Tipo             | Requerido | Descripción                                                                                                                                             |
 | ---------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1488,7 +1493,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.integration_set_group_datadog`
 
-> Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.
+> Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional. Requires confirmation.
 >
 > Returns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.
 >
@@ -1499,7 +1504,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro                | Tipo             | Requerido | Descripción                                                                                                                                                                                                                  |
 | ------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1516,7 +1521,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 
 ### `project.integration_set_jira`
 
-> Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.
+> Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers. Requires confirmation.
 >
 > Returns: JSON with the configured Jira integration details.
 >
@@ -1527,7 +1532,7 @@ Además necesita al menos uno de estos: `name`; `path`.
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Integration: Update en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro                         | Tipo             | Requerido | Descripción                                                                                                                                                                                                          |
 | --------------------------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1638,14 +1643,14 @@ Además necesita al menos uno de estos: `label_id`; `name`.
 
 ### `project.label_promote`
 
-> Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: [`project.label_get`](#projectlabel_get), [`project.label_list`](#projectlabel_list), [`group.group_label_list`](/gitlab-mcp-server/es/reference/tools/group/#groupgroup_label_list).
+> Promote a project label to a group label, sharing it across the group's projects. Requires confirmation. Returns: no content on success. Requires group-level Maintainer or higher access. See also: [`project.label_get`](#projectlabel_get), [`project.label_list`](#projectlabel_list), [`group.group_label_list`](/gitlab-mcp-server/es/reference/tools/group/#groupgroup_label_list).
 
 - **Meta-herramienta**: `gitlab_project`, acción `label_promote`
 - **Herramienta individual**: `gitlab_label_promote`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Label: Promote en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#project))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro    | Tipo             | Requerido | Descripción                    |
 | ------------ | ---------------- | --------- | ------------------------------ |

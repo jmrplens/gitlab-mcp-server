@@ -50,14 +50,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `external_status_check.create_project`
 
-> Create an external status check service for a project. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: [`external_status_check.list_project`](#external_status_checklist_project), [`external_status_check.update_project`](#external_status_checkupdate_project), [`external_status_check.delete_project`](#external_status_checkdelete_project).
+> Create an external status check service for a project. Requires confirmation. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: [`external_status_check.list_project`](#external_status_checklist_project), [`external_status_check.update_project`](#external_status_checkupdate_project), [`external_status_check.delete_project`](#external_status_checkdelete_project).
 
 - **Meta-herramienta**: `gitlab_external_status_check`, acción `create_project`
 - **Herramienta individual**: `gitlab_create_project_external_status_check`
 - **Nivel**: Ultimate
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: External Status Check Service: Create en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro              | Tipo             | Requerido | Descripción                                     |
 | ---------------------- | ---------------- | --------- | ----------------------------------------------- |
@@ -179,7 +179,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `external_status_check.update_project`
 
-> Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: [`external_status_check.list_project`](#external_status_checklist_project), [`external_status_check.create_project`](#external_status_checkcreate_project), [`external_status_check.delete_project`](#external_status_checkdelete_project).
+> Update a project external status check service. Sending external_url or shared_secret requires confirmation. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: [`external_status_check.list_project`](#external_status_checklist_project), [`external_status_check.create_project`](#external_status_checkcreate_project), [`external_status_check.delete_project`](#external_status_checkdelete_project).
 
 - **Meta-herramienta**: `gitlab_external_status_check`, acción `update_project`
 - **Herramienta individual**: `gitlab_update_project_external_status_check`
@@ -188,11 +188,12 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: External Status Check Service: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#external_status_check))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro              | Tipo             | Requerido | Descripción                                                                                                              |
-| ---------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `check_id`             | `integer`        | sí        | External status check ID to update                                                                                       |
-| `project_id`           | `string/integer` | sí        | Project ID or URL-encoded path                                                                                           |
-| `external_url`         | `string`         | no        | Updated external URL                                                                                                     |
-| `name`                 | `string`         | no        | Updated name                                                                                                             |
-| `protected_branch_ids` | `integer[]`      | no        | Updated protected branch IDs. Pass \[\] to scope the check to every branch again. Omit the field to leave them untouched |
-| `shared_secret`        | `string`         | no        | Updated shared secret for HMAC verification                                                                              |
+| Parámetro              | Tipo             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check_id`             | `integer`        | sí        | External status check ID to update                                                                                                                                                                                                                                                                                                |
+| `project_id`           | `string/integer` | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                    |
+| `confirm`              | `boolean`        | no        | Confirms pointing the check at the host external_url names, or replacing its shared secret. Pass true only after the user approves that. Only required when the call sends external_url or shared_secret. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `external_url`         | `string`         | no        | Updated external URL                                                                                                                                                                                                                                                                                                              |
+| `name`                 | `string`         | no        | Updated name                                                                                                                                                                                                                                                                                                                      |
+| `protected_branch_ids` | `integer[]`      | no        | Updated protected branch IDs. Pass \[\] to scope the check to every branch again. Omit the field to leave them untouched                                                                                                                                                                                                          |
+| `shared_secret`        | `string`         | no        | Updated shared secret for HMAC verification                                                                                                                                                                                                                                                                                       |

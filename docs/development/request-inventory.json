@@ -3887,7 +3887,7 @@
         "variable_type"
       ],
       "identifiers": {
-        ":key": 3,
+        ":key": 4,
         ":project_id": 4
       }
     },
@@ -6442,7 +6442,7 @@
         "shared_secret"
       ],
       "identifiers": {
-        ":external_status_check_id": 2,
+        ":external_status_check_id": 3,
         ":project_id": 2
       }
     },
@@ -8920,8 +8920,8 @@
       "method": "GET",
       "path": "/groups/:group_id/hooks/:hook_id",
       "identifiers": {
-        ":group_id": 3,
-        ":hook_id": 4
+        ":group_id": 4,
+        ":hook_id": 5
       }
     },
     {
@@ -8963,8 +8963,8 @@
         "wiki_page_events"
       ],
       "identifiers": {
-        ":group_id": 3,
-        ":hook_id": 3
+        ":group_id": 4,
+        ":hook_id": 4
       }
     },
     {
@@ -9011,6 +9011,32 @@
       ],
       "identifiers": {
         ":custom_header_id": 1,
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/Authorization",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":hook_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/groups",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/hooks/:hook_id/custom_headers/X-Fresh",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
         ":group_id": 1,
         ":hook_id": 1
       }
@@ -9255,9 +9281,9 @@
         "value"
       ],
       "identifiers": {
-        ":group_id": 3,
+        ":group_id": 4,
         ":hook_id": 2,
-        ":key": 9
+        ":key": 11
       }
     },
     {
@@ -10133,6 +10159,19 @@
     {
       "package": "internal/tools/groupvariables",
       "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/acme/variables/:key",
+      "body": [
+        "description",
+        "protected"
+      ],
+      "identifiers": {
+        ":key": 1
+      }
+    },
+    {
+      "package": "internal/tools/groupvariables",
+      "kind": "rest",
       "method": "DELETE",
       "path": "/groups/my-group/variables/:key",
       "identifiers": {
@@ -10472,7 +10511,7 @@
         "variable_type"
       ],
       "identifiers": {
-        ":key": 4
+        ":key": 5
       }
     },
     {
@@ -16281,7 +16320,7 @@
       "method": "GET",
       "path": "/projects/:project_id/hooks/:hook_id",
       "identifiers": {
-        ":hook_id": 1,
+        ":hook_id": 3,
         ":project_id": 2
       }
     },
@@ -16294,6 +16333,7 @@
         "branch_filter_strategy",
         "confidential_issues_events",
         "confidential_note_events",
+        "custom_headers",
         "custom_webhook_template",
         "deployment_events",
         "description",
@@ -16321,7 +16361,20 @@
         "wiki_page_events"
       ],
       "identifiers": {
-        ":hook_id": 2,
+        ":hook_id": 3,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projects",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/hooks/:hook_id/custom_headers/Authorization",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":hook_id": 1,
         ":project_id": 1
       }
     },
@@ -16340,6 +16393,19 @@
       "kind": "rest",
       "method": "PUT",
       "path": "/projects/:project_id/hooks/:hook_id/custom_headers/X-Custom",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":hook_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/projects",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/hooks/:hook_id/custom_headers/X-Fresh",
       "body": [
         "value"
       ],
@@ -16401,8 +16467,8 @@
         "value"
       ],
       "identifiers": {
-        ":hook_id": 1,
-        ":key": 4,
+        ":hook_id": 2,
+        ":key": 6,
         ":project_id": 1
       }
     },
@@ -19332,7 +19398,7 @@
       "method": "GET",
       "path": "/hooks/:hook_id",
       "identifiers": {
-        ":hook_id": 2
+        ":hook_id": 4
       }
     },
     {
@@ -19365,7 +19431,7 @@
         "url"
       ],
       "identifiers": {
-        ":hook_id": 3
+        ":hook_id": 4
       }
     },
     {
@@ -19387,8 +19453,8 @@
         "value"
       ],
       "identifiers": {
-        ":hook_id": 3,
-        ":key": 9
+        ":hook_id": 4,
+        ":key": 11
       }
     },
     {

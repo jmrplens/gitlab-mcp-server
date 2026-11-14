@@ -192,7 +192,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `ci_variable.group_update`
 
-> Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: [`ci_variable.group_get`](#ci_variablegroup_get), [`ci_variable.group_list`](#ci_variablegroup_list), [`ci_variable.group_delete`](#ci_variablegroup_delete).
+> Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: [`ci_variable.group_get`](#ci_variablegroup_get), [`ci_variable.group_list`](#ci_variablegroup_list), [`ci_variable.group_delete`](#ci_variablegroup_delete).
 
 - **Meta-herramienta**: `gitlab_ci_variable`, acción `group_update`
 - **Herramienta individual**: `gitlab_group_variable_update`
@@ -201,18 +201,19 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Variable: Update en grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro           | Tipo                         | Requerido | Descripción                                                                                           |
-| ------------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
-| `group_id`          | `string/integer`             | sí        | Group ID or URL-encoded path                                                                          |
-| `key`               | `string`                     | sí        | Variable key name                                                                                     |
-| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                  |
-| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object         |
-| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                       |
-| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
-| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                    |
-| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
-| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |
+| Parámetro           | Tipo                         | Requerido | Descripción                                                                                                                                                                                                                                                                    |
+| ------------------- | ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `group_id`          | `string/integer`             | sí        | Group ID or URL-encoded path                                                                                                                                                                                                                                                   |
+| `key`               | `string`                     | sí        | Variable key name                                                                                                                                                                                                                                                              |
+| `confirm`           | `boolean`                    | no        | Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                          |
+| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                                                                                                                                                                                           |
+| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object                                                                                                                                                                                  |
+| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                                                                                                                                                                                                |
+| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                                                                                                                                                                                         |
+| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                                                                                                                                                                                             |
+| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched                                                                                                                                                                                 |
+| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                                                                                                                                                                                                 |
 
 ### `ci_variable.instance_create`
 
@@ -285,7 +286,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `ci_variable.instance_update`
 
-> Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: [`ci_variable.instance_get`](#ci_variableinstance_get), [`ci_variable.instance_list`](#ci_variableinstance_list), [`ci_variable.instance_delete`](#ci_variableinstance_delete).
+> Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Replacing its value requires confirmation. Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: [`ci_variable.instance_get`](#ci_variableinstance_get), [`ci_variable.instance_list`](#ci_variableinstance_list), [`ci_variable.instance_delete`](#ci_variableinstance_delete).
 
 - **Meta-herramienta**: `gitlab_ci_variable`, acción `instance_update`
 - **Herramienta individual**: `gitlab_instance_variable_update`
@@ -294,15 +295,16 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Variable: Update en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro       | Tipo                         | Requerido | Descripción                                                                                           |
-| --------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
-| `key`           | `string`                     | sí        | Variable key name                                                                                     |
-| `description`   | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `masked`        | `boolean`                    | no        | Mask variable value in job logs                                                                       |
-| `protected`     | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
-| `raw`           | `boolean`                    | no        | Treat variable value as raw string                                                                    |
-| `value`         | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
-| `variable_type` | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |
+| Parámetro       | Tipo                         | Requerido | Descripción                                                                                                                                                                                                                                                                    |
+| --------------- | ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`           | `string`                     | sí        | Variable key name                                                                                                                                                                                                                                                              |
+| `confirm`       | `boolean`                    | no        | Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `description`   | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                          |
+| `masked`        | `boolean`                    | no        | Mask variable value in job logs                                                                                                                                                                                                                                                |
+| `protected`     | `boolean`                    | no        | Only expose in protected branches/tags                                                                                                                                                                                                                                         |
+| `raw`           | `boolean`                    | no        | Treat variable value as raw string                                                                                                                                                                                                                                             |
+| `value`         | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched                                                                                                                                                                                 |
+| `variable_type` | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                                                                                                                                                                                                 |
 
 ### `ci_variable.list`
 
@@ -325,7 +327,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `ci_variable.update`
 
-> Update a CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: [`ci_variable.get`](#ci_variableget), [`ci_variable.list`](#ci_variablelist), [`ci_variable.delete`](#ci_variabledelete).
+> Update a CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: [`ci_variable.get`](#ci_variableget), [`ci_variable.list`](#ci_variablelist), [`ci_variable.delete`](#ci_variabledelete).
 
 - **Meta-herramienta**: `gitlab_ci_variable`, acción `update`
 - **Herramienta individual**: `gitlab_ci_variable_update`
@@ -334,15 +336,16 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Variable: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#ci_variable))
 - **Comportamiento**: escribe, idempotente
 
-| Parámetro           | Tipo                         | Requerido | Descripción                                                                                           |
-| ------------------- | ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
-| `key`               | `string`                     | sí        | Variable key name                                                                                     |
-| `project_id`        | `string/integer`             | sí        | Project ID or URL-encoded path                                                                        |
-| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched |
-| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                  |
-| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object         |
-| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                       |
-| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                |
-| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                    |
-| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched        |
-| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                        |
+| Parámetro           | Tipo                         | Requerido | Descripción                                                                                                                                                                                                                                                                    |
+| ------------------- | ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`               | `string`                     | sí        | Variable key name                                                                                                                                                                                                                                                              |
+| `project_id`        | `string/integer`             | sí        | Project ID or URL-encoded path                                                                                                                                                                                                                                                 |
+| `confirm`           | `boolean`                    | no        | Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `description`       | `string`                     | no        | Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                          |
+| `environment_scope` | `string`                     | no        | Filter by environment scope (shorthand for filter.environment_scope)                                                                                                                                                                                                           |
+| `filter`            | `object`                     | no        | Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object                                                                                                                                                                                  |
+| `masked`            | `boolean`                    | no        | Mask variable value in job logs                                                                                                                                                                                                                                                |
+| `protected`         | `boolean`                    | no        | Only expose in protected branches/tags                                                                                                                                                                                                                                         |
+| `raw`               | `boolean`                    | no        | Treat variable value as raw string                                                                                                                                                                                                                                             |
+| `value`             | `string`                     | no        | Updated variable value. Pass an empty string to empty it. Omit the field to leave it untouched                                                                                                                                                                                 |
+| `variable_type`     | `string` (`env_var`, `file`) | no        | Variable type: env_var or file                                                                                                                                                                                                                                                 |

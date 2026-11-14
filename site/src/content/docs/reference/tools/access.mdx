@@ -155,14 +155,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `access.deploy_key_add`
 
-> Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_enable`](#accessdeploy_key_enable).
+> Add a new SSH deploy key to a project. Requires confirmation. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: [`access.deploy_key_get`](#accessdeploy_key_get), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_enable`](#accessdeploy_key_enable).
 
 - **Meta-tool**: `gitlab_access`, action `deploy_key_add`
 - **Individual tool**: `gitlab_deploy_key_add`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Deploy Key: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter    | Type             | Mandatory | Description                                                                                                   |
 | ------------ | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
@@ -207,14 +207,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `access.deploy_key_enable`
 
-> Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: [`access.deploy_key_list_all`](#accessdeploy_key_list_all), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_get`](#accessdeploy_key_get).
+> Enable an existing deploy key for a project. Requires confirmation. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: [`access.deploy_key_list_all`](#accessdeploy_key_list_all), [`access.deploy_key_list_project`](#accessdeploy_key_list_project), [`access.deploy_key_get`](#accessdeploy_key_get).
 
 - **Meta-tool**: `gitlab_access`, action `deploy_key_enable`
 - **Individual tool**: `gitlab_deploy_key_enable`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Deploy Key: Enable at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#access))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                                         |
 | --------------- | ---------------- | --------- | --------------------------------------------------- |

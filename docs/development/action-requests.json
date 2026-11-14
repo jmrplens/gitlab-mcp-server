@@ -4374,6 +4374,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "systemhooks.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "SystemHooks.GetHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /hooks/:hook_id",
           "placeholders": {
             "hook_id": "id"
@@ -4390,7 +4405,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -4467,6 +4482,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "systemhooks.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "SystemHooks.GetHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /hooks/:hook_id/url_variables/:key",
           "placeholders": {
             "hook_id": "id",
@@ -4484,7 +4514,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -11593,6 +11623,22 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id",
           "placeholders": {
             "hook_id": "hook_id",
@@ -11610,7 +11656,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -11713,6 +11759,22 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id/custom_headers/:key",
           "placeholders": {
             "hook_id": "hook_id",
@@ -11731,7 +11793,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -11742,6 +11804,22 @@
       ],
       "classic": "api",
       "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
         {
           "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id/url_variables/:key",
@@ -11762,7 +11840,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23675,6 +23753,19 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id",
           "placeholders": {
             "hook_id": "hook_id",
@@ -23689,7 +23780,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23755,6 +23846,19 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id/custom_headers/:key",
           "placeholders": {
             "hook_id": "hook_id",
@@ -23773,7 +23877,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23784,6 +23888,19 @@
       ],
       "classic": "api",
       "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
         {
           "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id/url_variables/:key",
@@ -23804,7 +23921,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

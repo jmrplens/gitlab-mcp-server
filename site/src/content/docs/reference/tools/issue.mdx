@@ -896,14 +896,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `issue.move`
 
-> Move an issue to another project. Returns: the issue in its new project. See also: [`issue.get`](#issueget), [`issue.update`](#issueupdate).
+> Move an issue to another project. Requires confirmation. Returns: the issue in its new project. See also: [`issue.get`](#issueget), [`issue.update`](#issueupdate).
 
 - **Meta-tool**: `gitlab_issue`, action `move`
 - **Individual tool**: `gitlab_issue_move`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Work Item: Update at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#issue))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 | Parameter       | Type             | Mandatory | Description                           |
 | --------------- | ---------------- | --------- | ------------------------------------- |

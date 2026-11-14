@@ -220,7 +220,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `repository.commit_create`
 
-> Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.tree`](#repositorytree), [`repository.commit_get`](#repositorycommit_get).
+> Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Creating it with force requires confirmation. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: [`branch.list`](/gitlab-mcp-server/reference/tools/branch/#branchlist), [`repository.tree`](#repositorytree), [`repository.commit_get`](#repositorycommit_get).
 
 - **Meta-tool**: `gitlab_repository`, action `commit_create`
 - **Individual tool**: `gitlab_commit_create`
@@ -229,19 +229,20 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Commit: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#repository))
 - **Behavior**: writes, not idempotent
 
-| Parameter        | Type             | Mandatory | Description                                                                                   |
-| ---------------- | ---------------- | --------- | --------------------------------------------------------------------------------------------- |
-| `actions`        | `object[]`       | yes       | List of file actions (create, update, delete, move, chmod)                                    |
-| `branch`         | `string`         | yes       | Target branch name                                                                            |
-| `commit_message` | `string`         | yes       | Commit message                                                                                |
-| `project_id`     | `string/integer` | yes       | Project ID or URL-encoded path                                                                |
-| `author_email`   | `string`         | no        | Custom author email                                                                           |
-| `author_name`    | `string`         | no        | Custom author name                                                                            |
-| `force`          | `boolean`        | no        | When true, force-overwrite the target branch even if a conflict exists                        |
-| `start_branch`   | `string`         | no        | Branch to start from if target branch does not exist                                          |
-| `start_project`  | `string`         | no        | Project ID or path of the source project to start the branch from (for cross-project commits) |
-| `start_sha`      | `string`         | no        | SHA to start from if target branch does not exist (alternative to start_branch)               |
-| `stats`          | `boolean`        | no        | Include commit stats (additions, deletions, total) in the response                            |
+| Parameter        | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions`        | `object[]`       | yes       | List of file actions (create, update, delete, move, chmod)                                                                                                                                                                                                                                                                       |
+| `branch`         | `string`         | yes       | Target branch name                                                                                                                                                                                                                                                                                                               |
+| `commit_message` | `string`         | yes       | Commit message                                                                                                                                                                                                                                                                                                                   |
+| `project_id`     | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                                                                   |
+| `author_email`   | `string`         | no        | Custom author email                                                                                                                                                                                                                                                                                                              |
+| `author_name`    | `string`         | no        | Custom author name                                                                                                                                                                                                                                                                                                               |
+| `confirm`        | `boolean`        | no        | Confirms creating the commit with force, which drops from the target branch the commits its starting point does not have. Pass true only after the user approves that. Only required when force is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `force`          | `boolean`        | no        | When true, reset the target branch to the starting point (start_branch or start_sha) plus this commit, dropping from the branch the commits the starting point does not have. Needs the user's approval: confirm=true once they approve, or an elicitation prompt                                                                |
+| `start_branch`   | `string`         | no        | Branch to start from if target branch does not exist                                                                                                                                                                                                                                                                             |
+| `start_project`  | `string`         | no        | Project ID or path of the source project to start the branch from (for cross-project commits)                                                                                                                                                                                                                                    |
+| `start_sha`      | `string`         | no        | SHA to start from if target branch does not exist (alternative to start_branch)                                                                                                                                                                                                                                                  |
+| `stats`          | `boolean`        | no        | Include commit stats (additions, deletions, total) in the response                                                                                                                                                                                                                                                               |
 
 ### `repository.commit_diff`
 

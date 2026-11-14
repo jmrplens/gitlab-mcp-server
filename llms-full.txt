@@ -50,10 +50,10 @@ Action guidance:
 - approve_project: Approve a user project access request. Use after listing pending requests and selecting the user_id to approve. Leave access_level out to grant Developer. A project grants Guest (10) to Owner (50), and any other level is refused before the request, since GitLab would answer it as an approval while the request stays pending.
 - deny_group: Deny a pending group access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
 - deny_project: Deny a pending project access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
-- deploy_key_add: Use for SSH deploy keys that grant repository access to projects.
+- deploy_key_add: Use for SSH deploy keys that grant repository access to projects. Destructive: whoever holds the key's private half can clone the project's repository from then on, and push to it when can_push is set, and deleting the key recalls nothing, so confirm with the user first.
 - deploy_key_add_instance: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_delete: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id. Deploy tokens are a different resource.
-- deploy_key_enable: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id. Deploy tokens are a different resource.
+- deploy_key_enable: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id. Deploy tokens are a different resource. Destructive: whoever holds the key's private half can clone the project's repository from then on, and push to it when can_push is set, and deleting the key recalls nothing, so confirm with the user first.
 - deploy_key_get: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id. Deploy tokens are a different resource.
 - deploy_key_list_all: List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of access.deploy_key_list_project when you need every key on the instance, not just those enabled for a single project.
 - deploy_key_list_project: Lists SSH deploy keys, not deploy tokens. Use access.deploy_token_list_project when credentials/tokens are requested.
@@ -850,13 +850,13 @@ Action guidance:
 - sidekiq_job_stats: Get aggregate Sidekiq job statistics for the instance such as processed, failed, and enqueued counts.
 - sidekiq_process_metrics: Get Sidekiq process metrics for the instance, listing running Sidekiq processes and their state.
 - sidekiq_queue_metrics: Get Sidekiq background-job queue metrics for the instance, including per-queue backlog and latency.
-- system_hook_add: Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.
+- system_hook_add: Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable. Destructive: from then on GitLab posts the events the hook subscribes to, to the host named in url, and deleting the hook does not recall what was sent, so confirm with the user first.
 - system_hook_delete: Delete an instance system hook by id (admin only), stopping it from receiving global event notifications.
 - system_hook_delete_url_variable: Delete one URL variable from an instance system hook (admin only). Provide the hook id and variable key.
-- system_hook_edit: Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.
+- system_hook_edit: Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification. An edit that points the hook at another url, sends a token or signing token, or replaces a URL variable or custom header the hook already has changes where its events go or loses a secret that cannot be read back, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An edit of events, name, description, branch filter or SSL verification asks nothing.
 - system_hook_get: Get one instance system hook by its numeric hook id.
 - system_hook_list: List instance-wide system hooks that fire on global events such as project, group, user, and key changes, one page at a time with page and per_page. Distinct from per-project webhooks.
-- system_hook_set_url_variable: Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.
+- system_hook_set_url_variable: Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value. Replacing a key the hook already has loses its current value, which cannot be read back, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. A new key asks nothing.
 - system_hook_test: Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.
 - terraform_state_delete: Delete a Terraform state by project_id and state name (admin/maintainer). Removes all versions of the state.
 - terraform_state_get: Get one Terraform state by project_id and state name, including its lock status.
@@ -2042,14 +2042,14 @@ Action guidance:
 - group_delete: Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter.
 - group_get: Get one group CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed.
 - group_list: List group CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
-- group_update: Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Use to change a variable's value or flags.
+- group_update: Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Use to change a variable's value or flags. Sending value replaces the value the variable holds, which no call restores, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An update that sends no value asks nothing.
 - instance_create: Create an instance-level CI/CD variable. Admin-only. Use for instance-wide pipeline/runtime configuration that should not be stored in repository files.
 - instance_delete: Delete an instance-level CI/CD variable by key. Admin-only.
 - instance_get: Get one instance-level CI/CD variable by key. Admin-only. Use when exact variable settings are needed.
 - instance_list: List instance-level CI/CD variables with order_by, sort, and offset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions.
-- instance_update: Update an instance-level CI/CD variable by key. Admin-only.
+- instance_update: Update an instance-level CI/CD variable by key. Admin-only. Sending value replaces the value the variable holds, which no call restores, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An update that sends no value asks nothing.
 - list: List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
-- update: Update an existing project CI/CD variable's value or flags by key (and optional environment scope). Use to rotate secrets or change protected/masked settings without recreating the variable.
+- update: Update an existing project CI/CD variable's value or flags by key (and optional environment scope). Use to rotate secrets or change protected/masked settings without recreating the variable. Sending value replaces the value the variable holds, which no call restores, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An update that sends no value asks nothing.
 Parameter guidance:
 - create.key: ci_variable_key. Source: Variable key name to create.
 - create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -2758,7 +2758,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_group.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so group.list is {"action":"list"} on this one.
 Action guidance:
-- archive: Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op.
+- archive: Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op. Destructive: GitLab also removes every project of the group from its fork network and closes the open merge requests from and to their forks, and unarchive restores neither, so confirm with the user first.
 - badge_add: Add a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
 - badge_delete: Delete a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete.
 - badge_edit: Edit a group badge. Use group_id for group badge operations. Do not use project_id. Use only when the task says group badge. Project badges are managed by project.badge_list, project.badge_add, project.badge_edit and project.badge_delete. Use the parameter name name for a new badge name. new_name is not supported.
@@ -4554,7 +4554,7 @@ Action guidance:
 - list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
 - list_all: List issues across projects. When scope is omitted GitLab answers scope=created_by_me, only the issues the caller created. Pass scope=assigned_to_me for the caller's assigned issues, or scope=all for every issue the caller can see in a project that is not archived, which GitLab Self-Managed and Dedicated accept. Whatever the scope, GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list. GitLab.com may refuse scope=all on this list with 400, a restriction it is rolling out per user. When it does, pass scope=created_by_me or scope=assigned_to_me, or list one group's or project's issues with issue.list_group or issue.list, which return the issues the caller can see in it, the group list leaving out its archived projects' issues as well.
 - list_group: List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project. GitLab leaves out the issues of archived projects and this action cannot ask for them, so list an archived project's issues with issue.list.
-- move: Move an issue to a different project, preserving its discussion and metadata.
+- move: Move an issue to a different project, preserving its discussion and metadata. Destructive: the issue is closed where it was and recreated in the target project under another IID, and moving it back creates a third issue rather than restoring the first, so confirm with the user first.
 - mrs_closing: List merge requests that will close this issue when merged (those referencing it with a closing keyword).
 - mrs_related: List merge requests related to this issue (those mentioning it), a broader set than the closing MRs.
 - note_create: Add a comment (note) to an issue. Use when the task asks to comment on, reply to, or annotate an existing issue. Set internal=true for a confidential note visible only to project members.
@@ -7113,12 +7113,12 @@ Action guidance:
 - schedule_create_variable: Create a pipeline schedule variable. Provide key and value. Value is always required. Only the schedule owner can manage variables.
 - schedule_delete: Permanently delete a pipeline schedule. Destructive and irreversible. Confirm project_id and schedule_id before calling.
 - schedule_delete_variable: Delete a pipeline schedule variable by key. Destructive. Confirm project_id, schedule_id, and key before calling.
-- schedule_edit_variable: Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables.
+- schedule_edit_variable: Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables. Destructive: every call replaces the value the variable holds, which no call restores, so confirm with the user first.
 - schedule_get: Get one pipeline schedule by schedule_id. Use after listing schedules or when the prompt names a concrete schedule. The single-schedule payload includes last_pipeline, variables, and inputs.
 - schedule_list: List pipeline schedules in a project. Use scope to filter active or inactive schedules, order_by/sort to order them, and page/per_page for large result sets.
 - schedule_list_triggered_pipelines: List the pipelines that a schedule has triggered. Use offset pagination for long histories.
 - schedule_run: Trigger a pipeline schedule to run immediately. Only the schedule owner can run it. Runs are rate-limited to roughly one per minute.
-- schedule_take_ownership: Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others.
+- schedule_take_ownership: Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others. Destructive: the schedule's pipelines run as the authenticated user from then on and no call hands ownership back to the previous owner, so confirm with the user first.
 - schedule_update: Edit a pipeline schedule's description, ref, cron, cron_timezone, active state, or inputs. Only the schedule owner can edit. Take ownership first if needed.
 - test_report: Get the full test report for a pipeline by project_id and pipeline_id. Use when the task needs per-suite test counts and timing. Requires jobs that upload JUnit artifacts.
 - test_report_summary: Get the summarized test report for a pipeline by project_id and pipeline_id. Use for aggregate pass/fail totals without the full per-test detail.
@@ -7541,7 +7541,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_project.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so project.list is {"action":"list"} on this one.
 Action guidance:
-- archive: Archive a project so it becomes read-only. Send project_id. Requires Owner role. Use unarchive to reverse.
+- archive: Archive a project so it becomes read-only. Send project_id. Requires Owner role. Destructive: GitLab also removes the project from its fork network, closes the open merge requests from and to its forks, and removes its Pages deployments and their custom domains, and unarchive restores write access and none of that, so confirm with the user first.
 - badge_add: Add a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
 - badge_delete: Delete a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete.
 - badge_edit: Edit a project badge. Use project_id for project badge operations. Do not use group_id. Use when the task says project badge. Group badges are managed by group.badge_list, group.badge_add, group.badge_edit and group.badge_delete. Use the parameter name name for a new badge name. new_name is not supported.
@@ -7566,21 +7566,21 @@ Action guidance:
 - delete_shared_group: Remove a group's share link from a project, revoking that group's inherited access. Send project_id and group_id.
 - download_avatar: Download the avatar image for a project. Send project_id. Returns the raw image bytes.
 - export_download: Download the generated export archive (.tar.gz) of a project as base64 once the export status is 'finished'. Archives are retained for 24 hours after generation.
-- export_schedule: Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download.
+- export_schedule: Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download. Naming an upload URL has GitLab send the whole project to that host, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An export without an upload URL asks nothing.
 - export_status: Get the current export status of a project. Use after project.export_schedule to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.
 - fork: Fork a project into your namespace or a chosen namespace. Optionally set name, path, namespace_id/namespace_path, visibility, and branches to fork.
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch. Do not use search.projects for an exact path lookup.
-- hook_add: Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.). Production GitLab requires HTTPS. Requires Maintainer role.
+- hook_add: Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.). Production GitLab requires HTTPS. Requires Maintainer role. Destructive: from then on GitLab posts the events the hook subscribes to, to the host named in url, and deleting the hook does not recall what was sent, so confirm with the user first.
 - hook_delete: Delete a project webhook by hook_id. Send project_id and hook_id. Irreversible.
 - hook_delete_custom_header: Delete a custom HTTP header from a project webhook. Send project_id, hook_id, and key.
 - hook_delete_url_variable: Delete a URL variable from a project webhook. Send project_id, hook_id, and key.
-- hook_edit: Edit an existing project webhook's URL, token, or enabled events. Send project_id, hook_id, and the fields to change.
+- hook_edit: Edit an existing project webhook's URL, token, or enabled events. Send project_id, hook_id, and the fields to change. An edit that points the hook at another url, sends a token or signing token, or replaces a URL variable or custom header the hook already has changes where its events go or loses a secret that cannot be read back, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An edit of events, name, description, branch filter or SSL verification asks nothing.
 - hook_get: Get one project webhook by hook_id, including its enabled events and configuration. Send project_id and hook_id.
 - hook_list: List the webhooks configured on a project. Send project_id. Requires Maintainer or Owner role.
-- hook_set_custom_header: Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value. The value is write-only.
-- hook_set_url_variable: Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value. The value is write-only.
+- hook_set_custom_header: Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value. The value is write-only. Replacing a key the hook already has loses its current value, which cannot be read back, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. A new key asks nothing.
+- hook_set_url_variable: Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value. The value is write-only. Replacing a key the hook already has loses its current value, which cannot be read back, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. A new key asks nothing.
 - hook_test: Trigger a test event for a project webhook to verify delivery. Send project_id, hook_id, and the event type to fire (e.g. push_events). The project must contain matching content.
-- import_from_file: Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward.
+- import_from_file: Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward. With overwrite=true GitLab replaces the project that is already at that path and nothing brings it back, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An import without overwrite asks nothing.
 - import_status: Get the import status of a project created by project.import_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.
 - integration_delete: Disable and remove a project integration by slug when it is no longer needed.
 - integration_delete_group: Disable and remove a group integration by slug when it is no longer needed.
@@ -7590,15 +7590,15 @@ Action guidance:
 - integration_get_group_datadog: Read the Datadog integration on a group to confirm the configured site, env, service, and tags.
 - integration_list: List every integration (service) wired up on a project to see what is active before reading or removing one.
 - integration_list_group: List every active integration wired up on a group to see what is enabled before reading or removing one.
-- integration_set: Configure any project integration by slug with a free-form config object when no dedicated tool exists (e.g. slack, harbor, jenkins, google-play).
-- integration_set_group: Configure any group integration by slug with a free-form config object, applying it across the group's projects.
-- integration_set_group_datadog: Create or update a group's Datadog integration so logs and CI traces forward to the chosen Datadog site.
-- integration_set_jira: Connect a project to a Jira instance, setting the URL, credentials, and which events sync to Jira.
+- integration_set: Configure any project integration by slug with a free-form config object when no dedicated tool exists (e.g. slack, harbor, jenkins, google-play). Destructive: the call writes the whole integration, so GitLab sends the events it covers to the service the call names from then on and the credentials stored before are replaced and cannot be read back, so confirm with the user first.
+- integration_set_group: Configure any group integration by slug with a free-form config object, applying it across the group's projects. Destructive: the call writes the whole integration, so GitLab sends the events it covers to the service the call names from then on and the credentials stored before are replaced and cannot be read back, so confirm with the user first.
+- integration_set_group_datadog: Create or update a group's Datadog integration so logs and CI traces forward to the chosen Datadog site. Destructive: the call writes the whole integration, so GitLab sends the events it covers to the service the call names from then on and the credentials stored before are replaced and cannot be read back, so confirm with the user first.
+- integration_set_jira: Connect a project to a Jira instance, setting the URL, credentials, and which events sync to Jira. Destructive: the call writes the whole integration, so GitLab sends the events it covers to the service the call names from then on and the credentials stored before are replaced and cannot be read back, so confirm with the user first.
 - label_create: Create a label in a project with required name and color, plus optional description and priority.
 - label_delete: Delete a project label by label_id (ID or name) or by name. Destructive and irreversible. Group-inherited labels must be deleted at the group level.
 - label_get: Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed.
 - label_list: List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance.
-- label_promote: Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels.
+- label_promote: Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels. Destructive: GitLab deletes the project labels of that title in the group's projects, this one included, after moving their issues and merge requests to the group label, and nothing demotes it back, so confirm with the user first.
 - label_subscribe: Subscribe the authenticated user to a project label to receive notifications. Identify the label by label_id (ID or name).
 - label_unsubscribe: Unsubscribe the authenticated user from a project label to stop receiving notifications. Identify the label by label_id (ID or name).
 - label_update: Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name) or by name. At least one mutable field is required.
@@ -9341,7 +9341,7 @@ Action guidance:
 - commit_cherry_pick: Cherry-pick a commit onto a target branch, optionally as a dry run to detect conflicts before creating the commit. Use this to port a single change to another branch.
 - commit_comment_create: Post a comment on a commit, optionally inline by supplying path, line, and line_type. Use this to leave review feedback on a specific commit or changed line.
 - commit_comments: List the comments posted on a commit with pagination. Use this before adding a comment or to review existing review notes attached to a commit.
-- commit_create: Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough.
+- commit_create: Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough. With force=true the branch is reset to its starting point plus the new commit and the commits it held are dropped from it, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. A commit without force asks nothing.
 - commit_diff: Get the file diffs for a single commit with offset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes.
 - commit_discussion_add_note: Reply to an existing commit discussion thread by adding a note. Use this after repository.commit_discussion_list or repository.commit_discussion_create to continue a thread. Supports backdating via created_at for admins/owners.
 - commit_discussion_create: Open a new discussion thread on a commit. Provide a position to attach an inline comment to a line of the commit's diff or a whole file, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners.
@@ -11386,12 +11386,12 @@ Action params schema: gitlab://tools/gitlab_user.<action>. A domain.action ID be
 Action guidance:
 - activate: Activate a deactivated user account by user_id (admin only). Use when the prompt asks to reactivate a dormant user.
 - activities: List recent user activities (last_activity_on per username) optionally filtered by a from-date (admin only). Use when the prompt asks who has been active recently.
-- add_email: Add a new email address to the authenticated user's own account. The email must be a valid RFC 5322 address that is not already taken. skip_confirmation requires an admin token.
-- add_email_for_user: Add a new email address to a specific user's account by user_id (admin only). The email must be a valid RFC 5322 address that is not already taken.
+- add_email: Add a new email address to the authenticated user's own account. The email must be a valid RFC 5322 address that is not already taken. skip_confirmation requires an admin token. Destructive: once the address is confirmed its mailbox can reset the account's password, so confirm with the user first.
+- add_email_for_user: Add a new email address to a specific user's account by user_id (admin only). The email must be a valid RFC 5322 address that is not already taken. Destructive: once the address is confirmed, at once with skip_confirmation, its mailbox can reset that account's password, so confirm with the user first.
 - add_gpg_key: Add a GPG key to the authenticated user's own account. The key must be an ASCII-armored OpenPGP public key block whose fingerprint is unique across GitLab.
 - add_gpg_key_for_user: Add a GPG key to a specific user's account by user_id (admin only). The key must be an ASCII-armored OpenPGP public key block whose fingerprint is unique across GitLab.
-- add_ssh_key: Add an SSH public key to the authenticated user's account with a title and optional expiry and usage type. Use when the prompt asks to register a new key.
-- add_ssh_key_for_user: Add an SSH public key to a specific user's account (admin only) with title and optional expiry. Use when the prompt asks to register a key on behalf of another user.
+- add_ssh_key: Add an SSH public key to the authenticated user's account with a title and optional expiry and usage type. Use when the prompt asks to register a new key. Destructive: whoever holds the key's private half can read and write over Git as the user from then on, and deleting the key recalls nothing, so confirm with the user first.
+- add_ssh_key_for_user: Add an SSH public key to a specific user's account (admin only) with title and optional expiry. Use when the prompt asks to register a key on behalf of another user. Destructive: whoever holds the key's private half can read and write over Git as that user from then on, and deleting the key recalls nothing, so confirm with the user first.
 - approve: Approve a pending user sign-up by user_id (admin only). Use when the prompt asks to approve a user awaiting admin approval.
 - associations_count: Get a user's association counts (groups, projects, issues, merge requests) by user_id. Use when the prompt asks how much a user owns or is involved in before deletion.
 - avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email. Do not use it to search for users by name or username.
@@ -11437,7 +11437,7 @@ Action guidance:
 - list_service_accounts: List instance-level service accounts with order_by/sort and pagination. Admin-only. Use when the prompt asks which service accounts exist.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - memberships: List a user's project and group memberships by user_id, optionally filtered by type (Project or Namespace). Use when the prompt asks where a user is a member and at what access level.
-- modify: Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details.
+- modify: Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details. Sending password, email, provider or extern_uid replaces what the account signs in or is recovered with, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An edit that sends none of them asks nothing.
 - namespace_exists: Check whether a namespace path is available before creating a group or project. Optionally scope the check to a parent namespace with parent_id.
 - namespace_get: Get one namespace by numeric ID or full path. Use after a list or search result, or when the prompt already names a concrete namespace.
 - namespace_list: List namespaces (user and group namespaces) visible to the authenticated user. Use filters such as search, owned_only, top_level_only, order_by, sort, and pagination when scoping the result set.
@@ -11454,7 +11454,7 @@ Action guidance:
 - ssh_keys: List the authenticated user's SSH keys with pagination. Use when the prompt asks which SSH keys are on the current account.
 - ssh_keys_for_user: List SSH keys belonging to a specific user by user_id, the user's ID or username, with pagination. Use when the prompt asks which keys another user has registered.
 - todo_list: List the authenticated user's to-do items. Use filters such as action, state, project_id, group_id, author_id, type, order_by, sort, and pagination to narrow pending or done items.
-- todo_mark_all_done: Mark every pending to-do item for the authenticated user as done in one call.
+- todo_mark_all_done: Mark every pending to-do item for the authenticated user as done in one call. Destructive: no action marks an item pending again and the answer does not say which items were pending, so confirm with the user first.
 - todo_mark_done: Mark a single pending to-do item as done by its ID. Find the ID with user.todo_list first.
 - unban: Unban a previously banned user by user_id (admin only). Use when the prompt asks to lift a ban.
 - unblock: Unblock a previously blocked user by user_id (admin only). Use when the prompt asks to restore a blocked user's access.
@@ -12661,14 +12661,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"create_project","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_external_status_check.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so external_status_check.create_project is {"action":"create_project"} on this one.
 Action guidance:
-- create_project: Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license.
+- create_project: Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license. Destructive: from then on GitLab sends each merge request of the project to the host named in external_url, and deleting the check does not recall what was sent, so confirm with the user first.
 - delete_project: Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab before 19.5 answers a caller without the role with success and deletes nothing, so on those releases confirm the deletion with external_status_check.list_project.
 - list_project: List the external status check services configured for a project, including their HMAC setting and protected-branch scope. Requires the Maintainer role and an Ultimate license. Supports order_by, sort, and offset pagination.
 - list_project_checks: List a project's external status check services (deprecated path). Prefer external_status_check.list_project. Use this only when matching the legacy endpoint. Requires the Maintainer role and an Ultimate license.
 - list_project_mr_checks: List the external status checks that apply to a specific merge request along with each check's current status. Use merge_request_iid (project-scoped). Requires at least the Reporter role and an Ultimate license. Supports order_by, sort, and offset pagination.
 - retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires at least the Developer role and an Ultimate license.
 - set_project_mr_status: Set the status (passed, failed or pending) of an external status check for a merge request, identified by external_status_check_id and the full SHA of the merge request's head commit. Typically called by the HMAC-authenticated external service that owns the check. Requires permission to approve the merge request and an Ultimate license.
-- update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.
+- update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license. Sending external_url points the check at the host it names, and sending shared_secret replaces a secret that cannot be read back, so either needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An update of the name or the branches asks nothing.
 Parameter guidance:
 - create_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - delete_project.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -13022,7 +13022,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"get","params":{...}}. The only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_merge_train.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so merge_train.get is {"action":"get"} on this one.
 Action guidance:
-- add: Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline. Optionally enable auto_merge, verify a head sha, or squash on merge.
+- add: Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline. Optionally enable auto_merge, verify a head sha, or squash on merge. Destructive: the merge request is merged into its target branch when its train pipeline passes, as merging it directly does, so confirm with the user first.
 - get: Fetch the merge train status of a single merge request by its IID. Use when the prompt names a concrete MR and asks whether or where it sits on a merge train.
 - list_branch: List the merge requests sitting on the merge train for one target branch. Use when work is scoped to a specific branch's merge train rather than the whole project.
 - list_project: List every merge train in a project. Use when the prompt asks for all merge trains, active trains, or completed trains in a known project, optionally filtered by scope and sorted.
@@ -13045,7 +13045,7 @@ Param conventions: * = required. All actions need project_id*.
 
 See also: gitlab_merge_request, gitlab_pipeline
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Action Output Schemas:**
 
@@ -13810,26 +13810,28 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_email
 
-Add an email address to the authenticated user's account. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.
+Add an email address to the authenticated user's account. Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `email` (string) (required): Email address to add
 - `skip_confirmation` (boolean): Skip confirmation email (admin only)
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_email_for_user
 
-Add an email address to a specific user's account (admin only). Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.
+Add an email address to a specific user's account (admin only). Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `email` (string) (required): Email address to add
 - `skip_confirmation` (boolean): Skip confirmation email (admin only)
 - `user_id` (integer) (required): GitLab user ID
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_epic_discussion_note
 
@@ -13915,18 +13917,19 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_merge_request_to_merge_train
 
-Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.
+Add a merge request to a merge train. Requires confirmation. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.
 
 **Parameters:**
 
 - `auto_merge` (boolean): Enable auto-merge when pipeline succeeds
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `sha` (string): Head SHA of the merge request to verify
 - `squash` (boolean): Squash commits when merging
 - `when_pipeline_succeeds` (boolean): Deprecated in 17.11. Use auto_merge instead. Merge only when the pipeline succeeds
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_project_badge
 
@@ -13986,38 +13989,41 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_ssh_key
 
-Add an SSH key to the current user. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.
+Add an SSH key to the current user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC
 - `key` (string) (required): The SSH public key content
 - `title` (string) (required): A descriptive title for the SSH key
 - `usage_type` (string): SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_ssh_key_for_user
 
-Add an SSH key to a specific user. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.
+Add an SSH key to a specific user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC
 - `key` (string) (required): The SSH public key content
 - `title` (string) (required): A descriptive title for the SSH key
 - `usage_type` (string): SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.
 - `user_id` (integer) (required): The ID of the user
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_system_hook
 
-Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.
+Add an instance system hook. Requires confirmation. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `custom_webhook_template` (string): Custom payload template (JSON) sent instead of the default webhook body
 - `description` (string): Description for the hook
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
@@ -14031,7 +14037,7 @@ Add an instance system hook. Returns: the created system hook with id, url, and 
 - `token` (string): Secret token for payload validation
 - `url` (string) (required): Hook URL to receive events
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ### approve (1 tool)
 
@@ -14490,10 +14496,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_ci_variable_update
 
-Update a CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete.
+Update a CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
 - `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
@@ -14555,7 +14562,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_commit_create
 
-Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get.
+Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Creating it with force requires confirmation. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get.
 
 **Parameters:**
 
@@ -14564,7 +14571,8 @@ Create a commit with multiple file actions (create/update/delete/move/chmod) on 
 - `author_name` (string): Custom author name
 - `branch` (string) (required): Target branch name
 - `commit_message` (string) (required): Commit message
-- `force` (boolean): When true, force-overwrite the target branch even if a conflict exists
+- `confirm` (boolean): Confirms creating the commit with force, which drops from the target branch the commits its starting point does not have. Pass true only after the user approves that. Only required when force is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
+- `force` (boolean): When true, reset the target branch to the starting point (start_branch or start_sha) plus this commit, dropping from the branch the commits the starting point does not have. Needs the user's approval: confirm=true once they approve, or an elicitation prompt
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `start_branch` (string): Branch to start from if target branch does not exist
 - `start_project` (string): Project ID or path of the source project to start the branch from (for cross-project commits)
@@ -14919,15 +14927,16 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_group_ssh_certificate
 
-Register a new SSH CA certificate on a group from a CA public key and title. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get.
+Register a new SSH CA certificate on a group from a CA public key and title. Requires confirmation. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `key` (string) (required): SSH public key content
 - `title` (string) (required): Title for the SSH certificate
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_create_impersonation_token
 
@@ -15040,17 +15049,18 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_project_external_status_check
 
-Create an external status check service for a project. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.
+Create an external status check service for a project. Requires confirmation. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `external_url` (string) (required): External URL for the status check
 - `name` (string) (required): Name of the external status check
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `protected_branch_ids` (array of integers): IDs of protected branches to scope the check to
 - `shared_secret` (string): Shared secret for HMAC verification
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_create_secure_file
 
@@ -15833,17 +15843,18 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_deploy_key_add
 
-Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable.
+Add a new SSH deploy key to a project. Requires confirmation. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable.
 
 **Parameters:**
 
 - `can_push` (boolean): Whether the key can push to the project
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `expires_at` (string): Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC
 - `key` (string) (required): Public SSH key content
 - `project_id` (string or integer) (required): Project ID or path
 - `title` (string) (required): Deploy key title
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_deploy_key_add_instance
 
@@ -15871,14 +15882,15 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_deploy_key_enable
 
-Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get.
+Enable an existing deploy key for a project. Requires confirmation. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `deploy_key_id` (integer) (required): Deploy key ID to enable. Do not use deploy_token_id
 - `project_id` (string or integer) (required): Project ID or path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_deploy_key_get
 
@@ -16345,11 +16357,12 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_edit_system_hook
 
-Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.
+Edit an instance system hook, including event triggers, SSL verification, and URL settings. Pointing it at another URL or replacing a token requires confirmation. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `confirm` (boolean): Confirms an edit that points the system hook at another URL or replaces its token or signing token, which cannot be read back. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL to a hook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `custom_webhook_template` (string): Updated custom payload template (JSON) sent instead of the default webhook body. Pass an empty string to remove it. Omit the field to leave it untouched
 - `description` (string): Updated hook description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
@@ -18095,13 +18108,14 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_archive
 
-Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
+Archive a GitLab group, making it and its projects read-only in GitLab. Requires confirmation. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_board_create
 
@@ -18384,13 +18398,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_hook_add
 
-Create a webhook on a GitLab group. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.
+Create a webhook on a GitLab group. Requires confirmation. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `custom_headers` (array of objects): Custom HTTP headers added to webhook requests
 - `custom_webhook_template` (string): Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `deployment_events` (boolean): Trigger on deployment events
@@ -18421,7 +18436,7 @@ Create a webhook on a GitLab group. Returns: the created hook with URL, enabled 
 - `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_group_hook_delete
 
@@ -18463,13 +18478,14 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_hook_edit
 
-Update a GitLab group webhook. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.
+Update a GitLab group webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
+- `confirm` (boolean): Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `custom_headers` (array of objects): Custom HTTP headers added to webhook requests
 - `custom_webhook_template` (string): Custom payload template (JSON) sent instead of the default webhook body. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `deployment_events` (boolean): Trigger on deployment events
@@ -18542,10 +18558,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_hook_set_custom_header
 
-Set a custom header on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get.
+Set a custom header on a GitLab group webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): Custom header key name
@@ -18555,10 +18572,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_hook_set_url_variable
 
-Set a URL variable on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get.
+Set a URL variable on a GitLab group webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): URL variable key name. Letters and underscores only. GitLab rejects keys containing digits
@@ -19742,10 +19760,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_variable_update
 
-Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete.
+Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
 - `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
@@ -19896,16 +19915,17 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_import_project_from_file
 
-Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.
+Import a project from an export archive. Overwriting an existing project requires confirmation. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms overwriting the project that is already at the path, which no call brings back. Pass true only after the user approves that. Only required when overwrite is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `content_base64` (string): Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.
 - `file_path` (string): Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided.
 - `name` (string): Name for the imported project
 - `namespace` (string): Namespace to import the project into (user or group path)
 - `override_params` (object): Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])
-- `overwrite` (boolean): If true, overwrite an existing project with the same path
+- `overwrite` (boolean): If true, overwrite an existing project with the same path, which replaces it whole. Needs the user's approval: confirm=true once they approve, or an elicitation prompt
 - `path` (string) (required): URL path for the imported project
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -19964,10 +19984,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_instance_variable_update
 
-Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.
+Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Replacing its value requires confirmation. Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched
 - `key` (string) (required): Variable key name
 - `masked` (boolean): Mask variable value in job logs
@@ -20407,15 +20428,16 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_move
 
-Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.
+Move an issue to another project. Requires confirmation. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `issue_iid` (integer) (required): Issue internal ID
 - `project_id` (string or integer) (required): Source project ID or URL-encoded path
 - `to_project_id` (integer) (required): Target project ID to move issue to
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_issue_mrs_closing
 
@@ -21024,14 +21046,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_promote
 
-Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.
+Promote a project label to a group label, sharing it across the group's projects. Requires confirmation. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `label_id` (string or integer) (required): Label ID or name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_label_subscribe
 
@@ -22525,7 +22548,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_modify_user
 
-Modify an existing user. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.
+Modify an existing user. Replacing the password, the email address or the external identity requires confirmation. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.
 
 **Parameters:**
 
@@ -22535,6 +22558,7 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `bio` (string): New bio text. Pass an empty string to remove it. Omit the field to leave it untouched
 - `can_create_group` (boolean): Allow user to create groups
 - `commit_email` (string): Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched
+- `confirm` (boolean): Confirms replacing what the account signs in or is recovered with: its password, its email address or its external identity. Pass true only after the user approves that. Only required when the call sends password, email, provider or extern_uid. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `email` (string): New email address
 - `extern_uid` (string): External UID for the provider
 - `external` (boolean): Mark or unmark as external
@@ -24459,17 +24483,18 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_schedule_edit_variable
 
-Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.
+Edit a pipeline schedule variable. Requires confirmation. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `key` (string) (required): Variable key to edit
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
 - `value` (string) (required): New variable value. Required when editing a schedule variable
 - `variable_type` (string): Variable type: env_var or file
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_schedule_get
 
@@ -24525,14 +24550,15 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_schedule_take_ownership
 
-Take ownership of a pipeline schedule. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.
+Take ownership of a pipeline schedule. Requires confirmation. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `schedule_id` (integer) (required): Pipeline schedule ID
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_schedule_update
 
@@ -24929,13 +24955,14 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_archive
 
-Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
+Archive a project, making it read-only in GitLab. Requires confirmation. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_create
 
@@ -25314,13 +25341,14 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_hook_add
 
-Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.
+Add a webhook to a project. Requires confirmation. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `custom_headers` (array of objects): Custom HTTP headers sent with each webhook request (key/value pairs)
 - `custom_webhook_template` (string): Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `deployment_events` (boolean): Trigger on deployment events
@@ -25349,7 +25377,7 @@ Add a webhook to a project. Returns: the created webhook with id, URL, and enabl
 - `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_project_hook_delete
 
@@ -25391,13 +25419,14 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_hook_edit
 
-Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.
+Edit a project webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.
 
 **Parameters:**
 
 - `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
+- `confirm` (boolean): Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `custom_headers` (array of objects): Custom HTTP headers sent with each webhook request (key/value pairs)
 - `custom_webhook_template` (string): Custom webhook payload template. On an edit, pass an empty string to remove it. Omit the field to leave it untouched
 - `deployment_events` (boolean): Trigger on deployment events
@@ -25456,10 +25485,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_hook_set_custom_header
 
-Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.
+Set a custom header on a project webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): Custom header key name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -25469,10 +25499,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_hook_set_url_variable
 
-Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.
+Set a URL variable on a project webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `hook_id` (integer) (required): Webhook ID
 - `key` (string) (required): URL variable key name. Letters and underscores only. GitLab rejects keys containing digits
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
@@ -27894,10 +27925,11 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_schedule_project_export
 
-Schedule an asynchronous project export. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.
+Schedule an asynchronous project export. Uploading it to a URL requires confirmation. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms having GitLab upload the export archive, the whole project, to the URL the call names. Pass true only after the user approves that. Only required when the call names an upload URL. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `description` (string): Override the project description in the export
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `upload` (object): Optional upload destination for the generated export archive (mirrors the GitLab upload[] options)
@@ -28125,13 +28157,14 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_set_group_datadog_integration
 
-Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.
+Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional. Requires confirmation.
 
 **Parameters:**
 
 - `api_key` (string) (required): Datadog API key (write-only. Never returned by the get endpoint). GitLab requires it on every update
 - `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com). Pass an empty string to remove it, which GitLab accepts while datadog_site is set. Omit the field to leave it untouched
 - `archive_trace_events` (boolean): Forward CI job trace events to Datadog
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `datadog_ci_visibility` (boolean): Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility
 - `datadog_env` (string): Datadog env tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched
 - `datadog_service` (string): Datadog service tag forwarded with every log/metric. Pass an empty string to remove it. Omit the field to leave it untouched
@@ -28140,7 +28173,7 @@ Create or update the Datadog integration on a group. Requires Owner role and Git
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `use_inherited_settings` (boolean): Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_set_group_integration
 
@@ -28149,10 +28182,11 @@ Configure (create or update) any group integration by slug, passing the integrat
 **Parameters:**
 
 - `config` (object): Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body)
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string or integer) (required): Group ID or URL-encoded path
 - `slug` (string) (required): Integration slug to configure (e.g. slack, jira, harbor). See doc/api/group_integrations.md for the supported list and each integration's config fields
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_set_integration
 
@@ -28161,14 +28195,15 @@ Configure (create or update) any project integration by slug, passing the integr
 **Parameters:**
 
 - `config` (object): Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook. Harbor expects url, project_name, username, password. Jenkins expects jenkins_url, project_name, username, password
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 - `slug` (string) (required): Integration slug to configure (e.g. slack, harbor, jenkins, google-play). See doc/api/integrations.md for the full list and each integration's config fields
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_set_jira_integration
 
-Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.
+Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers. Requires confirmation.
 
 **Parameters:**
 
@@ -28176,6 +28211,7 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 - `api_url` (string): Jira API URL (overrides base URL). Pass an empty string to remove it. Omit the field to leave it untouched
 - `comment_on_event_enabled` (boolean): Add comments on Jira issues for events
 - `commit_events` (boolean): Trigger on commit events
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `customize_jira_issue_enabled` (boolean): Customize the Jira issue created for vulnerabilities
 - `issues_enabled` (boolean): Enable Jira issues integration
 - `jira_allowed_statuses_as_string` (string): Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled). Pass an empty string to remove them. Omit the field to leave them untouched
@@ -28199,7 +28235,7 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 - `vulnerabilities_enabled` (boolean): Create Jira issues for vulnerabilities
 - `vulnerabilities_issuetype` (integer): Jira issue type ID used for vulnerability tickets (when vulnerabilities_enabled is true)
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_set_project_mr_external_status_check_status
 
@@ -28217,10 +28253,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_set_system_hook_url_variable
 
-Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.
+Create or update one URL variable for an instance system hook. Replacing a variable the hook already has requires confirmation. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.
 
 **Parameters:**
 
+- `confirm` (boolean): Confirms replacing a URL variable the system hook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the hook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `id` (integer) (required): System hook ID
 - `key` (string) (required): URL variable key name. Letters and underscores only. GitLab rejects keys containing digits
 - `value` (string) (required): URL variable value. Must be non-empty
@@ -28739,9 +28776,13 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_todo_mark_all_done
 
-Mark all pending to-do items as done. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.
+Mark all pending to-do items as done. Requires confirmation. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_todo_mark_done
 
@@ -29018,11 +29059,12 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_project_external_status_check
 
-Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.
+Update a project external status check service. Sending external_url or shared_secret requires confirmation. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.
 
 **Parameters:**
 
 - `check_id` (integer) (required): External status check ID to update
+- `confirm` (boolean): Confirms pointing the check at the host external_url names, or replacing its shared secret. Pass true only after the user approves that. Only required when the call sends external_url or shared_secret. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `external_url` (string): Updated external URL
 - `name` (string): Updated name
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
