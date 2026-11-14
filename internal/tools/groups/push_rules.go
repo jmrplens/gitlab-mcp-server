@@ -205,6 +205,11 @@ type EditPushRuleInput struct {
 	PreventSecrets             *bool                `json:"prevent_secrets,omitempty" jsonschema:"Reject files that are likely to contain secrets"`
 	RejectUnsignedCommits      *bool                `json:"reject_unsigned_commits,omitempty" jsonschema:"Reject commits that are not GPG signed"`
 	RejectNonDCOCommits        *bool                `json:"reject_non_dco_commits,omitempty" jsonschema:"Reject commits without DCO certification"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // applyEditPushRuleOptions copies the EditPushRuleInput fields onto the SDK options.
@@ -250,13 +255,18 @@ func applyEditPushRuleOptions(input EditPushRuleInput, opts *gl.EditGroupPushRul
 	}
 }
 
-// EditPushRule modifies the push-rule configuration for a group.
+// EditPushRule modifies the push-rule configuration for a group. An edit that
+// relaxes a rule in force is confirmed first, as [confirmPushRuleRelaxation]
+// describes.
 func EditPushRule(ctx context.Context, client *gitlabclient.Client, input EditPushRuleInput) (PushRuleOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return PushRuleOutput{}, err
 	}
 	if input.GroupID == "" {
 		return PushRuleOutput{}, errors.New("groupEditPushRule: group_id is required. Use group.list to find the ID, then pass it as group_id")
+	}
+	if err := confirmPushRuleRelaxation(ctx, client, input); err != nil {
+		return PushRuleOutput{}, err
 	}
 	opts := &gl.EditGroupPushRuleOptions{}
 	applyEditPushRuleOptions(input, opts)

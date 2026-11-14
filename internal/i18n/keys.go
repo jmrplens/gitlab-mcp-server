@@ -230,6 +230,33 @@ const (
 	ConfirmWorkItemAssignees Key = "confirm.work_item.assignees"
 	// ConfirmWorkItemCrmContacts names the CRM contacts a clear removes.
 	ConfirmWorkItemCrmContacts Key = "confirm.work_item.crm_contacts"
+	// ConfirmPushRuleRelax asks before an edit relaxes push rules, {target}
+	// the project or group they belong to and {changes} what the call does to
+	// them, each a sentence fragment that continues "This call".
+	ConfirmPushRuleRelax Key = "confirm.push_rule.relax"
+	// ConfirmPushRuleProject names the project {id} whose push rules an edit
+	// relaxes.
+	ConfirmPushRuleProject Key = "confirm.push_rule.project"
+	// ConfirmPushRuleGroup names the group {id} whose push rules an edit
+	// relaxes.
+	ConfirmPushRuleGroup Key = "confirm.push_rule.group"
+	// ConfirmPushRuleSwitchOff names the rule {setting} an edit turns off.
+	ConfirmPushRuleSwitchOff Key = "confirm.push_rule.switch_off"
+	// ConfirmPushRulePatternRemoved names the pattern {setting} an edit
+	// empties.
+	ConfirmPushRulePatternRemoved Key = "confirm.push_rule.pattern_removed"
+	// ConfirmPushRulePatternReplaced names the pattern {setting} an edit
+	// replaces with a different one.
+	ConfirmPushRulePatternReplaced Key = "confirm.push_rule.pattern_replaced"
+	// ConfirmPushRuleSizeRaised names the file size limit an edit raises,
+	// {from} and {to} in megabytes.
+	ConfirmPushRuleSizeRaised Key = "confirm.push_rule.size_raised"
+	// ConfirmPushRuleSizeRemoved names the file size limit of {from}
+	// megabytes an edit removes.
+	ConfirmPushRuleSizeRemoved Key = "confirm.push_rule.size_removed"
+	// ConfirmPushRuleUnread names the rule {setting} an edit may relax when
+	// the current rules could not be read.
+	ConfirmPushRuleUnread Key = "confirm.push_rule.unread"
 )
 
 // CommonListAnd is the conjunction [L] joins a list with.

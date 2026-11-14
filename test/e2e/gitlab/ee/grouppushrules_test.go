@@ -5,7 +5,9 @@
 
 // grouppushrules_test.go covers a group's push rules, which are one record
 // per group: add it, read it back, edit it and check the edit persisted,
-// delete it and check the read is then refused.
+// delete it and check the read is then refused. The edit is made three ways:
+// one that tightens the rule and asks nothing, one that relaxes it and is
+// refused unconfirmed, and that one confirmed.
 
 package ee
 
@@ -49,7 +51,29 @@ func TestGroupPushRules_Lifecycle_AddGetEditDelete(t *testing.T) {
 			e.T.Errorf("push_rule_get answered %+v, want rule %d as it was added", got, added.ID)
 		}
 
-		edited := harness.Do[groups.PushRuleOutput](s, actionGroupPushRuleEdit, withParams(params, map[string]any{"max_file_size": pushRuleEditedMaxFileSize}))
+		// An edit that adds a restriction asks nothing: the guard in
+		// internal/tools/groups reads the rule only for an edit that can
+		// relax one, and a switch turned on cannot.
+		tightened := harness.Do[groups.PushRuleOutput](s, actionGroupPushRuleEdit, withParams(params, map[string]any{"prevent_secrets": true}))
+		if !tightened.PreventSecrets || tightened.MaxFileSize != pushRuleInitialMaxFileSize {
+			e.T.Errorf("push_rule_edit answered %+v, want prevent_secrets on and the limit still %d MB", tightened, pushRuleInitialMaxFileSize)
+		}
+
+		// Raising the file size limit relaxes a rule in force, so the edit is
+		// refused unconfirmed on every surface, before anything is written,
+		// and the limit stays where it was.
+		unconfirmed := harness.ExpectToolError(s, actionGroupPushRuleEdit,
+			withParams(params, map[string]any{"max_file_size": pushRuleEditedMaxFileSize}), "confirm=true")
+		assertMentions(e, "the unconfirmed raising of the file size limit", unconfirmed, "raises max_file_size from 25 MB to 75 MB")
+		kept := harness.Do[groups.PushRuleOutput](s, actionGroupPushRuleGet, params)
+		if kept.MaxFileSize != pushRuleInitialMaxFileSize {
+			e.T.Errorf("the rule reads a limit of %d MB after the refused edit, want %d kept", kept.MaxFileSize, pushRuleInitialMaxFileSize)
+		}
+
+		// The same edit goes through with confirm, which is what a caller
+		// sends once the user has approved it.
+		edited := harness.Do[groups.PushRuleOutput](s, actionGroupPushRuleEdit,
+			withParams(params, map[string]any{"max_file_size": pushRuleEditedMaxFileSize, "confirm": true}))
 		if edited.MaxFileSize != pushRuleEditedMaxFileSize {
 			e.T.Errorf("push_rule_edit answered a limit of %d MB, want %d", edited.MaxFileSize, pushRuleEditedMaxFileSize)
 		}

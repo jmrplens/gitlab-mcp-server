@@ -657,9 +657,9 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 		options.Aliases = []string{"add group push rule", "create group push rules", "set group push rule", "configure group push rules"}
 		options.IndividualTool.Description = "Add push rules to a GitLab group. Returns: the created push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_edit_push_rule."
 	case "gitlab_group_edit_push_rule":
-		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role."
+		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role. " + toolutil.PushRuleRelaxUsage
 		options.Aliases = []string{"edit group push rule", "update group push rules", "modify group push rule", "change group push rule"}
-		options.IndividualTool.Description = "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
+		options.IndividualTool.Description = "Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
 	case "gitlab_group_delete_push_rule":
 		options.Usage = "Delete a group's push rules. Destructive. Send group_id. Premium/Ultimate, Owner role."
 		options.Aliases = []string{"delete group push rule", "remove group push rules", "drop group push rules", "clear group push rule"}

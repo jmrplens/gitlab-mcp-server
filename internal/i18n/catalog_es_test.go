@@ -123,6 +123,34 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" This replaces the list and cannot be undone from the response.",
 		},
 		{
+			name: "the push rule question for a project, each change a fragment that continues the sentence",
+			msg: New(ConfirmPushRuleRelax,
+				M("target", New(ConfirmPushRuleProject, S("id", "group/app"))),
+				L("changes",
+					New(ConfirmPushRuleSwitchOff, S("setting", "prevent_secrets")),
+					New(ConfirmPushRulePatternRemoved, S("setting", "file_name_regex")),
+					New(ConfirmPushRulePatternReplaced, S("setting", "branch_name_regex")),
+					New(ConfirmPushRuleSizeRaised, N("from", 50), N("to", 100)))),
+			spanish: "¿Relajar las push rules del proyecto group/app? Esta llamada desactiva prevent_secrets y quita file_name_regex" +
+				" y sustituye branch_name_regex por otro patrón que puede aceptar más y sube max_file_size de 50 MB a 100 MB." +
+				" Los push que esas reglas rechazan hoy se aceptan desde entonces.",
+			english: "Relax the push rules of project group/app? This call turns off prevent_secrets and removes file_name_regex" +
+				" and replaces branch_name_regex with another pattern that may accept more and raises max_file_size from 50 MB to 100 MB." +
+				" Pushes those rules reject today are accepted from then on.",
+		},
+		{
+			name: "the push rule question for a group whose rules could not be read",
+			msg: New(ConfirmPushRuleRelax,
+				M("target", New(ConfirmPushRuleGroup, S("id", "acme"))),
+				L("changes",
+					New(ConfirmPushRuleUnread, S("setting", "max_file_size")),
+					New(ConfirmPushRuleSizeRemoved, N("from", 50)))),
+			spanish: "¿Relajar las push rules del grupo acme? Esta llamada puede relajar max_file_size (no se pudieron leer las reglas actuales)" +
+				" y quita el límite max_file_size de 50 MB. Los push que esas reglas rechazan hoy se aceptan desde entonces.",
+			english: "Relax the push rules of group acme? This call may relax max_file_size (the current rules could not be read)" +
+				" and removes the max_file_size limit of 50 MB. Pushes those rules reject today are accepted from then on.",
+		},
+		{
 			name:    "numbers",
 			msg:     New(ProgressPipelineWaitPoll, N("pipeline", 1234), N("attempt", 7)),
 			spanish: "Sondeando el pipeline #1234 (intento 7, comprobación de estado)...",

@@ -59371,7 +59371,7 @@
   },
   {
     "name": "gitlab_group_edit_push_rule",
-    "description": "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.",
+    "description": "Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -59416,6 +59416,10 @@
             "null",
             "string"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "deny_delete_tag": {
           "description": "Deny tag deletion",
@@ -181022,7 +181026,7 @@
   },
   {
     "name": "gitlab_project_edit_push_rule",
-    "description": "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+    "description": "Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -181067,6 +181071,10 @@
             "null",
             "string"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "deny_delete_tag": {
           "description": "Deny tag deletion",

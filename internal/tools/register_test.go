@@ -1732,6 +1732,30 @@ func effectClasses() []effectClass {
 			},
 			byRoute: regexp.MustCompile(`/rotate$|/renew-secret$|/reset_(registration|authentication)_token$`),
 		},
+		{
+			name:    "push rules weakened",
+			reason:  "pushes the rules reject today are accepted from then on",
+			byName:  func(action string) bool { return strings.Contains(action, "push_rule") },
+			byRoute: regexp.MustCompile(`^(PUT|POST|DELETE) /(projects|groups)/:id/push_rule$`),
+			// An edit weakens the rules only when it turns one off, removes or
+			// replaces a pattern, or raises or removes the size limit, which
+			// the arguments and the rule GitLab holds decide between them. A
+			// destructive edit would ask before every call that adds a rule.
+			guarded: map[string]effectGuard{
+				"project.push_rule_edit": {
+					current: `{"id":1,"project_id":42,"prevent_secrets":true}`,
+					call:    map[string]any{"project_id": "42", "prevent_secrets": false},
+				},
+				"group.push_rule_edit": {
+					current: `{"id":1,"prevent_secrets":true}`,
+					call:    map[string]any{"group_id": "10", "prevent_secrets": false},
+				},
+			},
+			exempt: map[string]string{
+				"project.push_rule_add": "GitLab refuses the POST with 422 when the project already has push rules, so the action only ever adds restrictions where there were none",
+				"group.push_rule_add":   "GitLab refuses the POST with 422 when the group already has push rules, so the action only ever adds restrictions where there were none",
+			},
+		},
 	}
 }
 
@@ -1749,12 +1773,14 @@ func inAnyEffectClass(action string) bool {
 }
 
 // TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation holds every action
-// of one effect to one answer about confirmation. Two effects are read: a
-// project or a group moved to another namespace, and a credential replaced or
-// revoked. An action that reaches a class by its name or by a request it
-// sends is destructive, or guarded by its handler, or declared exempt with
-// the reason, and a declaration that stopped describing the catalog fails as
-// an unclassified action does.
+// of one effect to one answer about confirmation. Three effects are read: a
+// project or a group moved to another namespace, a credential replaced or
+// revoked, and push rules weakened. An action that reaches a class by its
+// name or by a request it sends is destructive, or guarded by its handler, or
+// declared exempt with the reason, and a declaration that stopped describing
+// the catalog fails as an unclassified action does. A guarded action is held
+// to its guard here as well: it declares the confirm parameter, and a call
+// that has the effect is refused before any write reaches GitLab.
 //
 // The name heuristic cannot hold this: it knew transfer as a name that may be
 // destructive, which project.transfer was and group.transfer was not, and it
@@ -1915,10 +1941,14 @@ func assertEffectClassesByRoute(t *testing.T, catalog *actioncatalog.Catalog, cl
 // destructive, it declares the confirm parameter its guard asks for, and a
 // call that has the effect is refused before any write reaches GitLab, on
 // what the guard read there.
+//
+// The client is built by hand rather than with testutil.NewTestClient: that
+// one records every request for the request inventory, where a guard's read
+// belongs to the package that owns the action, whose own tests record it.
 func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	t.Helper()
 	var reads, writes atomic.Int64
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 			testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1927,6 +1957,11 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 		reads.Add(1)
 		testutil.RespondJSON(w, http.StatusOK, guard.current)
 	}))
+	t.Cleanup(gitlab.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: gitlab.URL, GitLabToken: "test-token", DisableRetries: true})
+	if err != nil {
+		t.Fatalf("create the GitLab client: %v", err)
+	}
 	served := mustBuildActionCatalog(t, client, ActionCatalogOptions{Enterprise: true})
 	action, ok := served.Action(actioncatalog.ActionID(id))
 	if !ok {
@@ -1939,7 +1974,7 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	if _, declared := properties["confirm"]; !declared {
 		t.Errorf("%s declares no confirm parameter, so the individual tool's closed schema refuses the confirmation its guard asks for", id)
 	}
-	_, err := action.Route.Handler(context.Background(), guard.call)
+	_, err = action.Route.Handler(context.Background(), guard.call)
 	if err == nil || !strings.Contains(err.Error(), "confirm=true") {
 		t.Errorf("%s(%v) error = %v, want a refusal asking for confirm=true", id, guard.call, err)
 	}

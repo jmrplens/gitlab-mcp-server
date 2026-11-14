@@ -102,6 +102,15 @@ var spanish = map[Key]string{
 	ConfirmWorkItemAssigneesUnknown:    "todos los asignados (no se pudo leer la lista actual)",
 	ConfirmWorkItemAssignees:           "todos los asignados actuales ({count})",
 	ConfirmWorkItemCrmContacts:         "todos los contactos CRM",
+	ConfirmPushRuleRelax:               "¿Relajar las push rules del {target}? Esta llamada {changes}. Los push que esas reglas rechazan hoy se aceptan desde entonces.",
+	ConfirmPushRuleProject:             "proyecto {id}",
+	ConfirmPushRuleGroup:               "grupo {id}",
+	ConfirmPushRuleSwitchOff:           "desactiva {setting}",
+	ConfirmPushRulePatternRemoved:      "quita {setting}",
+	ConfirmPushRulePatternReplaced:     "sustituye {setting} por otro patrón que puede aceptar más",
+	ConfirmPushRuleSizeRaised:          "sube max_file_size de {from} MB a {to} MB",
+	ConfirmPushRuleSizeRemoved:         "quita el límite max_file_size de {from} MB",
+	ConfirmPushRuleUnread:              "puede relajar {setting} (no se pudieron leer las reglas actuales)",
 
 	CommonListAnd: " y ",
 

@@ -1970,6 +1970,14 @@ func newClearingProbe(t *testing.T) *clearingProbe {
 	return probe
 }
 
+// singletonReads are the routes whose last segment is a word and that answer
+// one object all the same, where the stand-in would otherwise take the word
+// for a collection. The push rule of a project or a group is one: its edit
+// reads it to decide whether the call relaxes a rule, and the generic object,
+// which sets none, is a rule an empty value relaxes nothing of, so the probe
+// sees the write carry it.
+var singletonReads = map[string]bool{"push_rule": true}
+
 // serve records a write and answers every request with one generic object, or
 // a list of one for a read of a collection.
 func (p *clearingProbe) serve(w http.ResponseWriter, r *http.Request) {
@@ -1993,7 +2001,7 @@ func (p *clearingProbe) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case graphQL:
 		_, _ = io.WriteString(w, `{"data":{}}`)
-	case r.Method == http.MethodGet && strings.Trim(last, "0123456789") != "":
+	case r.Method == http.MethodGet && strings.Trim(last, "0123456789") != "" && !singletonReads[last]:
 		_, _ = io.WriteString(w, `[{"id":1,"iid":1,"name":"x","key":"K"}]`)
 	default:
 		_, _ = io.WriteString(w, `{"id":1,"iid":1,"name":"x"}`)

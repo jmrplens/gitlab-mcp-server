@@ -216,14 +216,24 @@ func TestEditPushRule_RequiresGroupID(t *testing.T) {
 // add-first (404) hint. This is the branch a caller hits when they submit a
 // malformed regex, so losing the WrapErrWithHint call here would silently
 // downgrade a validation error into an unhelpful "no push rules exist" hint.
+// The relaxation guard's read is answered with a rule that has no pattern, so
+// the edit is the request GitLab refuses, and the hint is told from the
+// guard's own refusal, which names the setting too.
 func TestEditPushRule_InvalidRegex(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":7}`)
+			return
+		}
 		w.WriteHeader(http.StatusUnprocessableEntity)
 	}))
 	regex := "(unterminated"
 	_, err := EditPushRule(context.Background(), client, EditPushRuleInput{GroupID: "99", CommitMessageRegex: &regex})
 	if err == nil {
 		t.Fatal("expected error for 422 response")
+	}
+	if !strings.Contains(err.Error(), "regex patterns is invalid") {
+		t.Errorf("expected the invalid-regex hint, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "groupEditPushRule") {
 		t.Errorf("expected operation name in error, got: %v", err)
@@ -368,8 +378,11 @@ func TestAddPushRule_AllFields(t *testing.T) {
 }
 
 // TestEditPushRule_AllFields sends every optional setting at once and holds
-// the body to seven of their names, as the add test above does.
+// the body to seven of their names, as the add test above does. The request
+// under test is the write, so the server runs with confirmation switched off:
+// what the relaxation guard reads and asks is held by its own tests.
 func TestEditPushRule_AllFields(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	var gotBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -444,10 +457,17 @@ func TestPushRuleWrites_UnprocessableCarriesTheSameHintAsBadRequest(t *testing.T
 			},
 		} {
 			t.Run(name+"_"+http.StatusText(status), func(t *testing.T) {
-				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// The edit's relaxation guard reads the rule first. It is
+					// answered with one that has no pattern, so the write is
+					// the request GitLab refuses.
+					if r.Method == http.MethodGet {
+						testutil.RespondJSON(w, http.StatusOK, `{"id":7}`)
+						return
+					}
 					testutil.RespondJSON(w, status, `{"message":"rejected"}`)
 				}))
-				if err := call(client); err == nil || !strings.Contains(err.Error(), "regex") {
+				if err := call(client); err == nil || !strings.Contains(err.Error(), "regex patterns is invalid") {
 					t.Errorf("%s on a %d = %v, want the regex hint", name, status, err)
 				}
 			})
@@ -762,7 +782,12 @@ func pushRuleSettings() []pushRuleSetting {
 // key with its own value, on the add and on the edit. The all-fields tests
 // send five flags true at once and search the body for seven names, so a
 // setting written under a neighbor's key or with a neighbor's value passed.
+//
+// The request under test is the write, so the server runs with confirmation
+// switched off: an edit naming a pattern or a size is one the relaxation
+// guard reads the rule for, and its read is held by its own tests.
 func TestPushRuleWrites_EachSettingReachesTheRequestOnItsOwn(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, setting := range pushRuleSettings() {
 		t.Run("add/"+setting.key, func(t *testing.T) {
 			add := setting.add

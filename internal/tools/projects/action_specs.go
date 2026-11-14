@@ -284,6 +284,9 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 	}
 	if slices.Contains(extraTags, tagPushRule) {
 		options.Usage = "Use project push rule actions for the singleton project-level push rule. Do not pass push_rule_id. Get/add/edit/delete operate by project_id only. Use reject_unsigned_commits, not deny_unsigned_commits."
+		if individualTool == toolProjectEditPushRule {
+			options.Usage += " " + toolutil.PushRuleRelaxUsage
+		}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramProjectID: {
 				SemanticRole:     "scope_project",
@@ -672,7 +675,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	toolProjectEditPushRule: {
 		aliases:     []string{"edit push rule", "update project push rule", "change commit rules"},
 		related:     []string{actionProjectGetPushRules, actionProjectAddPushRule, actionProjectDeletePushRule},
-		description: "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+		description: "Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
 	},
 	"gitlab_project_delete_push_rule": {
 		aliases:     []string{"delete push rule", "remove project push rule", "clear commit rules"},

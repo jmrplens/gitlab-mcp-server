@@ -96,6 +96,15 @@ var english = map[Key]string{
 	ConfirmWorkItemAssigneesUnknown:    "every assignee (the current list could not be read)",
 	ConfirmWorkItemAssignees:           "all {count} assignees",
 	ConfirmWorkItemCrmContacts:         "every CRM contact",
+	ConfirmPushRuleRelax:               "Relax the push rules of {target}? This call {changes}. Pushes those rules reject today are accepted from then on.",
+	ConfirmPushRuleProject:             "project {id}",
+	ConfirmPushRuleGroup:               "group {id}",
+	ConfirmPushRuleSwitchOff:           "turns off {setting}",
+	ConfirmPushRulePatternRemoved:      "removes {setting}",
+	ConfirmPushRulePatternReplaced:     "replaces {setting} with another pattern that may accept more",
+	ConfirmPushRuleSizeRaised:          "raises max_file_size from {from} MB to {to} MB",
+	ConfirmPushRuleSizeRemoved:         "removes the max_file_size limit of {from} MB",
+	ConfirmPushRuleUnread:              "may relax {setting} (the current rules could not be read)",
 
 	CommonListAnd: " and ",
 

@@ -6,6 +6,8 @@
 // pushrules_test.go covers a project's push rule: add, read, edit, delete,
 // and the not-found a read gives once the rule is gone. A project has at
 // most one rule, which is why the whole life fits one project per surface.
+// The edit is made three ways: one that tightens the rule and asks nothing,
+// one that relaxes it and is refused unconfirmed, and that one confirmed.
 
 package ee
 
@@ -47,7 +49,31 @@ func TestPushRules_Lifecycle_AddsEditsAndDeletes(t *testing.T) {
 			e.T.Errorf("push_rule_get answered %+v, want rule %d with max_file_size %d", got, added.ID, pushRuleMaxFileSize)
 		}
 
-		edited := harness.Do[projects.PushRuleOutput](s, actionPushRuleEdit, map[string]any{"project_id": id, "max_file_size": pushRuleMaxFileSizeEdited})
+		// An edit that adds a restriction asks nothing: the guard in
+		// internal/tools/projects reads the rule only for an edit that can
+		// relax one, and a switch turned on cannot.
+		tightened := harness.Do[projects.PushRuleOutput](s, actionPushRuleEdit, map[string]any{"project_id": id, "prevent_secrets": true})
+		if !tightened.PreventSecrets || tightened.MaxFileSize != pushRuleMaxFileSize {
+			e.T.Errorf("push_rule_edit answered %+v, want prevent_secrets on and max_file_size still %d", tightened, pushRuleMaxFileSize)
+		}
+
+		// Raising the file size limit relaxes a rule in force, so the edit is
+		// refused unconfirmed on every surface, before anything is written,
+		// and the limit stays where it was.
+		unconfirmed := harness.ExpectToolError(s, actionPushRuleEdit, map[string]any{
+			"project_id": id, "max_file_size": pushRuleMaxFileSizeEdited,
+		}, "confirm=true")
+		assertMentions(e, "the unconfirmed raising of the file size limit", unconfirmed, "raises max_file_size from 50 MB to 100 MB")
+		kept := harness.Do[projects.PushRuleOutput](s, actionPushRuleGet, map[string]any{"project_id": id})
+		if kept.MaxFileSize != pushRuleMaxFileSize {
+			e.T.Errorf("push_rule_get answered max_file_size %d after the refused edit, want %d kept", kept.MaxFileSize, pushRuleMaxFileSize)
+		}
+
+		// The same edit goes through with confirm, which is what a caller
+		// sends once the user has approved it.
+		edited := harness.Do[projects.PushRuleOutput](s, actionPushRuleEdit, map[string]any{
+			"project_id": id, "max_file_size": pushRuleMaxFileSizeEdited, "confirm": true,
+		})
 		if edited.MaxFileSize != pushRuleMaxFileSizeEdited {
 			e.T.Errorf("push_rule_edit answered max_file_size %d, want %d", edited.MaxFileSize, pushRuleMaxFileSizeEdited)
 		}

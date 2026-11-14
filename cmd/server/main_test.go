@@ -17487,11 +17487,16 @@ type confirmedCall struct {
 	// it, and an action its own handler guards takes it inside them, where
 	// the handler does.
 	confirmInParams bool
+	// unasked, when set, is a call of the same action that does not have the
+	// effect and is therefore written without any confirmation.
+	unasked map[string]any
 }
 
 // confirmedCalls are one action of each family the catalog classifies by its
-// effect rather than its verb: a namespace transfer, a token rotation and a
-// runner token reset.
+// effect rather than its verb: a namespace transfer, a token rotation, a
+// runner token reset, and the two edits of push rules, which ask only for a
+// call that relaxes the rule the fake GitLab holds (a size limit of 50 and
+// prevent_secrets on) and write a call that tightens it unasked.
 func confirmedCalls() []confirmedCall {
 	return []confirmedCall{
 		{
@@ -17508,6 +17513,20 @@ func confirmedCalls() []confirmedCall {
 			action: "runner.reset_token", metaTool: "gitlab_runner", metaAction: "reset_token",
 			individual: "gitlab_runner_reset_token",
 			params:     map[string]any{"runner_id": 7},
+		},
+		{
+			action: "project.push_rule_edit", metaTool: "gitlab_project", metaAction: "push_rule_edit",
+			individual:      "gitlab_project_edit_push_rule",
+			params:          map[string]any{"project_id": "42", "max_file_size": 100},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "max_file_size": 10, "deny_delete_tag": true},
+		},
+		{
+			action: "group.push_rule_edit", metaTool: "gitlab_group", metaAction: "push_rule_edit",
+			individual:      "gitlab_group_edit_push_rule",
+			params:          map[string]any{"group_id": "10", "prevent_secrets": false},
+			confirmInParams: true,
+			unasked:         map[string]any{"group_id": "10", "prevent_secrets": true},
 		},
 	}
 }
@@ -17552,12 +17571,21 @@ func TestCreateServer_EffectClassActions_AskOnEverySurface(t *testing.T) {
 	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
 		t.Run(surface, func(t *testing.T) {
 			var writes atomic.Int64
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// The client is built by hand, as this package's are, rather than
+			// with testutil.NewTestClient: that one records every request for
+			// the request inventory, which holds the requests of the packages
+			// that own the actions and none under cmd/server.
+			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != http.MethodGet {
 					writes.Add(1)
 				}
 				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"prevent_secrets":true,"max_file_size":50}`)
 			}))
+			t.Cleanup(gitlab.Close)
+			client, err := gitlabclient.NewClient(&config.Config{GitLabURL: gitlab.URL, GitLabToken: testToken, DisableRetries: true})
+			if err != nil {
+				t.Fatalf("create the GitLab client: %v", err)
+			}
 			server := createServerWithin(t, client, &config.ServerConfig{
 				ToolSurface:       surface,
 				CapabilitySurface: config.CapabilitySurfaceMinimal,
@@ -17567,21 +17595,42 @@ func TestCreateServer_EffectClassActions_AskOnEverySurface(t *testing.T) {
 			session := newInMemorySession(t, server)
 			// sequential: each action is refused first and confirmed second, against one counter.
 			for _, action := range confirmedCalls() {
-				before := writes.Load()
-				tool, args := action.arguments(surface, false)
-				if answer := toolAnswer(t, session, tool, args); !strings.Contains(answer, "confirm=true") {
-					t.Errorf("%s without confirm answered %q, want a refusal asking for confirm=true", action.action, answer)
-				}
-				if sent := writes.Load() - before; sent != 0 {
-					t.Errorf("%s without confirm sent %d write(s) to GitLab, want 0", action.action, sent)
-				}
-				tool, args = action.arguments(surface, true)
-				answer := toolAnswer(t, session, tool, args)
-				if sent := writes.Load() - before; sent != 1 {
-					t.Errorf("%s with confirm sent %d write(s) to GitLab, want 1; it answered %q", action.action, sent, answer)
-				}
+				assertAsksBeforeItWrites(t, session, surface, action, &writes)
 			}
 		})
+	}
+}
+
+// assertAsksBeforeItWrites calls one action three ways on a surface and holds
+// the writes GitLab was sent after each: none for the call without the
+// confirmation, which is answered with the way to confirm, one for the same
+// call confirmed, and, where the action has a call without the effect, one
+// more for that call, which nobody is asked about.
+func assertAsksBeforeItWrites(t *testing.T, session *mcp.ClientSession, surface string, action confirmedCall, writes *atomic.Int64) {
+	t.Helper()
+	before := writes.Load()
+	tool, args := action.arguments(surface, false)
+	if answer := toolAnswer(t, session, tool, args); !strings.Contains(answer, "confirm=true") {
+		t.Errorf("%s without confirm answered %q, want a refusal asking for confirm=true", action.action, answer)
+	}
+	if sent := writes.Load() - before; sent != 0 {
+		t.Errorf("%s without confirm sent %d write(s) to GitLab, want 0", action.action, sent)
+	}
+	tool, args = action.arguments(surface, true)
+	answer := toolAnswer(t, session, tool, args)
+	if sent := writes.Load() - before; sent != 1 {
+		t.Errorf("%s with confirm sent %d write(s) to GitLab, want 1; it answered %q", action.action, sent, answer)
+	}
+	if action.unasked == nil {
+		return
+	}
+	harmless := action
+	harmless.params = action.unasked
+	tool, args = harmless.arguments(surface, false)
+	answer = toolAnswer(t, session, tool, args)
+	if sent := writes.Load() - before; sent != 2 {
+		t.Errorf("%s adding or tightening a rule sent %d write(s) in all, want its own beside the confirmed one; it answered %q",
+			action.action, sent, answer)
 	}
 }
 

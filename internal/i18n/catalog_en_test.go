@@ -51,6 +51,7 @@ const (
 	sampleAttempt    = 7
 	sampleID         = 1234
 	sampleIndex      = 2
+	sampleSetting    = "prevent_secrets"
 )
 
 // frozenEnglishRows holds every English entry against the literal it
@@ -61,8 +62,9 @@ const (
 // to; confirm.destructive.standalone quoted the tool name with %q, which is
 // what strconv.Quote writes, so the call site passes the quoted name and the
 // row renders the old template with the bare one. The pull mirror questions
-// written after that stack are [pullMirrorQuestionRows], appended here so the
-// tests below hold every entry.
+// written after that stack are [pullMirrorQuestionRows] and the push rule
+// question's are [pushRuleQuestionRows], both appended here so the tests below
+// hold every entry.
 func frozenEnglishRows() []frozenEnglish {
 	rows := []frozenEnglish{
 		{key: ElicitationSchemaConfirmTitle, dotted: "elicitation.schema.confirm.title", want: "Confirm"},
@@ -273,7 +275,58 @@ func frozenEnglishRows() []frozenEnglish {
 			want: fmt.Sprintf("Published %d of %d files", sampleIndex, sampleCount),
 		},
 	}
-	return append(rows, pullMirrorQuestionRows()...)
+	return append(append(rows, pullMirrorQuestionRows()...), pushRuleQuestionRows()...)
+}
+
+// pushRuleQuestionRows holds the question of the guard that asks before an
+// edit relaxes push rules, the two targets it names and each change it can
+// name. They replaced no literal, so each row pins the English it was written
+// with.
+func pushRuleQuestionRows() []frozenEnglish {
+	return []frozenEnglish{
+		{
+			key: ConfirmPushRuleRelax, dotted: "confirm.push_rule.relax",
+			args: []Arg{
+				M("target", New(ConfirmPushRuleProject, S("id", samplePath))),
+				L("changes", New(ConfirmPushRuleSwitchOff, S("setting", sampleSetting)), New(ConfirmPushRuleSizeRemoved, N("from", sampleCount))),
+			},
+			want: fmt.Sprintf(
+				"Relax the push rules of project %s? This call turns off %s and removes the max_file_size limit of %d MB."+
+					" Pushes those rules reject today are accepted from then on.",
+				samplePath, sampleSetting, sampleCount,
+			),
+		},
+		{key: ConfirmPushRuleProject, dotted: "confirm.push_rule.project", args: []Arg{S("id", samplePath)}, want: "project " + samplePath},
+		{key: ConfirmPushRuleGroup, dotted: "confirm.push_rule.group", args: []Arg{S("id", samplePath)}, want: "group " + samplePath},
+		{
+			key: ConfirmPushRuleSwitchOff, dotted: "confirm.push_rule.switch_off",
+			args: []Arg{S("setting", sampleSetting)}, want: "turns off " + sampleSetting,
+		},
+		{
+			key: ConfirmPushRulePatternRemoved, dotted: "confirm.push_rule.pattern_removed",
+			args: []Arg{S("setting", sampleSetting)}, want: "removes " + sampleSetting,
+		},
+		{
+			key: ConfirmPushRulePatternReplaced, dotted: "confirm.push_rule.pattern_replaced",
+			args: []Arg{S("setting", sampleSetting)},
+			want: "replaces " + sampleSetting + " with another pattern that may accept more",
+		},
+		{
+			key: ConfirmPushRuleSizeRaised, dotted: "confirm.push_rule.size_raised",
+			args: []Arg{N("from", sampleCount), N("to", sampleIID)},
+			want: fmt.Sprintf("raises max_file_size from %d MB to %d MB", sampleCount, sampleIID),
+		},
+		{
+			key: ConfirmPushRuleSizeRemoved, dotted: "confirm.push_rule.size_removed",
+			args: []Arg{N("from", sampleCount)},
+			want: fmt.Sprintf("removes the max_file_size limit of %d MB", sampleCount),
+		},
+		{
+			key: ConfirmPushRuleUnread, dotted: "confirm.push_rule.unread",
+			args: []Arg{S("setting", sampleSetting)},
+			want: "may relax " + sampleSetting + " (the current rules could not be read)",
+		},
+	}
 }
 
 // pullMirrorQuestionRows holds the questions of the pull mirror guard that
