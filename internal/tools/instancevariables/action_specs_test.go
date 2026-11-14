@@ -22,6 +22,10 @@ import (
 // returns a result rather than an error: it is the spec's wiring that is under
 // test, not the handlers the routes reach.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET "+pathInstanceVars, func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+varJSON+`]`)

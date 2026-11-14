@@ -17496,7 +17496,12 @@ type confirmedCall struct {
 // effect rather than its verb: a namespace transfer, a token rotation, a
 // runner token reset, and the two edits of push rules, which ask only for a
 // call that relaxes the rule the fake GitLab holds (a size limit of 50 and
-// prevent_secrets on) and write a call that tightens it unasked.
+// prevent_secrets on) and write a call that tightens it unasked. After them
+// come an issue moved to another project, a webhook added, a deploy key
+// attached to a project, and the actions whose handler asks about one of
+// their calls: a webhook pointed at another address, a variable's value
+// replaced, a commit created with force and a user's password replaced, each
+// beside a call of the same action that goes out unasked.
 func confirmedCalls() []confirmedCall {
 	return []confirmedCall{
 		{
@@ -17527,6 +17532,55 @@ func confirmedCalls() []confirmedCall {
 			params:          map[string]any{"group_id": "10", "prevent_secrets": false},
 			confirmInParams: true,
 			unasked:         map[string]any{"group_id": "10", "prevent_secrets": true},
+		},
+		{
+			action: "issue.move", metaTool: "gitlab_issue", metaAction: "move",
+			individual: "gitlab_issue_move",
+			params:     map[string]any{"project_id": "42", "issue_iid": 5, "to_project_id": 43},
+		},
+		{
+			action: "project.hook_add", metaTool: "gitlab_project", metaAction: "hook_add",
+			individual: "gitlab_project_hook_add",
+			params:     map[string]any{"project_id": "42", "url": "https://new.example/hook"},
+		},
+		{
+			action: "access.deploy_key_enable", metaTool: "gitlab_access", metaAction: "deploy_key_enable",
+			individual: "gitlab_deploy_key_enable",
+			params:     map[string]any{"project_id": "42", "deploy_key_id": 3},
+		},
+		{
+			action: "project.hook_edit", metaTool: "gitlab_project", metaAction: "hook_edit",
+			individual:      "gitlab_project_hook_edit",
+			params:          map[string]any{"project_id": "42", "hook_id": 7, "url": "https://new.example/hook"},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "hook_id": 7, "push_events": false},
+		},
+		{
+			action: "ci_variable.update", metaTool: "gitlab_ci_variable", metaAction: "update",
+			individual:      "gitlab_ci_variable_update",
+			params:          map[string]any{"project_id": "42", "key": "DEPLOY_URL", "value": "https://deploy.example"},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "key": "DEPLOY_URL", "protected": true},
+		},
+		{
+			action: "repository.commit_create", metaTool: "gitlab_repository", metaAction: "commit_create",
+			individual: "gitlab_commit_create",
+			params: map[string]any{
+				"project_id": "42", "branch": "main", "start_branch": "develop", "commit_message": "change", "force": true,
+				"actions": []any{map[string]any{"action": "create", "file_path": "a.txt", "content": "a"}},
+			},
+			confirmInParams: true,
+			unasked: map[string]any{
+				"project_id": "42", "branch": "main", "commit_message": "change",
+				"actions": []any{map[string]any{"action": "create", "file_path": "a.txt", "content": "a"}},
+			},
+		},
+		{
+			action: "user.modify", metaTool: "gitlab_user", metaAction: "modify",
+			individual:      "gitlab_modify_user",
+			params:          map[string]any{"user_id": 5, "password": "a new password"},
+			confirmInParams: true,
+			unasked:         map[string]any{"user_id": 5, "name": "Renamed"},
 		},
 	}
 }
@@ -17560,9 +17614,11 @@ func (c confirmedCall) arguments(surface string, confirm bool) (tool string, arg
 
 // TestCreateServer_EffectClassActions_AskOnEverySurface drives the real
 // server on each of its three surfaces against a GitLab that counts what it
-// is sent. An action that moves a namespace, replaces a credential or relaxes
-// a push rule sends no write until the call carries the confirmation, on a
-// client that cannot be asked, and sends its one write once it does. The
+// is sent. An action of [confirmedCalls], classified destructive for its
+// effect or guarded by its handler, sends no write until the call carries the
+// confirmation, on a client that cannot be asked, and sends its one write once
+// it does, while the call of a guarded action that does not have the effect
+// is written unasked. The
 // catalog test holds the classification; this holds that every dispatcher
 // acts on it.
 func TestCreateServer_EffectClassActions_AskOnEverySurface(t *testing.T) {
@@ -17629,7 +17685,7 @@ func assertAsksBeforeItWrites(t *testing.T, session *mcp.ClientSession, surface 
 	tool, args = harmless.arguments(surface, false)
 	answer = toolAnswer(t, session, tool, args)
 	if sent := writes.Load() - before; sent != 2 {
-		t.Errorf("%s adding or tightening a rule sent %d write(s) in all, want its own beside the confirmed one; it answered %q",
+		t.Errorf("%s called without the effect sent %d write(s) in all, want its own beside the confirmed one; it answered %q",
 			action.action, sent, answer)
 	}
 }

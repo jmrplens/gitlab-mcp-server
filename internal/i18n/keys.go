@@ -257,6 +257,65 @@ const (
 	// ConfirmPushRuleUnread names the rule {setting} an edit may relax when
 	// the current rules could not be read.
 	ConfirmPushRuleUnread Key = "confirm.push_rule.unread"
+	// ConfirmTargetProject names the project {id} a guarded call acts on, in
+	// the questions that name their target as "in {target}".
+	ConfirmTargetProject Key = "confirm.target.project"
+	// ConfirmTargetGroup names the group {id} a guarded call acts on.
+	ConfirmTargetGroup Key = "confirm.target.group"
+	// ConfirmTargetInstance names the GitLab instance, for an object that
+	// belongs to no project or group.
+	ConfirmTargetInstance Key = "confirm.target.instance"
+	// ConfirmVariableValue asks before an update replaces the value of the
+	// CI/CD variable {key} in {target}. It never shows a value.
+	ConfirmVariableValue Key = "confirm.variable.value"
+	// ConfirmUserAccess asks before an administrator's edit replaces what
+	// user {id} signs in or recovers the account with, {changes} each a
+	// sentence fragment that continues "This call".
+	ConfirmUserAccess Key = "confirm.user_access.replace"
+	// ConfirmUserAccessPassword names the password an edit replaces.
+	ConfirmUserAccessPassword Key = "confirm.user_access.password"
+	// ConfirmUserAccessEmail names the address {email} an edit makes the
+	// account's.
+	ConfirmUserAccessEmail Key = "confirm.user_access.email"
+	// ConfirmUserAccessIdentity names the external identity an edit replaces.
+	ConfirmUserAccessIdentity Key = "confirm.user_access.identity"
+	// ConfirmHookDelivery asks before a call changes where webhook {hook} in
+	// {target} delivers or replaces a secret it sends, {changes} each a
+	// sentence fragment that continues "This call".
+	ConfirmHookDelivery Key = "confirm.hook.delivery"
+	// ConfirmHookURL names the origin {url} a call points a webhook at and
+	// the origin {current} it delivers to now.
+	ConfirmHookURL Key = "confirm.hook.url"
+	// ConfirmHookURLUnread names the origin {url} a call sends when the
+	// webhook could not be read.
+	ConfirmHookURLUnread Key = "confirm.hook.url_unread"
+	// ConfirmHookToken names the write-only {token} a call replaces: token
+	// or signing_token, the parameter's own name.
+	ConfirmHookToken Key = "confirm.hook.token"
+	// ConfirmHookValue names the entry {key} of the write-only map {field},
+	// url_variables or custom_headers, that a call replaces.
+	ConfirmHookValue Key = "confirm.hook.value"
+	// ConfirmHookValueUnread names the entry {key} of {field} a call may
+	// replace when the webhook could not be read.
+	ConfirmHookValueUnread Key = "confirm.hook.value_unread"
+	// ConfirmImportOverwrite asks before a project import overwrites the
+	// project at {path}.
+	ConfirmImportOverwrite Key = "confirm.import.overwrite"
+	// ConfirmCommitForce asks before a commit resets branch {branch} in
+	// {target} to its starting point.
+	ConfirmCommitForce Key = "confirm.commit.force"
+	// ConfirmExportUpload asks before an export of {target} is uploaded to
+	// the origin {url}.
+	ConfirmExportUpload Key = "confirm.export.upload"
+	// ConfirmStatusCheck asks before an edit changes where external status
+	// check {check} in {target} sends merge requests or replaces its shared
+	// secret, {changes} each a sentence fragment that continues "This call".
+	ConfirmStatusCheck Key = "confirm.status_check.delivery"
+	// ConfirmStatusCheckURL names the origin {url} an edit points an external
+	// status check at.
+	ConfirmStatusCheckURL Key = "confirm.status_check.url"
+	// ConfirmStatusCheckSecret names the shared secret an edit replaces.
+	ConfirmStatusCheckSecret Key = "confirm.status_check.secret"
 )
 
 // CommonListAnd is the conjunction [L] joins a list with.

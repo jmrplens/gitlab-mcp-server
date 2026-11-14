@@ -41,8 +41,18 @@ func userEmailReadSpec(name string, route toolutil.ActionRoute, individualTool s
 }
 
 // userEmailCreateSpec builds the canonical create spec for a user email tool.
+// It is a create that asks for confirmation: once an address added to an
+// account is confirmed, which its own mailbox does or an administrator's
+// skip_confirmation does at once, GitLab sends that mailbox the account's
+// password reset. Adding the address a call names therefore hands recovery
+// of the account to whoever reads that mailbox, and the address is a
+// parameter a model can take from text the user never read. Deleting the
+// address ends that and undoes nothing done meanwhile. Only the destructive
+// bit is added to the create.
 func userEmailCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, userEmailOptions(individualTool))
+	options := userEmailOptions(individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 // userEmailDeleteSpec builds the canonical destructive delete spec for a user email tool.
@@ -75,16 +85,16 @@ var userEmailActionMeta = map[string]userEmailMeta{
 		description: "Get one email address from the authenticated user's account by ID. Returns: the email's ID, address, and confirmation timestamp. See also: gitlab_add_email, gitlab_delete_email, gitlab_list_emails_for_user.",
 	},
 	"gitlab_add_email": {
-		usage:       "Add a new email address to the authenticated user's own account. The email must be a valid RFC 5322 address that is not already taken. skip_confirmation requires an admin token.",
+		usage:       "Add a new email address to the authenticated user's own account. The email must be a valid RFC 5322 address that is not already taken. skip_confirmation requires an admin token. Destructive: once the address is confirmed its mailbox can reset the account's password, so confirm with the user first.",
 		aliases:     []string{"add email", "create email address", "register email"},
 		related:     []string{actionUserGetEmail, actionUserDeleteEmail, actionUserAddEmailForUser},
-		description: "Add an email address to the authenticated user's account. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.",
+		description: "Add an email address to the authenticated user's account. Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.",
 	},
 	"gitlab_add_email_for_user": {
-		usage:       "Add a new email address to a specific user's account by user_id (admin only). The email must be a valid RFC 5322 address that is not already taken.",
+		usage:       "Add a new email address to a specific user's account by user_id (admin only). The email must be a valid RFC 5322 address that is not already taken. Destructive: once the address is confirmed, at once with skip_confirmation, its mailbox can reset that account's password, so confirm with the user first.",
 		aliases:     []string{"add email for user", "create user email address", "register email for user"},
 		related:     []string{actionUserEmailsForUser, actionUserDeleteEmailForUser, actionUserAddEmail},
-		description: "Add an email address to a specific user's account (admin only). Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.",
+		description: "Add an email address to a specific user's account (admin only). Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.",
 	},
 	"gitlab_delete_email": {
 		usage:       "Delete an email address from the authenticated user's own account by email_id. The primary email cannot be deleted.",

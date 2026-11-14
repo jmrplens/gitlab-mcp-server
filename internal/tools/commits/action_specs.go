@@ -198,7 +198,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "Get the signature (GPG/X.509/SSH) of a commit for authenticity verification. Returns: the signing key ID, primary key ID, signer name/email, verification status, and optional subkey ID. See also: gitlab_commit_get, gitlab_commit_list."
 	case "commit_create":
-		options.Usage = "Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough."
+		options.Usage = "Create a commit by applying one or more file actions (create/update/delete/move/chmod) to a branch in a single API call. Use for multi-file changes where single-file repository APIs are not enough. With force=true the branch is reset to its starting point plus the new commit and the commits it held are dropped from it, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. A commit without force asks nothing."
 		options.Aliases = []string{"create commit", "commit file changes", "batch commit changes", "commit multiple files"}
 		options.RelatedActions = []string{actionBranchList, actionRepositoryTree, actionCommitGet}
 		options.ParameterGuidance["branch"] = toolutil.ParameterGuidance{
@@ -211,7 +211,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 			ValueSource:    "Array of commit actions (create/update/delete/move/chmod) with file paths and content.",
 			ExampleBinding: `params.actions:[{"action":"create","file_path":"README.md","content":"text"}]`,
 		}
-		options.IndividualTool.Description = "Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get."
+		options.IndividualTool.Description = "Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Creating it with force requires confirmation. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("actions.action", map[string]any{"enum": []any{"create", "delete", "move", "update", "chmod"}}),
 		}

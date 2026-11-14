@@ -62,9 +62,10 @@ const (
 // to; confirm.destructive.standalone quoted the tool name with %q, which is
 // what strconv.Quote writes, so the call site passes the quoted name and the
 // row renders the old template with the bare one. The pull mirror questions
-// written after that stack are [pullMirrorQuestionRows] and the push rule
-// question's are [pushRuleQuestionRows], both appended here so the tests below
-// hold every entry.
+// written after that stack are [pullMirrorQuestionRows], the push rule
+// question's are [pushRuleQuestionRows] and those of the guards that ask about
+// one call of an action are [guardedCallQuestionRows], all appended here so
+// the tests below hold every entry.
 func frozenEnglishRows() []frozenEnglish {
 	rows := []frozenEnglish{
 		{key: ElicitationSchemaConfirmTitle, dotted: "elicitation.schema.confirm.title", want: "Confirm"},
@@ -275,7 +276,125 @@ func frozenEnglishRows() []frozenEnglish {
 			want: fmt.Sprintf("Published %d of %d files", sampleIndex, sampleCount),
 		},
 	}
-	return append(append(rows, pullMirrorQuestionRows()...), pushRuleQuestionRows()...)
+	rows = append(rows, pullMirrorQuestionRows()...)
+	rows = append(rows, pushRuleQuestionRows()...)
+	return append(rows, guardedCallQuestionRows()...)
+}
+
+// guardedCallQuestionRows holds the questions of the guards that ask about one
+// call of an action that is not destructive: the targets they name, and for
+// each guard its question and every change it can name. They replaced no
+// literal, so each row pins the English it was written with. No row carries a
+// value that is a secret, and every address is an origin.
+func guardedCallQuestionRows() []frozenEnglish {
+	const (
+		origin   = "https://hooks.example.com/..."
+		current  = "https://ci.example.com"
+		variable = "DEPLOY_URL"
+		address  = "new@example.com"
+		field    = "url_variables"
+	)
+	project := New(ConfirmTargetProject, S("id", samplePath))
+	return []frozenEnglish{
+		{key: ConfirmTargetProject, dotted: "confirm.target.project", args: []Arg{S("id", samplePath)}, want: "project " + samplePath},
+		{key: ConfirmTargetGroup, dotted: "confirm.target.group", args: []Arg{S("id", samplePath)}, want: "group " + samplePath},
+		{key: ConfirmTargetInstance, dotted: "confirm.target.instance", want: "this GitLab instance"},
+		{
+			key: ConfirmVariableValue, dotted: "confirm.variable.value",
+			args: []Arg{S("key", variable), M("target", project)},
+			want: "Replace the value of the CI/CD variable " + variable + " in project " + samplePath +
+				"? The value it holds now is overwritten and no call restores it.",
+		},
+		{
+			key: ConfirmUserAccess, dotted: "confirm.user_access.replace",
+			args: []Arg{S("id", "1234"), L("changes", New(ConfirmUserAccessPassword), New(ConfirmUserAccessIdentity))},
+			want: "Change how user 1234 signs in or recovers the account? This call replaces the password, which no call reads or restores" +
+				" and replaces the external identity the account signs in with.",
+		},
+		{
+			key: ConfirmUserAccessPassword, dotted: "confirm.user_access.password",
+			want: "replaces the password, which no call reads or restores",
+		},
+		{
+			key: ConfirmUserAccessEmail, dotted: "confirm.user_access.email",
+			args: []Arg{S("email", address)},
+			want: "sets the email address to " + address + ", whose mailbox can then reset the password",
+		},
+		{
+			key: ConfirmUserAccessIdentity, dotted: "confirm.user_access.identity",
+			want: "replaces the external identity the account signs in with",
+		},
+		{
+			key: ConfirmHookDelivery, dotted: "confirm.hook.delivery",
+			args: []Arg{
+				S("hook", "7"), M("target", project),
+				L("changes", New(ConfirmHookURL, S("url", origin), S("current", current)), New(ConfirmHookToken, S("token", "token"))),
+			},
+			want: "Change where webhook 7 in project " + samplePath + " delivers, or a secret it sends? This call points it at " +
+				origin + " instead of " + current + " and replaces its token, which cannot be read back.",
+		},
+		{
+			key: ConfirmHookURL, dotted: "confirm.hook.url",
+			args: []Arg{S("url", origin), S("current", current)},
+			want: "points it at " + origin + " instead of " + current,
+		},
+		{
+			key: ConfirmHookURLUnread, dotted: "confirm.hook.url_unread",
+			args: []Arg{S("url", origin)},
+			want: "may point it at another host, " + origin + " (the webhook could not be read)",
+		},
+		{
+			key: ConfirmHookToken, dotted: "confirm.hook.token",
+			args: []Arg{S("token", "signing_token")},
+			want: "replaces its signing_token, which cannot be read back",
+		},
+		{
+			key: ConfirmHookValue, dotted: "confirm.hook.value",
+			args: []Arg{S("field", field), S("key", "tenant")},
+			want: "replaces the " + field + " entry tenant, whose current value cannot be read back",
+		},
+		{
+			key: ConfirmHookValueUnread, dotted: "confirm.hook.value_unread",
+			args: []Arg{S("field", field), S("key", "tenant")},
+			want: "may replace the " + field + " entry tenant (the webhook could not be read)",
+		},
+		{
+			key: ConfirmImportOverwrite, dotted: "confirm.import.overwrite",
+			args: []Arg{S("path", samplePath)},
+			want: "Import into " + samplePath + " and overwrite the project that is already there?" +
+				" GitLab replaces the existing project with the archive, and no call brings it back.",
+		},
+		{
+			key: ConfirmCommitForce, dotted: "confirm.commit.force",
+			args: []Arg{S("branch", sampleBranch), M("target", project)},
+			want: "Create this commit on branch " + sampleBranch + " in project " + samplePath + " with force?" +
+				" The branch is reset to its starting point plus the new commit," +
+				" and the commits it holds that the starting point does not are dropped from it.",
+		},
+		{
+			key: ConfirmExportUpload, dotted: "confirm.export.upload",
+			args: []Arg{M("target", project), S("url", origin)},
+			want: "Export project " + samplePath + " and have GitLab upload the archive to " + origin + "?" +
+				" That host receives the whole project: its repository, issues, merge requests and settings.",
+		},
+		{
+			key: ConfirmStatusCheck, dotted: "confirm.status_check.delivery",
+			args: []Arg{
+				S("check", "3"), M("target", project),
+				L("changes", New(ConfirmStatusCheckURL, S("url", origin)), New(ConfirmStatusCheckSecret)),
+			},
+			want: "Change where external status check 3 in project " + samplePath + " sends merge requests, or its shared secret?" +
+				" This call points it at " + origin + " and replaces its shared secret, which cannot be read back.",
+		},
+		{
+			key: ConfirmStatusCheckURL, dotted: "confirm.status_check.url",
+			args: []Arg{S("url", origin)}, want: "points it at " + origin,
+		},
+		{
+			key: ConfirmStatusCheckSecret, dotted: "confirm.status_check.secret",
+			want: "replaces its shared secret, which cannot be read back",
+		},
+	}
 }
 
 // pushRuleQuestionRows holds the question of the guard that asks before an

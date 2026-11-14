@@ -167,14 +167,25 @@ type ModifyInput struct {
 	//
 	// Nor is there a skype or a job_title field, for the reason CreateInput
 	// gives.
+
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing what the account signs in or is recovered with: its password, its email address or its external identity. Pass true only after the user approves that. Only required when the call sends password, email, provider or extern_uid. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// Modify modifies an existing GitLab user (admin only).
+// Modify modifies an existing GitLab user (admin only). An edit that
+// replaces the password, the email address or the external identity is
+// confirmed first, as [confirmAccessReplaced] describes.
 func Modify(ctx context.Context, client *gitlabclient.Client, input ModifyInput) (Output, error) {
 	if input.UserID == 0 {
 		return Output{}, errors.New("modify_user: user_id is required")
 	}
 	if err := ctx.Err(); err != nil {
+		return Output{}, err
+	}
+	if err := confirmAccessReplaced(ctx, input); err != nil {
 		return Output{}, err
 	}
 

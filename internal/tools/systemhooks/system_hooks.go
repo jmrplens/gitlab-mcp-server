@@ -127,6 +127,11 @@ type EditInput struct {
 	MergeRequestsEvents    *bool   `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
 	RepositoryUpdateEvents *bool   `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
 	EnableSSLVerification  *bool   `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for the hook URL"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms an edit that points the system hook at another URL or replaces its token or signing token, which cannot be read back. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL to a hook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // EditOutput wraps the edited hook.
@@ -156,6 +161,11 @@ type SetURLVariableInput struct {
 	ID    int64  `json:"id"    jsonschema:"System hook ID,required"`
 	Key   string `json:"key"   jsonschema:"URL variable key name. Letters and underscores only. GitLab rejects keys containing digits,required"`
 	Value string `json:"value" jsonschema:"URL variable value. Must be non-empty,required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing a URL variable the system hook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the hook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteURLVariableInput is the input for deleting a system hook URL variable.
@@ -360,10 +370,16 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	return AddOutput{Hook: toItem(hook)}, nil
 }
 
-// Edit updates an existing system hook.
+// Edit updates an existing system hook. An edit that redirects the hook or
+// replaces one of its tokens is confirmed first, as [confirmHookChange]
+// describes.
 func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (EditOutput, error) {
 	if input.ID <= 0 {
 		return EditOutput{}, toolutil.ErrRequiredInt64("system_hook_edit", "id")
+	}
+	edit := toolutil.HookEdit{URL: input.URL, Token: input.Token != "", SigningToken: input.SigningToken != ""}
+	if err := confirmHookChange(ctx, client, "system_hook_edit", input.ID, edit); err != nil {
+		return EditOutput{}, err
 	}
 	opts := hookEditOptions(input)
 
@@ -409,6 +425,8 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 }
 
 // SetURLVariable creates or updates a URL variable for a system hook.
+// Replacing a variable the hook already has is confirmed first, as
+// [confirmHookChange] describes.
 func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetURLVariableInput) error {
 	if input.ID <= 0 {
 		return toolutil.ErrRequiredInt64("system_hook_set_url_variable", "id")
@@ -421,6 +439,10 @@ func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetU
 	}
 	if input.Value == "" {
 		return toolutil.ErrRequiredString("system_hook_set_url_variable", "value")
+	}
+	if err := confirmHookChange(ctx, client, "system_hook_set_url_variable", input.ID,
+		toolutil.HookEdit{URLVariableKeys: []string{input.Key}}); err != nil {
+		return err
 	}
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
 	// client-go places the key into the path as given, so it is escaped here

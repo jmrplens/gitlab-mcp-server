@@ -60,6 +60,11 @@ type UpdateInput struct {
 	Protected    *bool   `json:"protected,omitempty"        jsonschema:"Only expose in protected branches/tags"`
 	Masked       *bool   `json:"masked,omitempty"           jsonschema:"Mask variable value in job logs"`
 	Raw          *bool   `json:"raw,omitempty"              jsonschema:"Treat variable value as raw string"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput holds parameters for deleting an instance CI/CD variable.
@@ -218,13 +223,19 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return toOutput(v, extra), nil
 }
 
-// Update modifies an existing instance-level CI/CD variable.
+// Update modifies an existing instance-level CI/CD variable. An update that
+// sends value is confirmed first, as [toolutil.ConfirmVariableValueReplaced]
+// describes.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if input.Key == "" {
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(opUpdateInstanceVariable, err)
+	}
+	if err := toolutil.ConfirmVariableValueReplaced(ctx, opUpdateInstanceVariable, input.Value != nil,
+		toolutil.ConfirmTargetInstance(), input.Key); err != nil {
+		return Output{}, err
 	}
 
 	// Presence decides, never emptiness: an empty value or description is the

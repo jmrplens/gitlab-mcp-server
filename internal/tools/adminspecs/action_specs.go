@@ -196,7 +196,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("license_delete", ownerLicense, toolutil.DestructiveVoidAction(client, license.Delete), "gitlab_delete_license"),
 		adminReadSpec("system_hook_list", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.List), "gitlab_list_system_hooks"),
 		adminReadSpec("system_hook_get", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Get), "gitlab_get_system_hook"),
-		adminCreateSpec("system_hook_add", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
+		adminSystemHookAddSpec("system_hook_add", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
 		adminSystemHookEditSpec(client),
 		// Classified as a create, not a read, and deliberately without an
 		// annotation override. Firing a test event makes GitLab POST a sample
@@ -320,15 +320,29 @@ func adminUpdateCreateIndividualSpec(name, owner string, route toolutil.ActionRo
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
+// adminSystemHookAddSpec is a create that asks for confirmation. A system
+// hook deletes nothing, and from then on GitLab posts the events of the
+// whole instance (users and projects created, with their addresses, pushes
+// and merge requests of every project) to the host named in its url, which
+// is a parameter a model can take from text the user never read. That is
+// what project.hook_add and project.mirror_add are destructive for, at the
+// widest scope, and system_hook_delete stops the delivery without recalling
+// what was sent. Only the destructive bit is added to the create.
+func adminSystemHookAddSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := adminOptions(owner, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerSystemHooks, "gitlab_edit_system_hook")
-	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
+	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Pointing it at another URL or replacing a token requires confirmation. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
 	return toolutil.NewUpdateActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
 }
 
 func adminSystemHookSetURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerSystemHooks, "gitlab_set_system_hook_url_variable")
-	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
+	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Replacing a variable the hook already has requires confirmation. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
 	return toolutil.NewUpdateActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
 }
 
@@ -795,10 +809,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Get a system hook by id. Returns: the system hook with url, event triggers, and SSL verification setting. See also: gitlab_list_system_hooks, gitlab_edit_system_hook.",
 	},
 	"gitlab_add_system_hook": {
-		usage:       "Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.",
+		usage:       "Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable. " + toolutil.HookAddUsage,
 		aliases:     []string{"add system hook", "create instance webhook", "register system hook"},
 		related:     []string{actionSystemHookList, actionSystemHookEdit, actionSystemHookTest},
-		description: "Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
+		description: "Add an instance system hook. Requires confirmation. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
 	},
 	"gitlab_test_system_hook": {
 		usage:       "Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.",
@@ -817,12 +831,12 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 	// and RelatedActions are filled here (description omitted to preserve the
 	// builder text).
 	"gitlab_edit_system_hook": {
-		usage:   "Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.",
+		usage:   "Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification. " + toolutil.HookEditUsage,
 		aliases: []string{"edit system hook", "update instance webhook", "change system hook"},
 		related: []string{actionSystemHookGet, actionSystemHookList, actionSystemHookTest},
 	},
 	"gitlab_set_system_hook_url_variable": {
-		usage:   "Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.",
+		usage:   "Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value. " + toolutil.HookSetValueUsage,
 		aliases: []string{"set system hook url variable", "add system hook url variable", "configure system hook variable"},
 		related: []string{"admin.system_hook_delete_url_variable", actionSystemHookEdit, actionSystemHookGet},
 	},

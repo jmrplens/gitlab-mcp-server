@@ -244,6 +244,10 @@ func TestCreateUser_CancelledContext(t *testing.T) {
 // for; the comment used to claim it verified the fields were sent while its
 // own mock discarded the body.
 func TestModifyUser_AllOptionalFields(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/users/42" {
 			testutil.RespondJSON(w, http.StatusOK, crudUserJSON)
@@ -483,6 +487,10 @@ func TestCreate_EachOptionReachesTheRequest(t *testing.T) {
 // ModifyUserOptions, and GitLab's PUT /users/:id declares no such parameter,
 // so its case here would have driven the flag and found an empty body.
 func TestModify_EachOptionReachesTheRequest(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	yes := true
 	four := int64(4)
 

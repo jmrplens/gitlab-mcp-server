@@ -27,6 +27,16 @@ package modelcorpus
 // declared none, the action requires resolved, and every replay of it was
 // refused before it reached GitLab.
 //
+// The same holds for the confirm of an action whose handler asks about one of
+// its calls, which MT-027 is the first to reach: ci_variable.update is not
+// destructive, and it refuses a call that replaces the variable's value until
+// the call carries confirm. There the confirmation is an argument of the
+// action's own input, so the key declares it, optional and implied by the
+// prompt asking for the new value: the fake replays it, nothing compares it,
+// and a model that was refused first and sent it second is recorded as that.
+// It is not the confirmation of a destructive action, which no key declares
+// and destructive.go says why.
+//
 // Two texts changed beyond the four kinds of rewrite read.go lists, and both
 // are changes to what the model is asked:
 //
@@ -155,7 +165,8 @@ func mutatingCases() []Case {
 				step("ci_variable.update", project(),
 					req("key", fact(FactCIVariableKey)),
 					req("value", literal("masked-value-456")),
-					req("environment_scope", literal("production"))),
+					req("environment_scope", literal("production")),
+					opt("confirm", implied("true"))),
 			}},
 		},
 		{

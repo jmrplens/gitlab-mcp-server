@@ -293,9 +293,10 @@ func specsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 // mergeTrainSurfaceFacts is what the catalog reads off one spec to decide where
 // the action is served and whether a session may run it.
 type mergeTrainSurfaceFacts struct {
-	action     string
-	readOnly   bool
-	idempotent bool
+	action      string
+	readOnly    bool
+	idempotent  bool
+	destructive bool
 }
 
 // TestActionSpecs_SurfaceMetadata pins the facts the catalog reads off each
@@ -307,13 +308,15 @@ type mergeTrainSurfaceFacts struct {
 // each is one word away from a surface defect that compiles: building the add
 // action with [mergeTrainReadSpec] serves a tool that enqueues a merge request
 // to a --read-only deployment and to a read_api token, and an empty Edition
-// serves this Premium domain to a Free instance.
+// serves this Premium domain to a Free instance. The add action is the one
+// that asks for confirmation: a merge request on the train is merged when its
+// pipeline passes, which is what merging it directly does.
 func TestActionSpecs_SurfaceMetadata(t *testing.T) {
 	want := map[string]mergeTrainSurfaceFacts{
 		"gitlab_list_project_merge_trains":         {action: "list_project", readOnly: true, idempotent: true},
 		"gitlab_list_merge_request_in_merge_train": {action: "list_branch", readOnly: true, idempotent: true},
 		"gitlab_get_merge_request_on_merge_train":  {action: "get", readOnly: true, idempotent: true},
-		"gitlab_add_merge_request_to_merge_train":  {action: "add", readOnly: false, idempotent: false},
+		"gitlab_add_merge_request_to_merge_train":  {action: "add", readOnly: false, idempotent: false, destructive: true},
 	}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -347,8 +350,8 @@ func assertSurfaceFacts(t *testing.T, spec toolutil.ActionSpec, facts mergeTrain
 	if spec.Idempotent != facts.idempotent {
 		t.Errorf("Idempotent = %v, want %v", spec.Idempotent, facts.idempotent)
 	}
-	if spec.Destructive {
-		t.Error("Destructive = true; no merge train action deletes anything")
+	if spec.Destructive != facts.destructive || spec.Route.Destructive != facts.destructive {
+		t.Errorf("Destructive = %v on the spec and %v on its route, want %v on both", spec.Destructive, spec.Route.Destructive, facts.destructive)
 	}
 	if spec.Edition != "premium" {
 		t.Errorf("Edition = %q, want %q: merge trains are a Premium feature", spec.Edition, "premium")

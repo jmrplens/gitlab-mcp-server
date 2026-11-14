@@ -24,6 +24,10 @@ import (
 // TestUpdate_EmptyValues_ReachTheBody holds an instance variable's value and
 // description to an empty value emptying them (issue 1306).
 func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"key": "K", "value": "", "description": ""})
 	if err != nil {
 		t.Fatalf("UnmarshalParams() error: %v", err)
@@ -95,6 +99,50 @@ func wantRequestFieldAbsent(t *testing.T, body map[string]any, key string) {
 	t.Helper()
 	if got, ok := body[key]; ok {
 		t.Errorf("request body carries %q = %#v, want it absent", key, got)
+	}
+}
+
+// ---------- Update: the value guard ----------.
+
+// TestUpdate_SendingAValue_IsRefusedBeforeAnyRequest holds the update to the
+// confirmation it owes when it replaces the variable's value, an empty one
+// included: with nobody to ask it is refused with the question, word for
+// word and without the value, and GitLab is sent nothing.
+func TestUpdate_SendingAValue_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("GitLab was sent %s %s before the update was confirmed", r.Method, r.URL.Path)
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	const want = "update instance variable: Replace the value of the CI/CD variable DEPLOY_URL in this GitLab instance?" +
+		" The value it holds now is overwritten and no call restores it." +
+		" Re-send the same call with confirm=true once the user has approved it"
+	for name, value := range map[string]string{"a value": "https://deploy.example/secret", "an empty value": ""} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Update(t.Context(), client, UpdateInput{Key: "DEPLOY_URL", Value: &value})
+			if err == nil || err.Error() != want {
+				t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+			}
+		})
+	}
+}
+
+// TestUpdate_WithoutAValue_AsksNothing is the other half: an update that
+// changes the variable's other settings is written unasked, since the same
+// action undoes each of them.
+func TestUpdate_WithoutAValue_AsksNothing(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("GitLab was sent %s %s, want the write alone", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"key":"DEPLOY_URL","variable_type":"env_var","protected":true,"masked":false,"raw":false}`)
+	}))
+	out, err := Update(t.Context(), client, UpdateInput{Key: "DEPLOY_URL", Protected: new(true), Description: new("deploy target")})
+	if err != nil || !out.Protected {
+		t.Errorf("Update() = %+v, %v, want the update written unasked", out, err)
 	}
 }
 
@@ -259,6 +307,10 @@ func TestCreate_MissingValue(t *testing.T) {
 // The test exercises the PUT path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
 			testutil.RespondJSON(w, http.StatusOK, varJSON)
@@ -804,6 +856,10 @@ func TestInstanceVariableUpdate_NotFound(t *testing.T) {
 // a no-op that still answers 200 and still renders as a success. The response
 // the mock writes cannot show that, since it is the same JSON either way.
 func TestInstanceVariableUpdate_AllOptionalFields_ReachTheRequestBody(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables/DB_HOST" && r.Method == http.MethodPut {
 			body, ok := decodeVariableRequest(t, w, r)
@@ -1150,6 +1206,10 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 // to list. Each error is therefore kept and held to its own operation after
 // the table has run.
 func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
 	poisoned := func(body string) *gitlabclient.Client {
@@ -1301,6 +1361,10 @@ func TestInstanceVariableList_PairsEachVariableWithItsOwnCapturedFields(t *testi
 // wrong verbs, with the suite green throughout. What a reader is told then is
 // which call failed, and it is the wrong one.
 func TestInstanceVariables_Refusals_NameTheirOwnOperationAndHint(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	refuse := func(status int, body string) *gitlabclient.Client {
 		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			testutil.RespondJSON(w, status, body)

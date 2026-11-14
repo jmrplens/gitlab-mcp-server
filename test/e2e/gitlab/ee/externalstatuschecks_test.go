@@ -94,9 +94,15 @@ func TestExternalStatusChecks_Lifecycle_CreatesSetsRetriesAndDeletes(t *testing.
 			e.T.Errorf("the project listing does not hold the created check %d: %v", created.ID, ids)
 		}
 
-		updated := harness.Do[externalstatuschecks.ProjectStatusCheckOutput](s, actionStatusCheckUpdateProject, map[string]any{
+		// An update that names external_url points the check at that host, so
+		// it is refused unconfirmed, before anything is written, and goes
+		// through with the confirmation a caller sends once the user approves.
+		update := map[string]any{
 			"project_id": project, "check_id": created.ID, "name": name + "-updated", "external_url": "https://example.com/e2e/" + name + "-updated",
-		})
+		}
+		unconfirmed := harness.ExpectToolError(s, actionStatusCheckUpdateProject, update, "confirm=true")
+		assertMentions(e, "the unconfirmed update of the check's address", unconfirmed, "points it at https://example.com/...")
+		updated := harness.Do[externalstatuschecks.ProjectStatusCheckOutput](s, actionStatusCheckUpdateProject, withParams(update, map[string]any{"confirm": true}))
 		if updated.ID != created.ID || updated.Name != name+"-updated" {
 			e.T.Errorf("update answered %+v, want check %d renamed to %q", updated, created.ID, name+"-updated")
 		}

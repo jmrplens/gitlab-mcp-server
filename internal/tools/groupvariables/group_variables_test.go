@@ -20,6 +20,10 @@ import (
 // TestUpdate_EmptyValues_ReachTheBody holds a group variable's value and
 // description to an empty value emptying them (issue 1306).
 func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"group_id": "5", "key": "K", "value": "", "description": ""})
 	if err != nil {
 		t.Fatalf("UnmarshalParams() error: %v", err)
@@ -39,6 +43,50 @@ const (
 	// varJSON identifies the var JSON constant used by this package.
 	varJSON = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"hidden":false,"raw":false,"environment_scope":"*","description":"Test var"}`
 )
+
+// ---------- Update: the value guard ----------.
+
+// TestUpdate_SendingAValue_IsRefusedBeforeAnyRequest holds the update to the
+// confirmation it owes when it replaces the variable's value, an empty one
+// included: with nobody to ask it is refused with the question, word for
+// word and without the value, and GitLab is sent nothing.
+func TestUpdate_SendingAValue_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("GitLab was sent %s %s before the update was confirmed", r.Method, r.URL.Path)
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	const want = "update group variable: Replace the value of the CI/CD variable DEPLOY_URL in group acme?" +
+		" The value it holds now is overwritten and no call restores it." +
+		" Re-send the same call with confirm=true once the user has approved it"
+	for name, value := range map[string]string{"a value": "https://deploy.example/secret", "an empty value": ""} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Update(t.Context(), client, UpdateInput{GroupID: "acme", Key: "DEPLOY_URL", Value: &value})
+			if err == nil || err.Error() != want {
+				t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+			}
+		})
+	}
+}
+
+// TestUpdate_WithoutAValue_AsksNothing is the other half: an update that
+// changes the variable's other settings is written unasked, since the same
+// action undoes each of them.
+func TestUpdate_WithoutAValue_AsksNothing(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("GitLab was sent %s %s, want the write alone", r.Method, r.URL.Path)
+		}
+		testutil.RespondJSON(w, http.StatusOK, varJSON)
+	}))
+	out, err := Update(t.Context(), client, UpdateInput{GroupID: "acme", Key: "MY_VAR", Protected: new(true), Description: new("deploy target")})
+	if err != nil || !out.Protected {
+		t.Errorf("Update() = %+v, %v, want the update written unasked", out, err)
+	}
+}
 
 // ---------- List ----------.
 
@@ -203,6 +251,10 @@ func TestCreate_MissingGroupID(t *testing.T) {
 // The test exercises the PUT path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
 			testutil.RespondJSON(w, http.StatusOK, varJSON)
@@ -689,6 +741,10 @@ func TestUpdate_MissingGroupID(t *testing.T) {
 // The mock GitLab API at /api/v4/groups/10/variables/DB_HOST (PUT) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodPut {
 			var body map[string]any
@@ -1047,6 +1103,10 @@ func TestGet_FilterObjectPrecedence(t *testing.T) {
 // TestUpdate_FilterObjectPrecedence verifies the nested filter object wins over
 // the flat environment_scope shorthand on Update.
 func TestUpdate_FilterObjectPrecedence(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
 			body := map[string]any{}
@@ -1223,6 +1283,10 @@ func TestCreate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem(t *testing.T) {
 // with an empty value, or silently leaves the new value out of the request and
 // reports the unchanged variable back as though it had been written.
 func TestUpdate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	yes := true
 	cases := []struct {
 		name            string

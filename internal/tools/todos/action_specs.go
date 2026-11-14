@@ -29,8 +29,21 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_todo_mark_done — mark a single to-do item as done.
 		userTodoUpdateSpec("todo_mark_done", toolutil.RouteAction(client, MarkDone), "gitlab_todo_mark_done"),
 		// gitlab_todo_mark_all_done — mark every pending to-do item as done.
-		userTodoUpdateSpec("todo_mark_all_done", toolutil.RouteAction(client, MarkAllDone), "gitlab_todo_mark_all_done"),
+		userTodoMarkAllDoneSpec("todo_mark_all_done", toolutil.RouteAction(client, MarkAllDone), "gitlab_todo_mark_all_done"),
 	}
+}
+
+// userTodoMarkAllDoneSpec is an update that asks for confirmation. Marking
+// every pending to-do item as done empties the list in one call, and nothing
+// in the catalog marks an item pending again, nor does the answer say which
+// items were pending, so the list cannot be put back. Marking one item done
+// is not classified: its id is known, and the caller chose it. Only the
+// destructive bit is added to the update.
+func userTodoMarkAllDoneSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := userTodoOptions(individualTool)
+	decorateTodoMeta(&options, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 // userTodoReadSpec builds the canonical read-only spec for a to-do tool.
@@ -81,10 +94,10 @@ var todoActionMeta = map[string]todoActionMetaEntry{
 		description: "Mark a single to-do item as done. Returns: a confirmation naming the to-do item ID. See also: gitlab_todo_list, gitlab_todo_mark_all_done.",
 	},
 	"gitlab_todo_mark_all_done": {
-		usage:       "Mark every pending to-do item for the authenticated user as done in one call.",
+		usage:       "Mark every pending to-do item for the authenticated user as done in one call. Destructive: no action marks an item pending again and the answer does not say which items were pending, so confirm with the user first.",
 		aliases:     []string{"mark all todos done", "clear all todos", "dismiss all todos"},
 		related:     []string{actionList, actionMarkDone},
-		description: "Mark all pending to-do items as done. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.",
+		description: "Mark all pending to-do items as done. Requires confirmation. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.",
 	},
 }
 

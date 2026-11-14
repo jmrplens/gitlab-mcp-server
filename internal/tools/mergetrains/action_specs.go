@@ -43,10 +43,16 @@ func mergeTrainReadSpec(name string, route toolutil.ActionRoute, individualTool 
 }
 
 // mergeTrainCreateSpec builds a create-style [toolutil.ActionSpec] for
-// a merge train action, applying the action's discovery metadata.
+// a merge train action, applying the action's discovery metadata. It is a
+// create that asks for confirmation: a merge request added to the train is
+// merged when its train pipeline passes, which is the result of
+// merge_request.merge, destructive whether it merges at once or when the
+// pipeline succeeds. Two actions that end in the same merge ask the same
+// question. Only the destructive bit is added to the create.
 func mergeTrainCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := mergeTrainOptions(individualTool)
 	decorateMergeTrainMeta(&options, individualTool)
+	options.Destructive = true
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -82,10 +88,10 @@ var mergeTrainActionMeta = map[string]mergeTrainActionMetaEntry{
 		description: "Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_list_project_merge_trains, gitlab_list_merge_request_in_merge_train, gitlab_add_merge_request_to_merge_train.",
 	},
 	"gitlab_add_merge_request_to_merge_train": {
-		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline. Optionally enable auto_merge, verify a head sha, or squash on merge.",
+		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline. Optionally enable auto_merge, verify a head sha, or squash on merge. Destructive: the merge request is merged into its target branch when its train pipeline passes, as merging it directly does, so confirm with the user first.",
 		aliases:     []string{"add merge request to merge train", "enqueue mr on merge train", "merge train an mr"},
 		related:     []string{actionMergeTrainGet, actionMergeTrainListBranch, actionMergeTrainListProject},
-		description: "Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
+		description: "Add a merge request to a merge train. Requires confirmation. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
 	},
 }
 

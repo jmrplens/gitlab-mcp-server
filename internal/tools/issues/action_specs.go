@@ -116,7 +116,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_issue_reorder — move an issue before/after another issue in the list.
 		issueUpdateSpec(specReorder, toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
 		// gitlab_issue_move — move an issue to a different project.
-		issueUpdateSpec(specMove, toolutil.RouteAction(client, Move), "gitlab_issue_move"),
+		issueMoveSpec(specMove, toolutil.RouteAction(client, Move), "gitlab_issue_move"),
 		// gitlab_issue_subscribe — subscribe the caller to issue notifications.
 		issueUpdateSpec(specSubscribe, toolutil.RouteAction(client, Subscribe), "gitlab_issue_subscribe"),
 		// gitlab_issue_unsubscribe — remove the caller's subscription from the issue.
@@ -355,10 +355,10 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		description: "Reorder an issue within its list. Returns: the updated issue. See also: gitlab_issue_get, gitlab_issue_list.",
 	},
 	"gitlab_issue_move": {
-		usage:       "Move an issue to a different project, preserving its discussion and metadata.",
+		usage:       "Move an issue to a different project, preserving its discussion and metadata. Destructive: the issue is closed where it was and recreated in the target project under another IID, and moving it back creates a third issue rather than restoring the first, so confirm with the user first.",
 		aliases:     []string{"move issue to project", "transfer issue", "move issue to another project", "relocate issue"},
 		related:     []string{actionIssueGet, actionIssueUpdate, actionIssueList},
-		description: "Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
+		description: "Move an issue to another project. Requires confirmation. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
 	},
 	"gitlab_issue_subscribe": {
 		usage:       "Subscribe the authenticated user to notifications for an issue.",
@@ -474,6 +474,20 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := issueOptions(individualTool)
 	decorateIssueMeta(&options, individualTool)
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// issueMoveSpec is an update that asks for confirmation. Moving an issue
+// closes it where it was and creates another in the target project, under
+// another IID and another URL, in front of that project's members. No call
+// brings the original back: moving the new issue again creates a third one
+// and leaves the first closed. Every call does that, so the action carries
+// the destructive bit rather than a guard. Only the bit is added to the
+// update.
+func issueMoveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueOptions(individualTool)
+	decorateIssueMeta(&options, individualTool)
+	options.Destructive = true
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 

@@ -1589,6 +1589,10 @@ var graphQLMutation = regexp.MustCompile(`\bmutation\b`)
 // server sends GitLab, and recording them would put every update route in the
 // request inventory under this package.
 func TestUpdateActions_AnEmptyValueReachesGitLabOrIsDeclared(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	// Every write action is called to learn its verb, and one that saves the
 	// stand-in's answer to the path its fill names would write it into the
 	// package directory, so the probe runs from a directory of its own.

@@ -33,9 +33,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		integrationDeleteSpec("integration_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_integration",
 			"Delete (disable) a project integration by slug. Supports the same slugs as get, plus 'slack-application' for disabling the GitLab for Slack app.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_integrations, gitlab_get_integration."),
 		integrationCreateSpec("integration_set_jira", toolutil.RouteAction(client, SetJira), "gitlab_set_jira_integration",
-			"Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration."),
+			"Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers. Requires confirmation.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration."),
 		integrationCreateSpec("integration_set", toolutil.RouteAction(client, SetIntegration), "gitlab_set_integration",
-			"Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: "+commonIntegrationSlugs+".\n\nThe `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration."),
+			"Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: "+commonIntegrationSlugs+".\n\nThe `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`). Requires confirmation.\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration."),
 
 		// Generic group-level integration actions (group integration API mirrors the project one).
 		groupIntegrationReadSpec("integration_list_group", toolutil.RouteAction(client, ListGroupIntegrations), "gitlab_list_group_integrations",
@@ -43,7 +43,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupIntegrationReadSpec("integration_get_group", toolutil.RouteAction(client, GetGroupIntegration), "gitlab_get_group_integration",
 			"Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration."),
 		groupIntegrationCreateSpec("integration_set_group", toolutil.RouteAction(client, SetGroupIntegration), "gitlab_set_group_integration",
-			"Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration."),
+			"Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields. Requires confirmation.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration."),
 		groupIntegrationDeleteSpec("integration_delete_group", toolutil.DestructiveAction(client, deleteGroupIntegrationOutput), "gitlab_delete_group_integration",
 			"Delete (disable) a group integration by slug. Requires Owner role on the group.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_integrations, gitlab_get_group_integration, gitlab_set_group_integration."),
 
@@ -51,7 +51,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupDatadogReadSpec("integration_get_group_datadog", toolutil.RouteAction(client, GetGroupDatadog), "gitlab_get_group_datadog_integration",
 			"Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The configuration lives in the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events), which is the only shape it is published in. An older GitLab that sends the configuration flat is read into that same object.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration."),
 		groupDatadogCreateSpec("integration_set_group_datadog", toolutil.RouteAction(client, SetGroupDatadog), "gitlab_set_group_datadog_integration",
-			"Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration."),
+			"Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional. Requires confirmation.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration."),
 		groupDatadogDeleteSpec("integration_delete_group_datadog", toolutil.DestructiveAction(client, deleteGroupDatadogOutput), "gitlab_delete_group_datadog_integration",
 			"Remove the Datadog integration from a group. The stored api_key is cleared. Deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_set_group_datadog_integration."),
 	}
@@ -85,8 +85,29 @@ func integrationReadSpec(name string, route toolutil.ActionRoute, individualTool
 	return toolutil.NewReadActionSpec(name, route, integrationOptions(individualTool, description))
 }
 
+// integrationSetUsage is what the four actions that configure an integration
+// tell a model about the confirmation.
+const integrationSetUsage = " Destructive: the call writes the whole integration, so GitLab sends the events it covers to the service the call names from then on and the credentials stored before are replaced and cannot be read back, so confirm with the user first."
+
+// integrationSetSpec builds the spec of an action that configures an
+// integration, from the options of its scope. The four of them are creates
+// that ask for confirmation. Each call writes the integration whole: it
+// names the service GitLab sends the project's or the group's events to
+// from then on (a webhook, a URL, recipients), which is what adding a
+// webhook does, and it replaces credentials GitLab never returns. The
+// config of the two generic actions is a free map over dozens of slugs, so
+// no argument tells the destination from a switch, and the typed two take
+// their URL or their key on every call. integration_delete stops the
+// delivery and recalls nothing. Only the destructive bit is added to the
+// create.
+func integrationSetSpec(name string, route toolutil.ActionRoute, options toolutil.ActionSpecOptions) toolutil.ActionSpec {
+	options.Destructive = true
+	options.Usage += integrationSetUsage
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
 func integrationCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, integrationOptions(individualTool, description))
+	return integrationSetSpec(name, route, integrationOptions(individualTool, description))
 }
 
 func integrationDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
@@ -98,7 +119,7 @@ func groupIntegrationReadSpec(name string, route toolutil.ActionRoute, individua
 }
 
 func groupIntegrationCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, groupIntegrationOptions(individualTool, description))
+	return integrationSetSpec(name, route, groupIntegrationOptions(individualTool, description))
 }
 
 func groupIntegrationDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
@@ -110,7 +131,7 @@ func groupDatadogReadSpec(name string, route toolutil.ActionRoute, individualToo
 }
 
 func groupDatadogCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, groupDatadogOptions(individualTool, description))
+	return integrationSetSpec(name, route, groupDatadogOptions(individualTool, description))
 }
 
 func groupDatadogDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {

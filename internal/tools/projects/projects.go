@@ -2693,9 +2693,16 @@ type EditHookInput struct {
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID to edit,required"`
 	URL       string               `json:"url,omitempty" jsonschema:"Updated webhook URL"`
 	HookOptionsInput
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// EditHook edits an existing project webhook.
+// EditHook edits an existing project webhook. An edit that redirects the
+// webhook or replaces one of its secrets is confirmed first, as
+// [confirmHookChange] describes.
 func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookInput) (HookOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return HookOutput{}, err
@@ -2705,6 +2712,9 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	}
 	if input.HookID == 0 {
 		return HookOutput{}, errors.New("projectEditHook: hook_id is required. Use project.hook_list to find webhook IDs for the project")
+	}
+	if err := confirmHookChange(ctx, client, "projectEditHook", string(input.ProjectID), input.HookID, input.hookEdit()); err != nil {
+		return HookOutput{}, err
 	}
 	opts := editProjectHookOptions(input)
 	h, _, err := doProjectRequest[projectHookAPI](ctx, client, http.MethodPut, projectHookPath(string(input.ProjectID), input.HookID), opts)
@@ -3751,9 +3761,16 @@ type SetCustomHeaderInput struct {
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
 	Key       string               `json:"key" jsonschema:"Custom header key name,required"`
 	Value     string               `json:"value" jsonschema:"Custom header value,required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// SetCustomHeader sets a custom header on a project webhook.
+// SetCustomHeader sets a custom header on a project webhook. Replacing a
+// header the webhook already has is confirmed first, as [confirmHookChange]
+// describes.
 func SetCustomHeader(ctx context.Context, client *gitlabclient.Client, input SetCustomHeaderInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -3766,6 +3783,10 @@ func SetCustomHeader(ctx context.Context, client *gitlabclient.Client, input Set
 	}
 	if input.Key == "" {
 		return errors.New("projectSetCustomHeader: key is required")
+	}
+	if err := confirmHookChange(ctx, client, "projectSetCustomHeader", string(input.ProjectID), input.HookID,
+		toolutil.HookEdit{CustomHeaderKeys: []string{input.Key}}); err != nil {
+		return err
 	}
 	opts := &gl.SetHookCustomHeaderOptions{
 		Value: &input.Value,
@@ -3813,9 +3834,16 @@ type SetWebhookURLVariableInput struct {
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
 	Key       string               `json:"key" jsonschema:"URL variable key name. Letters and underscores only. GitLab rejects keys containing digits,required"`
 	Value     string               `json:"value" jsonschema:"URL variable value. Must be non-empty,required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// SetWebhookURLVariable sets a URL variable on a project webhook.
+// SetWebhookURLVariable sets a URL variable on a project webhook. Replacing
+// a variable the webhook already has is confirmed first, as
+// [confirmHookChange] describes.
 func SetWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, input SetWebhookURLVariableInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -3828,6 +3856,10 @@ func SetWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	if input.Key == "" {
 		return errors.New("projectSetWebhookURLVariable: key is required")
+	}
+	if err := confirmHookChange(ctx, client, "projectSetWebhookURLVariable", string(input.ProjectID), input.HookID,
+		toolutil.HookEdit{URLVariableKeys: []string{input.Key}}); err != nil {
+		return err
 	}
 	opts := &gl.SetProjectWebhookURLVariableOptions{
 		Value: &input.Value,

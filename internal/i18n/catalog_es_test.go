@@ -151,6 +151,93 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and removes the max_file_size limit of 50 MB. Pushes those rules reject today are accepted from then on.",
 		},
 		{
+			name: "the variable question, its target a catalog text with its article",
+			msg:  New(ConfirmVariableValue, S("key", "DEPLOY_URL"), M("target", New(ConfirmTargetInstance))),
+			spanish: "¿Sustituir el valor de la variable de CI/CD DEPLOY_URL en esta instancia de GitLab?" +
+				" El valor que tiene ahora se sobrescribe y ninguna llamada lo restaura.",
+			english: "Replace the value of the CI/CD variable DEPLOY_URL in this GitLab instance?" +
+				" The value it holds now is overwritten and no call restores it.",
+		},
+		{
+			name: "the user access question, each change a fragment that continues the sentence",
+			msg: New(ConfirmUserAccess, S("id", "42"),
+				L("changes",
+					New(ConfirmUserAccessPassword),
+					New(ConfirmUserAccessEmail, S("email", "new@example.com")),
+					New(ConfirmUserAccessIdentity))),
+			spanish: "¿Cambiar cómo inicia sesión o recupera la cuenta el usuario 42? Esta llamada sustituye la contraseña, que ninguna llamada lee ni restaura" +
+				" y pone como dirección de correo new@example.com, cuyo buzón puede entonces restablecer la contraseña" +
+				" y sustituye la identidad externa con la que la cuenta inicia sesión.",
+			english: "Change how user 42 signs in or recovers the account? This call replaces the password, which no call reads or restores" +
+				" and sets the email address to new@example.com, whose mailbox can then reset the password" +
+				" and replaces the external identity the account signs in with.",
+		},
+		{
+			name: "the webhook question for a group, a read hook",
+			msg: New(ConfirmHookDelivery, S("hook", "7"), M("target", New(ConfirmTargetGroup, S("id", "acme"))),
+				L("changes",
+					New(ConfirmHookURL, S("url", "https://new.example"), S("current", "https://old.example")),
+					New(ConfirmHookToken, S("token", "token")),
+					New(ConfirmHookValue, S("field", "custom_headers"), S("key", "Authorization")))),
+			spanish: "¿Cambiar adónde entrega el webhook 7 en el grupo acme, o un secreto que envía?" +
+				" Esta llamada lo apunta a https://new.example en lugar de https://old.example" +
+				" y sustituye su token, que no se puede volver a leer" +
+				" y sustituye la entrada Authorization de custom_headers, cuyo valor actual no se puede volver a leer.",
+			english: "Change where webhook 7 in group acme delivers, or a secret it sends?" +
+				" This call points it at https://new.example instead of https://old.example" +
+				" and replaces its token, which cannot be read back" +
+				" and replaces the custom_headers entry Authorization, whose current value cannot be read back.",
+		},
+		{
+			name: "the webhook question for a project whose hook could not be read",
+			msg: New(ConfirmHookDelivery, S("hook", "7"), M("target", New(ConfirmTargetProject, S("id", "group/app"))),
+				L("changes",
+					New(ConfirmHookURLUnread, S("url", "https://new.example")),
+					New(ConfirmHookValueUnread, S("field", "url_variables"), S("key", "tenant")))),
+			spanish: "¿Cambiar adónde entrega el webhook 7 en el proyecto group/app, o un secreto que envía?" +
+				" Esta llamada puede apuntarlo a otro host, https://new.example (no se pudo leer el webhook)" +
+				" y puede sustituir la entrada tenant de url_variables (no se pudo leer el webhook).",
+			english: "Change where webhook 7 in project group/app delivers, or a secret it sends?" +
+				" This call may point it at another host, https://new.example (the webhook could not be read)" +
+				" and may replace the url_variables entry tenant (the webhook could not be read).",
+		},
+		{
+			name: "the status check question",
+			msg: New(ConfirmStatusCheck, S("check", "3"), M("target", New(ConfirmTargetProject, S("id", "group/app"))),
+				L("changes", New(ConfirmStatusCheckURL, S("url", "https://new.example")), New(ConfirmStatusCheckSecret))),
+			spanish: "¿Cambiar adónde envía los merge requests el external status check 3 en el proyecto group/app, o su secreto compartido?" +
+				" Esta llamada lo apunta a https://new.example y sustituye su secreto compartido, que no se puede volver a leer.",
+			english: "Change where external status check 3 in project group/app sends merge requests, or its shared secret?" +
+				" This call points it at https://new.example and replaces its shared secret, which cannot be read back.",
+		},
+		{
+			name: "the import question",
+			msg:  New(ConfirmImportOverwrite, S("path", "acme/app")),
+			spanish: "¿Importar en acme/app y sobrescribir el proyecto que ya está ahí?" +
+				" GitLab sustituye el proyecto existente por el archivo, y ninguna llamada lo devuelve.",
+			english: "Import into acme/app and overwrite the project that is already there?" +
+				" GitLab replaces the existing project with the archive, and no call brings it back.",
+		},
+		{
+			name: "the forced commit question",
+			msg:  New(ConfirmCommitForce, S("branch", "main"), M("target", New(ConfirmTargetProject, S("id", "group/app")))),
+			spanish: "¿Crear este commit en la rama main en el proyecto group/app con force?" +
+				" La rama se restablece a su punto de partida más el commit nuevo," +
+				" y los commits que tiene y el punto de partida no tiene dejan de estar en ella.",
+			english: "Create this commit on branch main in project group/app with force?" +
+				" The branch is reset to its starting point plus the new commit," +
+				" and the commits it holds that the starting point does not are dropped from it.",
+		},
+		{
+			name: "the export question",
+			msg: New(ConfirmExportUpload, M("target", New(ConfirmTargetProject, S("id", "group/app"))),
+				S("url", "https://files.example/...")),
+			spanish: "¿Exportar el proyecto group/app y que GitLab suba el archivo a https://files.example/...?" +
+				" Ese host recibe el proyecto entero: su repositorio, issues, merge requests y ajustes.",
+			english: "Export project group/app and have GitLab upload the archive to https://files.example/...?" +
+				" That host receives the whole project: its repository, issues, merge requests and settings.",
+		},
+		{
 			name:    "numbers",
 			msg:     New(ProgressPipelineWaitPoll, N("pipeline", 1234), N("attempt", 7)),
 			spanish: "Sondeando el pipeline #1234 (intento 7, comprobación de estado)...",

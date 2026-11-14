@@ -46,6 +46,11 @@ type ScheduleExportInput struct {
 	// Deprecated: use Upload.HTTPMethod. Retained as a flat alias for backward
 	// compatibility; ignored when Upload is set.
 	UploadHTTP string `json:"upload_http_method,omitempty" jsonschema:"Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms having GitLab upload the export archive, the whole project, to the URL the call names. Pass true only after the user approves that. Only required when the call names an upload URL. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // ScheduleExportOutput is the output for scheduling a project export.
@@ -54,7 +59,9 @@ type ScheduleExportOutput struct {
 	Message string `json:"message"`
 }
 
-// ScheduleExport schedules an asynchronous project export.
+// ScheduleExport schedules an asynchronous project export. An export that
+// names an upload URL is confirmed first, as [toolutil.ConfirmExportUpload]
+// describes.
 func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input ScheduleExportInput) (ScheduleExportOutput, error) {
 	opts := &gl.ScheduleExportOptions{}
 	if input.Description != "" {
@@ -67,6 +74,11 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	upload := input.Upload
 	if upload == nil {
 		upload = &ScheduleExportUploadInput{URL: input.UploadURL, HTTPMethod: input.UploadHTTP}
+	}
+	// The guard reads the same address the request is about to carry, so the
+	// nested field and its flat alias cannot be asked about differently.
+	if err := toolutil.ConfirmExportUpload(ctx, "schedule_export", string(input.ProjectID), upload.URL); err != nil {
+		return ScheduleExportOutput{}, err
 	}
 	if upload.URL != "" {
 		opts.Upload = gl.ScheduleExportUploadOptions{
@@ -283,8 +295,13 @@ type ImportFromFileInput struct {
 	Namespace      string                     `json:"namespace,omitempty" jsonschema:"Namespace to import the project into (user or group path)"`
 	Name           string                     `json:"name,omitempty" jsonschema:"Name for the imported project"`
 	Path           string                     `json:"path,omitempty" jsonschema:"URL path for the imported project,required"`
-	Overwrite      *bool                      `json:"overwrite,omitempty" jsonschema:"If true, overwrite an existing project with the same path"`
+	Overwrite      *bool                      `json:"overwrite,omitempty" jsonschema:"If true, overwrite an existing project with the same path, which replaces it whole. Needs the user's approval: confirm=true once they approve, or an elicitation prompt"`
 	OverrideParams *ImportOverrideParamsInput `json:"override_params,omitempty" jsonschema:"Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms overwriting the project that is already at the path, which no call brings back. Pass true only after the user approves that. Only required when overwrite is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // ImportStatusOutput is the output for import operations: every key
@@ -372,7 +389,19 @@ func importStatusToOutput(s *gl.ImportStatus) ImportStatusOutput {
 // a real file reaches only through a permission root does not lack.
 var openArchive = os.Open
 
-// ImportFromFile imports a project from an export archive.
+// importTarget names where an import is aimed, for the confirmation: the
+// path under the namespace the call names, or the path alone when it names
+// none and GitLab uses the caller's own namespace.
+func importTarget(input ImportFromFileInput) string {
+	if input.Namespace == "" {
+		return input.Path
+	}
+	return input.Namespace + "/" + input.Path
+}
+
+// ImportFromFile imports a project from an export archive. An import that
+// overwrites the project already at its path is confirmed first, before the
+// archive is opened, as [toolutil.ConfirmImportOverwrite] describes.
 func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input ImportFromFileInput) (ImportStatusOutput, error) {
 	hasFilePath := input.FilePath != ""
 	hasBase64 := input.ContentBase64 != ""
@@ -382,6 +411,10 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 	}
 	if !hasFilePath && !hasBase64 {
 		return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", errors.New("one of file_path or content_base64 is required"))
+	}
+	overwrite := input.Overwrite != nil && *input.Overwrite
+	if err := toolutil.ConfirmImportOverwrite(ctx, "import_from_file", overwrite, importTarget(input)); err != nil {
+		return ImportStatusOutput{}, err
 	}
 
 	var archiveReader io.Reader

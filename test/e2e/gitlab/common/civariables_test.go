@@ -84,7 +84,25 @@ func TestCIVariable_ProjectLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		if !slices.Contains(projectVariableKeys(listed.Variables), key) {
 			e.T.Errorf("the variable listing does not hold %s: %v", key, projectVariableKeys(listed.Variables))
 		}
-		updated := harness.Do[civariables.Output](s, actionCIVariableUpdate, withParams(withParams(params, variableUpdateDefaults), map[string]any{"value": "updated-value"}))
+		// An update that sends no value changes settings the same action
+		// undoes, and asks nothing.
+		update := withParams(params, variableUpdateDefaults)
+		described := harness.Do[civariables.Output](s, actionCIVariableUpdate, withParams(update, map[string]any{"description": "described by the e2e suite"}))
+		if described.Description != "described by the e2e suite" || described.Value != "hello-e2e" {
+			e.T.Errorf("variable update answered %+v, want the description set and the value kept", described)
+		}
+
+		// Replacing the value is refused unconfirmed on every surface, before
+		// anything is written, and the variable keeps the value it had.
+		unconfirmed := harness.ExpectToolError(s, actionCIVariableUpdate, withParams(update, map[string]any{"value": "updated-value"}), "confirm=true")
+		assertMentions(e, "the unconfirmed replacement of the variable's value", unconfirmed, "Replace the value of the CI/CD variable "+key)
+		if kept := harness.Do[civariables.Output](s, actionCIVariableGet, withParams(params, variableScopeDefault)); kept.Value != "hello-e2e" {
+			e.T.Errorf("variable get answered the value %q after the refused update, want hello-e2e kept", kept.Value)
+		}
+
+		// The same update goes through with confirm, which is what a caller
+		// sends once the user has approved it.
+		updated := harness.Do[civariables.Output](s, actionCIVariableUpdate, withParams(update, map[string]any{"value": "updated-value", "confirm": true}))
 		if updated.Key != key || updated.Value != "updated-value" {
 			e.T.Errorf("variable update answered %+v, want %s=updated-value", updated, key)
 		}
@@ -124,7 +142,9 @@ func TestCIVariable_GroupLifecycle_ListCreateGetUpdateDelete(t *testing.T) {
 		if got.Key != key || got.Value != "test-value" {
 			e.T.Errorf("group variable get answered %+v, want %s=test-value", got, key)
 		}
-		updated := harness.Do[groupvariables.Output](s, actionCIVariableGroupUpdate, withParams(params, map[string]any{"value": "updated-value"}))
+		// The update replaces the value, which the handler asks about, so the
+		// call carries the confirmation a caller sends once the user approves.
+		updated := harness.Do[groupvariables.Output](s, actionCIVariableGroupUpdate, withParams(params, map[string]any{"value": "updated-value", "confirm": true}))
 		if updated.Key != key || updated.Value != "updated-value" {
 			e.T.Errorf("group variable update answered %+v, want %s=updated-value", updated, key)
 		}

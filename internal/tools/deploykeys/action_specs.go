@@ -36,10 +36,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		deployKeyReadSpec("deploy_key_list_project", toolutil.RouteAction(client, ListProject), "gitlab_deploy_key_list_project"),
 		deployKeyReadSpec("deploy_key_get", toolutil.RouteAction(client, Get), "gitlab_deploy_key_get").
 			WithEmbeddedResource("gitlab://project/{project_id}/deploy_key/{deploy_key_id}"),
-		deployKeyCreateSpec("deploy_key_add", toolutil.RouteAction(client, Add), "gitlab_deploy_key_add"),
+		deployKeyAddSpec("deploy_key_add", toolutil.RouteAction(client, Add), "gitlab_deploy_key_add"),
 		deployKeyUpdateSpec("deploy_key_update", toolutil.RouteAction(client, Update), "gitlab_deploy_key_update"),
 		deployKeyDeleteSpec("deploy_key_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_deploy_key_delete"),
-		deployKeyUpdateSpec("deploy_key_enable", toolutil.RouteAction(client, Enable), "gitlab_deploy_key_enable"),
+		deployKeyEnableSpec("deploy_key_enable", toolutil.RouteAction(client, Enable), "gitlab_deploy_key_enable"),
 		deployKeyReadSpec("deploy_key_list_all", toolutil.RouteAction(client, ListAll), "gitlab_deploy_key_list_all"),
 		deployKeyCreateSpec("deploy_key_add_instance", toolutil.RouteAction(client, AddInstance), "gitlab_deploy_key_add_instance"),
 		deployKeyReadSpec(actionDeployKeyListUserProject, toolutil.RouteAction(client, ListUserProject), "gitlab_deploy_key_list_user_project"),
@@ -56,6 +56,42 @@ func deployKeyCreateSpec(name string, route toolutil.ActionRoute, individualTool
 
 func deployKeyUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, deployKeyOptions(name, individualTool))
+}
+
+// deployKeyGrantUsage is what the two actions that give a deploy key access
+// to a project tell a model about the confirmation.
+const deployKeyGrantUsage = " Destructive: whoever holds the key's private half can clone the project's repository from then on, and push to it when can_push is set, and deleting the key recalls nothing, so confirm with the user first."
+
+// deployKeyGrantOptions are the options of an action that gives a deploy key
+// access to a project: deploy_key_add, which registers the public key the
+// call carries, and deploy_key_enable, which attaches a key the instance
+// already holds. Both ask for confirmation. A deploy key belongs to no
+// account of the instance: whoever holds its private half can clone the
+// repository from then on, and the key or its id is a parameter a model can
+// take from text the user never read. That is the repository handed to a
+// party the call names, which the catalog classifies as it does the push
+// mirror, and the two actions have that one effect, so they answer alike.
+// deploy_key_delete ends the access and recalls nothing that was cloned.
+// deploy_key_add_instance is not classified: a key registered on the
+// instance reaches no project until deploy_key_enable attaches it. Only the
+// destructive bit is added, and each action keeps the constructor it had.
+func deployKeyGrantOptions(name, individualTool string) toolutil.ActionSpecOptions {
+	options := deployKeyOptions(name, individualTool)
+	options.Destructive = true
+	options.Usage += deployKeyGrantUsage
+	return options
+}
+
+// deployKeyAddSpec is the create of deploy_key_add, which asks for
+// confirmation as [deployKeyGrantOptions] says.
+func deployKeyAddSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, deployKeyGrantOptions(name, individualTool))
+}
+
+// deployKeyEnableSpec is the update of deploy_key_enable, which asks for
+// confirmation as [deployKeyGrantOptions] says.
+func deployKeyEnableSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewUpdateActionSpec(name, route, deployKeyGrantOptions(name, individualTool))
 }
 
 func deployKeyDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -123,13 +159,13 @@ func deployKeyDescription(actionName string) string {
 	case "deploy_key_get":
 		return "Get a single project deploy key by id. Returns: the deploy key with title, key, fingerprint, fingerprint_sha256, can_push, created_at, and expires_at. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_update, gitlab_deploy_key_delete."
 	case "deploy_key_add":
-		return "Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable."
+		return "Add a new SSH deploy key to a project. Requires confirmation. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable."
 	case "deploy_key_update":
 		return "Update a project deploy key's title or push permission. Returns: the updated deploy key. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_delete."
 	case "deploy_key_delete":
 		return "Delete a deploy key from a project (removes it from all projects where it is enabled). Returns: a success confirmation. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project."
 	case "deploy_key_enable":
-		return "Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get."
+		return "Enable an existing deploy key for a project. Requires confirmation. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get."
 	case "deploy_key_list_all":
 		return "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of access.deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project."
 	case "deploy_key_add_instance":

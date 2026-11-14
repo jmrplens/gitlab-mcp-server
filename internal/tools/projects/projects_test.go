@@ -6614,6 +6614,10 @@ func TestSetCustomHeader_EmptyKey(t *testing.T) {
 
 // TestSetCustomHeader_APIError verifies SetCustomHeader propagates errors returned by the GitLab API.
 func TestSetCustomHeader_APIError(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -6743,6 +6747,10 @@ func TestSetWebhookURLVariable_EmptyKey(t *testing.T) {
 
 // TestSetWebhookURLVariable_APIError verifies SetURLVariable propagates errors returned by the GitLab API.
 func TestSetWebhookURLVariable_APIError(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -6758,6 +6766,10 @@ func TestSetWebhookURLVariable_APIError(t *testing.T) {
 // GitLab 19 422 "Illegal key or value" response is wrapped with a hint about
 // the accepted key characters and the non-empty value requirement.
 func TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
 	}))
@@ -9578,6 +9590,10 @@ func TestProjectEditHook_SendsOnlyWhatTheCallerSet(t *testing.T) {
 // GitLab merges the variables an edit names into the hook's own, so an edit
 // that dropped them would leave the caller believing a value was set.
 func TestProjectEditHook_URLVariables_ReachTheRequest(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := bodyAssertingClient(t, http.MethodPut, pathProject42Hook1,
 		`{"url_variables":[{"key":"env","value":"prod"},{"key":"region","value":"eu-west"}]}`, http.StatusOK, `{"id":1}`)
 	input := EditHookInput{

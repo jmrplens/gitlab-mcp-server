@@ -6,12 +6,14 @@ package externalstatuschecks
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -361,9 +363,52 @@ type UpdateProjectInput struct {
 	ExternalURL        string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
 	SharedSecret       string               `json:"shared_secret,omitempty" jsonschema:"Updated shared secret for HMAC verification"`
 	ProtectedBranchIDs []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Updated protected branch IDs. Pass [] to scope the check to every branch again. Omit the field to leave them untouched"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms pointing the check at the host external_url names, or replacing its shared secret. Pass true only after the user approves that. Only required when the call sends external_url or shared_secret. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// UpdateProjectExternalStatusCheck updates an external status check for a project.
+// confirmStatusCheckDelivery asks the caller to confirm an update that
+// points an external status check at a host or replaces its shared secret,
+// and returns nil when the update may proceed.
+//
+// Updating a check is not destructive by itself, and is deliberately not
+// classified as such: its name and the branches it covers are undone by the
+// same action. Two settings are not. external_url is where GitLab sends
+// every merge request of the project from then on, which is what creating
+// the check does and why that is destructive. And shared_secret is
+// write-only: GitLab never returns it, so the one an update replaces is gone
+// unless the caller kept it.
+//
+// The arguments alone decide. GitLab publishes no route for one check, only
+// the project's list, so telling an address that differs from the current
+// one would cost a paged read on every such update, and an update that names
+// the address is in practice the one that changes it. The question shows the
+// address as its origin alone and never the secret.
+func confirmStatusCheckDelivery(ctx context.Context, input UpdateProjectInput) error {
+	var changes []i18n.Message
+	if input.ExternalURL != "" {
+		changes = append(changes, i18n.New(i18n.ConfirmStatusCheckURL, i18n.S("url", toolutil.RedactURLToOrigin(input.ExternalURL))))
+	}
+	if input.SharedSecret != "" {
+		changes = append(changes, i18n.New(i18n.ConfirmStatusCheckSecret))
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	question := i18n.New(i18n.ConfirmStatusCheck,
+		i18n.S("check", strconv.FormatInt(input.CheckID, 10)),
+		i18n.M("target", toolutil.ConfirmTargetProject(string(input.ProjectID))),
+		i18n.L("changes", changes...))
+	return toolutil.ConfirmGuardedCall(ctx, "updateProjectExternalStatusCheck", toolutil.StatusCheckConfirmID, question,
+		"the user declined changing where the check sends merge requests or its shared secret; send the update without external_url and shared_secret, or leave the check as it is")
+}
+
+// UpdateProjectExternalStatusCheck updates an external status check for a
+// project. An update that sends external_url or shared_secret is confirmed
+// first, as [confirmStatusCheckDelivery] describes.
 func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.Client, input UpdateProjectInput) (ProjectStatusCheckOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ProjectStatusCheckOutput{}, err
@@ -373,6 +418,9 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	}
 	if input.CheckID <= 0 {
 		return ProjectStatusCheckOutput{}, toolutil.ErrRequiredInt64("updateProjectExternalStatusCheck", "check_id")
+	}
+	if err := confirmStatusCheckDelivery(ctx, input); err != nil {
+		return ProjectStatusCheckOutput{}, err
 	}
 	opts := &gl.UpdateProjectExternalStatusCheckOptions{}
 	if input.Name != "" {

@@ -14,6 +14,8 @@ package i18n
 // Each template is one string literal, however long: a template joined with +
 // is an expression at package level, which no coverage profile reaches, so
 // the mutation gate would read each + as code no test covers.
+//
+//nolint:gosec // G101 fires on the keys named for a password, a token and a secret; these are the questions that name them, and no credential is anywhere near them.
 var english = map[Key]string{
 	ElicitationSchemaConfirmTitle:    "Confirm",
 	ElicitationSchemaSelectionTitle:  "Selection",
@@ -105,6 +107,26 @@ var english = map[Key]string{
 	ConfirmPushRuleSizeRaised:          "raises max_file_size from {from} MB to {to} MB",
 	ConfirmPushRuleSizeRemoved:         "removes the max_file_size limit of {from} MB",
 	ConfirmPushRuleUnread:              "may relax {setting} (the current rules could not be read)",
+	ConfirmTargetProject:               "project {id}",
+	ConfirmTargetGroup:                 "group {id}",
+	ConfirmTargetInstance:              "this GitLab instance",
+	ConfirmVariableValue:               "Replace the value of the CI/CD variable {key} in {target}? The value it holds now is overwritten and no call restores it.",
+	ConfirmUserAccess:                  "Change how user {id} signs in or recovers the account? This call {changes}.",
+	ConfirmUserAccessPassword:          "replaces the password, which no call reads or restores",
+	ConfirmUserAccessEmail:             "sets the email address to {email}, whose mailbox can then reset the password",
+	ConfirmUserAccessIdentity:          "replaces the external identity the account signs in with",
+	ConfirmHookDelivery:                "Change where webhook {hook} in {target} delivers, or a secret it sends? This call {changes}.",
+	ConfirmHookURL:                     "points it at {url} instead of {current}",
+	ConfirmHookURLUnread:               "may point it at another host, {url} (the webhook could not be read)",
+	ConfirmHookToken:                   "replaces its {token}, which cannot be read back",
+	ConfirmHookValue:                   "replaces the {field} entry {key}, whose current value cannot be read back",
+	ConfirmHookValueUnread:             "may replace the {field} entry {key} (the webhook could not be read)",
+	ConfirmImportOverwrite:             "Import into {path} and overwrite the project that is already there? GitLab replaces the existing project with the archive, and no call brings it back.",
+	ConfirmCommitForce:                 "Create this commit on branch {branch} in {target} with force? The branch is reset to its starting point plus the new commit, and the commits it holds that the starting point does not are dropped from it.",
+	ConfirmExportUpload:                "Export {target} and have GitLab upload the archive to {url}? That host receives the whole project: its repository, issues, merge requests and settings.",
+	ConfirmStatusCheck:                 "Change where external status check {check} in {target} sends merge requests, or its shared secret? This call {changes}.",
+	ConfirmStatusCheckURL:              "points it at {url}",
+	ConfirmStatusCheckSecret:           "replaces its shared secret, which cannot be read back",
 
 	CommonListAnd: " and ",
 

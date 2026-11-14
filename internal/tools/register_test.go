@@ -22,6 +22,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1629,7 +1630,7 @@ func TestDestructiveRoutes_NameHeuristic_ClassifiesActions(t *testing.T) {
 		// An action of an effect class is one: the class that demands it be
 		// destructive is what permits it to be, whatever its verb.
 		_, isKnownException := knownNonKeywordDestructive[r.action]
-		isKnownException = isKnownException || isRouteDestructiveException(r.id) || inAnyEffectClass(r.action)
+		isKnownException = isKnownException || isRouteDestructiveException(r.id) || inAnyEffectClass(r.id, r.action)
 		if hasSafeKw && r.destructive && !hasDestructiveKw && !isKnownException {
 			t.Errorf("%s action %q contains safe keyword but is destructive", r.id, r.action)
 			failures++
@@ -1681,8 +1682,11 @@ type effectClass struct {
 	// reason is why the effect asks for confirmation, which the failure
 	// message gives to whoever added the action.
 	reason string
-	// byName reads the bare name of an action that writes.
-	byName func(action string) bool
+	// byName reads an action that writes: its canonical ID and its bare
+	// name, the ID without the domain. A class whose members share a word
+	// reads the name, and one whose members are named for their domain
+	// (create_project, add) reads the ID.
+	byName func(id, action string) bool
 	// byRoute reads "METHOD /route" of a REST request other than a GET or a
 	// HEAD, in the spelling of docs/development/action-requests.json.
 	byRoute *regexp.Regexp
@@ -1696,15 +1700,24 @@ type effectClass struct {
 }
 
 // effectGuard is what a guarded action is held to: a call that has the
-// effect, and the state GitLab answers the guard's read with.
+// effect, the state GitLab answers the guard's read with, and a call that
+// does not have the effect.
 type effectGuard struct {
-	// current is the body the fake GitLab answers every GET with.
+	// current is the body the fake GitLab answers every GET with. It is empty
+	// for a guard the arguments alone decide, which is held to reading
+	// nothing.
 	current string
 	// call is a call that has the effect against that state.
 	call map[string]any
+	// harmless is a call of the same action that does not have the effect,
+	// which the guard lets through unasked: a guard that asked about every
+	// call would be the destructive bit under another name.
+	harmless map[string]any
 }
 
 // effectClasses are the effects the catalog classifies by what they do.
+//
+//nolint:maintidx // one table of data: its length is the number of classes it declares.
 func effectClasses() []effectClass {
 	containsAny := func(action string, words ...string) bool {
 		for _, word := range words {
@@ -1714,11 +1727,22 @@ func effectClasses() []effectClass {
 		}
 		return false
 	}
+	// hook is the webhook the fake GitLab answers the hook guards' read with:
+	// an address, one URL variable and one custom header.
+	const hook = `{"id":7,"url":"https://old.example/hook","url_variables":[{"key":"token"}],"custom_headers":[{"key":"Authorization"}]}`
+	commit := func(extra map[string]any) map[string]any {
+		call := map[string]any{
+			"project_id": "42", "branch": "main", "commit_message": "change",
+			"actions": []any{map[string]any{"action": "create", "file_path": "a.txt", "content": "a"}},
+		}
+		maps.Copy(call, extra)
+		return call
+	}
 	return []effectClass{
 		{
 			name:   "namespace transfer",
 			reason: "a transfer changes the path and the URLs of the project or group and of everything under it, and who inherits access to it",
-			byName: func(action string) bool {
+			byName: func(_, action string) bool {
 				return action == "transfer" || strings.HasPrefix(action, "transfer_")
 			},
 			byRoute: regexp.MustCompile(`^(PUT|POST) /(projects|groups)/:id/transfer$|^POST /groups/:id/projects/:project_id$`),
@@ -1726,7 +1750,7 @@ func effectClasses() []effectClass {
 		{
 			name:   "credential replaced or revoked",
 			reason: "the previous credential stops working at once and no call brings it back",
-			byName: func(action string) bool {
+			byName: func(_, action string) bool {
 				return containsAny(action, "rotate", "revoke", "renew_secret", "regenerate") ||
 					(strings.Contains(action, "reset") && strings.Contains(action, "token"))
 			},
@@ -1735,7 +1759,7 @@ func effectClasses() []effectClass {
 		{
 			name:    "push rules weakened",
 			reason:  "pushes the rules reject today are accepted from then on",
-			byName:  func(action string) bool { return strings.Contains(action, "push_rule") },
+			byName:  func(_, action string) bool { return strings.Contains(action, "push_rule") },
 			byRoute: regexp.MustCompile(`^(PUT|POST|DELETE) /(projects|groups)/:id/push_rule$`),
 			// An edit weakens the rules only when it turns one off, removes or
 			// replaces a pattern, or raises or removes the size limit, which
@@ -1743,17 +1767,179 @@ func effectClasses() []effectClass {
 			// destructive edit would ask before every call that adds a rule.
 			guarded: map[string]effectGuard{
 				"project.push_rule_edit": {
-					current: `{"id":1,"project_id":42,"prevent_secrets":true}`,
-					call:    map[string]any{"project_id": "42", "prevent_secrets": false},
+					current:  `{"id":1,"project_id":42,"prevent_secrets":true}`,
+					call:     map[string]any{"project_id": "42", "prevent_secrets": false},
+					harmless: map[string]any{"project_id": "42", "member_check": true},
 				},
 				"group.push_rule_edit": {
-					current: `{"id":1,"prevent_secrets":true}`,
-					call:    map[string]any{"group_id": "10", "prevent_secrets": false},
+					current:  `{"id":1,"prevent_secrets":true}`,
+					call:     map[string]any{"group_id": "10", "prevent_secrets": false},
+					harmless: map[string]any{"group_id": "10", "member_check": true},
 				},
 			},
 			exempt: map[string]string{
 				"project.push_rule_add": "GitLab refuses the POST with 422 when the project already has push rules, so the action only ever adds restrictions where there were none",
 				"group.push_rule_add":   "GitLab refuses the POST with 422 when the group already has push rules, so the action only ever adds restrictions where there were none",
+			},
+		},
+		{
+			name:   "object consumed with no way back",
+			reason: "the object is closed, merged into another or handed to another owner, and no call puts it back as it was",
+			byName: func(_, action string) bool {
+				return action == "move" || action == "archive" ||
+					containsAny(action, "promote", "take_ownership", "mark_all_done")
+			},
+			byRoute: regexp.MustCompile(`/move$|/promote$|^POST /(projects|groups)/:id/archive$|/take_ownership$|^POST /todos/mark_as_done$`),
+		},
+		{
+			name:   "merge request merged",
+			reason: "the merge request is merged into its target branch, at once or when its pipeline passes",
+			byName: func(id, action string) bool {
+				return action == "merge" || id == "merge_train.add"
+			},
+			byRoute: regexp.MustCompile(`^PUT /projects/:id/merge_requests/:merge_request_iid/merge$|^POST /projects/:id/merge_trains/merge_requests/:merge_request_iid$`),
+		},
+		{
+			name:   "delivery to a host the call names",
+			reason: "GitLab sends the events or the content of the project, the group or the instance to the host the call names from then on, and removing the destination recalls nothing that was sent",
+			byName: func(id, action string) bool {
+				if strings.HasPrefix(id, "external_status_check.") {
+					return strings.HasPrefix(action, "create") || strings.HasPrefix(action, "update")
+				}
+				return id == "project.export_schedule" ||
+					containsAny(action, "hook_add", "hook_edit", "hook_set_", "integration_set", "mirror_add")
+			},
+			byRoute: regexp.MustCompile(`^POST (/projects/:id|/groups/:id)?/hooks$` +
+				`|^PUT (/projects/:id|/groups/:id)?/hooks/:hook_id(/(url_variables|custom_headers)/:key)?$` +
+				`|^PUT /(projects|groups)/:id/integrations/` +
+				`|^(POST|PUT) /projects/:id/external_status_checks(/:check_id)?$` +
+				`|^POST /projects/:id/remote_mirrors$|^POST /projects/:id/export$`),
+			// Adding a destination is destructive. Changing one is guarded:
+			// an edit hands something over only when it sends another address
+			// or replaces a secret GitLab does not return, and an export only
+			// when it names an upload URL, so the bit would ask before turning
+			// an event off and before every export that stays on the instance.
+			guarded: map[string]effectGuard{
+				"project.hook_edit": {
+					current:  hook,
+					call:     map[string]any{"project_id": "42", "hook_id": 7, "url": "https://new.example/hook"},
+					harmless: map[string]any{"project_id": "42", "hook_id": 7, "push_events": false},
+				},
+				"group.hook_edit": {
+					current:  hook,
+					call:     map[string]any{"group_id": "10", "hook_id": 7, "url": "https://new.example/hook"},
+					harmless: map[string]any{"group_id": "10", "hook_id": 7, "push_events": false},
+				},
+				"admin.system_hook_edit": {
+					current:  hook,
+					call:     map[string]any{"id": 7, "url": "https://new.example/hook"},
+					harmless: map[string]any{"id": 7, "push_events": false},
+				},
+				"project.hook_set_url_variable": {
+					current:  hook,
+					call:     map[string]any{"project_id": "42", "hook_id": 7, "key": "token", "value": "v"},
+					harmless: map[string]any{"project_id": "42", "hook_id": 7, "key": "fresh", "value": "v"},
+				},
+				"group.hook_set_url_variable": {
+					current:  hook,
+					call:     map[string]any{"group_id": "10", "hook_id": 7, "key": "token", "value": "v"},
+					harmless: map[string]any{"group_id": "10", "hook_id": 7, "key": "fresh", "value": "v"},
+				},
+				"admin.system_hook_set_url_variable": {
+					current:  hook,
+					call:     map[string]any{"id": 7, "key": "token", "value": "v"},
+					harmless: map[string]any{"id": 7, "key": "fresh", "value": "v"},
+				},
+				"project.hook_set_custom_header": {
+					current:  hook,
+					call:     map[string]any{"project_id": "42", "hook_id": 7, "key": "Authorization", "value": "v"},
+					harmless: map[string]any{"project_id": "42", "hook_id": 7, "key": "X-Fresh", "value": "v"},
+				},
+				"group.hook_set_custom_header": {
+					current:  hook,
+					call:     map[string]any{"group_id": "10", "hook_id": 7, "key": "Authorization", "value": "v"},
+					harmless: map[string]any{"group_id": "10", "hook_id": 7, "key": "X-Fresh", "value": "v"},
+				},
+				"external_status_check.update_project": {
+					call:     map[string]any{"project_id": "42", "check_id": 3, "external_url": "https://new.example/check"},
+					harmless: map[string]any{"project_id": "42", "check_id": 3, "name": "renamed"},
+				},
+				"project.export_schedule": {
+					call:     map[string]any{"project_id": "42", "upload": map[string]any{"url": "https://files.example/put?signature=secret"}},
+					harmless: map[string]any{"project_id": "42"},
+				},
+			},
+		},
+		{
+			name:   "access to an account or a repository handed over",
+			reason: "whoever holds the key, the mailbox or the identity the call names can use the account or read the repository from then on, and removing it recalls nothing",
+			byName: func(id, action string) bool {
+				return id == "user.modify" ||
+					containsAny(action, "deploy_key_add", "deploy_key_enable", "add_ssh_key", "ssh_cert_create", "add_email")
+			},
+			byRoute: regexp.MustCompile(`^POST /projects/:id/deploy_keys(/:key_id/enable)?$|^POST /deploy_keys$` +
+				`|^POST /user/keys$|^POST /users/:user_id/keys$|^POST /groups/:id/ssh_certificates$` +
+				`|^POST /user/emails$|^POST /users/:id/emails$|^PUT /users/:id$`),
+			// An administrator's edit of a user hands the account over only
+			// when it replaces the password, the address or the external
+			// identity, which the arguments say. The bit would ask before
+			// every change of a name or a limit.
+			guarded: map[string]effectGuard{
+				"user.modify": {
+					call:     map[string]any{"user_id": 5, "password": "a new password"},
+					harmless: map[string]any{"user_id": 5, "name": "Renamed"},
+				},
+			},
+			exempt: map[string]string{
+				"access.deploy_key_add_instance": "a key registered on the instance reaches no project until access.deploy_key_enable attaches it, which is the action that asks",
+			},
+		},
+		{
+			name:   "stored value overwritten",
+			reason: "the value the variable holds is replaced and no call restores it",
+			byName: func(id, action string) bool {
+				return strings.Contains(action, "edit_variable") ||
+					(strings.HasPrefix(id, "ci_variable.") && strings.HasSuffix(action, "update"))
+			},
+			byRoute: regexp.MustCompile(`^PUT (/projects/:id|/groups/:id|/admin/ci)/variables/:key$` +
+				`|^PUT /projects/:id/pipeline_schedules/:pipeline_schedule_id/variables/:key$`),
+			// An update replaces the value only when it sends one, and the
+			// rest of what it changes is undone by the same action. The bit
+			// would ask before marking a variable protected.
+			guarded: map[string]effectGuard{
+				"ci_variable.update": {
+					call:     map[string]any{"project_id": "42", "key": "DEPLOY_URL", "value": "v"},
+					harmless: map[string]any{"project_id": "42", "key": "DEPLOY_URL", "protected": true},
+				},
+				"ci_variable.group_update": {
+					call:     map[string]any{"group_id": "10", "key": "DEPLOY_URL", "value": "v"},
+					harmless: map[string]any{"group_id": "10", "key": "DEPLOY_URL", "protected": true},
+				},
+				"ci_variable.instance_update": {
+					call:     map[string]any{"key": "DEPLOY_URL", "value": "v"},
+					harmless: map[string]any{"key": "DEPLOY_URL", "protected": true},
+				},
+			},
+		},
+		{
+			name:   "existing content overwritten on request",
+			reason: "the project at the path, or the commits the branch holds, are replaced and no call brings them back",
+			byName: func(id, _ string) bool {
+				return id == "project.import_from_file" || id == "repository.commit_create"
+			},
+			byRoute: regexp.MustCompile(`^POST /projects/import$|^POST /projects/:id/repository/commits$`),
+			// Both actions only add unless the call asks them to overwrite,
+			// with overwrite or with force. The bit would ask before every
+			// commit and every import into a free path.
+			guarded: map[string]effectGuard{
+				"project.import_from_file": {
+					call:     map[string]any{"namespace": "acme", "path": "app", "content_base64": "YQ==", "overwrite": true},
+					harmless: map[string]any{"namespace": "acme", "path": "app", "content_base64": "YQ=="},
+				},
+				"repository.commit_create": {
+					call:     commit(map[string]any{"start_branch": "develop", "force": true}),
+					harmless: commit(nil),
+				},
 			},
 		},
 	}
@@ -1763,9 +1949,9 @@ func effectClasses() []effectClass {
 // effect class, which is what allows it to be destructive without a
 // destructive verb in its name: the class that permits it is the one that
 // demands it.
-func inAnyEffectClass(action string) bool {
+func inAnyEffectClass(id, action string) bool {
 	for _, class := range effectClasses() {
-		if class.byName(action) {
+		if class.byName(id, action) {
 			return true
 		}
 	}
@@ -1773,14 +1959,18 @@ func inAnyEffectClass(action string) bool {
 }
 
 // TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation holds every action
-// of one effect to one answer about confirmation. Three effects are read: a
-// project or a group moved to another namespace, a credential replaced or
-// revoked, and push rules weakened. An action that reaches a class by its
+// of one effect to one answer about confirmation. The effects read are the
+// ones [effectClasses] lists: a namespace moved, a credential replaced or
+// revoked, push rules weakened, an object consumed with no way back, a merge
+// request merged, a delivery to a host the call names, access to an account
+// or a repository handed over, a stored value overwritten, and existing
+// content overwritten on request. An action that reaches a class by its
 // name or by a request it sends is destructive, or guarded by its handler, or
 // declared exempt with the reason, and a declaration that stopped describing
 // the catalog fails as an unclassified action does. A guarded action is held
-// to its guard here as well: it declares the confirm parameter, and a call
-// that has the effect is refused before any write reaches GitLab.
+// to its guard here as well: it declares the confirm parameter, a call that
+// has the effect is refused before any write reaches GitLab, and a call that
+// does not have it goes out unasked.
 //
 // The name heuristic cannot hold this: it knew transfer as a name that may be
 // destructive, which project.transfer was and group.transfer was not, and it
@@ -1823,7 +2013,7 @@ func (class effectClass) answers(action actioncatalog.Action) bool {
 func (class effectClass) siblings(catalog *actioncatalog.Catalog) string {
 	var ids []string
 	for _, action := range catalog.Actions() {
-		if !action.ReadOnly && action.Route.Destructive && class.byName(action.Name) {
+		if !action.ReadOnly && action.Route.Destructive && class.byName(string(action.ID), action.Name) {
 			ids = append(ids, string(action.ID))
 		}
 	}
@@ -1856,7 +2046,7 @@ func assertEffectClassesByName(t *testing.T, catalog *actioncatalog.Catalog, cla
 			continue
 		}
 		for _, class := range classes {
-			if !class.byName(action.Name) {
+			if !class.byName(string(action.ID), action.Name) {
 				continue
 			}
 			members++
@@ -1938,9 +2128,10 @@ func assertEffectClassesByRoute(t *testing.T, catalog *actioncatalog.Catalog, cl
 }
 
 // assertEffectGuardHolds holds a guarded action to its guard: it is not
-// destructive, it declares the confirm parameter its guard asks for, and a
-// call that has the effect is refused before any write reaches GitLab, on
-// what the guard read there.
+// destructive, it declares the confirm parameter its guard asks for, a call
+// that has the effect is refused before any write reaches GitLab, on what the
+// guard read there or on the arguments alone when it declares no state to
+// read, and a call that does not have the effect is written unasked.
 //
 // The client is built by hand rather than with testutil.NewTestClient: that
 // one records every request for the request inventory, where a guard's read
@@ -1968,7 +2159,7 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 		t.Fatalf("the catalog holds no action %s", id)
 	}
 	if action.Route.Destructive {
-		t.Errorf("%s is guarded by its handler and destructive as well: the destructive gate would ask before a call that adds or tightens a rule", id)
+		t.Errorf("%s is guarded by its handler and destructive as well: the destructive gate would ask before a call that does not have the effect", id)
 	}
 	properties, _ := action.Route.InputSchema["properties"].(map[string]any)
 	if _, declared := properties["confirm"]; !declared {
@@ -1981,8 +2172,22 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	if got := writes.Load(); got != 0 {
 		t.Errorf("%s sent %d write(s) before it was confirmed, want 0", id, got)
 	}
-	if got := reads.Load(); got == 0 {
-		t.Errorf("%s read nothing, so its refusal was not decided by the rule GitLab holds", id)
+	// A chain of ifs rather than a switch, so each branch is its own
+	// statement in a coverage or mutation report.
+	if got := reads.Load(); guard.current != "" && got == 0 {
+		t.Errorf("%s read nothing, so its refusal was not decided by what GitLab holds", id)
+	} else if guard.current == "" && got != 0 {
+		t.Errorf("%s read GitLab %d time(s) to decide what its arguments alone decide, want 0", id, got)
+	}
+	if guard.harmless == nil {
+		t.Errorf("%s declares no call its guard lets through, so nothing holds it to asking only when the call has the effect", id)
+		return
+	}
+	if _, err = action.Route.Handler(context.Background(), guard.harmless); err != nil {
+		t.Errorf("%s(%v) error = %v, want a call without the effect to go out unasked", id, guard.harmless, err)
+	}
+	if got := writes.Load(); got != 1 {
+		t.Errorf("%s sent %d write(s) for a call without the effect, want 1", id, got)
 	}
 }
 
@@ -2008,12 +2213,53 @@ func assertEffectDeclarationsDescribeTheCatalog(t *testing.T, catalog *actioncat
 			t.Errorf("the effect class %q declares %s as %s, and the catalog holds no such action", class.name, id, how)
 			continue
 		}
-		if action.ReadOnly || !class.byName(action.Name) {
+		if action.ReadOnly || !class.byName(string(action.ID), action.Name) {
 			t.Errorf("the effect class %q declares %s as %s, and the action no longer belongs to the class", class.name, id, how)
 		}
 		if action.Route.Destructive {
 			t.Errorf("the effect class %q declares %s as %s, and the action is destructive, so the declaration answers nothing", class.name, id, how)
 		}
+	}
+}
+
+// TestDestructiveRoutes_ClassifiedByEffect_SayThatTheyAsk holds the actions
+// that are destructive for what they do, under a name that reads as an
+// ordinary write, to saying so where a model reads it. Their verb tells a
+// model nothing, so the usage says what cannot be undone or who receives
+// what, and the individual tool's description says the call needs
+// confirmation, on a spec and a route that both carry the bit and a tool
+// that carries destructiveHint.
+func TestDestructiveRoutes_ClassifiedByEffect_SayThatTheyAsk(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	ids := []string{
+		"issue.move", "project.label_promote", "merge_train.add", "project.archive", "group.archive",
+		"pipeline.schedule_take_ownership", "pipeline.schedule_edit_variable", "user.todo_mark_all_done",
+		"project.hook_add", "group.hook_add", "admin.system_hook_add",
+		"project.integration_set", "project.integration_set_jira", "project.integration_set_group", "project.integration_set_group_datadog",
+		"external_status_check.create_project",
+		"access.deploy_key_add", "access.deploy_key_enable",
+		"user.add_ssh_key", "user.add_ssh_key_for_user", "group.ssh_cert_create",
+		"user.add_email", "user.add_email_for_user",
+	}
+	for _, id := range ids {
+		t.Run(id, func(t *testing.T) {
+			action, ok := catalog.Action(actioncatalog.ActionID(id))
+			if !ok {
+				t.Fatalf("the catalog holds no action %s", id)
+			}
+			if !action.Destructive || !action.Route.Destructive {
+				t.Errorf("action destructive %v, route destructive %v, want both true", action.Destructive, action.Route.Destructive)
+			}
+			if !strings.Contains(action.Usage, "Destructive: ") || !strings.Contains(action.Usage, "confirm with the user first") {
+				t.Errorf("usage %q does not say what the action does that cannot be undone and that it asks", action.Usage)
+			}
+			if !strings.Contains(action.IndividualTool.Description, "Requires confirmation.") {
+				t.Errorf("description %q does not say the action requires confirmation", action.IndividualTool.Description)
+			}
+			if !inAnyEffectClass(id, action.Name) {
+				t.Errorf("%s belongs to no effect class, so nothing holds an action of the same effect to it", id)
+			}
+		})
 	}
 }
 
@@ -2033,7 +2279,7 @@ func TestDestructiveRoutes_MinimumInventory_PreventsMassReclassification(t *test
 	// Current baseline: update this number when intentionally adding/removing
 	// destructive routes. This number represents the minimum expected count in
 	// the canonical action catalog, including GitLab.com Enterprise actions.
-	const minExpectedDestructiveRoutes = 208
+	const minExpectedDestructiveRoutes = 231
 
 	total := len(uniqueActions)
 	if total < minExpectedDestructiveRoutes {

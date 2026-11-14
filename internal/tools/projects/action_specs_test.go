@@ -113,6 +113,10 @@ func TestLegacyOutputWrappers_ReturnUnderlyingErrors(t *testing.T) {
 
 // TestLegacyOutputWrappers_ReturnMessages verifies wrapper success messages.
 func TestLegacyOutputWrappers_ReturnMessages(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/42/hooks/1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

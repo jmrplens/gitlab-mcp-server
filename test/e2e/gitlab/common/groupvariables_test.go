@@ -57,7 +57,11 @@ func TestGroupVariables_Lifecycle_CreateListGetUpdateDelete(t *testing.T) {
 			e.T.Errorf("group_get answered %+v, want %s set to first", got, groupVariableKey)
 		}
 
-		updated := harness.Do[groupvariables.Output](s, actionGroupVariableUpdate, withParams(variable, map[string]any{"value": "second"}))
+		// Replacing the value is refused unconfirmed and goes through with
+		// the confirmation a caller sends once the user approves.
+		unconfirmed := harness.ExpectToolError(s, actionGroupVariableUpdate, withParams(variable, map[string]any{"value": "second"}), "confirm=true")
+		assertMentions(e, "the unconfirmed replacement of the group variable's value", unconfirmed, "Replace the value of the CI/CD variable "+groupVariableKey)
+		updated := harness.Do[groupvariables.Output](s, actionGroupVariableUpdate, withParams(variable, map[string]any{"value": "second", "confirm": true}))
 		if updated.Key != groupVariableKey || updated.Value != "second" {
 			e.T.Errorf("group_update answered %+v, want %s set to second", updated, groupVariableKey)
 		}
