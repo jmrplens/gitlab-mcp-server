@@ -5466,6 +5466,69 @@ func assertStdioProvisionalTierWarning(t *testing.T, warning map[string]any, wan
 	}
 }
 
+// TestPrepareStdioCatalog_AnUntrustedAuthority_WarnsWithTheCAStoreHint covers
+// the degraded-mode warning of a start whose connectivity check failed on a
+// certificate this host does not trust (issue 1592). A host with no CA store
+// fails that way on every certificate, so the warning names the store and
+// SSL_CERT_FILE; a check that failed for any other reason, an instance
+// answering 503, carries no such hint, since installing certificates would
+// not help it. The instance's certificate is httptest's own, which no store
+// holds. Not parallel: the log capture replaces the default logger.
+func TestPrepareStdioCatalog_AnUntrustedAuthority_WarnsWithTheCAStoreHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		start    func(http.Handler) *httptest.Server
+		wantHint bool
+	}{
+		{name: "a certificate no store holds", start: httptest.NewTLSServer, wantHint: true},
+		{name: "an instance answering 503", start: httptest.NewServer},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab := tt.start(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			t.Cleanup(gitlab.Close)
+			cfg := &config.Config{
+				GitLabURL:      gitlab.URL,
+				GitLabToken:    testToken,
+				ToolSurface:    config.ToolSurfaceDynamic,
+				IgnoreScopes:   true,
+				DisableRetries: true,
+			}
+			client, serverCfg, shell := newStdioStartupShell(t, cfg)
+			var logged bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+			if prepErr := prepareStdioCatalog(t.Context(), client, cfg, serverCfg, shell, &deferredIdentity{}); prepErr != nil {
+				t.Fatalf("prepareStdioCatalog: %v", prepErr)
+			}
+			slog.SetDefault(previous)
+
+			warning := degradedWarning(t, logged.String())
+			if got, _ := warning["hint"].(string); (got == untrustedAuthorityHint) != tt.wantHint {
+				t.Errorf("the degraded-mode warning carries hint %q, want it named: %v", got, tt.wantHint)
+			}
+			if tt.wantHint && !strings.Contains(untrustedAuthorityHint, "install ca-certificates or set SSL_CERT_FILE") {
+				t.Errorf("the hint %q does not name the CA store and SSL_CERT_FILE", untrustedAuthorityHint)
+			}
+		})
+	}
+}
+
+// degradedWarning returns the degraded-mode warning among the JSON log lines
+// in logs, failing the test when there is none.
+func degradedWarning(t *testing.T, logs string) map[string]any {
+	t.Helper()
+	warnings := jsonLogRecordsWithPrefix(t, logs, "gitlab connectivity check failed. Server will start in degraded mode")
+	if len(warnings) == 0 {
+		t.Fatalf("no degraded-mode warning was logged:\n%s", logs)
+	}
+	return warnings[0]
+}
+
 // TestPrepareStdioCatalog_VersionRefusedToAFineGrainedToken_StartsWhole covers
 // a stdio start whose fine-grained token GitLab refuses the instance version
 // (no Metadata: Read) and allows everything else startup asks. The start is

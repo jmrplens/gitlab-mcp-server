@@ -49,6 +49,8 @@ The binary the SDK runs is the release asset byte for byte, so the build provena
 
 Everything is configured through environment variables: `GITLAB_MCP_TOOL_SURFACE` (dynamic, meta or individual tool catalogs), `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_TIER`, rate limiting, telemetry and more. See the [configuration guide](https://docs.jmrp.io/gitlab-mcp-server/configuration/) for the full reference.
 
+The binary verifies GitLab's certificate against the host's CA store. On a Linux host with none, such as a minimal container image, every connection fails with `x509: certificate signed by unknown authority`, gitlab.com's included: install `ca-certificates`, or set `SSL_CERT_FILE` to a PEM bundle that holds the instance's CA. `GITLAB_MCP_SKIP_TLS_VERIFY=true` turns verification off, and is only for a self-signed certificate nothing can be made to trust.
+
 ## Platform support
 
 Packages are published for `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `win-x64` and `win-arm64`. The Linux binaries need glibc; on musl systems such as Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server` instead. Installing or running the tool needs the .NET 10 SDK or newer; the tool manifest format the runtime-specific packages use does not exist in older SDKs.

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -1805,8 +1806,11 @@ func prepareStdioCatalog(
 		return nil
 	}
 	if err != nil {
-		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode",
-			"url", cfg.GitLabURL, "error", err)
+		args := []any{"url", cfg.GitLabURL, "error", err}
+		if _, untrusted := errors.AsType[x509.UnknownAuthorityError](err); untrusted {
+			args = append(args, "hint", untrustedAuthorityHint)
+		}
+		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode", args...)
 	}
 
 	if err == nil {
@@ -2038,6 +2042,15 @@ func redetectStdioToken(ctx context.Context, client *gitlabclient.Client) gitlab
 // stdioRereadTimeout bounds one stdio re-read of a fine-grained token's grant
 // and the instance version, as an HTTP pool entry's revalidation is bounded.
 const stdioRereadTimeout = 10 * time.Second
+
+// untrustedAuthorityHint is what the degraded-mode warning adds when the
+// connectivity check failed on a certificate signed by an authority this host
+// does not trust (issue 1592). A host with no CA store at all, a minimal
+// container image for one, fails that way on every certificate, a public
+// CA's included, since Go then verifies against an empty pool, and turning
+// verification off is the wrong fix there. SSL_CERT_FILE is what Go reads on
+// Linux and the BSDs in place of the system bundle.
+const untrustedAuthorityHint = "install ca-certificates or set SSL_CERT_FILE to a PEM bundle that holds the instance's CA"
 
 // stdioDetectTimeout bounds what the stdio start asks GitLab after its
 // connectivity check, taken together: the token's description, the user, the
