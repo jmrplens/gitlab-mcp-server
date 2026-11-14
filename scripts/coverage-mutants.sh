@@ -116,6 +116,46 @@ if [ "$ceiling" != "$CEILING" ]; then
   echo "gremlins: MUTANT_DEADLINE_MAX=${CEILING}s is under the ${FLOOR}s floor and would report untested mutants as timeouts; using ${ceiling}s"
 fi
 
+# The deadline bounds how long a mutant runs, not how much it holds, and a
+# mutant can turn a loop that ends into one that never does and allocates on
+# every pass. Such a test binary grows by about 1 GiB a second: `index + 1` ->
+# `index - 1` in makeArgument.take (cmd/audit_supply_chain) re-reads one make
+# option for ever, and `i++` -> `i--` in beforeVerb (cmd/audit_tenancy) writes
+# one byte for ever. On 2026-11-12 test binaries of those two packages reached
+# up to 24.1 GiB (cmd/audit_supply_chain) and 28.5 GiB (cmd/audit_tenancy) on
+# the build host before the kernel's OOM killer stopped them, together with
+# an unrelated process. So gremlins, and every go command and test binary it
+# starts, runs under an address-space ceiling of MUTANT_MEMORY_MAX GiB
+# (ulimit -v): a runaway ends in `fatal error: out of memory` within
+# seconds, its test fails, and gremlins reports it KILLED, the verdict any
+# failing test gives a mutant. Address space is not resident memory, since the
+# Go runtime reserves ahead of what it touches: under 3 GiB the make.go runaway
+# stopped at 660 MiB resident. The heaviest suites measured
+# (cmd/audit_readonly_graphql, cmd/server, internal/tools) pass under the
+# default. The ceiling is per process, so gremlins' four workers can hold four
+# times it between them. 0 sets no ceiling, a tighter limit the run inherited
+# is kept rather than raised to this one, and outside Linux, the kernel this
+# relies on to enforce ulimit -v, the run goes on without one and says so.
+#
+# The value is a whole number written without a leading zero, as the
+# coefficient below is, because bash arithmetic reads a leading zero as octal:
+# 010 would be held to 8 GiB and announced as 010, 00 would slip past the check
+# for none and set a ceiling of zero, under which nothing gremlins starts can
+# run, and 08 is no number in base 8, so the expansion fails and takes the
+# whole ulimit block with it, leaving gremlins with no ceiling and nothing
+# but bash's own expansion error to tell of it. Past 1048576 GiB (1 PiB) the
+# figure bounds nothing a host can hold and, further on, its kibibytes no
+# longer fit in bash's arithmetic, so it is refused rather than wrapped.
+MEMORY_MAX=${MUTANT_MEMORY_MAX:-8}
+if ! [[ $MEMORY_MAX =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "gremlins: MUTANT_MEMORY_MAX=${MEMORY_MAX} is not a whole number of GiB written without a leading zero; write it as 8, or as 0 for no ceiling" >&2
+  exit 1
+fi
+if [ "${#MEMORY_MAX}" -gt 7 ] || [ "$MEMORY_MAX" -gt 1048576 ]; then
+  echo "gremlins: MUTANT_MEMORY_MAX=${MEMORY_MAX} GiB is more than 1048576 (1 PiB), so it bounds nothing; write 0 for no ceiling" >&2
+  exit 1
+fi
+
 # GREMLINS_FLAGS is split into words on purpose and then quoted, because its
 # documented use carries a regular expression, and a caller passing `.*` to
 # --exclude-files would otherwise have it expanded against the working
@@ -714,6 +754,27 @@ fi
 # wins. A flag passed here would override their variable without a word.
 if [ -z "$excluded" ]; then
   gremlins_flags+=(--exclude-files=/)
+fi
+
+# The memory ceiling explained beside MUTANT_MEMORY_MAX above. It is set here,
+# for gremlins and what it starts, and not for the baseline, which runs the
+# package's own code and nothing a mutant changed. A soft limit the run
+# inherited at or under the ceiling is left alone, because `ulimit -v` would
+# raise it as far as the hard limit allows and so loosen what the caller set.
+# Outside Linux the limit may be accepted and never enforced, which would make
+# the line below a claim nobody checked, so it is not set there at all.
+if [ "$MEMORY_MAX" != 0 ]; then
+  wanted=$((MEMORY_MAX * 1024 * 1024))
+  held=$(ulimit -Sv)
+  if [ "$(uname -s)" != Linux ]; then
+    echo "gremlins: MUTANT_MEMORY_MAX=${MEMORY_MAX} is applied with ulimit -v, which this script relies on Linux to enforce, so on $(uname -s) a mutant that allocates without end runs until the host stops it"
+  elif [ "$held" != unlimited ] && [ "$held" -le "$wanted" ]; then
+    echo "gremlins: every process gremlins starts is already held to $((held / 1024)) MiB of address space, the limit this run inherited, which is no more than MUTANT_MEMORY_MAX=${MEMORY_MAX} GiB and so is kept"
+  elif ulimit -v "$wanted" 2>/dev/null; then
+    echo "gremlins: every process gremlins starts is held to ${MEMORY_MAX} GiB of address space (MUTANT_MEMORY_MAX), so a mutant that allocates without end fails its test instead of exhausting the host"
+  else
+    echo "gremlins: MUTANT_MEMORY_MAX=${MEMORY_MAX} cannot be set here (ulimit -v is refused), so a mutant that allocates without end runs until the host stops it"
+  fi
 fi
 
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
