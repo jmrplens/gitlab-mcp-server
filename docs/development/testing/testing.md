@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,035 |
-| Unit test functions                                   | 22,252 |
+| Total test functions                                  | 24,036 |
+| Unit test functions                                   | 22,253 |
 | E2E test functions                                    |  1,783 |
 | cmd test functions                                    |  6,018 |
 | Test files (internal/)                                |    779 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,807 | 57.4% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,329 | 38.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,330 | 38.8% |
 
 ## Test Distribution
 
@@ -48,11 +48,11 @@
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,353 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            456 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tools orchestration     |            457 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (181) |         11,425 |        489 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,783 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,018 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,035** |  **1,723** |                                                                                                 |
+| **Total**               |     **24,036** |  **1,723** |                                                                                                 |
 
 ### Core Packages
 
