@@ -5993,8 +5993,10 @@ func TestUpdate_LabelInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 // with "at least one parameter must be provided" when it is the only change,
 // and an empty description, due date, assignee list or label list could not
 // be sent at all, so the update reported success with the issue unchanged
-// (issue 1297).
+// (issue 1297). YOLO mode stands for the confirmation an empty assignee list
+// asks for, which TestUpdate_Removals_Ask holds.
 func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	tests := []struct {
 		name  string
 		input UpdateInput
@@ -6036,6 +6038,7 @@ func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
 // dynamic routes use, so what a model writes reaches the body as well as what
 // a Go caller builds.
 func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"project_id": testProjectID, "issue_iid": 10,
 		"weight": 0, "description": "", "due_date": "", "assignee_ids": []any{}, "labels": []any{},
@@ -6061,8 +6064,9 @@ func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 // arguments go. GitLab reads assignee_id 0 as unassigning everybody and an
 // epic_id of 0 as taking the issue out of its epic, and the handler forwarded
 // either only when it was not 0, so neither removal could be sent (issue
-// 1306).
+// 1306). YOLO mode stands for the confirmation both removals ask for.
 func TestUpdate_ZeroReferences_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"project_id": testProjectID, "issue_iid": 10, "assignee_id": 0, "epic_id": 0,
 	})
@@ -6732,4 +6736,35 @@ func TestList_KeysetPage_FiltersSentAgain_ReachGitLabInOneForm(t *testing.T) {
 		})
 		return testutil.KeysetPage{Token: out.Pagination.NextPageToken, HasMore: out.Pagination.HasMore, Rows: len(out.Issues)}, err
 	})
+}
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that creating and updating an issue refuse a description that carries a
+// quick action the guard asks about, before any request, naming what the line
+// does and how to proceed ([toolutil.ConfirmQuickActions]). GitLab runs such
+// a line when it saves the description, so the edit would move the issue
+// unasked, which issue.move asks about.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	text := "Steps to reproduce.\n/move group/app"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", Title: "t", Description: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", IssueIID: 7, Description: &text})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move group/app`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
 }

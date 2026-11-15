@@ -42,6 +42,46 @@ func TestProjectServiceAccountAliases_UnknownAction_HasNone(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Rotations_AreDestructive holds the rotation to the answer
+// the revocation gives: GitLab revokes the rotated token in the same request,
+// which is the effect service_account_pat_revoke is destructive for. The
+// spec, its route and the individual tool's annotation say so, the usage
+// tells a model why, and the action stays the non-idempotent create it was,
+// since a rotation repeated issues another token.
+func TestActionSpecs_Rotations_AreDestructive(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
+	byName := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		byName[spec.Name] = spec
+	}
+	for _, name := range []string{"service_account_pat_rotate"} {
+		t.Run(name, func(t *testing.T) {
+			spec := byName[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want neither", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, "Destructive: ") || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation. Returns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", name, spec.Usage, spec.IndividualTool.Description)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("%s: destructiveHint is not true: %+v", name, tool.Annotations)
+			}
+		})
+	}
+	t.Run("service_account_pat_create", func(t *testing.T) {
+		if spec := byName["service_account_pat_create"]; spec.Destructive || strings.Contains(spec.Usage, "Destructive") {
+			t.Errorf("service_account_pat_create: destructive %v, usage %q, want a create that ends no token", spec.Destructive, spec.Usage)
+		}
+	})
+}
+
 // TestActionSpecs_ConditionalMetadataReachesOnlyTheActionsThatNeedIt holds each
 // of the five per-action additions to exactly the actions it is written for:
 // the token_id guidance on the two that take one, the email caution on the two

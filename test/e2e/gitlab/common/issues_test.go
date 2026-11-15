@@ -70,9 +70,14 @@ func TestIssue_Update_EmptyValuesRemoveDescriptionDueDateAssigneesAndLabels(t *t
 		}
 
 		issueParams := withParams(params, map[string]any{"issue_iid": created.IID})
-		cleared := harness.Do[issues.Output](s, actionIssueUpdate, withParams(issueParams, map[string]any{
+		clearing := withParams(issueParams, map[string]any{
 			"description": "", "due_date": "", "assignee_ids": []int64{}, "labels": []string{},
-		}))
+		})
+		// The empty assignee list removes the one assignee the issue has, so
+		// the update is refused unconfirmed and goes through with confirm.
+		unconfirmed := harness.ExpectToolError(s, actionIssueUpdate, clearing, "confirm=true")
+		assertMentions(e, "the unconfirmed removal of the issue's assignees", unconfirmed, "Remove all 1 assignees")
+		cleared := harness.Do[issues.Output](s, actionIssueUpdate, withParams(clearing, map[string]any{"confirm": true}))
 		read := harness.Do[issues.Output](s, actionIssueGet, issueParams)
 		assertCleared := func(call string, out issues.Output) {
 			if out.Description != "" || out.DueDate != "" || len(out.Assignees) != 0 || len(out.Labels) != 0 {

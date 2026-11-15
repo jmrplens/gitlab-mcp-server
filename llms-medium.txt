@@ -793,8 +793,8 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_group_access_token_get: Get a specific group access token by its ID.
 - gitlab_group_access_token_list: List all access tokens for a GitLab group.
 - gitlab_group_access_token_revoke: Revoke a group access token.
-- gitlab_group_access_token_rotate: Rotate a group access token, generating a new token value.
-- gitlab_group_access_token_rotate_self: Rotate the group access token used for the current request. Returns the new token value.
+- gitlab_group_access_token_rotate: Rotate a group access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once.
+- gitlab_group_access_token_rotate_self: Rotate the group access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once.
 - gitlab_group_add_push_rule: Add push rules to a GitLab group.
 - gitlab_group_archive: Archive a GitLab group, making it and its projects read-only in GitLab.
 - gitlab_group_board_create: Create a new group issue board (Premium/Ultimate).
@@ -1206,8 +1206,8 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_personal_access_token_list: List personal access tokens.
 - gitlab_personal_access_token_revoke: Revoke a personal access token by ID.
 - gitlab_personal_access_token_revoke_self: Revoke the personal access token used for the current request. This action cannot be undone.
-- gitlab_personal_access_token_rotate: Rotate a personal access token, generating a new token value.
-- gitlab_personal_access_token_rotate_self: Rotate the personal access token used for the current request. Returns the new token value.
+- gitlab_personal_access_token_rotate: Rotate a personal access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once.
+- gitlab_personal_access_token_rotate_self: Rotate the personal access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once.
 - gitlab_pipeline_cancel: Cancel a running pipeline.
 - gitlab_pipeline_create: Create a new pipeline.
 - gitlab_pipeline_delete: Delete a pipeline and all its jobs.
@@ -1244,8 +1244,8 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_project_access_token_get: Get a specific project access token by its ID.
 - gitlab_project_access_token_list: List all access tokens for a GitLab project.
 - gitlab_project_access_token_revoke: Revoke a project access token.
-- gitlab_project_access_token_rotate: Rotate a project access token, generating a new token value.
-- gitlab_project_access_token_rotate_self: Rotate the project access token used for the current request. Returns the new token value.
+- gitlab_project_access_token_rotate: Rotate a project access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once.
+- gitlab_project_access_token_rotate_self: Rotate the project access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once.
 - gitlab_project_add_push_rule: Add push rules to a project.
 - gitlab_project_approval_config_change: Change a project's approval configuration.
 - gitlab_project_approval_config_get: Get a project's approval configuration.

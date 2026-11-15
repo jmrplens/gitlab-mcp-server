@@ -77,6 +77,11 @@ type UpdateInput struct {
 	Raw              *bool                `json:"raw" jsonschema:"Treat variable value as raw string"`
 	EnvironmentScope string               `json:"environment_scope" jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
 	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput holds parameters for deleting a project CI/CD variable.
@@ -265,7 +270,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return toOutput(v), nil
 }
 
-// Update updates resources for the civariables package.
+// Update updates resources for the civariables package. An update that sends
+// value is confirmed first, as [toolutil.ConfirmVariableValueReplaced]
+// describes.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
@@ -275,6 +282,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(opUpdateCIVariable, err)
+	}
+	if err := toolutil.ConfirmVariableValueReplaced(ctx, opUpdateCIVariable, input.Value != nil,
+		toolutil.ConfirmTargetProject(string(input.ProjectID)), input.Key); err != nil {
+		return Output{}, err
 	}
 
 	// Presence decides, never emptiness: an empty value or description is the

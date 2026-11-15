@@ -272,6 +272,10 @@ func TestAdd_Validation(t *testing.T) {
 
 // TestEdit_Success verifies Edit when success.
 func TestEdit_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -481,6 +485,10 @@ func TestEdit_ZeroID(t *testing.T) {
 // reaches the body. The body is held to the value and not merely to the key
 // name, which a call sending the key under it would also satisfy.
 func TestSetURLVariable_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -511,6 +519,10 @@ func TestSetURLVariable_Success(t *testing.T) {
 // 422 "Illegal key or value" response is wrapped with a hint about the accepted
 // key characters and the non-empty value requirement.
 func TestSetURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
 	}))
@@ -846,6 +858,10 @@ var hookRequestStrings = []struct {
 // asserts only that the name arrived. Driving one string at a time, and
 // refusing every other string key, tells all seven apart on both call paths.
 func TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, field := range hookRequestStrings {
 		t.Run(field.key, func(t *testing.T) {
 			t.Run("add", func(t *testing.T) {
@@ -1161,6 +1177,10 @@ func TestSystemHooks_OmitTheConditionalFieldsGitLabDidNotSend(t *testing.T) {
 // on its own Hook as of v3.15.0, so its decoder is what refuses it, and the
 // handlers read nothing beside it any more.
 func TestSystemHooks_UnreadableOrganization_Refused(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	const poisoned = `{"id":1,"url":"https://example.com/hook","organization_id":"not-a-number"}`
 	cases := make([]testutil.CapturedCase, 0, len(hookCalls))
 	for _, hookCall := range hookCalls {
@@ -1216,6 +1236,10 @@ func recordingHookMock(t *testing.T) (*gitlabclient.Client, func() []string) {
 // sent. client-go places the key into the request path without escaping it,
 // so the handler checks that it names one URL variable.
 func TestSetURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, tc := range dotSegmentKeys {
 		t.Run(tc.name, func(t *testing.T) {
 			client, requests := recordingHookMock(t)
@@ -1338,6 +1362,10 @@ func assertRequestPath(t *testing.T, requests []string, want string) {
 // unchanged. client-go places the key into the request path as given, so
 // the handler escapes it first.
 func TestSetURLVariable_Key_IsEscapedAsOneSegment(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, tc := range keyEncodings {
 		t.Run(tc.name, func(t *testing.T) {
 			client, requests := recordingHookMock(t)

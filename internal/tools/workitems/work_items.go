@@ -567,6 +567,11 @@ type CreateInput struct {
 	CreatedAt      string             `json:"created_at,omitempty" jsonschema:"Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only"`
 	CreateSource   string             `json:"create_source,omitempty" jsonschema:"Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item"`
 	LinkedItems    *CreateLinkedItems `json:"linked_items,omitempty" jsonschema:"Linked work items to add on creation"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // CreateLinkedItems specifies work items to link during creation.
@@ -580,6 +585,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts, err := buildCreateOptions(input)
 	if err != nil {
 		return GetOutput{}, fmt.Errorf("create_work_item: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "create_work_item", input.Description); askErr != nil {
+		return GetOutput{}, askErr
 	}
 
 	wi, resp, err := client.GL().WorkItems.CreateWorkItem(input.FullPath, gl.WorkItemTypeID(input.WorkItemTypeID), opts, gl.WithContext(ctx))
@@ -704,9 +712,9 @@ type UpdateInput struct {
 	Title          string  `json:"title,omitempty" jsonschema:"New title"`
 	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
 	Description    *string `json:"description,omitempty" jsonschema:"New description. Pass an empty string to remove the description. Omit the field to leave it untouched"`
-	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched"`
+	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. An ID of 0 or below is refused. Omit the field to leave assignees untouched"`
 	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone. Pass 0 to remove the work item from its milestone. Omit the field to leave it untouched"`
-	CRMContactIDs  []int64 `json:"crm_contact_ids,omitempty" jsonschema:"CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched"`
+	CRMContactIDs  []int64 `json:"crm_contact_ids,omitempty" jsonschema:"CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. An ID of 0 or below is refused. Omit the field to leave contacts untouched"`
 	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent work item. Pass 0 to remove the parent. Omit the field to leave it untouched"`
 	AddLabelIDs    []int64 `json:"add_label_ids,omitempty" jsonschema:"Global IDs of labels to add"`
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
@@ -723,7 +731,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the handler reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array, required only when entries would actually be deleted, and taking the work item out of its parent when parent_id is 0. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Pass true only after the user approves"`
 }
 
 // Update modifies an existing work item.
@@ -737,6 +745,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	opts, removals, buildErr := buildUpdateOptions(input)
 	if buildErr != nil {
 		return GetOutput{}, fmt.Errorf("update_work_item: %w", buildErr)
+	}
+	// The description is asked about before the clearing guard, which reads
+	// the work item: a text decides by itself.
+	if err := toolutil.ConfirmQuickActionsOptional(ctx, "update_work_item", input.Description); err != nil {
+		return GetOutput{}, err
+	}
+	// The parent is decided by the arguments alone, so it is asked about
+	// before the clearing guard reads the work item.
+	if err := confirmParentRemoval(ctx, input); err != nil {
+		return GetOutput{}, err
 	}
 	if err := confirmListClearing(ctx, client, input); err != nil {
 		return GetOutput{}, err
@@ -767,6 +785,12 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.Reques
 	if input.StateEvent != "" {
 		ev := gl.WorkItemStateEvent(input.StateEvent)
 		opts.StateEvent = &ev
+	}
+	if err := toolutil.CheckWorkItemIDList("assignee_ids", input.AssigneeIDs); err != nil {
+		return nil, nil, err
+	}
+	if err := toolutil.CheckWorkItemIDList("crm_contact_ids", input.CRMContactIDs); err != nil {
+		return nil, nil, err
 	}
 	if input.AssigneeIDs != nil {
 		opts.AssigneeIDs = input.AssigneeIDs

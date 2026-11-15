@@ -376,14 +376,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `pipeline.schedule_edit_variable`
 
-> Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: [`pipeline.schedule_create_variable`](#pipelineschedule_create_variable), [`pipeline.schedule_delete_variable`](#pipelineschedule_delete_variable).
+> Edit a pipeline schedule variable. Requires confirmation. Returns: the updated variable with key, value, variable_type, and raw. See also: [`pipeline.schedule_create_variable`](#pipelineschedule_create_variable), [`pipeline.schedule_delete_variable`](#pipelineschedule_delete_variable).
 
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_edit_variable`
 - **Herramienta individual**: `gitlab_pipeline_schedule_edit_variable`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#pipeline))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo                         | Requerido | Descripción                                                   |
 | --------------- | ---------------------------- | --------- | ------------------------------------------------------------- |
@@ -467,14 +467,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `pipeline.schedule_take_ownership`
 
-> Take ownership of a pipeline schedule. Returns: the schedule with the caller as owner. See also: [`pipeline.schedule_update`](#pipelineschedule_update), [`pipeline.schedule_run`](#pipelineschedule_run).
+> Take ownership of a pipeline schedule. Requires confirmation. Returns: the schedule with the caller as owner. See also: [`pipeline.schedule_update`](#pipelineschedule_update), [`pipeline.schedule_run`](#pipelineschedule_run).
 
 - **Meta-herramienta**: `gitlab_pipeline`, acción `schedule_take_ownership`
 - **Herramienta individual**: `gitlab_pipeline_schedule_take_ownership`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Pipeline Schedule: Update en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#pipeline))
-- **Comportamiento**: escribe, idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro     | Tipo             | Requerido | Descripción                    |
 | ------------- | ---------------- | --------- | ------------------------------ |

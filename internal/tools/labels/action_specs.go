@@ -73,7 +73,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_label_unsubscribe — remove the caller's label subscription.
 		labelUpdateSpec(specLabelUnsubscribe, toolutil.RouteVoidAction(client, Unsubscribe), "gitlab_label_unsubscribe"),
 		// gitlab_label_promote — promote a project label to a group label.
-		labelUpdateSpec(specLabelPromote, toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
+		labelPromoteSpec(specLabelPromote, toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
 	}
 }
 
@@ -105,6 +105,19 @@ func labelCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 // label action using the package's default [labelOptionsForAction].
 func labelUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, labelOptionsForAction(name, individualTool))
+}
+
+// labelPromoteSpec is an update that asks for confirmation. Promoting a
+// label creates the group label, moves to it the issues, merge requests,
+// board lists and subscriptions of every project label of that title in the
+// group's projects, and deletes those project labels, this one included. No
+// route demotes it back. That is what project.milestone_promote does to a
+// milestone and why it is destructive, so the two promotions answer alike.
+// Only the destructive bit is added to the update.
+func labelPromoteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := labelOptionsForAction(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 // labelDeleteSpec builds a destructive [toolutil.ActionSpec] for a
@@ -214,10 +227,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 	case specLabelPromote:
-		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels."
+		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels. Destructive: GitLab deletes the project labels of that title in the group's projects, this one included, after moving their issues and merge requests to the group label, and nothing demotes it back, so confirm with the user first."
 		options.Aliases = []string{"promote label", "promote to group label", "make group label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelList, actionGroupLabelList}
-		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
+		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Requires confirmation. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,

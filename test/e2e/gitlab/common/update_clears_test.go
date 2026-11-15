@@ -173,8 +173,11 @@ func TestUpdateClears_CIVariable_ValueAndDescription(t *testing.T) {
 			e.T.Fatalf("variable create answered %+v, want a value and a description to remove", created)
 		}
 
+		// Emptying the value replaces it, which the handler asks about, so
+		// the call carries the confirmation a caller sends once the user
+		// approves.
 		cleared := harness.Do[civariables.Output](s, actionCIVariableUpdate, withParams(withParams(params, variableUpdateDefaults), map[string]any{
-			"value": "", "description": "",
+			"value": "", "description": "", "confirm": true,
 		}))
 		read := harness.Do[civariables.Output](s, actionCIVariableGet, withParams(params, variableScopeDefault))
 		assertCleared := func(call string, out civariables.Output) {

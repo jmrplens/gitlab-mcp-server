@@ -1905,3 +1905,34 @@ func assertNoteOwnerOutcome(t *testing.T, label string, tt noteOwnerCase, err er
 		t.Errorf("%s sent the mutation %d time(s) for a note the epic does not own", label, writes)
 	}
 }
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that the two writes of an epic note refuse a body that carries a quick
+// action the guard asks about, before any request, the read that resolves
+// the epic included, naming what the line does and how to proceed
+// ([toolutil.ConfirmQuickActions]). GitLab runs such a line when it saves the
+// note, so the note would move the epic to another group unasked.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	const text = "Done.\n/move other-group"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{FullPath: "my-group", IID: 7, Body: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: "my-group", IID: 7, NoteID: 9, Body: text})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move other-group`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
+}

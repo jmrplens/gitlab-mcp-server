@@ -89,11 +89,11 @@ const (
 // actions, parameter guidance, and a "Returns: … See also: …" description).
 var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_schedule_project_export": {
-		usage:       "Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download.",
+		usage:       "Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll project.export_status until 'finished' and download with project.export_download. Naming an upload URL has GitLab send the whole project to that host, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An export without an upload URL asks nothing.",
 		aliases:     []string{"export project", "schedule project export", "create project export archive", "back up project"},
 		related:     []string{actionExportStatus, actionExportDownload, actionProjectGet},
 		guidance:    projectIDGuidance(),
-		description: "Schedule an asynchronous project export. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
+		description: "Schedule an asynchronous project export. Uploading it to a URL requires confirmation. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
 		// GitLab accepts only PUT and POST for upload[http_method]
 		// (https://docs.gitlab.com/api/project_import_export/#schedule-an-export).
 		overrides: []toolutil.InputSchemaOverride{
@@ -116,7 +116,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 		description: "Download a finished project export archive as base64. Returns: base64 archive content and size in bytes. See also: gitlab_get_project_export_status, gitlab_import_project_from_file.",
 	},
 	"gitlab_import_project_from_file": {
-		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward.",
+		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content, at the URL path the new project takes. Optionally set the namespace and name, and override project attributes via override_params. Poll project.import_status afterward. With overwrite=true GitLab replaces the project that is already at that path and nothing brings it back, so that call needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An import without overwrite asks nothing.",
 		aliases: []string{"import project", "import project from file", "restore project from export", "upload project archive"},
 		related: []string{actionImportStatus, actionExportDownload, actionProjectGet},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -139,7 +139,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 				CommonConfusions: []string{"Supply exactly one of file_path or content_base."},
 			},
 		},
-		description: "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
+		description: "Import a project from an export archive. Overwriting an existing project requires confirmation. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
 		// override_params accepts the create-project attributes, whose closed
 		// value sets are documented on the Projects API
 		// (https://docs.gitlab.com/api/projects/#create-a-project). The central

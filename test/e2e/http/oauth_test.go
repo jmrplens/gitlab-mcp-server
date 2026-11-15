@@ -828,7 +828,10 @@ func TestOAuth_AnOAuthTokenIsNotServedWhatGitLabRefusesItsKind(t *testing.T) {
 	gitlab := startTokenKindFakeGitLab(t, map[string][]string{oauthToken: {"api"}, readAPIToken: {"read_api"}}, personalToken)
 	call, says := postAsBearer, assertAnswerSays
 	const kind = "the credential in use is an OAuth access token"
-	executeBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"access.token_personal_rotate_self","params":{}},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+	// The rotation is destructive, so each call carries the confirmation: a
+	// call without it is refused for that before the session's credential is
+	// what decides the answer for the token GitLab does serve.
+	executeBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"access.token_personal_rotate_self","params":{},"confirm":true},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
 
 	t.Run("individual listing", func(t *testing.T) {
 		srv := startServer(t, map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"},
@@ -869,7 +872,7 @@ func TestOAuth_AnOAuthTokenIsNotServedWhatGitLabRefusesItsKind(t *testing.T) {
 	t.Run("meta call", func(t *testing.T) {
 		srv := startServer(t, map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"},
 			"--auth-mode=oauth", "--gitlab-url="+gitlab.url, "--public-url="+publicURL)
-		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_access","arguments":{"action":"token_personal_rotate_self","params":{}},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_access","arguments":{"action":"token_personal_rotate_self","params":{"confirm":true}},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
 		got := call(t, srv, oauthToken, "token_personal_rotate_self", body)
 		says(t, got, []string{
 			`gitlab_access: action \"token_personal_rotate_self\" exists but is not available to this session`,

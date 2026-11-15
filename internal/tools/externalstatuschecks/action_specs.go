@@ -28,9 +28,18 @@ func externalStatusCheckReadSpec(name string, route toolutil.ActionRoute, indivi
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
+// externalStatusCheckCreateSpec is a create that asks for confirmation. An
+// external status check deletes nothing, and from then on GitLab sends every
+// merge request of the project, and each change to it, to the host named in
+// external_url, which is a parameter a model can take from text the user
+// never read. That is a webhook of merge request events under another name,
+// and adding a webhook is destructive for that. delete_project stops the
+// delivery and recalls nothing. Only the destructive bit is added to the
+// create.
 func externalStatusCheckCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := externalStatusCheckOptions(individualTool)
 	decorateExternalStatusCheckMeta(&options, individualTool)
+	options.Destructive = true
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -134,16 +143,16 @@ var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntr
 		description: "List the external status checks for a merge request and their status. Returns: each check with id, name, external_url, status, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_set_project_mr_external_status_check_status, gitlab_retry_failed_external_status_check_for_project_mr.",
 	},
 	"gitlab_create_project_external_status_check": {
-		usage:       "Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license.",
+		usage:       "Create an external status check service for a project, optionally scoping it to protected branches and supplying a shared secret for HMAC verification. Requires the Maintainer role and an Ultimate license. Destructive: from then on GitLab sends each merge request of the project to the host named in external_url, and deleting the check does not recall what was sent, so confirm with the user first.",
 		aliases:     []string{"create external status check", "add project status check", "register external status check service"},
 		related:     []string{actionListProject, actionUpdateProject, actionDeleteProject},
-		description: "Create an external status check service for a project. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.",
+		description: "Create an external status check service for a project. Requires confirmation. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_update_project_external_status_check": {
-		usage:       "Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license.",
+		usage:       "Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires the Maintainer role and an Ultimate license. Sending external_url points the check at the host it names, and sending shared_secret replaces a secret that cannot be read back, so either needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An update of the name or the branches asks nothing.",
 		aliases:     []string{"update external status check", "edit project status check", "modify external status check service"},
 		related:     []string{actionListProject, actionCreateProject, actionDeleteProject},
-		description: "Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
+		description: "Update a project external status check service. Sending external_url or shared_secret requires confirmation. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_delete_project_external_status_check": {
 		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires the Maintainer role and an Ultimate license. GitLab before 19.5 answers a caller without the role with success and deletes nothing, so on those releases confirm the deletion with external_status_check.list_project.",

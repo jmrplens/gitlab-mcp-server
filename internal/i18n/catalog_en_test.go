@@ -51,6 +51,7 @@ const (
 	sampleAttempt    = 7
 	sampleID         = 1234
 	sampleIndex      = 2
+	sampleSetting    = "prevent_secrets"
 )
 
 // frozenEnglishRows holds every English entry against the literal it
@@ -61,8 +62,10 @@ const (
 // to; confirm.destructive.standalone quoted the tool name with %q, which is
 // what strconv.Quote writes, so the call site passes the quoted name and the
 // row renders the old template with the bare one. The pull mirror questions
-// written after that stack are [pullMirrorQuestionRows], appended here so the
-// tests below hold every entry.
+// written after that stack are [pullMirrorQuestionRows], the push rule
+// question's are [pushRuleQuestionRows] and those of the guards that ask about
+// one call of an action are [guardedCallQuestionRows], all appended here so
+// the tests below hold every entry.
 func frozenEnglishRows() []frozenEnglish {
 	rows := []frozenEnglish{
 		{key: ElicitationSchemaConfirmTitle, dotted: "elicitation.schema.confirm.title", want: "Confirm"},
@@ -273,7 +276,290 @@ func frozenEnglishRows() []frozenEnglish {
 			want: fmt.Sprintf("Published %d of %d files", sampleIndex, sampleCount),
 		},
 	}
-	return append(rows, pullMirrorQuestionRows()...)
+	rows = append(rows, pullMirrorQuestionRows()...)
+	rows = append(rows, pushRuleQuestionRows()...)
+	rows = append(rows, detachQuestionRows()...)
+	return append(rows, guardedCallQuestionRows()...)
+}
+
+// guardedCallQuestionRows holds the questions of the guards that ask about one
+// call of an action that is not destructive: the targets they name, and for
+// each guard its question and every change it can name. They replaced no
+// literal, so each row pins the English it was written with. No row carries a
+// value that is a secret, and every address is an origin.
+func guardedCallQuestionRows() []frozenEnglish {
+	const (
+		origin   = "https://hooks.example.com/..."
+		current  = "https://ci.example.com"
+		variable = "DEPLOY_URL"
+		address  = "new@example.com"
+		field    = "url_variables"
+		// quoted is a line of a text as a question shows it: fenced in
+		// backticks by the guard, so it cannot pass for the server's words.
+		quoted = "`/move group/app`"
+	)
+	project := New(ConfirmTargetProject, S("id", samplePath))
+	return []frozenEnglish{
+		{key: ConfirmTargetProject, dotted: "confirm.target.project", args: []Arg{S("id", samplePath)}, want: "project " + samplePath},
+		{key: ConfirmTargetGroup, dotted: "confirm.target.group", args: []Arg{S("id", samplePath)}, want: "group " + samplePath},
+		{key: ConfirmTargetInstance, dotted: "confirm.target.instance", want: "this GitLab instance"},
+		{
+			key: ConfirmVariableValue, dotted: "confirm.variable.value",
+			args: []Arg{S("key", variable), M("target", project)},
+			want: "Replace the value of the CI/CD variable " + variable + " in project " + samplePath +
+				"? The value it holds now is overwritten and no call restores it.",
+		},
+		{
+			key: ConfirmUserAccess, dotted: "confirm.user_access.replace",
+			args: []Arg{S("id", "1234"), L("changes", New(ConfirmUserAccessPassword), New(ConfirmUserAccessIdentity))},
+			want: "Change how user 1234 signs in or recovers the account? This call replaces the password, which no call reads or restores" +
+				" and replaces the external identity the account signs in with.",
+		},
+		{
+			key: ConfirmUserAccessPassword, dotted: "confirm.user_access.password",
+			want: "replaces the password, which no call reads or restores",
+		},
+		{
+			key: ConfirmUserAccessEmail, dotted: "confirm.user_access.email",
+			args: []Arg{S("email", address)},
+			want: "sets the email address to " + address + ", whose mailbox can then reset the password",
+		},
+		{
+			key: ConfirmUserAccessIdentity, dotted: "confirm.user_access.identity",
+			want: "replaces the external identity the account signs in with",
+		},
+		{
+			key: ConfirmHookDelivery, dotted: "confirm.hook.delivery",
+			args: []Arg{
+				S("hook", "7"), M("target", project),
+				L("changes", New(ConfirmHookURL, S("url", origin), S("current", current)), New(ConfirmHookToken, S("token", "token"))),
+			},
+			want: "Change where webhook 7 in project " + samplePath + " delivers, or a secret it sends? This call points it at " +
+				origin + " instead of " + current + " and replaces its token, which cannot be read back.",
+		},
+		{
+			key: ConfirmHookURL, dotted: "confirm.hook.url",
+			args: []Arg{S("url", origin), S("current", current)},
+			want: "points it at " + origin + " instead of " + current,
+		},
+		{
+			key: ConfirmHookURLSameHost, dotted: "confirm.hook.url_same_host",
+			args: []Arg{S("url", origin)},
+			want: "keeps it on " + origin + " and changes the path or the query it delivers to there",
+		},
+		{
+			key: ConfirmHookURLUnread, dotted: "confirm.hook.url_unread",
+			args: []Arg{S("url", origin)},
+			want: "may point it at another host, " + origin + " (the webhook could not be read)",
+		},
+		{
+			key: ConfirmHookToken, dotted: "confirm.hook.token",
+			args: []Arg{S("token", "signing_token")},
+			want: "replaces its signing_token, which cannot be read back",
+		},
+		{
+			key: ConfirmHookValue, dotted: "confirm.hook.value",
+			args: []Arg{S("field", field), S("key", "tenant")},
+			want: "replaces the " + field + " entry tenant, whose current value cannot be read back",
+		},
+		{
+			key: ConfirmHookValueUnread, dotted: "confirm.hook.value_unread",
+			args: []Arg{S("field", field), S("key", "tenant")},
+			want: "may replace the " + field + " entry tenant (the webhook could not be read)",
+		},
+		{
+			key: ConfirmImportOverwrite, dotted: "confirm.import.overwrite",
+			args: []Arg{S("path", samplePath)},
+			want: "Import into " + samplePath + " and overwrite the project that is already there?" +
+				" GitLab replaces the existing project with the archive, and no call brings it back.",
+		},
+		{
+			key: ConfirmCommitForce, dotted: "confirm.commit.force",
+			args: []Arg{S("branch", sampleBranch), M("target", project)},
+			want: "Create this commit on branch " + sampleBranch + " in project " + samplePath + " with force?" +
+				" The branch is reset to its starting point plus the new commit," +
+				" and the commits it holds that the starting point does not are dropped from it.",
+		},
+		{
+			key: ConfirmExportUpload, dotted: "confirm.export.upload",
+			args: []Arg{M("target", project), S("url", origin)},
+			want: "Export project " + samplePath + " and have GitLab upload the archive to " + origin + "?" +
+				" That host receives the whole project: its repository, issues, merge requests and settings.",
+		},
+		{
+			key: ConfirmStatusCheck, dotted: "confirm.status_check.delivery",
+			args: []Arg{
+				S("check", "3"), M("target", project),
+				L("changes", New(ConfirmStatusCheckURL, S("url", origin)), New(ConfirmStatusCheckSecret)),
+			},
+			want: "Change where external status check 3 in project " + samplePath + " sends merge requests, or its shared secret?" +
+				" This call points it at " + origin + " and replaces its shared secret, which cannot be read back.",
+		},
+		{
+			key: ConfirmStatusCheckURL, dotted: "confirm.status_check.url",
+			args: []Arg{S("url", origin)}, want: "points it at " + origin,
+		},
+		{
+			key: ConfirmStatusCheckSecret, dotted: "confirm.status_check.secret",
+			want: "replaces its shared secret, which cannot be read back",
+		},
+		{
+			key: ConfirmQuickActions, dotted: "confirm.quick_action.run",
+			args: []Arg{L("effects", New(ConfirmQuickActionMove, S("line", quoted)), New(ConfirmQuickActionMore, N("count", 3)))},
+			want: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
+				" moves the item to another project or group (" + quoted + ") and runs 3 more quick actions of these kinds.",
+		},
+		{
+			key: ConfirmQuickActionMove, dotted: "confirm.quick_action.move",
+			args: []Arg{S("line", quoted)}, want: "moves the item to another project or group (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionMerge, dotted: "confirm.quick_action.merge",
+			args: []Arg{S("line", quoted)}, want: "merges the merge request, at once or when its checks pass (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionPromote, dotted: "confirm.quick_action.promote",
+			args: []Arg{S("line", quoted)}, want: "closes the issue and makes an epic of it (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionTicket, dotted: "confirm.quick_action.convert_to_ticket",
+			args: []Arg{S("line", quoted)},
+			want: "converts the issue to a Service Desk ticket whose author is an outside email address (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionAddEmail, dotted: "confirm.quick_action.add_email",
+			args: []Arg{S("line", quoted)},
+			want: "adds outside email addresses that receive the comments of the issue (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionPublish, dotted: "confirm.quick_action.publish",
+			args: []Arg{S("line", quoted)}, want: "publishes the issue on the status page (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionUnapprove, dotted: "confirm.quick_action.unapprove",
+			args: []Arg{S("line", quoted)}, want: "withdraws the caller's approval of the merge request (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionUnlink, dotted: "confirm.quick_action.unlink",
+			args: []Arg{S("line", quoted)}, want: "removes the link between this item and another (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveParent, dotted: "confirm.quick_action.remove_parent",
+			args: []Arg{S("line", quoted)}, want: "takes the item out of its epic or its parent (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveChild, dotted: "confirm.quick_action.remove_child",
+			args: []Arg{S("line", quoted)}, want: "takes a child out of the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionUnassign, dotted: "confirm.quick_action.unassign",
+			args: []Arg{S("line", quoted)}, want: "removes assignees from the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionReassign, dotted: "confirm.quick_action.reassign",
+			args: []Arg{S("line", quoted)}, want: "removes every assignee of the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveContacts, dotted: "confirm.quick_action.remove_contacts",
+			args: []Arg{S("line", quoted)}, want: "removes CRM contacts from the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionMore, dotted: "confirm.quick_action.more",
+			args: []Arg{N("count", 3)}, want: "runs 3 more quick actions of these kinds",
+		},
+	}
+}
+
+// detachQuestionRows holds the questions asked before an update takes an
+// item out of its epic or its parent, or removes every assignee of an issue,
+// a merge request or an epic. They replaced no literal, so each row pins the
+// English it was written with.
+func detachQuestionRows() []frozenEnglish {
+	project := New(ConfirmTargetProject, S("id", "`42`"))
+	assignees := New(ConfirmWorkItemAssignees, N("count", sampleCount))
+	return []frozenEnglish{
+		{
+			key: ConfirmIssueEpicRemove, dotted: "confirm.parent.issue_epic_remove",
+			args: []Arg{N("iid", sampleIID), M("target", project)},
+			want: "Take issue 42 in project `42` out of its epic? The issue is no longer a child of the epic, as when it is removed from the epic.",
+		},
+		{
+			key: ConfirmWorkItemParentRemove, dotted: "confirm.parent.work_item_remove",
+			args: []Arg{S("path", "`"+samplePath+"`"), N("iid", sampleIID)},
+			want: "Take work item `group/app`#42 out of its parent? The work item is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			key: ConfirmEpicParentRemove, dotted: "confirm.parent.epic_remove",
+			args: []Arg{S("path", "`group`"), N("iid", sampleIID)},
+			want: "Take epic `group`&42 out of its parent epic? The epic is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			key: ConfirmIssueAssigneesClear, dotted: "confirm.assignees.issue_clear",
+			args: []Arg{L("losses", assignees), N("iid", sampleIID), M("target", project)},
+			want: "Remove all 3 assignees from issue 42 in project `42`? This replaces the list and cannot be undone from the response.",
+		},
+		{
+			key: ConfirmMergeRequestAssigneesClear, dotted: "confirm.assignees.merge_request_clear",
+			args: []Arg{L("losses", assignees), N("iid", sampleIID), M("target", project)},
+			want: "Remove all 3 assignees from merge request 42 in project `42`? This replaces the list and cannot be undone from the response.",
+		},
+		{
+			key: ConfirmEpicAssigneesClear, dotted: "confirm.assignees.epic_clear",
+			args: []Arg{L("losses", New(ConfirmWorkItemAssigneesUnknown)), S("path", "`group`"), N("iid", sampleIID)},
+			want: "Remove every assignee (the current list could not be read) from epic `group`&42? This replaces the list and cannot be undone from the response.",
+		},
+	}
+}
+
+// pushRuleQuestionRows holds the question of the guard that asks before an
+// edit relaxes push rules, the two targets it names and each change it can
+// name. They replaced no literal, so each row pins the English it was written
+// with.
+func pushRuleQuestionRows() []frozenEnglish {
+	return []frozenEnglish{
+		{
+			key: ConfirmPushRuleRelax, dotted: "confirm.push_rule.relax",
+			args: []Arg{
+				M("target", New(ConfirmPushRuleProject, S("id", samplePath))),
+				L("changes", New(ConfirmPushRuleSwitchOff, S("setting", sampleSetting)), New(ConfirmPushRuleSizeRemoved, N("from", sampleCount))),
+			},
+			want: fmt.Sprintf(
+				"Relax the push rules of project %s? This call turns off %s and removes the max_file_size limit of %d MB."+
+					" Pushes those rules reject today are accepted from then on.",
+				samplePath, sampleSetting, sampleCount,
+			),
+		},
+		{key: ConfirmPushRuleProject, dotted: "confirm.push_rule.project", args: []Arg{S("id", samplePath)}, want: "project " + samplePath},
+		{key: ConfirmPushRuleGroup, dotted: "confirm.push_rule.group", args: []Arg{S("id", samplePath)}, want: "group " + samplePath},
+		{
+			key: ConfirmPushRuleSwitchOff, dotted: "confirm.push_rule.switch_off",
+			args: []Arg{S("setting", sampleSetting)}, want: "turns off " + sampleSetting,
+		},
+		{
+			key: ConfirmPushRulePatternRemoved, dotted: "confirm.push_rule.pattern_removed",
+			args: []Arg{S("setting", sampleSetting)}, want: "removes " + sampleSetting,
+		},
+		{
+			key: ConfirmPushRulePatternReplaced, dotted: "confirm.push_rule.pattern_replaced",
+			args: []Arg{S("setting", sampleSetting)},
+			want: "replaces " + sampleSetting + " with another pattern that may accept more",
+		},
+		{
+			key: ConfirmPushRuleSizeRaised, dotted: "confirm.push_rule.size_raised",
+			args: []Arg{N("from", sampleCount), N("to", sampleIID)},
+			want: fmt.Sprintf("raises max_file_size from %d MB to %d MB", sampleCount, sampleIID),
+		},
+		{
+			key: ConfirmPushRuleSizeRemoved, dotted: "confirm.push_rule.size_removed",
+			args: []Arg{N("from", sampleCount)},
+			want: fmt.Sprintf("removes the max_file_size limit of %d MB", sampleCount),
+		},
+		{
+			key: ConfirmPushRuleUnread, dotted: "confirm.push_rule.unread",
+			args: []Arg{S("setting", sampleSetting)},
+			want: "may relax " + sampleSetting + " (the current rules could not be read)",
+		},
+	}
 }
 
 // pullMirrorQuestionRows holds the questions of the pull mirror guard that

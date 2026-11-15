@@ -88,9 +88,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_get_ssh_key_for_user — fetch an SSH key for a specific user.
 		userReadSpec("get_ssh_key_for_user", toolutil.RouteAction(client, GetSSHKeyForUser), "gitlab_get_ssh_key_for_user"),
 		// gitlab_add_ssh_key — add an SSH key to the current user's account.
-		userCreateSpec("add_ssh_key", toolutil.RouteAction(client, AddSSHKey), "gitlab_add_ssh_key"),
+		userKeyAddSpec("add_ssh_key", toolutil.RouteAction(client, AddSSHKey), "gitlab_add_ssh_key"),
 		// gitlab_add_ssh_key_for_user — add an SSH key to a specific user (admin-only).
-		userCreateSpec("add_ssh_key_for_user", toolutil.RouteAction(client, AddSSHKeyForUser), "gitlab_add_ssh_key_for_user"),
+		userKeyAddSpec("add_ssh_key_for_user", toolutil.RouteAction(client, AddSSHKeyForUser), "gitlab_add_ssh_key_for_user"),
 		// gitlab_delete_ssh_key — delete the current user's SSH key (destructive).
 		userDeleteSpec("delete_ssh_key", toolutil.DestructiveAction(client, DeleteSSHKey), "gitlab_delete_ssh_key"),
 		// gitlab_delete_ssh_key_for_user — delete an SSH key for a specific user (admin-only).
@@ -135,6 +135,20 @@ func userReadSpec(name string, route toolutil.ActionRoute, individualTool string
 // userCreateSpec builds the canonical create spec for a user tool.
 func userCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, userOptionsForAction(name, individualTool))
+}
+
+// userKeyAddSpec is a create that asks for confirmation. An SSH key added to
+// an account lets whoever holds its private half read and write over Git
+// everything the user can, from then on, and the key is a parameter a model
+// can take from text the user never read. That is a credential handed to a
+// party the call names, which the catalog classifies as it does the push
+// mirror that hands a repository to a host. Deleting the key ends the access
+// and recalls nothing that was cloned or pushed. Only the destructive bit is
+// added to the create.
+func userKeyAddSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := userOptionsForAction(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 // userUpdateSpec builds the canonical update spec for a user tool.
@@ -193,10 +207,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Get one of the current user's SSH keys by ID. Returns: key ID, title, public key, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_add_ssh_key, gitlab_delete_ssh_key.",
 	},
 	"gitlab_add_ssh_key": {
-		usage:          "Add an SSH public key to the authenticated user's account with a title and optional expiry and usage type. Use when the prompt asks to register a new key.",
+		usage:          "Add an SSH public key to the authenticated user's account with a title and optional expiry and usage type. Use when the prompt asks to register a new key. Destructive: whoever holds the key's private half can read and write over Git as the user from then on, and deleting the key recalls nothing, so confirm with the user first.",
 		aliases:        []string{"add ssh key", "create ssh key", "register ssh key"},
 		relatedActions: []string{actionUserSSHKeys, actionUserGetSSHKey, actionUserDeleteSSHKey},
-		description:    "Add an SSH key to the current user. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.",
+		description:    "Add an SSH key to the current user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.",
 	},
 	"gitlab_delete_ssh_key": {
 		usage:          "Delete one of the authenticated user's SSH keys by key_id. Use when the prompt asks to remove a key from the current account.",
@@ -217,10 +231,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Get a specific user's SSH key by ID. Returns: key ID, title, public key, usage type, and expiry. See also: gitlab_list_ssh_keys_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_add_ssh_key_for_user": {
-		usage:          "Add an SSH public key to a specific user's account (admin only) with title and optional expiry. Use when the prompt asks to register a key on behalf of another user.",
+		usage:          "Add an SSH public key to a specific user's account (admin only) with title and optional expiry. Use when the prompt asks to register a key on behalf of another user. Destructive: whoever holds the key's private half can read and write over Git as that user from then on, and deleting the key recalls nothing, so confirm with the user first.",
 		aliases:        []string{"add ssh key for user", "create ssh key for user", "register user ssh key"},
 		relatedActions: []string{actionUserSSHKeysForUser, actionUserGetSSHKeyForUser, actionUserDelSSHKeyForUser},
-		description:    "Add an SSH key to a specific user. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
+		description:    "Add an SSH key to a specific user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_delete_ssh_key_for_user": {
 		usage:          "Delete a specific SSH key from a specific user's account (admin only) by user_id and key_id. Use when the prompt asks to remove another user's key.",
@@ -283,10 +297,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Delete a user's external identity. Returns: confirmation with user ID and provider. Requires admin token. See also: gitlab_get_user, gitlab_modify_user.",
 	},
 	"gitlab_modify_user": {
-		usage:          "Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details.",
+		usage:          "Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details. Sending password, email, provider or extern_uid replaces what the account signs in or is recovered with, so it needs confirm=true (or an approved elicitation prompt): pass it only after the user approves. An edit that sends none of them asks nothing.",
 		aliases:        []string{"modify user", "update user", "edit user account"},
 		relatedActions: []string{actionUserGet, "user.create", actionUserDelete},
-		description:    "Modify an existing user. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.",
+		description:    "Modify an existing user. Replacing the password, the email address or the external identity requires confirmation. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.",
 	},
 	"gitlab_delete_user": {
 		usage:          "Delete a user account by user_id (admin only). Supports hard delete to remove all contributions. Use only when the prompt explicitly asks to remove a user.",

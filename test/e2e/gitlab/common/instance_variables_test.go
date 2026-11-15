@@ -59,7 +59,9 @@ func TestCIVariables_Instance_Lifecycle(t *testing.T) {
 	}
 
 	const updatedValue = "instance_updated_value"
-	updated := harness.Do[instancevariables.Output](s, actionCIVariableInstanceUpdate, map[string]any{"key": key, "value": updatedValue})
+	// The update replaces the value, which the handler asks about, so the
+	// call carries the confirmation a caller sends once the user approves.
+	updated := harness.Do[instancevariables.Output](s, actionCIVariableInstanceUpdate, map[string]any{"key": key, "value": updatedValue, "confirm": true})
 	if updated.Key != key || updated.Value != updatedValue {
 		e.T.Errorf("instance_update answered %+v, want %s=%s", updated, key, updatedValue)
 	}

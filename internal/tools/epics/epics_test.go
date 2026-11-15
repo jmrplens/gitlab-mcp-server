@@ -2533,8 +2533,10 @@ func recordEpicUpdate(t *testing.T) (http.Handler, func() map[string]any) {
 //
 // Before issue 1302 "" sent nothing, so the update answered with the epic's
 // dates and health status still in place, and 0 reached GitLab as a global ID
-// no object carries.
+// no object carries. YOLO mode stands for the confirmation removing the parent
+// asks for, which TestUpdate_ParentRemoval_Asks holds.
 func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	zero, empty := int64(0), ""
 	cases := []struct {
 		name          string
@@ -2599,8 +2601,8 @@ func TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire(t *testing.T) {
 }
 
 // TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest verifies a negative
-// parent or milestone ID is refused, naming the field, rather than sent as a
-// global ID no object carries.
+// parent or milestone ID, and an assignee id of 0 or below, is refused,
+// naming the field, rather than sent as a global ID no object carries.
 func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 	negative := int64(-1)
 	cases := []struct {
@@ -2609,6 +2611,9 @@ func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 	}{
 		{"parent_id", UpdateInput{ParentID: &negative}},
 		{"milestone_id", UpdateInput{MilestoneID: &negative}},
+		// An id no user has: GitLab would empty the assignees, as [] does,
+		// without the question [] asks.
+		{"assignee_ids", UpdateInput{AssigneeIDs: []int64{0}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2616,7 +2621,7 @@ func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 			input.FullPath, input.IID = testFullPath, 1
 			_, err := Update(t.Context(), testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), input)
 			if err == nil || !strings.Contains(err.Error(), tc.name) {
-				t.Errorf("Update(%s=-1) error = %v, want a refusal naming the field", tc.name, err)
+				t.Errorf("Update(%s) error = %v, want a refusal naming the field", tc.name, err)
 			}
 		})
 	}
@@ -2718,6 +2723,37 @@ func TestHandlers_DateThatDoesNotParse_IsRefusedBeforeAnyRequest(t *testing.T) {
 			err := tc.call()
 			if err == nil || !strings.Contains(err.Error(), tc.field+" must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
 				t.Errorf("%s error = %v, want the %s refusal quoting the value", tc.name, err, tc.field)
+			}
+		})
+	}
+}
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that creating and updating an epic refuse a description that carries a
+// quick action the guard asks about, before any request, naming what the line
+// does and how to proceed ([toolutil.ConfirmQuickActions]). GitLab runs such
+// a line when it saves the description, so the edit would move the epic to
+// another group unasked.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	text := "The goal of the quarter.\n/move other-group"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{FullPath: "my-group", Title: "t", Description: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: "my-group", IID: 7, Description: &text})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move other-group`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
 			}
 		})
 	}

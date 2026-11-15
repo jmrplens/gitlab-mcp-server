@@ -87,19 +87,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerUpdateSpec("remove", toolutil.DestructiveAction(client, removeOutput), "gitlab_runner_remove"),
 		runnerReadSpec("jobs", toolutil.RouteAction(client, ListJobs), "gitlab_runner_jobs"),
 		runnerReadSpec("list_project", toolutil.RouteAction(client, ListProject), toolRunnerListProject),
-		runnerCreateSpec("enable_project", toolutil.RouteAction(client, EnableProject), toolRunnerEnableProject),
+		runnerEnableSpec("enable_project", toolutil.RouteAction(client, EnableProject), toolRunnerEnableProject),
 		runnerUpdateSpec("disable_project", toolutil.DestructiveAction(client, disableProjectOutput), toolRunnerDisableProject),
 		runnerReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_runner_list_group"),
 		runnerCreateSpec("register", toolutil.RouteAction(client, Register), "gitlab_runner_register"),
 		runnerUpdateSpec("delete_registered", toolutil.DestructiveAction(client, deleteByIDOutput), toolRunnerDeleteRegistered),
 		runnerUpdateSpec("delete_by_token", toolutil.DestructiveAction(client, deleteByTokenOutput), toolRunnerDeleteByToken),
 		runnerReadSpec("verify", toolutil.RouteAction(client, verifyOutput), "gitlab_runner_verify"),
-		runnerUpdateSpec("reset_token", toolutil.RouteAction(client, ResetAuthToken), "gitlab_runner_reset_token"),
-		runnerUpdateSpec("reset_token_by_token", toolutil.RouteAction(client, ResetAuthTokenByToken), toolRunnerResetByToken),
+		runnerTokenResetSpec("reset_token", toolutil.RouteAction(client, ResetAuthToken), "gitlab_runner_reset_token"),
+		runnerTokenResetSpec("reset_token_by_token", toolutil.RouteAction(client, ResetAuthTokenByToken), toolRunnerResetByToken),
 		runnerReadSpec("router_discovery", toolutil.RouteAction(client, RouterDiscovery), toolRunnerRouterDiscovery),
-		runnerUpdateSpec("reset_instance_reg_token", toolutil.RouteAction(client, ResetInstanceRegToken), toolRunnerResetInstanceReg),
-		runnerUpdateSpec("reset_group_reg_token", toolutil.RouteAction(client, ResetGroupRegToken), toolRunnerResetGroupReg),
-		runnerUpdateSpec("reset_project_reg_token", toolutil.RouteAction(client, ResetProjectRegToken), toolRunnerResetProjectReg),
+		runnerTokenResetSpec("reset_instance_reg_token", toolutil.RouteAction(client, ResetInstanceRegToken), toolRunnerResetInstanceReg),
+		runnerTokenResetSpec("reset_group_reg_token", toolutil.RouteAction(client, ResetGroupRegToken), toolRunnerResetGroupReg),
+		runnerTokenResetSpec("reset_project_reg_token", toolutil.RouteAction(client, ResetProjectRegToken), toolRunnerResetProjectReg),
 		runnerReadSpec("list_managers", toolutil.RouteAction(client, ListManagers), toolRunnerListManagers),
 	}
 	specs = append(specs, runnercontrollers.ActionSpecs(client)...)
@@ -158,6 +158,41 @@ func runnerCreateSpec(name string, route toolutil.ActionRoute, individualTool st
 func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, runnerOptions(name, individualTool))
 }
+
+// runnerEnableSpec is the create of enable_project, which asks for
+// confirmation. Assigning a runner to a project hands the jobs of the project
+// to the machine behind that runner: from then on it picks them up with the
+// variables, the job token and the repository each job carries, and
+// disable_project ends the assignment and recalls nothing a job already
+// delivered. The runner is a parameter a model can take from text the user
+// never read, so this is the project handed to a party the call names, which
+// the catalog classifies as it does enabling a deploy key. register is not
+// classified: it answers with a token for a runner nobody runs yet, and names
+// no machine. Only the destructive bit is added to the create.
+func runnerEnableSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
+// runnerTokenResetSpec is an update that asks for confirmation. A reset ends
+// the token it replaces and no call brings it back: after an authentication
+// token is reset the runner is locked out until it is given the new one, and
+// after a registration token is reset nobody registers a runner with the old
+// one. That is a credential revoked with another issued in its place, so the
+// five resets answer as the revocations elsewhere in the catalog do. Only the
+// destructive bit is added to the update.
+func runnerTokenResetSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// The two sentences every reset's usage says about the token it replaces.
+const (
+	runnerAuthTokenResetWarning = "Destructive: the runner stops authenticating until it is given the new token, so confirm with the user first."
+	runnerRegTokenResetWarning  = "Destructive: the previous registration token stops working, so confirm with the user first."
+)
 
 func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	usage := "Use to execute runners domain action."
@@ -266,7 +301,7 @@ func resetScopedRegTokenEntry(scope, scopeParam, relatedFirst, firstTool, relate
 	return runnerActionMetaEntry{
 		usage: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated registration flow). "+
-				"Use only for legacy %s-scoped runner registration. Modern flows use runner.register with a created token.",
+				runnerRegTokenResetWarning+" Use only for legacy %s-scoped runner registration. Modern flows use runner.register with a created token.",
 			scope, scopeParam, scope,
 		),
 		aliases: []string{
@@ -277,7 +312,7 @@ func resetScopedRegTokenEntry(scope, scopeParam, relatedFirst, firstTool, relate
 		},
 		related: []string{relatedFirst, relatedSecond},
 		description: fmt.Sprintf(
-			"Reset a %s's runner registration token by %s (deprecated). "+
+			"Reset a %s's runner registration token by %s (deprecated). Requires confirmation. "+
 				"Returns: the new registration token and its expiry. See also: %s, %s.",
 			scope, scopeParam, firstTool, secondTool,
 		),
@@ -334,10 +369,10 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 		description: "List runners assigned to a project, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_enable_project, gitlab_runner_disable_project, gitlab_runner_list.",
 	},
 	toolRunnerEnableProject: {
-		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first.",
+		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first. Destructive: from then on the machine behind that runner picks up the project's jobs, with the variables, the job token and the repository each one carries, and unassigning it recalls nothing a job delivered, so confirm with the user first.",
 		aliases:     []string{"enable project runner", "assign runner to project", "attach runner to project"},
 		related:     []string{actionRunnerDisableProject, actionRunnerListProject},
-		description: "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
+		description: "Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
 	},
 	toolRunnerDisableProject: {
 		usage:       "Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).",
@@ -377,16 +412,16 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 		description: "Verify that a runner authentication token is valid. Returns: a success confirmation when the token authenticates. See also: gitlab_runner_register, gitlab_runner_reset_token.",
 	},
 	"gitlab_runner_reset_token": {
-		usage:       "Reset a runner's authentication token by runner_id, invalidating the previous token. Use when a runner token is compromised or must be rotated. The response returns the new token.",
+		usage:       "Reset a runner's authentication token by runner_id, invalidating the previous token. " + runnerAuthTokenResetWarning + " Use when a runner token is compromised or must be rotated. The response returns the new token.",
 		aliases:     []string{"reset runner token", "rotate runner authentication token", "renew runner token", "regenerate runner token"},
 		related:     []string{actionRunnerVerify, actionRunnerGet},
-		description: "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
+		description: "Reset a runner's authentication token by runner_id. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
 	},
 	toolRunnerResetByToken: {
-		usage:       "Reset a runner's authentication token with the current token instead of a runner_id, invalidating the current one. GitLab finds the runner by the token passed, which is how a runner rotates its own token. The response returns the new token. Prefer runner.reset_token when you have the runner_id.",
+		usage:       "Reset a runner's authentication token with the current token instead of a runner_id, invalidating the current one. " + runnerAuthTokenResetWarning + " GitLab finds the runner by the token passed, which is how a runner rotates its own token. The response returns the new token. Prefer runner.reset_token when you have the runner_id.",
 		aliases:     []string{"reset runner token by token", "rotate runner token with current token", "self rotate runner token", "renew runner token using token"},
 		related:     []string{actionRunnerVerify, actionRunnerResetToken},
-		description: "Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
+		description: "Reset a runner's authentication token with its current authentication token. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
 	},
 	toolRunnerRouterDiscovery: {
 		usage:       "Discover the Job Router URL a runner connects to, authenticated by the runner's authentication token. Needs GitLab 18.7 or later with the Job Router on: it sits behind the job_router and job_router_instance_runners feature flags, disabled by default, and GitLab answers 501 while it is off.",
@@ -396,10 +431,10 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 	},
 	// Deprecated registration-token reset actions.
 	toolRunnerResetInstanceReg: {
-		usage:       "Reset the instance-wide runner registration token (admin only, deprecated registration flow). Use only for legacy instance-level runner registration. Modern flows use runner.register with a created token.",
+		usage:       "Reset the instance-wide runner registration token (admin only, deprecated registration flow). " + runnerRegTokenResetWarning + " Use only for legacy instance-level runner registration. Modern flows use runner.register with a created token.",
 		aliases:     []string{"reset instance registration token", "rotate instance runner registration token", "renew instance registration token", "regenerate instance runner token"},
 		related:     []string{actionRunnerResetGroupReg, actionRunnerResetProjectReg},
-		description: "Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
+		description: "Reset the instance-level runner registration token (deprecated, admin only). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
 	},
 	toolRunnerResetGroupReg: resetScopedRegTokenEntry("group", "group_id",
 		actionRunnerResetInstanceReg, toolRunnerResetInstanceReg,

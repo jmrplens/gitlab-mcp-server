@@ -162,9 +162,14 @@ func TestMergeRequest_Update_EmptyListsRemoveAssigneesReviewersAndLabels(t *test
 				set.Assignees, set.Reviewers, set.Labels)
 		}
 
-		cleared := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(params, map[string]any{
+		clearing := withParams(params, map[string]any{
 			"assignee_ids": []int64{}, "reviewer_ids": []int64{}, "labels": []string{},
-		}))
+		})
+		// The empty assignee list removes the one assignee the request has,
+		// so the update is refused unconfirmed and goes through with confirm.
+		unconfirmed := harness.ExpectToolError(s, actionMergeRequestUpdate, clearing, "confirm=true")
+		assertMentions(e, "the unconfirmed removal of the request's assignees", unconfirmed, "Remove all 1 assignees")
+		cleared := harness.Do[mergerequests.Output](s, actionMergeRequestUpdate, withParams(clearing, map[string]any{"confirm": true}))
 		if len(cleared.Assignees) != 0 || len(cleared.Reviewers) != 0 || len(cleared.Labels) != 0 {
 			e.T.Errorf("merge_request update with empty lists answered assignees %v, reviewers %v, labels %v; want none",
 				cleared.Assignees, cleared.Reviewers, cleared.Labels)

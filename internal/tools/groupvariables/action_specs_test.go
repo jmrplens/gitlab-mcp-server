@@ -19,6 +19,10 @@ import (
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	variableJSON := `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"hidden":false,"raw":false,"environment_scope":"*","description":"Test var"}`
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/10/variables", func(w http.ResponseWriter, _ *http.Request) {

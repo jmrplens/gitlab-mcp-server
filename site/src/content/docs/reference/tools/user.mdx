@@ -151,14 +151,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `user.add_email`
 
-> Add an email address to the authenticated user's account. Returns: the created email's ID, address, and confirmation timestamp. See also: [`user.get_email`](#userget_email), [`user.delete_email`](#userdelete_email), [`user.add_email_for_user`](#useradd_email_for_user).
+> Add an email address to the authenticated user's account. Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: [`user.get_email`](#userget_email), [`user.delete_email`](#userdelete_email), [`user.add_email_for_user`](#useradd_email_for_user).
 
 - **Meta-tool**: `gitlab_user`, action `add_email`
 - **Individual tool**: `gitlab_add_email`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Email: Create at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter           | Type      | Mandatory | Description                          |
 | ------------------- | --------- | --------- | ------------------------------------ |
@@ -167,14 +167,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `user.add_email_for_user`
 
-> Add an email address to a specific user's account (admin only). Returns: the created email's ID, address, and confirmation timestamp. See also: [`user.emails_for_user`](#useremails_for_user), [`user.delete_email_for_user`](#userdelete_email_for_user), [`user.add_email`](#useradd_email).
+> Add an email address to a specific user's account (admin only). Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: [`user.emails_for_user`](#useremails_for_user), [`user.delete_email_for_user`](#userdelete_email_for_user), [`user.add_email`](#useradd_email).
 
 - **Meta-tool**: `gitlab_user`, action `add_email_for_user`
 - **Individual tool**: `gitlab_add_email_for_user`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Email: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter           | Type      | Mandatory | Description                          |
 | ------------------- | --------- | --------- | ------------------------------------ |
@@ -215,14 +215,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `user.add_ssh_key`
 
-> Add an SSH key to the current user. Returns: created key ID, title, usage type, and expiry. See also: [`user.ssh_keys`](#userssh_keys), [`user.get_ssh_key`](#userget_ssh_key), [`user.delete_ssh_key`](#userdelete_ssh_key).
+> Add an SSH key to the current user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. See also: [`user.ssh_keys`](#userssh_keys), [`user.get_ssh_key`](#userget_ssh_key), [`user.delete_ssh_key`](#userdelete_ssh_key).
 
 - **Meta-tool**: `gitlab_user`, action `add_ssh_key`
 - **Individual tool**: `gitlab_add_ssh_key`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: SSH Key: Create at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter    | Type                                             | Mandatory | Description                                                                                                                  |
 | ------------ | ------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -233,14 +233,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `user.add_ssh_key_for_user`
 
-> Add an SSH key to a specific user. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: [`user.ssh_keys_for_user`](#userssh_keys_for_user), [`user.get_ssh_key_for_user`](#userget_ssh_key_for_user), [`user.delete_ssh_key_for_user`](#userdelete_ssh_key_for_user).
+> Add an SSH key to a specific user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: [`user.ssh_keys_for_user`](#userssh_keys_for_user), [`user.get_ssh_key_for_user`](#userget_ssh_key_for_user), [`user.delete_ssh_key_for_user`](#userdelete_ssh_key_for_user).
 
 - **Meta-tool**: `gitlab_user`, action `add_ssh_key_for_user`
 - **Individual tool**: `gitlab_add_ssh_key_for_user`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: SSH Key: Create at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter    | Type                                             | Mandatory | Description                                                                                                                  |
 | ------------ | ------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -1060,7 +1060,7 @@ No parameters.
 
 ### `user.modify`
 
-> Modify an existing user. Returns: the updated user profile metadata. See also: [`user.get`](#userget), [`user.create`](#usercreate), [`user.delete`](#userdelete).
+> Modify an existing user. Replacing the password, the email address or the external identity requires confirmation. Returns: the updated user profile metadata. See also: [`user.get`](#userget), [`user.create`](#usercreate), [`user.delete`](#userdelete).
 
 - **Meta-tool**: `gitlab_user`, action `modify`
 - **Individual tool**: `gitlab_modify_user`
@@ -1069,34 +1069,35 @@ No parameters.
 - **Fine-grained token**: User: Update at instance ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
 - **Behavior**: writes, idempotent
 
-| Parameter                 | Type      | Mandatory | Description                                                                                                                                                                      |
-| ------------------------- | --------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user_id`                 | `integer` | yes       | The ID of the user to modify                                                                                                                                                     |
-| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                                                                                                                 |
-| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                                                                                                            |
-| `avatar`                  | `object`  | no        | New avatar image to upload for the user, from a local file or base64 content                                                                                                     |
-| `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                            |
-| `can_create_group`        | `boolean` | no        | Allow user to create groups                                                                                                                                                      |
-| `commit_email`            | `string`  | no        | Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched |
-| `email`                   | `string`  | no        | New email address                                                                                                                                                                |
-| `extern_uid`              | `string`  | no        | External UID for the provider                                                                                                                                                    |
-| `external`                | `boolean` | no        | Mark or unmark as external                                                                                                                                                       |
-| `linkedin`                | `string`  | no        | LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
-| `location`                | `string`  | no        | New location. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                            |
-| `name`                    | `string`  | no        | New display name                                                                                                                                                                 |
-| `note`                    | `string`  | no        | New admin note. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                          |
-| `organization`            | `string`  | no        | New organization. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
-| `password`                | `string`  | no        | New password                                                                                                                                                                     |
-| `private_profile`         | `boolean` | no        | Set profile as private                                                                                                                                                           |
-| `projects_limit`          | `integer` | no        | New maximum projects limit                                                                                                                                                       |
-| `provider`                | `string`  | no        | External provider name (use with extern_uid)                                                                                                                                     |
-| `public_email`            | `string`  | no        | Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched                                                                          |
-| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                                                                                                                                              |
-| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                                                                                                                                                |
-| `twitter`                 | `string`  | no        | Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                       |
-| `username`                | `string`  | no        | New username                                                                                                                                                                     |
-| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file                                                                                                                                    |
-| `website_url`             | `string`  | no        | User website URL. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                        |
+| Parameter                 | Type      | Mandatory | Description                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`                 | `integer` | yes       | The ID of the user to modify                                                                                                                                                                                                                                                                                                                                                 |
+| `admin`                   | `boolean` | no        | Grant or revoke admin privileges                                                                                                                                                                                                                                                                                                                                             |
+| `auditor` (Premium)       | `boolean` | no        | Grant or revoke auditor privileges (Premium/Ultimate)                                                                                                                                                                                                                                                                                                                        |
+| `avatar`                  | `object`  | no        | New avatar image to upload for the user, from a local file or base64 content                                                                                                                                                                                                                                                                                                 |
+| `bio`                     | `string`  | no        | New bio text. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                        |
+| `can_create_group`        | `boolean` | no        | Allow user to create groups                                                                                                                                                                                                                                                                                                                                                  |
+| `commit_email`            | `string`  | no        | Email used for commits. Pass an empty string to remove it, so commits use the primary email, which GitLab then reports as the commit email. Omit the field to leave it untouched                                                                                                                                                                                             |
+| `confirm`                 | `boolean` | no        | Confirms replacing what the account signs in or is recovered with: its password, its email address or its external identity. Pass true only after the user approves that. Only required when the call sends password, email, provider or extern_uid. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked |
+| `email`                   | `string`  | no        | New email address                                                                                                                                                                                                                                                                                                                                                            |
+| `extern_uid`              | `string`  | no        | External UID for the provider                                                                                                                                                                                                                                                                                                                                                |
+| `external`                | `boolean` | no        | Mark or unmark as external                                                                                                                                                                                                                                                                                                                                                   |
+| `linkedin`                | `string`  | no        | LinkedIn account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                    |
+| `location`                | `string`  | no        | New location. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                        |
+| `name`                    | `string`  | no        | New display name                                                                                                                                                                                                                                                                                                                                                             |
+| `note`                    | `string`  | no        | New admin note. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                      |
+| `organization`            | `string`  | no        | New organization. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                    |
+| `password`                | `string`  | no        | New password                                                                                                                                                                                                                                                                                                                                                                 |
+| `private_profile`         | `boolean` | no        | Set profile as private                                                                                                                                                                                                                                                                                                                                                       |
+| `projects_limit`          | `integer` | no        | New maximum projects limit                                                                                                                                                                                                                                                                                                                                                   |
+| `provider`                | `string`  | no        | External provider name (use with extern_uid)                                                                                                                                                                                                                                                                                                                                 |
+| `public_email`            | `string`  | no        | Publicly visible email address. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                      |
+| `skip_reconfirmation`     | `boolean` | no        | Skip reconfirmation on email change                                                                                                                                                                                                                                                                                                                                          |
+| `theme_id`                | `integer` | no        | GitLab theme ID for the user's UI                                                                                                                                                                                                                                                                                                                                            |
+| `twitter`                 | `string`  | no        | Twitter/X account. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                   |
+| `username`                | `string`  | no        | New username                                                                                                                                                                                                                                                                                                                                                                 |
+| `view_diffs_file_by_file` | `boolean` | no        | Show whitespace changes in diffs file by file                                                                                                                                                                                                                                                                                                                                |
+| `website_url`             | `string`  | no        | User website URL. Pass an empty string to remove it. Omit the field to leave it untouched                                                                                                                                                                                                                                                                                    |
 
 ### `user.namespace_exists`
 
@@ -1421,14 +1422,14 @@ No parameters.
 
 ### `user.todo_mark_all_done`
 
-> Mark all pending to-do items as done. Returns: a confirmation that all items were cleared. See also: [`user.todo_list`](#usertodo_list), [`user.todo_mark_done`](#usertodo_mark_done).
+> Mark all pending to-do items as done. Requires confirmation. Returns: a confirmation that all items were cleared. See also: [`user.todo_list`](#usertodo_list), [`user.todo_mark_done`](#usertodo_mark_done).
 
 - **Meta-tool**: `gitlab_user`, action `todo_mark_all_done`
 - **Individual tool**: `gitlab_todo_mark_all_done`
 - **Tier**: Free
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Todo: Update at user ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#user))
-- **Behavior**: writes, idempotent
+- **Behavior**: writes, destructive (needs confirmation), idempotent
 
 No parameters.
 

@@ -35,7 +35,7 @@ Read-only actions: 3 of 4, the ones a deployment in read-only mode keeps. A toke
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.5.0 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.5.0 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`. A destructive action runs only once confirmed, unless `GITLAB_MCP_YOLO_MODE` (or `AUTOPILOT`) skips that step: the dynamic surface needs `confirm: true` on `gitlab_execute_action`, and the other two take a `confirm` parameter or the client's prompt ([Destructive actions](/gitlab-mcp-server/operations/security/#destructive-actions)).
 
 | Action                                                 | Individual                                 |
 | ------------------------------------------------------ | ------------------------------------------ |
@@ -46,14 +46,14 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `merge_train.add`
 
-> Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: [`merge_train.get`](#merge_trainget), [`merge_train.list_branch`](#merge_trainlist_branch), [`merge_train.list_project`](#merge_trainlist_project).
+> Add a merge request to a merge train. Requires confirmation. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: [`merge_train.get`](#merge_trainget), [`merge_train.list_branch`](#merge_trainlist_branch), [`merge_train.list_project`](#merge_trainlist_project).
 
 - **Meta-tool**: `gitlab_merge_train`, action `add`
 - **Individual tool**: `gitlab_add_merge_request_to_merge_train`
 - **Tier**: Premium
 - **Classic or OAuth token**: `api`
 - **Fine-grained token**: Merge Train Merge Request: Add at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#merge_train))
-- **Behavior**: writes, not idempotent
+- **Behavior**: writes, destructive (needs confirmation), not idempotent
 
 | Parameter                | Type             | Mandatory | Description                                                                        |
 | ------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------- |

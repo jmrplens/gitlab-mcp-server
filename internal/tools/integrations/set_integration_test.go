@@ -458,7 +458,9 @@ func TestDeleteGroupIntegrationOutput_Error(t *testing.T) {
 // ActionSpec coverage.
 
 // TestActionSpecs_GenericIntegrationsPresent verifies the new generic actions
-// are registered with the expected destructive/edition/tag metadata.
+// are registered with the expected destructive/edition/tag metadata. The two
+// sets are destructive as the deletes are: each writes the integration whole,
+// naming the service GitLab sends events to and replacing its credentials.
 func TestActionSpecs_GenericIntegrationsPresent(t *testing.T) {
 	specs := ActionSpecs(nil)
 	want := map[string]struct {
@@ -466,10 +468,10 @@ func TestActionSpecs_GenericIntegrationsPresent(t *testing.T) {
 		edition     string
 		group       bool
 	}{
-		"integration_set":          {destructive: false, edition: "", group: false},
+		"integration_set":          {destructive: true, edition: "", group: false},
 		"integration_list_group":   {destructive: false, edition: "", group: true},
 		"integration_get_group":    {destructive: false, edition: "", group: true},
-		"integration_set_group":    {destructive: false, edition: "", group: true},
+		"integration_set_group":    {destructive: true, edition: "", group: true},
 		"integration_delete_group": {destructive: true, edition: "", group: true},
 	}
 	seen := map[string]bool{}

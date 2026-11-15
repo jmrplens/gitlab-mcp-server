@@ -41,7 +41,12 @@ type CreateInput struct {
 	AuthorEmail   string               `json:"author_email,omitempty" jsonschema:"Custom author email"`
 	AuthorName    string               `json:"author_name,omitempty"  jsonschema:"Custom author name"`
 	Stats         bool                 `json:"stats,omitempty"        jsonschema:"Include commit stats (additions, deletions, total) in the response"`
-	Force         bool                 `json:"force,omitempty"        jsonschema:"When true, force-overwrite the target branch even if a conflict exists"`
+	Force         bool                 `json:"force,omitempty"        jsonschema:"When true, reset the target branch to the starting point (start_branch or start_sha) plus this commit, dropping from the branch the commits the starting point does not have. Needs the user's approval: confirm=true once they approve, or an elicitation prompt"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms creating the commit with force, which drops from the target branch the commits its starting point does not have. Pass true only after the user approves that. Only required when force is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // Output represents a created commit. It mirrors the full gl.Commit payload
@@ -118,13 +123,17 @@ func authorToOutput(a gl.Author) *BasicUserOutput {
 // Create creates a new commit in the specified GitLab project with one
 // or more file actions. Supports optional start branch (to create a new branch
 // from an existing one) and custom author metadata. Returns the created commit
-// details or an error if the API call fails.
+// details or an error if the API call fails. A commit created with force is
+// confirmed first, as [toolutil.ConfirmCommitForce] describes.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
 		return Output{}, errors.New("commitCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
+	}
+	if err := toolutil.ConfirmCommitForce(ctx, "commitCreate", input.Force, string(input.ProjectID), input.Branch); err != nil {
+		return Output{}, err
 	}
 
 	actions := make([]*gl.CommitActionOptions, len(input.Actions))

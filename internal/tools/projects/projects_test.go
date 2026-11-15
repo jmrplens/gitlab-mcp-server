@@ -6614,6 +6614,10 @@ func TestSetCustomHeader_EmptyKey(t *testing.T) {
 
 // TestSetCustomHeader_APIError verifies SetCustomHeader propagates errors returned by the GitLab API.
 func TestSetCustomHeader_APIError(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -6743,6 +6747,10 @@ func TestSetWebhookURLVariable_EmptyKey(t *testing.T) {
 
 // TestSetWebhookURLVariable_APIError verifies SetURLVariable propagates errors returned by the GitLab API.
 func TestSetWebhookURLVariable_APIError(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -6758,6 +6766,10 @@ func TestSetWebhookURLVariable_APIError(t *testing.T) {
 // GitLab 19 422 "Illegal key or value" response is wrapped with a hint about
 // the accepted key characters and the non-empty value requirement.
 func TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
 	}))
@@ -9578,6 +9590,10 @@ func TestProjectEditHook_SendsOnlyWhatTheCallerSet(t *testing.T) {
 // GitLab merges the variables an edit names into the hook's own, so an edit
 // that dropped them would leave the caller believing a value was set.
 func TestProjectEditHook_URLVariables_ReachTheRequest(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := bodyAssertingClient(t, http.MethodPut, pathProject42Hook1,
 		`{"url_variables":[{"key":"env","value":"prod"},{"key":"region","value":"eu-west"}]}`, http.StatusOK, `{"id":1}`)
 	input := EditHookInput{
@@ -9659,8 +9675,17 @@ func TestAddPushRule_EachSettingAloneIsSentUnderItsOwnKey(t *testing.T) {
 // TestEditPushRule_EachSettingAloneIsSentUnderItsOwnKey edits a push rule with
 // one setting at a time and holds the body to that key alone, so an edit
 // changes the one setting the caller named and nothing beside it.
+//
+// The request under test is the write, so the server runs with confirmation
+// switched off: the values this sends, a switch turned off and a pattern, are
+// the ones the relaxation guard reads the rule for, and its read is held by
+// its own tests. The reserved confirm key is no setting and is never sent.
 func TestEditPushRule_EachSettingAloneIsSentUnderItsOwnKey(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for key, value := range eachSettingAlone(reflect.TypeFor[EditPushRuleInput](), paramProjectID) {
+		if key == "confirm" {
+			continue
+		}
 		t.Run(key, func(t *testing.T) {
 			input := inputFromJSON[EditPushRuleInput](t, map[string]any{paramProjectID: "42", key: value})
 			client := bodyAssertingClient(t, http.MethodPut, pathPushRules42, mustJSON(t, map[string]any{key: value}), http.StatusOK, pushRuleJSON)
@@ -9674,7 +9699,8 @@ func TestEditPushRule_EachSettingAloneIsSentUnderItsOwnKey(t *testing.T) {
 // TestEditPushRule_RefusedPayload_GetsTheRegexHint verifies that an edit
 // GitLab refuses as unprocessable or as a bad request is answered with the
 // hint about the regex patterns, on either status, while a not-found gets
-// the advice that no rules exist yet.
+// the advice that no rules exist yet. The guard's read is answered with no
+// rule, so the edit is the request GitLab refuses.
 func TestEditPushRule_RefusedPayload_GetsTheRegexHint(t *testing.T) {
 	for _, testCase := range []struct {
 		status int
@@ -9685,7 +9711,11 @@ func TestEditPushRule_RefusedPayload_GetsTheRegexHint(t *testing.T) {
 		{http.StatusNotFound, "no push rules currently exist"},
 	} {
 		t.Run(http.StatusText(testCase.status), func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					testutil.RespondJSON(w, http.StatusOK, "null")
+					return
+				}
 				testutil.RespondJSON(w, testCase.status, `{"message":"rejected"}`)
 			}))
 			_, err := EditPushRule(t.Context(), client, EditPushRuleInput{ProjectID: "42", CommitMessageRegex: new(testCommitRegex)})

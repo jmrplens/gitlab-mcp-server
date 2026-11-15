@@ -84,10 +84,10 @@ func groupVariableOptionsForAction(actionName, individualTool string) toolutil.A
 		}
 		options.IndividualTool.Description = "Create a CI/CD variable in a group with type, environment scope, and protected/masked/raw/masked_and_hidden flags. Returns: the created variable's key, value, type, flags, environment scope, and description. See also: gitlab_group_variable_list, gitlab_group_variable_get, gitlab_group_variable_update."
 	case "group_update":
-		options.Usage = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Use to change a variable's value or flags."
+		options.Usage = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Use to change a variable's value or flags. " + toolutil.VariableValueUsage
 		options.Aliases = []string{"update group variable", "edit group variable", "change group ci variable"}
 		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableList, actionGroupVariableDelete}
-		options.IndividualTool.Description = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete."
+		options.IndividualTool.Description = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete."
 	case "group_delete":
 		options.Usage = "Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter."
 		options.Aliases = []string{"delete group variable", "remove group variable", "drop group ci variable"}

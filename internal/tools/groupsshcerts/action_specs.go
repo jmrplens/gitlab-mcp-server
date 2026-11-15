@@ -63,12 +63,20 @@ func groupSSHCertReadSpec(name string, route toolutil.ActionRoute, individualToo
 	return toolutil.NewReadActionSpec(name, route, opts)
 }
 
+// groupSSHCertCreateSpec is a create that asks for confirmation. Whoever
+// holds the private half of a CA registered on a group can sign certificates
+// that authenticate over Git as the group's enterprise users, and the public
+// key is a parameter a model can take from text the user never read. That is
+// the credential user.add_ssh_key hands over, for every such user at once.
+// ssh_cert_delete ends it and recalls nothing. Only the destructive bit is
+// added to the create.
 func groupSSHCertCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := groupSSHCertOptions(individualTool)
-	opts.Usage = "Register an SSH CA certificate on a group by supplying the CA public key and a title. Members can then authenticate Git over SSH using user certificates signed by this CA. Use this when onboarding an SSH certificate authority for a group. Requires the group Owner role. The key must be a valid SSH public key."
+	opts.Destructive = true
+	opts.Usage = "Register an SSH CA certificate on a group by supplying the CA public key and a title. Members can then authenticate Git over SSH using user certificates signed by this CA. Use this when onboarding an SSH certificate authority for a group. Requires the group Owner role. The key must be a valid SSH public key. Destructive: whoever holds the CA's private half can sign certificates that authenticate over Git as the group's enterprise users, so confirm with the user first."
 	opts.Aliases = []string{individualTool, "add group ssh ca certificate", "register ssh certificate authority", "trust ssh signing key for group"}
 	opts.RelatedActions = []string{actionList, actionDelete, actionGroupGet}
-	opts.IndividualTool.Description = "Register a new SSH CA certificate on a group from a CA public key and title. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get."
+	opts.IndividualTool.Description = "Register a new SSH CA certificate on a group from a CA public key and title. Requires confirmation. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get."
 	return toolutil.NewCreateActionSpec(name, route, opts)
 }
 

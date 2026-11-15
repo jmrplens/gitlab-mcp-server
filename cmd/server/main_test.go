@@ -30,6 +30,7 @@ import (
 	"go/token"
 	"io"
 	"log/slog"
+	"maps"
 	"math/big"
 	"net"
 	"net/http"
@@ -17471,4 +17472,237 @@ func TestWarnStatefulSessions_TellsWhatTheTransportAndAZeroTimeoutCost(t *testin
 			}
 		})
 	}
+}
+
+// confirmedCall is one action whose effect asks for confirmation, as each of
+// the three surfaces is asked for it.
+type confirmedCall struct {
+	action     string
+	metaTool   string
+	metaAction string
+	individual string
+	params     map[string]any
+	// confirmInParams is where the dynamic surface takes the confirmation: a
+	// destructive action takes it beside params, where the execute gate reads
+	// it, and an action its own handler guards takes it inside them, where
+	// the handler does.
+	confirmInParams bool
+	// unasked, when set, is a call of the same action that does not have the
+	// effect and is therefore written without any confirmation.
+	unasked map[string]any
+}
+
+// confirmedCalls are one action of each family the catalog classifies by its
+// effect rather than its verb: a namespace transfer, a token rotation, a
+// runner token reset, and the two edits of push rules, which ask only for a
+// call that relaxes the rule the fake GitLab holds (a size limit of 50 and
+// prevent_secrets on) and write a call that tightens it unasked. After them
+// come an issue moved to another project, a webhook added, a deploy key
+// attached to a project, and the actions whose handler asks about one of
+// their calls: a webhook pointed at another address, a variable's value
+// replaced, a commit created with force and a user's password replaced, each
+// beside a call of the same action that goes out unasked.
+func confirmedCalls() []confirmedCall {
+	return []confirmedCall{
+		{
+			action: "group.transfer_project", metaTool: "gitlab_group", metaAction: "transfer_project",
+			individual: "gitlab_group_transfer_project",
+			params:     map[string]any{"group_id": "10", "project_id": 42},
+		},
+		{
+			action: "access.token_project_rotate", metaTool: "gitlab_access", metaAction: "token_project_rotate",
+			individual: "gitlab_project_access_token_rotate",
+			params:     map[string]any{"project_id": "42", "token_id": 3},
+		},
+		{
+			action: "runner.reset_token", metaTool: "gitlab_runner", metaAction: "reset_token",
+			individual: "gitlab_runner_reset_token",
+			params:     map[string]any{"runner_id": 7},
+		},
+		{
+			action: "project.push_rule_edit", metaTool: "gitlab_project", metaAction: "push_rule_edit",
+			individual:      "gitlab_project_edit_push_rule",
+			params:          map[string]any{"project_id": "42", "max_file_size": 100},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "max_file_size": 10, "deny_delete_tag": true},
+		},
+		{
+			action: "group.push_rule_edit", metaTool: "gitlab_group", metaAction: "push_rule_edit",
+			individual:      "gitlab_group_edit_push_rule",
+			params:          map[string]any{"group_id": "10", "prevent_secrets": false},
+			confirmInParams: true,
+			unasked:         map[string]any{"group_id": "10", "prevent_secrets": true},
+		},
+		{
+			action: "issue.move", metaTool: "gitlab_issue", metaAction: "move",
+			individual: "gitlab_issue_move",
+			params:     map[string]any{"project_id": "42", "issue_iid": 5, "to_project_id": 43},
+		},
+		{
+			action: "project.hook_add", metaTool: "gitlab_project", metaAction: "hook_add",
+			individual: "gitlab_project_hook_add",
+			params:     map[string]any{"project_id": "42", "url": "https://new.example/hook"},
+		},
+		{
+			action: "access.deploy_key_enable", metaTool: "gitlab_access", metaAction: "deploy_key_enable",
+			individual: "gitlab_deploy_key_enable",
+			params:     map[string]any{"project_id": "42", "deploy_key_id": 3},
+		},
+		{
+			action: "project.hook_edit", metaTool: "gitlab_project", metaAction: "hook_edit",
+			individual:      "gitlab_project_hook_edit",
+			params:          map[string]any{"project_id": "42", "hook_id": 7, "url": "https://new.example/hook"},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "hook_id": 7, "push_events": false},
+		},
+		{
+			action: "ci_variable.update", metaTool: "gitlab_ci_variable", metaAction: "update",
+			individual:      "gitlab_ci_variable_update",
+			params:          map[string]any{"project_id": "42", "key": "DEPLOY_URL", "value": "https://deploy.example"},
+			confirmInParams: true,
+			unasked:         map[string]any{"project_id": "42", "key": "DEPLOY_URL", "protected": true},
+		},
+		{
+			action: "repository.commit_create", metaTool: "gitlab_repository", metaAction: "commit_create",
+			individual: "gitlab_commit_create",
+			params: map[string]any{
+				"project_id": "42", "branch": "main", "start_branch": "develop", "commit_message": "change", "force": true,
+				"actions": []any{map[string]any{"action": "create", "file_path": "a.txt", "content": "a"}},
+			},
+			confirmInParams: true,
+			unasked: map[string]any{
+				"project_id": "42", "branch": "main", "commit_message": "change",
+				"actions": []any{map[string]any{"action": "create", "file_path": "a.txt", "content": "a"}},
+			},
+		},
+		{
+			action: "user.modify", metaTool: "gitlab_user", metaAction: "modify",
+			individual:      "gitlab_modify_user",
+			params:          map[string]any{"user_id": 5, "password": "a new password"},
+			confirmInParams: true,
+			unasked:         map[string]any{"user_id": 5, "name": "Renamed"},
+		},
+	}
+}
+
+// arguments builds the tools/call of this action on one surface, with the
+// confirmation where that surface takes it when confirm is set.
+func (c confirmedCall) arguments(surface string, confirm bool) (tool string, args map[string]any) {
+	params := maps.Clone(c.params)
+	switch surface {
+	case config.ToolSurfaceIndividual:
+		if confirm {
+			params["confirm"] = true
+		}
+		return c.individual, params
+	case config.ToolSurfaceMeta:
+		if confirm {
+			params["confirm"] = true
+		}
+		return c.metaTool, map[string]any{"action": c.metaAction, "params": params}
+	default:
+		args = map[string]any{"action": c.action, "params": params}
+		if confirm && c.confirmInParams {
+			params["confirm"] = true
+		}
+		if confirm && !c.confirmInParams {
+			args["confirm"] = true
+		}
+		return "gitlab_execute_action", args
+	}
+}
+
+// TestCreateServer_EffectClassActions_AskOnEverySurface drives the real
+// server on each of its three surfaces against a GitLab that counts what it
+// is sent. An action of [confirmedCalls], classified destructive for its
+// effect or guarded by its handler, sends no write until the call carries the
+// confirmation, on a client that cannot be asked, and sends its one write once
+// it does, while the call of a guarded action that does not have the effect
+// is written unasked. The
+// catalog test holds the classification; this holds that every dispatcher
+// acts on it.
+func TestCreateServer_EffectClassActions_AskOnEverySurface(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
+		t.Run(surface, func(t *testing.T) {
+			var writes atomic.Int64
+			// The client is built by hand, as this package's are, rather than
+			// with testutil.NewTestClient: that one records every request for
+			// the request inventory, which holds the requests of the packages
+			// that own the actions and none under cmd/server.
+			gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					writes.Add(1)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"prevent_secrets":true,"max_file_size":50}`)
+			}))
+			t.Cleanup(gitlab.Close)
+			client, err := gitlabclient.NewClient(&config.Config{GitLabURL: gitlab.URL, GitLabToken: testToken, DisableRetries: true})
+			if err != nil {
+				t.Fatalf("create the GitLab client: %v", err)
+			}
+			server := createServerWithin(t, client, &config.ServerConfig{
+				ToolSurface:       surface,
+				CapabilitySurface: config.CapabilitySurfaceMinimal,
+				Tier:              edition.Ultimate,
+				TierExplicit:      true,
+			})
+			session := newInMemorySession(t, server)
+			// sequential: each action is refused first and confirmed second, against one counter.
+			for _, action := range confirmedCalls() {
+				assertAsksBeforeItWrites(t, session, surface, action, &writes)
+			}
+		})
+	}
+}
+
+// assertAsksBeforeItWrites calls one action three ways on a surface and holds
+// the writes GitLab was sent after each: none for the call without the
+// confirmation, which is answered with the way to confirm, one for the same
+// call confirmed, and, where the action has a call without the effect, one
+// more for that call, which nobody is asked about.
+func assertAsksBeforeItWrites(t *testing.T, session *mcp.ClientSession, surface string, action confirmedCall, writes *atomic.Int64) {
+	t.Helper()
+	before := writes.Load()
+	tool, args := action.arguments(surface, false)
+	if answer := toolAnswer(t, session, tool, args); !strings.Contains(answer, "confirm=true") {
+		t.Errorf("%s without confirm answered %q, want a refusal asking for confirm=true", action.action, answer)
+	}
+	if sent := writes.Load() - before; sent != 0 {
+		t.Errorf("%s without confirm sent %d write(s) to GitLab, want 0", action.action, sent)
+	}
+	tool, args = action.arguments(surface, true)
+	answer := toolAnswer(t, session, tool, args)
+	if sent := writes.Load() - before; sent != 1 {
+		t.Errorf("%s with confirm sent %d write(s) to GitLab, want 1; it answered %q", action.action, sent, answer)
+	}
+	if action.unasked == nil {
+		return
+	}
+	harmless := action
+	harmless.params = action.unasked
+	tool, args = harmless.arguments(surface, false)
+	answer = toolAnswer(t, session, tool, args)
+	if sent := writes.Load() - before; sent != 2 {
+		t.Errorf("%s called without the effect sent %d write(s) in all, want its own beside the confirmed one; it answered %q",
+			action.action, sent, answer)
+	}
+}
+
+// toolAnswer calls a tool and returns what the model reads: the text of the
+// result, or the protocol error the call was answered with.
+func toolAnswer(t *testing.T, session *mcp.ClientSession, tool string, args map[string]any) string {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: tool, Arguments: args})
+	if err != nil {
+		return err.Error()
+	}
+	var text strings.Builder
+	for _, content := range result.Content {
+		if block, ok := content.(*mcp.TextContent); ok {
+			text.WriteString(block.Text)
+		}
+	}
+	return text.String()
 }

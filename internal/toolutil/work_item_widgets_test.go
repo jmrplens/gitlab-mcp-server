@@ -267,6 +267,35 @@ func TestApplyWorkItemWidgets_NegativeReference_IsRefused(t *testing.T) {
 	}
 }
 
+// TestCheckWorkItemIDList_RefusesAnIDNoObjectHas verifies a list holding an
+// id of 0 or below is refused, naming the field and the id, because GitLab
+// replaces the list with the objects it resolves and so empties it, while a
+// list of real ids, an empty one and one left out pass.
+func TestCheckWorkItemIDList_RefusesAnIDNoObjectHas(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		ids     []int64
+		refused string
+	}{
+		{name: "left out"},
+		{name: "empty", ids: []int64{}},
+		{name: "real ids", ids: []int64{3, 9}},
+		{name: "zero alone", ids: []int64{0}, refused: "got 0"},
+		{name: "zero after a real id", ids: []int64{3, 0}, refused: "got 0"},
+		{name: "a negative id", ids: []int64{-2}, refused: "got -2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckWorkItemIDList("assignee_ids", tc.ids)
+			if tc.refused == "" && err != nil {
+				t.Errorf("CheckWorkItemIDList(%v) = %v, want nil", tc.ids, err)
+			}
+			if tc.refused != "" && (err == nil || !strings.Contains(err.Error(), "assignee_ids") || !strings.Contains(err.Error(), tc.refused)) {
+				t.Errorf("CheckWorkItemIDList(%v) = %v, want a refusal naming assignee_ids and %q", tc.ids, err, tc.refused)
+			}
+		})
+	}
+}
+
 // TestApplyWorkItemWidgets_MalformedDate_IsRefused verifies a date that does
 // not parse is refused, naming the field, rather than dropped.
 func TestApplyWorkItemWidgets_MalformedDate_IsRefused(t *testing.T) {

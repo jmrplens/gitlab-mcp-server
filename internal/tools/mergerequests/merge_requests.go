@@ -76,6 +76,12 @@ type CreateInput struct {
 
 	// Deprecated approvals control (use the Merge Request Approvals API instead)
 	ApprovalsBeforeMerge int64 `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)"`
+
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // Output is the canonical merge-request output shape. The authoritative
@@ -479,7 +485,7 @@ type UpdateInput struct {
 	Description        *string              `json:"description,omitempty"         jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	TargetBranch       string               `json:"target_branch,omitempty"       jsonschema:"New target branch"`
 	AssigneeID         *int64               `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
-	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] or [0] to remove every assignee. Omit the field to leave them untouched"`
 	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs that replace the merge request's reviewers. Pass [] to remove every reviewer. Omit the field to leave them untouched"`
 	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
@@ -492,6 +498,11 @@ type UpdateInput struct {
 	DiscussionLocked   *bool                `json:"discussion_locked,omitempty"   jsonschema:"Lock discussions on the merge request"`
 	AllowCollaboration *bool                `json:"allow_collaboration,omitempty" jsonschema:"Allow commits from upstream members who can merge to target branch"`
 	StateEvent         string               `json:"state_event,omitempty"         jsonschema:"State transition (close, reopen)"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing every current assignee when assignee_ids is [] or begins with 0, or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // MergeInput defines parameters for merging a merge request.
@@ -684,6 +695,17 @@ func mrMilestoneOutputPtr(m *gl.Milestone) *toolutil.MRMilestoneOutput {
 	return out[0]
 }
 
+// checkCreate holds the two checks of a create that the arguments alone
+// decide: the milestone is named one way, and a description that carries a
+// quick action the guard asks about is confirmed first, as
+// [toolutil.ConfirmQuickActions] describes.
+func checkCreate(ctx context.Context, input CreateInput) error {
+	if err := checkMilestoneChoice("mrCreate", input.Milestone, input.MilestoneID != 0); err != nil {
+		return err
+	}
+	return toolutil.ConfirmQuickActions(ctx, "mrCreate", input.Description)
+}
+
 // Create creates a new merge request in the specified GitLab project.
 // It maps optional fields (description, assignees, reviewers, labels, squash)
 // only when provided. Returns the created merge request details.
@@ -694,7 +716,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("mrCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
-	if err := checkMilestoneChoice("mrCreate", input.Milestone, input.MilestoneID != 0); err != nil {
+	if err := checkCreate(ctx, input); err != nil {
 		return Output{}, err
 	}
 	mergeAfter, err := toolutil.ParseTimeField("merge_after", input.MergeAfter)
@@ -979,9 +1001,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "merge_request_iid")
 	}
+	if err := toolutil.ConfirmQuickActionsOptional(ctx, "mrUpdate", input.Description); err != nil {
+		return Output{}, err
+	}
 	opts, nulls, err := buildUpdateOpts(input)
 	if err != nil {
 		return Output{}, err
+	}
+	if askErr := confirmAssigneesCleared(ctx, client, input); askErr != nil {
+		return Output{}, askErr
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),

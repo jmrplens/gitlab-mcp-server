@@ -1019,8 +1019,9 @@ func witnessCases() []witnessCase {
 
 // checkProjectHookHeaders holds the custom header keys of a project hook to
 // the struct its raw request sends: covered on the add, read through
-// AddProjectHookOptions, and under the container EditProjectHookOptions
-// models on the edit.
+// AddProjectHookOptions, and covered on the edit as well, since the tests of
+// the webhook guard record an edit that carries custom_headers, which
+// EditProjectHookOptions models.
 func checkProjectHookHeaders(t *testing.T, reported map[string]Finding) {
 	t.Helper()
 	const hookAdd, hookEdit = "POST /projects/:id/hooks", "PUT /projects/:id/hooks/:hook_id"
@@ -1029,19 +1030,13 @@ func checkProjectHookHeaders(t *testing.T, reported map[string]Finding) {
 			t.Errorf("%s duo_flow_callback_enabled option types = %v, want the AddProjectHookOptions the raw request sends", hookAdd, finding.OptionTypes)
 		}
 	})
-	for _, param := range []string{"custom_headers", "custom_headers[key]", "custom_headers[value]"} {
-		t.Run(hookAdd+" "+param+" is covered", func(t *testing.T) {
-			if finding, found := reported[hookAdd+" "+param]; found {
-				t.Errorf("%s %s = %+v, want it covered by the recorded custom_headers and the struct that models it", hookAdd, param, finding)
-			}
-		})
-	}
-	for _, param := range []string{"custom_headers[key]", "custom_headers[value]"} {
-		t.Run(hookEdit+" "+param+" stands under the modeled container", func(t *testing.T) {
-			finding, found := reported[hookEdit+" "+param]
-			if !found || finding.Param != "custom_headers" || !finding.SDKModels || !slices.Contains(finding.OptionTypes, "EditProjectHookOptions") {
-				t.Errorf("%s %s = %+v (found %t), want it under the custom_headers container EditProjectHookOptions models", hookEdit, param, finding, found)
-			}
-		})
+	for _, route := range []string{hookAdd, hookEdit} {
+		for _, param := range []string{"custom_headers", "custom_headers[key]", "custom_headers[value]"} {
+			t.Run(route+" "+param+" is covered", func(t *testing.T) {
+				if finding, found := reported[route+" "+param]; found {
+					t.Errorf("%s %s = %+v, want it covered by the recorded custom_headers and the struct that models it", route, param, finding)
+				}
+			})
+		}
 	}
 }

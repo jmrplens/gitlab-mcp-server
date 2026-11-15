@@ -7824,8 +7824,10 @@ func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
 // it held something, so the one value that empties it never left, and the
 // update reported success with the merge request unchanged (issue 1300).
 // add_labels and remove_labels are changes rather than replacements, so an
-// empty one still sends nothing.
+// empty one still sends nothing. YOLO mode stands for the confirmation an
+// empty assignee list asks for, which TestUpdate_ClearingAssignees_Asks holds.
 func TestUpdate_EmptyLists_ReplaceWithNothing(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	tests := []struct {
 		name  string
 		input UpdateInput
@@ -7853,6 +7855,7 @@ func TestUpdate_EmptyLists_ReplaceWithNothing(t *testing.T) {
 // dynamic routes hand their arguments to, so a [] a model writes is held to
 // the request and not only one a Go caller builds.
 func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"assignee_ids": []any{}, "reviewer_ids": []any{}, "labels": []any{},
 	})
@@ -7867,8 +7870,10 @@ func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 // everybody, and the handler forwarded the field only when it was not 0, so
 // the one value that removes the assignees never left and the update reported
 // success with the merge request unchanged (issue 1306). The arguments go
-// through toolutil.UnmarshalParams, as every surface's do.
+// through toolutil.UnmarshalParams, as every surface's do, and YOLO mode
+// stands for the confirmation the call asks for.
 func TestUpdate_AssigneeIDZero_RemovesEveryAssignee(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"assignee_id": 0})
 	if err != nil {
 		t.Fatalf("UnmarshalParams() error: %v", err)
@@ -8989,6 +8994,37 @@ func TestMergeRequestListings_MergeTimeThatDoesNotParse_IsRefusedBeforeAnyReques
 			err := listWithParams(List)(t.Context(), client, map[string]any{"project_id": "42", field: "not-a-date"})
 			if err == nil || !strings.Contains(err.Error(), field+" must be") || !strings.Contains(err.Error(), `"not-a-date"`) {
 				t.Errorf("List() error = %v, want the %s refusal quoting the value", err, field)
+			}
+		})
+	}
+}
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that creating and updating a merge request refuse a description that
+// carries a quick action the guard asks about, before any request, naming
+// what the line does and how to proceed ([toolutil.ConfirmQuickActions]).
+// GitLab runs such a line when it saves the description, so the edit would
+// merge the merge request unasked, which merge_request.merge asks about.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	text := "What this changes.\n/merge"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", SourceBranch: "feature", TargetBranch: "main", Title: "t", Description: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 7, Description: &text})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "merges the merge request, at once or when its checks pass (`/merge`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
 			}
 		})
 	}

@@ -570,6 +570,10 @@ func TestSetHookCustomHeader_Guards(t *testing.T) {
 
 // TestSetHookCustomHeaderOutput_Success verifies the void wrapper confirmation.
 func TestSetHookCustomHeaderOutput_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -645,6 +649,10 @@ func TestSetHookURLVariable_Success(t *testing.T) {
 // 422 "Illegal key or value" response is wrapped with a hint about the accepted
 // key characters and the non-empty value requirement.
 func TestSetHookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
 	}))
@@ -679,6 +687,10 @@ func TestSetHookURLVariable_Guards(t *testing.T) {
 
 // TestSetHookURLVariableOutput_Success verifies the void wrapper confirmation.
 func TestSetHookURLVariableOutput_Success(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -866,6 +878,10 @@ func TestHookSubOps_CanceledContext(t *testing.T) {
 // API response into its operation-prefixed error instead of returning nil,
 // covering the error branch of each of the six twin handlers.
 func TestHookHelpers_APIError_ReturnsWrappedError(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -999,6 +1015,10 @@ func TestHook_AuditCustomFields(t *testing.T) {
 // sending them; GitLab merges the variables an edit names into the hook's own,
 // so the caller would be told a value was set that never was.
 func TestHooks_URLVariables_ReachTheAddAndTheEdit(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	const want = `[{"key":"env","value":"prod"},{"key":"region","value":"eu-west"}]`
 	variables := []HookURLVariableInput{{Key: "env", Value: "prod"}, {Key: "region", Value: "eu-west"}}
 	sent := map[string]string{}
@@ -1340,6 +1360,10 @@ func TestHookWrites_EachFlagReachesTheRequestOnItsOwn(t *testing.T) {
 // two tokens, the two filters and the two texts are each of a kind a copy
 // could cross.
 func TestEditHook_CarriesEveryIdentityFieldUnderItsOwnKey(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	body := recordedJSONBody(t, http.StatusOK, groupHookJSON, func(client *gitlabclient.Client) error {
 		_, err := EditHook(context.Background(), client, EditHookInput{
 			GroupID: "99", HookID: 10,
@@ -1414,6 +1438,10 @@ func assertPathArgOutcome(t *testing.T, err error, operation, field, segment str
 // an error that names key, and that a key with a dot inside a segment is sent.
 // client-go places the key into the request path without escaping it.
 func TestSetHookCustomHeader_DotSegmentKey_IsRefused(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, tc := range pathArgCases {
 		t.Run(tc.name, func(t *testing.T) {
 			client, recorder := testutil.RecordQueries(t, `{}`)
@@ -1441,6 +1469,10 @@ func TestDeleteHookCustomHeader_DotSegmentKey_IsRefused(t *testing.T) {
 // an error that names key, and that a key with a dot inside a segment is sent.
 // client-go places the key into the request path without escaping it.
 func TestSetHookURLVariable_DotSegmentKey_IsRefused(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	for _, tc := range pathArgCases {
 		t.Run(tc.name, func(t *testing.T) {
 			client, recorder := testutil.RecordQueries(t, `{}`)
@@ -1500,6 +1532,10 @@ var segmentEncodings = []struct {
 // sent unchanged. client-go places the key and the trigger into the request
 // path as given, so each handler escapes it first.
 func TestHookSubOperations_PathArgument_IsEscapedAsOneSegment(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	const hook = "/api/v4/groups/group%2Fsub/hooks/10/"
 	operations := []struct {
 		name  string

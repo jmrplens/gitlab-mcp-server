@@ -249,3 +249,90 @@ func TestAccessTokenOptions_EmptyScopeShortCircuit(t *testing.T) {
 		t.Errorf("expected default Usage for unknown scope, got %q", got.Usage)
 	}
 }
+
+// assertDestructiveHint fails unless the individual tool projected from spec
+// tells a client the action is destructive.
+func assertDestructiveHint(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{Description: "Rotate an access token."})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+		t.Errorf("%s: destructiveHint is not true: %+v", spec.IndividualTool.Name, tool.Annotations)
+	}
+}
+
+// TestActionSpecs_Rotations_AreDestructive holds the six rotations to the
+// answer the revocations give. GitLab revokes the rotated token in the same
+// request, so whatever still holds the old value stops authenticating, which
+// is the effect token_*_revoke is destructive for. The spec, its route and
+// the individual tool's annotation all say so, the usage tells a model why,
+// and nothing else about the action moved: a rotation repeated issues another
+// token, so it stays non-idempotent.
+func TestActionSpecs_Rotations_AreDestructive(t *testing.T) {
+	byTool := accessTokenSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NotFoundHandler())))
+	tools := []string{
+		"gitlab_project_access_token_rotate", "gitlab_project_access_token_rotate_self",
+		"gitlab_group_access_token_rotate", "gitlab_group_access_token_rotate_self",
+		"gitlab_personal_access_token_rotate", "gitlab_personal_access_token_rotate_self",
+	}
+	for _, name := range tools {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := byTool[name]
+			if !ok {
+				t.Fatalf("no action spec projects %s", name)
+			}
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want neither", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, accessTokenRotationWarning) {
+				t.Errorf("%s usage = %q, want it to carry %q", name, spec.Usage, accessTokenRotationWarning)
+			}
+			description := spec.IndividualTool.Description
+			if !strings.Contains(description, "stops working at once") || !strings.Contains(description, "Requires confirmation.") {
+				t.Errorf("%s description = %q, want it to say the token stops working and that the call asks", name, description)
+			}
+			assertDestructiveHint(t, spec)
+		})
+	}
+	for _, name := range []string{"gitlab_project_access_token_create", "gitlab_group_access_token_create"} {
+		t.Run(name, func(t *testing.T) {
+			if spec := byTool[name]; spec.Destructive || strings.Contains(spec.Usage, accessTokenRotationWarning) || spec.IndividualTool.Description != "" {
+				t.Errorf("%s: destructive %v, usage %q, description %q, want a create that ends no token and keeps the served description",
+					name, spec.Destructive, spec.Usage, spec.IndividualTool.Description)
+			}
+		})
+	}
+}
+
+// TestAccessTokenRotateDescription_NamesItsCounterparts pins the description
+// of each rotation: what it ends, that it asks, and the tools its See also
+// clause has always named, which for a self rotation are its own scope's
+// rotation and the self rotation of another scope.
+func TestAccessTokenRotateDescription_NamesItsCounterparts(t *testing.T) {
+	tests := []struct {
+		scope, operation, lead, seeAlso string
+	}{
+		{"project", "rotate", "Rotate a project access token: ", "See also: gitlab_project_access_token_list, gitlab_project_access_token_revoke."},
+		{"group", "rotate", "Rotate a group access token: ", "See also: gitlab_group_access_token_list, gitlab_group_access_token_revoke."},
+		{"personal", "rotate", "Rotate a personal access token: ", "See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke."},
+		{"project", "rotate_self", "Rotate the project access token used for the current request: ", "See also: gitlab_project_access_token_rotate, gitlab_personal_access_token_rotate_self."},
+		{"group", "rotate_self", "Rotate the group access token used for the current request: ", "See also: gitlab_group_access_token_rotate, gitlab_personal_access_token_rotate_self."},
+		{"personal", "rotate_self", "Rotate the personal access token used for the current request: ", "See also: gitlab_personal_access_token_rotate, gitlab_project_access_token_rotate_self."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.scope+"_"+tt.operation, func(t *testing.T) {
+			got := accessTokenRotateDescription(tt.scope, tt.operation)
+			if !strings.HasPrefix(got, tt.lead) || !strings.HasSuffix(got, tt.seeAlso) {
+				t.Errorf("description = %q, want it to open with %q and end with %q", got, tt.lead, tt.seeAlso)
+			}
+			if !strings.Contains(got, "Requires confirmation. Returns: ") {
+				t.Errorf("description = %q, want it to say that it asks before what it returns", got)
+			}
+		})
+	}
+}

@@ -35,7 +35,7 @@ Acciones de solo lectura: 3 de 4, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.5.0 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.5.0 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)).
 
 | Acción                                                 | Individual                                 |
 | ------------------------------------------------------ | ------------------------------------------ |
@@ -46,14 +46,14 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `merge_train.add`
 
-> Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: [`merge_train.get`](#merge_trainget), [`merge_train.list_branch`](#merge_trainlist_branch), [`merge_train.list_project`](#merge_trainlist_project).
+> Add a merge request to a merge train. Requires confirmation. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: [`merge_train.get`](#merge_trainget), [`merge_train.list_branch`](#merge_trainlist_branch), [`merge_train.list_project`](#merge_trainlist_project).
 
 - **Meta-herramienta**: `gitlab_merge_train`, acción `add`
 - **Herramienta individual**: `gitlab_add_merge_request_to_merge_train`
 - **Nivel**: Premium
 - **Token clásico u OAuth**: `api`
 - **Token de grano fino**: Merge Train Merge Request: Add en proyecto ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#merge_train))
-- **Comportamiento**: escribe, no idempotente
+- **Comportamiento**: escribe, destructiva (necesita confirmación), no idempotente
 
 | Parámetro                | Tipo             | Requerido | Descripción                                                                        |
 | ------------------------ | ---------------- | --------- | ---------------------------------------------------------------------------------- |

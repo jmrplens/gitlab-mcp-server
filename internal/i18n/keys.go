@@ -230,6 +230,167 @@ const (
 	ConfirmWorkItemAssignees Key = "confirm.work_item.assignees"
 	// ConfirmWorkItemCrmContacts names the CRM contacts a clear removes.
 	ConfirmWorkItemCrmContacts Key = "confirm.work_item.crm_contacts"
+	// ConfirmPushRuleRelax asks before an edit relaxes push rules, {target}
+	// the project or group they belong to and {changes} what the call does to
+	// them, each a sentence fragment that continues "This call".
+	ConfirmPushRuleRelax Key = "confirm.push_rule.relax"
+	// ConfirmPushRuleProject names the project {id} whose push rules an edit
+	// relaxes.
+	ConfirmPushRuleProject Key = "confirm.push_rule.project"
+	// ConfirmPushRuleGroup names the group {id} whose push rules an edit
+	// relaxes.
+	ConfirmPushRuleGroup Key = "confirm.push_rule.group"
+	// ConfirmPushRuleSwitchOff names the rule {setting} an edit turns off.
+	ConfirmPushRuleSwitchOff Key = "confirm.push_rule.switch_off"
+	// ConfirmPushRulePatternRemoved names the pattern {setting} an edit
+	// empties.
+	ConfirmPushRulePatternRemoved Key = "confirm.push_rule.pattern_removed"
+	// ConfirmPushRulePatternReplaced names the pattern {setting} an edit
+	// replaces with a different one.
+	ConfirmPushRulePatternReplaced Key = "confirm.push_rule.pattern_replaced"
+	// ConfirmPushRuleSizeRaised names the file size limit an edit raises,
+	// {from} and {to} in megabytes.
+	ConfirmPushRuleSizeRaised Key = "confirm.push_rule.size_raised"
+	// ConfirmPushRuleSizeRemoved names the file size limit of {from}
+	// megabytes an edit removes.
+	ConfirmPushRuleSizeRemoved Key = "confirm.push_rule.size_removed"
+	// ConfirmPushRuleUnread names the rule {setting} an edit may relax when
+	// the current rules could not be read.
+	ConfirmPushRuleUnread Key = "confirm.push_rule.unread"
+	// ConfirmTargetProject names the project {id} a guarded call acts on, in
+	// the questions that name their target as "in {target}".
+	ConfirmTargetProject Key = "confirm.target.project"
+	// ConfirmTargetGroup names the group {id} a guarded call acts on.
+	ConfirmTargetGroup Key = "confirm.target.group"
+	// ConfirmTargetInstance names the GitLab instance, for an object that
+	// belongs to no project or group.
+	ConfirmTargetInstance Key = "confirm.target.instance"
+	// ConfirmVariableValue asks before an update replaces the value of the
+	// CI/CD variable {key} in {target}. It never shows a value.
+	ConfirmVariableValue Key = "confirm.variable.value"
+	// ConfirmUserAccess asks before an administrator's edit replaces what
+	// user {id} signs in or recovers the account with, {changes} each a
+	// sentence fragment that continues "This call".
+	ConfirmUserAccess Key = "confirm.user_access.replace"
+	// ConfirmUserAccessPassword names the password an edit replaces.
+	ConfirmUserAccessPassword Key = "confirm.user_access.password"
+	// ConfirmUserAccessEmail names the address {email} an edit makes the
+	// account's.
+	ConfirmUserAccessEmail Key = "confirm.user_access.email"
+	// ConfirmUserAccessIdentity names the external identity an edit replaces.
+	ConfirmUserAccessIdentity Key = "confirm.user_access.identity"
+	// ConfirmHookDelivery asks before a call changes where webhook {hook} in
+	// {target} delivers or replaces a secret it sends, {changes} each a
+	// sentence fragment that continues "This call".
+	ConfirmHookDelivery Key = "confirm.hook.delivery"
+	// ConfirmHookURL names the origin {url} a call points a webhook at and
+	// the origin {current} it delivers to now.
+	ConfirmHookURL Key = "confirm.hook.url"
+	// ConfirmHookURLSameHost names the origin {url} a webhook keeps when a
+	// call sends another address on it, since the two addresses shown as
+	// their origins would read as one origin instead of itself.
+	ConfirmHookURLSameHost Key = "confirm.hook.url_same_host"
+	// ConfirmHookURLUnread names the origin {url} a call sends when the
+	// webhook could not be read.
+	ConfirmHookURLUnread Key = "confirm.hook.url_unread"
+	// ConfirmHookToken names the write-only {token} a call replaces: token
+	// or signing_token, the parameter's own name.
+	ConfirmHookToken Key = "confirm.hook.token"
+	// ConfirmHookValue names the entry {key} of the write-only map {field},
+	// url_variables or custom_headers, that a call replaces.
+	ConfirmHookValue Key = "confirm.hook.value"
+	// ConfirmHookValueUnread names the entry {key} of {field} a call may
+	// replace when the webhook could not be read.
+	ConfirmHookValueUnread Key = "confirm.hook.value_unread"
+	// ConfirmImportOverwrite asks before a project import overwrites the
+	// project at {path}.
+	ConfirmImportOverwrite Key = "confirm.import.overwrite"
+	// ConfirmCommitForce asks before a commit resets branch {branch} in
+	// {target} to its starting point.
+	ConfirmCommitForce Key = "confirm.commit.force"
+	// ConfirmExportUpload asks before an export of {target} is uploaded to
+	// the origin {url}.
+	ConfirmExportUpload Key = "confirm.export.upload"
+	// ConfirmStatusCheck asks before an edit changes where external status
+	// check {check} in {target} sends merge requests or replaces its shared
+	// secret, {changes} each a sentence fragment that continues "This call".
+	ConfirmStatusCheck Key = "confirm.status_check.delivery"
+	// ConfirmStatusCheckURL names the origin {url} an edit points an external
+	// status check at.
+	ConfirmStatusCheckURL Key = "confirm.status_check.url"
+	// ConfirmStatusCheckSecret names the shared secret an edit replaces.
+	ConfirmStatusCheckSecret Key = "confirm.status_check.secret"
+	// ConfirmQuickActions asks before a note body or a description is sent
+	// that carries quick actions GitLab runs when it saves the text,
+	// {effects} each a sentence fragment that continues "this call" and
+	// quotes its line of the text as {line}.
+	ConfirmQuickActions Key = "confirm.quick_action.run"
+	// ConfirmQuickActionMove names a /move line, which moves the item.
+	ConfirmQuickActionMove Key = "confirm.quick_action.move"
+	// ConfirmQuickActionMerge names a /merge line, which merges the merge
+	// request.
+	ConfirmQuickActionMerge Key = "confirm.quick_action.merge"
+	// ConfirmQuickActionPromote names a /promote line, which makes an epic of
+	// the issue.
+	ConfirmQuickActionPromote Key = "confirm.quick_action.promote"
+	// ConfirmQuickActionTicket names a /convert_to_ticket line, which makes
+	// the issue a Service Desk ticket.
+	ConfirmQuickActionTicket Key = "confirm.quick_action.convert_to_ticket"
+	// ConfirmQuickActionAddEmail names an /add_email line, which adds outside
+	// addresses as participants.
+	ConfirmQuickActionAddEmail Key = "confirm.quick_action.add_email"
+	// ConfirmQuickActionPublish names a /publish line, which publishes the
+	// issue on the status page.
+	ConfirmQuickActionPublish Key = "confirm.quick_action.publish"
+	// ConfirmQuickActionUnapprove names an /unapprove line, which withdraws
+	// the caller's approval of the merge request.
+	ConfirmQuickActionUnapprove Key = "confirm.quick_action.unapprove"
+	// ConfirmQuickActionUnlink names an /unlink line, which removes the link
+	// between the item and another.
+	ConfirmQuickActionUnlink Key = "confirm.quick_action.unlink"
+	// ConfirmQuickActionRemoveParent names a /remove_epic, /remove_parent or
+	// /remove_parent_epic line, which takes the item out of its epic or its
+	// parent.
+	ConfirmQuickActionRemoveParent Key = "confirm.quick_action.remove_parent"
+	// ConfirmQuickActionRemoveChild names a /remove_child or
+	// /remove_child_epic line, which takes a child out of the item.
+	ConfirmQuickActionRemoveChild Key = "confirm.quick_action.remove_child"
+	// ConfirmQuickActionUnassign names an /unassign line, which removes
+	// assignees from the item: every one of them when it names nobody or the
+	// item takes a single assignee.
+	ConfirmQuickActionUnassign Key = "confirm.quick_action.unassign"
+	// ConfirmQuickActionReassign names a /reassign line that names nobody,
+	// which removes every assignee of the item.
+	ConfirmQuickActionReassign Key = "confirm.quick_action.reassign"
+	// ConfirmQuickActionRemoveContacts names a /remove_contacts line, which
+	// removes CRM contacts from the item.
+	ConfirmQuickActionRemoveContacts Key = "confirm.quick_action.remove_contacts"
+	// ConfirmQuickActionMore counts the {count} lines of the same kinds that
+	// the question does not quote.
+	ConfirmQuickActionMore Key = "confirm.quick_action.more"
+)
+
+// The questions asked before an update takes an item out of its epic or its
+// parent, or removes every assignee of an issue, a merge request or an epic.
+const (
+	// ConfirmIssueEpicRemove asks before an issue update takes issue {iid}
+	// of {target} out of its epic.
+	ConfirmIssueEpicRemove Key = "confirm.parent.issue_epic_remove"
+	// ConfirmWorkItemParentRemove asks before a work item update takes work
+	// item {path}#{iid} out of its parent.
+	ConfirmWorkItemParentRemove Key = "confirm.parent.work_item_remove"
+	// ConfirmEpicParentRemove asks before an epic update takes epic
+	// {path}&{iid} out of its parent epic.
+	ConfirmEpicParentRemove Key = "confirm.parent.epic_remove"
+	// ConfirmIssueAssigneesClear asks before an issue update removes
+	// {losses} from issue {iid} of {target}.
+	ConfirmIssueAssigneesClear Key = "confirm.assignees.issue_clear"
+	// ConfirmMergeRequestAssigneesClear asks before a merge request update
+	// removes {losses} from merge request {iid} of {target}.
+	ConfirmMergeRequestAssigneesClear Key = "confirm.assignees.merge_request_clear"
+	// ConfirmEpicAssigneesClear asks before an epic update removes {losses}
+	// from epic {path}&{iid}.
+	ConfirmEpicAssigneesClear Key = "confirm.assignees.epic_clear"
 )
 
 // CommonListAnd is the conjunction [L] joins a list with.

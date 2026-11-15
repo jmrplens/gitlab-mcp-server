@@ -82,13 +82,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_group_restore — restore a previously deleted group.
 		groupUpdateSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_group_restore"),
 		// gitlab_group_archive — archive a group (destructive, idempotent).
-		groupUpdateSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
-		// gitlab_group_unarchive — unarchive a group (destructive, idempotent).
+		groupConfirmedUpdateSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
+		// gitlab_group_unarchive: unarchive a group (idempotent).
 		groupUpdateSpec("unarchive", toolutil.RouteAction(client, UnarchiveOutput), "gitlab_group_unarchive"),
 		// gitlab_group_search — search for groups by name or path.
 		groupReadSpec(paramSearch, toolutil.RouteAction(client, Search), "gitlab_group_search"),
-		// gitlab_group_transfer_project — transfer a project into a group.
-		groupUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
+		// gitlab_group_transfer_project: transfer a project into a group (destructive).
+		groupConfirmedUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
 		// gitlab_group_projects — list the projects that belong to a group.
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
 		// gitlab_group_members_list — list the members of a group.
@@ -106,7 +106,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_group_hook_get — fetch a single group webhook by ID (Premium/Ultimate).
 		groupPremiumSpec(groupReadSpec("hook_get", toolutil.RouteAction(client, GetHook), "gitlab_group_hook_get")),
 		// gitlab_group_hook_add — create a new group webhook (Premium/Ultimate).
-		groupPremiumSpec(groupCreateSpec("hook_add", toolutil.RouteAction(client, AddHook), toolGroupHookAdd)),
+		groupPremiumSpec(groupHookAddSpec("hook_add", toolutil.RouteAction(client, AddHook), toolGroupHookAdd)),
 		// gitlab_group_hook_edit — update an existing group webhook (Premium/Ultimate).
 		groupPremiumSpec(groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit")),
 		// gitlab_group_hook_delete — delete a group webhook (Premium/Ultimate, destructive).
@@ -131,8 +131,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupReadSpec("shared_projects", toolutil.RouteAction(client, ListSharedProjects), "gitlab_group_shared_projects_list"),
 		// gitlab_group_shared_project_delete: remove a project shared with a group, from the group's side (destructive).
 		groupDeleteSpec("shared_project_delete", toolutil.DestructiveVoidAction(client, DeleteSharedProject), toolGroupSharedProjectDelete),
-		// gitlab_group_transfer — move a group under a new parent group or to top level.
-		groupUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
+		// gitlab_group_transfer: move a group under a new parent group or to top level (destructive).
+		groupConfirmedUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
 		// gitlab_group_upload_avatar — upload or replace a group's avatar image.
 		groupUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadAvatar), "gitlab_group_upload_avatar"),
 		// gitlab_group_list_provisioned_users — list users provisioned via SAML/SCIM (Premium/Ultimate).
@@ -226,6 +226,40 @@ func groupCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func groupUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(individualTool))
+}
+
+// groupConfirmedUpdateSpec is an update that asks for confirmation. Only the
+// destructive bit changes: the constructor, and with it the idempotency hint,
+// stays the update's. Three actions take it:
+//
+//   - transfer and transfer_project: a transfer changes the path and the URLs
+//     of the project or the group and of everything under it, and who
+//     inherits access to it, and the members and tokens the old namespace
+//     granted stop reaching it. project.transfer makes the same move through
+//     PUT /projects/:id/transfer and is destructive, so the three actions
+//     that move a namespace answer alike.
+//   - archive: archiving a group does more than make it and its projects
+//     read-only. GitLab takes every project of the group out of its fork
+//     network and closes the open merge requests from and to their forks, and
+//     group.unarchive restores neither. That is what project.archive does to
+//     one project and project.delete_fork_relation is destructive for.
+func groupConfirmedUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupOptionsForAction(individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// groupHookAddSpec is a create that asks for confirmation. A group webhook
+// deletes nothing, and from then on GitLab posts the events it subscribes
+// to, of every project of the group, to the host named in its url, which is
+// a parameter a model can take from text the user never read. That is what
+// project.hook_add and project.mirror_add are destructive for, and
+// group.hook_delete stops the delivery without recalling what was sent. Only
+// the destructive bit is added to the create.
+func groupHookAddSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupOptionsForAction(individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func groupDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -379,7 +413,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 		}
 		options.IndividualTool.Description = "Restore a GitLab group marked for deletion. Returns: the restored group metadata. See also: gitlab_group_delete, gitlab_group_get, gitlab_group_list."
 	case "gitlab_group_archive":
-		options.Usage = "Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op."
+		options.Usage = "Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op. Destructive: GitLab also removes every project of the group from its fork network and closes the open merge requests from and to their forks, and unarchive restores neither, so confirm with the user first."
 		options.Aliases = []string{"archive group", "freeze group", "make group read-only"}
 		options.RelatedActions = []string{actionGroupGet, "group.unarchive", actionGroupUpdate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -389,7 +423,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 				ExampleBinding: `params.group_id:"my-org/platform"`,
 			},
 		}
-		options.IndividualTool.Description = "Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
+		options.IndividualTool.Description = "Archive a GitLab group, making it and its projects read-only in GitLab. Requires confirmation. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
 	case "gitlab_group_unarchive":
 		options.Usage = "Unarchive a previously archived group, restoring write access. Idempotent. Unarchiving a non-archived group is a no-op."
 		options.Aliases = []string{"unarchive group", "unfreeze group", "restore group write access"}
@@ -604,7 +638,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 		}
 		options.IndividualTool.Description = "Remove a project shared with a GitLab group, from the group's side. Returns: a success confirmation. See also: gitlab_group_shared_projects_list, gitlab_project_delete_shared_group, gitlab_project_share_with_group, gitlab_group_get."
 	case "gitlab_group_transfer":
-		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
+		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Destructive: the move changes the path and URLs of everything under the group and who inherits access to it, so confirm with the user first. Use group.transfer_locations first to find valid parents. Requires Owner role on both ends. GitLab 19.4 and later move the group in the background, so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the group where it still is: read it back with group.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs."
 		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}
 		options.RelatedActions = []string{actionGroupTransferLocs, actionGroupGet, actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -614,7 +648,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				CommonConfusions: []string{"parent_id is the destination. group_id is the group being moved. Omit parent_id to make the group top-level."},
 			},
 		}
-		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
+		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
 	default:
 		return applyGroupPushRuleMetadata(individualTool, options)
 	}
@@ -644,9 +678,9 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 		options.Aliases = []string{"add group push rule", "create group push rules", "set group push rule", "configure group push rules"}
 		options.IndividualTool.Description = "Add push rules to a GitLab group. Returns: the created push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_edit_push_rule."
 	case "gitlab_group_edit_push_rule":
-		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role."
+		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role. " + toolutil.PushRuleRelaxUsage
 		options.Aliases = []string{"edit group push rule", "update group push rules", "modify group push rule", "change group push rule"}
-		options.IndividualTool.Description = "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
+		options.IndividualTool.Description = "Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
 	case "gitlab_group_delete_push_rule":
 		options.Usage = "Delete a group's push rules. Destructive. Send group_id. Premium/Ultimate, Owner role."
 		options.Aliases = []string{"delete group push rule", "remove group push rules", "drop group push rules", "clear group push rule"}
@@ -664,7 +698,7 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
 	switch individualTool {
 	case "gitlab_group_transfer_project":
-		options.Usage = "Move an existing project into this group's namespace, as an administrator. GitLab refuses this route to anyone else, the project's owner included, who moves a project with project.transfer instead. The move is applied before GitLab answers, and the answer is the destination group rather than the project: read the project with project.get to see its new path. To discover which groups a group itself can be transferred into, use group.transfer_locations instead."
+		options.Usage = "Move an existing project into this group's namespace, as an administrator. Destructive: the move changes the project's path and URLs and who inherits access to it, so confirm with the user first. GitLab refuses this route to anyone else, the project's owner included, who moves a project with project.transfer instead. The move is applied before GitLab answers, and the answer is the destination group rather than the project: read the project with project.get to see its new path. To discover which groups a group itself can be transferred into, use group.transfer_locations instead."
 		options.Aliases = []string{"transfer project to group", "move project into group", "relocate project namespace"}
 		options.RelatedActions = []string{actionGroupGet, actionGroupTransferLocs, actionGroupProjects, "project.transfer"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -675,7 +709,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				CommonConfusions: []string{"project_id is the project being moved. group_id is the destination group."},
 			},
 		}
-		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
+		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
 	case "gitlab_group_shared_with_list":
 		options.Usage = "List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups."
 		options.Aliases = []string{"groups shared with this group", "list shared groups", "group share grants", "who shares this group"}
@@ -786,17 +820,17 @@ func applyGroupHookSubOpMetadata(individualTool string, options *toolutil.Action
 	}
 	switch individualTool {
 	case toolGroupHookSetHeader:
-		options.Usage = "Set (create or update) a custom HTTP header on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role."
+		options.Usage = "Set (create or update) a custom HTTP header on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role. " + toolutil.HookSetValueUsage
 		options.Aliases = []string{"set group hook custom header", "add webhook header to group hook", "configure group webhook header"}
-		options.IndividualTool.Description = "Set a custom header on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get."
+		options.IndividualTool.Description = "Set a custom header on a GitLab group webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get."
 	case toolGroupHookDelHeader:
 		options.Usage = "Delete a custom HTTP header from a group webhook by hook_id and key. Destructive. Requires Owner role."
 		options.Aliases = []string{"delete group hook custom header", "remove webhook header from group hook", "drop group webhook header", "clear group hook custom header"}
 		options.IndividualTool.Description = "Delete a custom header from a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_set_custom_header, gitlab_group_hook_get."
 	case toolGroupHookSetURLVar:
-		options.Usage = "Set (create or update) a templated URL variable on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role."
+		options.Usage = "Set (create or update) a templated URL variable on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role. " + toolutil.HookSetValueUsage
 		options.Aliases = []string{"set group hook url variable", "add url variable to group webhook", "configure group webhook url variable", "create group hook url variable"}
-		options.IndividualTool.Description = "Set a URL variable on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get."
+		options.IndividualTool.Description = "Set a URL variable on a GitLab group webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get."
 	case toolGroupHookDelURLVar:
 		options.Usage = "Delete a templated URL variable from a group webhook by hook_id and key. Destructive. Requires Owner role."
 		options.Aliases = []string{"delete group hook url variable", "remove url variable from group webhook", "drop group webhook url variable", "clear group hook url variable"}
@@ -842,12 +876,12 @@ func applyGroupHookAddEditMetadata(individualTool string, options *toolutil.Acti
 		},
 	}
 	if individualTool == toolGroupHookAdd {
-		options.Usage = "Create a group webhook. Send url plus the event flags to enable (push_events, merge_requests_events, pipeline_events, etc.) and optional token/custom_headers/custom_webhook_template. Requires Owner role."
+		options.Usage = "Create a group webhook. Send url plus the event flags to enable (push_events, merge_requests_events, pipeline_events, etc.) and optional token/custom_headers/custom_webhook_template. Requires Owner role. " + toolutil.HookAddUsage
 		options.Aliases = []string{"add group hook", "create group webhook", "register group webhook"}
-		options.IndividualTool.Description = "Create a webhook on a GitLab group. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
+		options.IndividualTool.Description = "Create a webhook on a GitLab group. Requires confirmation. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
 		return
 	}
-	options.Usage = "Update an existing group webhook by hook_id. Send only the fields to change. Unset fields keep their current values. Requires Owner role."
+	options.Usage = "Update an existing group webhook by hook_id. Send only the fields to change. Unset fields keep their current values. Requires Owner role. " + toolutil.HookEditUsage
 	options.Aliases = []string{"edit group hook", "update group webhook", "modify group webhook"}
-	options.IndividualTool.Description = "Update a GitLab group webhook. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
+	options.IndividualTool.Description = "Update a GitLab group webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
 }

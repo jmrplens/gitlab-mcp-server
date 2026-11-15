@@ -97,6 +97,11 @@ type EditHookInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	HookID  int64                `json:"hook_id"  jsonschema:"Hook ID to edit,required"`
 	HookInput
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteHookInput defines parameters for deleting a group hook.
@@ -475,7 +480,9 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 	return hookOutput("AddHook", h, captured)
 }
 
-// EditHook updates an existing group webhook configuration.
+// EditHook updates an existing group webhook configuration. An edit that
+// redirects the webhook or replaces one of its secrets is confirmed first, as
+// [confirmHookChange] describes.
 func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookInput) (HookOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return HookOutput{}, err
@@ -485,6 +492,9 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	}
 	if input.HookID <= 0 {
 		return HookOutput{}, toolutil.ErrRequiredInt64("EditHook", "hook_id")
+	}
+	if err := confirmHookChange(ctx, client, "EditHook", string(input.GroupID), input.HookID, input.hookEdit()); err != nil {
+		return HookOutput{}, err
 	}
 
 	opts := applyEditHookOpts(input.HookInput)
@@ -579,9 +589,16 @@ type SetHookCustomHeaderInput struct {
 	HookID  int64                `json:"hook_id"  jsonschema:"Webhook ID,required"`
 	Key     string               `json:"key"      jsonschema:"Custom header key name,required"`
 	Value   string               `json:"value"    jsonschema:"Custom header value (write-only),required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // SetHookCustomHeader creates or updates a custom header on a group webhook.
+// Replacing a header the webhook already has is confirmed first, as
+// [confirmHookChange] describes.
 func SetHookCustomHeader(ctx context.Context, client *gitlabclient.Client, input SetHookCustomHeaderInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -596,6 +613,10 @@ func SetHookCustomHeader(ctx context.Context, client *gitlabclient.Client, input
 		return errors.New("groupSetHookCustomHeader: key is required")
 	}
 	if err := toolutil.RejectTraversalArg("groupSetHookCustomHeader", "key", input.Key); err != nil {
+		return err
+	}
+	if err := confirmHookChange(ctx, client, "groupSetHookCustomHeader", string(input.GroupID), input.HookID,
+		toolutil.HookEdit{CustomHeaderKeys: []string{input.Key}}); err != nil {
 		return err
 	}
 	opts := &gl.SetHookCustomHeaderOptions{Value: &input.Value}
@@ -648,9 +669,16 @@ type SetHookURLVariableInput struct {
 	HookID  int64                `json:"hook_id"  jsonschema:"Webhook ID,required"`
 	Key     string               `json:"key"      jsonschema:"URL variable key name. Letters and underscores only. GitLab rejects keys containing digits,required"`
 	Value   string               `json:"value"    jsonschema:"URL variable value (write-only). Must be non-empty,required"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
-// SetHookURLVariable creates or updates a templated URL variable on a group webhook.
+// SetHookURLVariable creates or updates a templated URL variable on a group
+// webhook. Replacing a variable the webhook already has is confirmed first,
+// as [confirmHookChange] describes.
 func SetHookURLVariable(ctx context.Context, client *gitlabclient.Client, input SetHookURLVariableInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -665,6 +693,10 @@ func SetHookURLVariable(ctx context.Context, client *gitlabclient.Client, input 
 		return errors.New("groupSetHookURLVariable: key is required")
 	}
 	if err := toolutil.RejectTraversalArg("groupSetHookURLVariable", "key", input.Key); err != nil {
+		return err
+	}
+	if err := confirmHookChange(ctx, client, "groupSetHookURLVariable", string(input.GroupID), input.HookID,
+		toolutil.HookEdit{URLVariableKeys: []string{input.Key}}); err != nil {
 		return err
 	}
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}

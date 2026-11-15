@@ -1842,7 +1842,8 @@ func TestUpdate_Error(t *testing.T) {
 }
 
 // TestUpdate_MalformedDate_RefusesBeforeAnyRequest verifies that update stops
-// on a start_date or due_date it cannot read, naming the one at fault, and
+// on a start_date or due_date it cannot read, a negative reference, or an
+// assignee or contact id of 0 or below, naming the one at fault, and
 // does so before issuing anything: the clearing guard's read would otherwise be
 // spent on a call already destined to be refused.
 func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
@@ -1855,6 +1856,10 @@ func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
 		{"milestone_id", UpdateInput{MilestoneID: new(int64(-1))}},
 		{"parent_id", UpdateInput{ParentID: new(int64(-1))}},
 		{"iteration_id", UpdateInput{IterationID: new(int64(-1))}},
+		// An id no user or contact has: GitLab would empty the list, as []
+		// does, without the question [] asks.
+		{"assignee_ids", UpdateInput{AssigneeIDs: []int64{0}}},
+		{"crm_contact_ids", UpdateInput{CRMContactIDs: []int64{7, -4}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3431,8 +3436,11 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 //
 // Before issue 1303, 0 reached GitLab as gid://gitlab/Milestone/0, refused as
 // "No object found", and "" sent nothing at all, so the update answered success
-// with the value still in place.
+// with the value still in place. YOLO mode stands for the confirmation
+// removing the parent asks for, which TestConfirmParentRemoval_AsksOnlyForZero
+// holds.
 func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	zero, empty := int64(0), ""
 	cases := []struct {
 		input UpdateInput
@@ -3600,4 +3608,36 @@ func extractText(t *testing.T, result *mcp.CallToolResult) string {
 		t.Fatalf("expected TextContent, got %T", result.Content[0])
 	}
 	return tc.Text
+}
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that creating and updating a work item refuse a description that carries a
+// quick action the guard asks about, before any request, the read of the
+// clearing guard included, naming what the line does and how to proceed
+// ([toolutil.ConfirmQuickActions]). GitLab runs such a line when it saves the
+// description, so the edit would move the work item unasked, which
+// issue.move asks about.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	text := "Steps to reproduce.\n/move group/app"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(t.Context(), client, CreateInput{FullPath: "group/project", WorkItemTypeID: "gid://gitlab/WorkItems::Type/1", Title: "t", Description: text})
+			return err
+		},
+		"update": func() error {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: "group/project", IID: 7, Description: &text, AssigneeIDs: []int64{}})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move group/app`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
 }

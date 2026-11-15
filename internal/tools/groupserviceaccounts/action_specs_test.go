@@ -64,6 +64,44 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Rotations_AreDestructive holds the rotation to the answer
+// the revocation gives: GitLab revokes the rotated token in the same request,
+// which is the effect service_account_pat_revoke is destructive for. The
+// spec, its route and the individual tool's annotation say so, the usage
+// tells a model why, and the rest of the update is as it was.
+func TestActionSpecs_Rotations_AreDestructive(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupServiceAccountSpecsByTool(t, ActionSpecs(client))
+	for _, name := range []string{"gitlab_group_service_account_pat_rotate"} {
+		t.Run(name, func(t *testing.T) {
+			spec := byTool[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || !spec.Idempotent {
+				t.Errorf("%s: read-only %v idempotent %v, want the update it was", name, spec.ReadOnly, spec.Idempotent)
+			}
+			if !strings.Contains(spec.Usage, "Destructive: ") || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation.\nReturns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", name, spec.Usage, spec.IndividualTool.Description)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("%s: destructiveHint is not true: %+v", name, tool.Annotations)
+			}
+		})
+	}
+	t.Run("gitlab_group_service_account_pat_create", func(t *testing.T) {
+		if spec := byTool["gitlab_group_service_account_pat_create"]; spec.Destructive || strings.Contains(spec.Usage, "Destructive") {
+			t.Errorf("gitlab_group_service_account_pat_create: destructive %v, usage %q, want a create that ends no token", spec.Destructive, spec.Usage)
+		}
+	})
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

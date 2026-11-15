@@ -4374,6 +4374,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "systemhooks.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "SystemHooks.GetHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /hooks/:hook_id",
           "placeholders": {
             "hook_id": "id"
@@ -4390,7 +4405,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -4467,6 +4482,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "systemhooks.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "SystemHooks.GetHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /hooks/:hook_id/url_variables/:key",
           "placeholders": {
             "hook_id": "id",
@@ -4484,7 +4514,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -9878,6 +9908,58 @@
       "requests": [
         {
           "kind": "graphql",
+          "operation": "query namespace (WorkItems.GetWorkItem)",
+          "root_fields": [
+            "namespace"
+          ],
+          "positions": [
+            "namespace",
+            "namespace.workItem",
+            "namespace.workItem.author",
+            "namespace.workItem.features",
+            "namespace.workItem.features.assignees",
+            "namespace.workItem.features.assignees.assignees",
+            "namespace.workItem.features.assignees.assignees.nodes",
+            "namespace.workItem.features.color",
+            "namespace.workItem.features.healthStatus",
+            "namespace.workItem.features.hierarchy",
+            "namespace.workItem.features.hierarchy.children",
+            "namespace.workItem.features.hierarchy.children.nodes",
+            "namespace.workItem.features.hierarchy.children.nodes.namespace",
+            "namespace.workItem.features.hierarchy.parent",
+            "namespace.workItem.features.hierarchy.parent.namespace",
+            "namespace.workItem.features.iteration",
+            "namespace.workItem.features.iteration.iteration",
+            "namespace.workItem.features.labels",
+            "namespace.workItem.features.labels.labels",
+            "namespace.workItem.features.labels.labels.nodes",
+            "namespace.workItem.features.linkedItems",
+            "namespace.workItem.features.linkedItems.linkedItems",
+            "namespace.workItem.features.linkedItems.linkedItems.nodes",
+            "namespace.workItem.features.linkedItems.linkedItems.nodes.workItem",
+            "namespace.workItem.features.linkedItems.linkedItems.nodes.workItem.namespace",
+            "namespace.workItem.features.milestone",
+            "namespace.workItem.features.milestone.milestone",
+            "namespace.workItem.features.startAndDueDate",
+            "namespace.workItem.features.status",
+            "namespace.workItem.features.status.status",
+            "namespace.workItem.features.weight",
+            "namespace.workItem.workItemType"
+          ],
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "epics.currentAssignees"
+          ],
+          "sdk_methods": [
+            "WorkItems.GetWorkItem"
+          ],
+          "directives": [
+            "optional: the epic is read only when the update empties its assignees and nobody has confirmed it yet"
+          ]
+        },
+        {
+          "kind": "graphql",
           "operation": "query namespace (getWorkItemIDQuery)",
           "root_fields": [
             "namespace"
@@ -9947,8 +10029,8 @@
       ],
       "paths": [
         [
-          0,
-          1
+          1,
+          2
         ]
       ]
     },
@@ -11593,6 +11675,22 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id",
           "placeholders": {
             "hook_id": "hook_id",
@@ -11610,7 +11708,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -11713,6 +11811,22 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id/custom_headers/:key",
           "placeholders": {
             "hook_id": "hook_id",
@@ -11731,7 +11845,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -11742,6 +11856,22 @@
       ],
       "classic": "api",
       "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /groups/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmHookChange"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupHook"
+          ]
+        },
         {
           "kind": "rest",
           "route": "PUT /groups/:id/hooks/:hook_id/url_variables/:key",
@@ -11762,7 +11892,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -12493,6 +12623,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /groups/:id/push_rule",
+          "placeholders": {
+            "id": "group_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "groups.confirmPushRuleRelaxation"
+          ],
+          "sdk_methods": [
+            "Groups.GetGroupPushRules"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /groups/:id/push_rule",
           "placeholders": {
             "id": "group_id"
@@ -12509,7 +12654,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -15672,6 +15817,25 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/issues/:issue_iid",
+          "placeholders": {
+            "id": "project_id",
+            "issue_iid": "issue_iid"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "issues.currentAssignees"
+          ],
+          "sdk_methods": [
+            "Issues.GetIssue"
+          ],
+          "directives": [
+            "optional: the issue is read only when the update empties its assignees and nobody has confirmed it yet"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/issues/:issue_iid",
           "placeholders": {
             "id": "project_id",
@@ -15689,7 +15853,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -19089,6 +19253,25 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/merge_requests/:merge_request_iid",
+          "placeholders": {
+            "id": "project_id",
+            "merge_request_iid": "merge_request_iid"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "mergerequests.currentAssignees"
+          ],
+          "sdk_methods": [
+            "MergeRequests.GetMergeRequest"
+          ],
+          "directives": [
+            "optional: the merge request is read only when the update empties its assignees and nobody has confirmed it yet"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/merge_requests/:merge_request_iid",
           "placeholders": {
             "id": "project_id",
@@ -19106,7 +19289,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23660,6 +23843,19 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id",
           "placeholders": {
             "hook_id": "hook_id",
@@ -23674,7 +23870,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23740,6 +23936,19 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id/custom_headers/:key",
           "placeholders": {
             "hook_id": "hook_id",
@@ -23758,7 +23967,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -23769,6 +23978,19 @@
       ],
       "classic": "api",
       "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/hooks/:hook_id",
+          "placeholders": {
+            "hook_id": "hook_id",
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.doProjectRequest"
+          ]
+        },
         {
           "kind": "rest",
           "route": "PUT /projects/:id/hooks/:hook_id/url_variables/:key",
@@ -23789,7 +24011,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },
@@ -26495,6 +26717,21 @@
       "requests": [
         {
           "kind": "rest",
+          "route": "GET /projects/:id/push_rule",
+          "placeholders": {
+            "id": "project_id"
+          },
+          "class": "optional",
+          "classic": "read_api",
+          "sites": [
+            "projects.confirmPushRuleRelaxation"
+          ],
+          "sdk_methods": [
+            "Projects.GetProjectPushRules"
+          ]
+        },
+        {
+          "kind": "rest",
           "route": "PUT /projects/:id/push_rule",
           "placeholders": {
             "id": "project_id"
@@ -26511,7 +26748,7 @@
       ],
       "paths": [
         [
-          0
+          1
         ]
       ]
     },

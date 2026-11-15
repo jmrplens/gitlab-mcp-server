@@ -65,14 +65,14 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		projectCreateSpec("fork", toolutil.RouteAction(client, Fork), "gitlab_project_fork"),
 		projectCreateSpec("star", toolutil.RouteAction(client, Star), "gitlab_project_star"),
 		projectMutationSpec("unstar", toolutil.RouteAction(client, Unstar), "gitlab_project_unstar"),
-		projectMutationSpec("archive", toolutil.RouteAction(client, Archive), "gitlab_project_archive"),
+		projectArchiveSpec("archive", toolutil.RouteAction(client, Archive), "gitlab_project_archive"),
 		projectMutationSpec("unarchive", toolutil.RouteAction(client, Unarchive), "gitlab_project_unarchive"),
 		projectDestructiveUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, Transfer), "gitlab_project_transfer"),
 		projectReadSpec("list_forks", toolutil.RouteAction(client, ListForks), "gitlab_project_list_forks"),
 		projectReadSpec("languages", toolutil.RouteAction(client, GetLanguages), "gitlab_project_languages"),
 		projectReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_project_hook_list", tagWebhook),
 		projectReadSpec("hook_get", toolutil.RouteAction(client, GetHook), "gitlab_project_hook_get", tagWebhook),
-		projectCreateSpec("hook_add", toolutil.RouteAction(client, AddHook), "gitlab_project_hook_add", tagWebhook),
+		projectHookAddSpec("hook_add", toolutil.RouteAction(client, AddHook), "gitlab_project_hook_add", tagWebhook),
 		projectMutationSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_project_hook_edit", tagWebhook),
 		projectDestructiveUpdateSpec("hook_delete", toolutil.RouteAction(client, DeleteHookOutput), "gitlab_project_hook_delete", tagWebhook),
 		projectMutationSpec("hook_test", toolutil.RouteAction(client, TriggerTestHook), "gitlab_project_hook_test", tagWebhook),
@@ -266,6 +266,33 @@ func projectMutationSpec(name string, route toolutil.ActionRoute, individualTool
 	return toolutil.NewUpdateActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
 
+// projectArchiveSpec is an update that asks for confirmation. Archiving does
+// more than make the project read-only: GitLab takes it out of its fork
+// network, closes the open merge requests from and to its forks, and removes
+// its Pages deployments with their custom domains. project.unarchive brings
+// none of that back, and each of those losses is what project.delete_fork_relation,
+// project.pages_unpublish and project.pages_domain_delete are destructive
+// for. Only the destructive bit is added to the update.
+func projectArchiveSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
+	options := projectOptions(individualTool, extraTags...)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// projectHookAddSpec is a create that asks for confirmation. A webhook
+// deletes nothing, and from then on GitLab posts the events it subscribes to
+// (pushes with their commits, issues and notes, the confidential ones
+// included, jobs, pipelines) to the host named in its url, which is a
+// parameter a model can take from text the user never read. That is what
+// project.mirror_add is destructive for, and project.hook_delete stops the
+// delivery without recalling what was sent. Only the destructive bit is
+// added to the create.
+func projectHookAddSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
+	options := projectOptions(individualTool, extraTags...)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
 func projectDestructiveUpdateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
@@ -284,6 +311,9 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 	}
 	if slices.Contains(extraTags, tagPushRule) {
 		options.Usage = "Use project push rule actions for the singleton project-level push rule. Do not pass push_rule_id. Get/add/edit/delete operate by project_id only. Use reject_unsigned_commits, not deny_unsigned_commits."
+		if individualTool == toolProjectEditPushRule {
+			options.Usage += " " + toolutil.PushRuleRelaxUsage
+		}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramProjectID: {
 				SemanticRole:     "scope_project",
@@ -420,10 +450,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Unstar a project. Returns: the project with the updated star_count. See also: gitlab_project_star, gitlab_project_list_starrers.",
 	},
 	"gitlab_project_archive": {
-		usage:       "Archive a project so it becomes read-only. Send project_id. Requires Owner role. Use unarchive to reverse.",
+		usage:       "Archive a project so it becomes read-only. Send project_id. Requires Owner role. Destructive: GitLab also removes the project from its fork network, closes the open merge requests from and to its forks, and removes its Pages deployments and their custom domains, and unarchive restores write access and none of that, so confirm with the user first.",
 		aliases:     []string{"archive project", "make project read-only", "freeze project", "lock project"},
 		related:     []string{"project.unarchive", actionProjectGet, actionProjectDelete},
-		description: "Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
+		description: "Archive a project, making it read-only in GitLab. Requires confirmation. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
 	},
 	"gitlab_project_unarchive": {
 		usage:       "Unarchive a previously archived project to restore write access. Send project_id. Requires Owner role.",
@@ -552,16 +582,16 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Get a single project webhook. Returns: the webhook with URL, enabled events, and SSL settings. See also: gitlab_project_hook_list, gitlab_project_hook_edit.",
 	},
 	"gitlab_project_hook_add": {
-		usage:       "Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.). Production GitLab requires HTTPS. Requires Maintainer role.",
+		usage:       "Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.). Production GitLab requires HTTPS. Requires Maintainer role. " + toolutil.HookAddUsage,
 		aliases:     []string{"add project webhook", "create project hook", "register webhook"},
 		related:     []string{actionProjectHookList, actionProjectHookEdit, "project.hook_test"},
-		description: "Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
+		description: "Add a webhook to a project. Requires confirmation. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
 	},
 	"gitlab_project_hook_edit": {
-		usage:       "Edit an existing project webhook's URL, token, or enabled events. Send project_id, hook_id, and the fields to change.",
+		usage:       "Edit an existing project webhook's URL, token, or enabled events. Send project_id, hook_id, and the fields to change. " + toolutil.HookEditUsage,
 		aliases:     []string{"edit project webhook", "update project hook", "change webhook settings"},
 		related:     []string{actionProjectHookGet, actionProjectHookList, "project.hook_test"},
-		description: "Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
+		description: "Edit a project webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
 	},
 	"gitlab_project_hook_delete": {
 		usage:       "Delete a project webhook by hook_id. Send project_id and hook_id. Irreversible.",
@@ -576,10 +606,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Trigger a test event for a project webhook. Returns: a confirmation that the test event was fired. See also: gitlab_project_hook_get, gitlab_project_hook_edit.",
 	},
 	"gitlab_project_hook_set_custom_header": {
-		usage:       "Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value. The value is write-only.",
+		usage:       "Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value. The value is write-only. " + toolutil.HookSetValueUsage,
 		aliases:     []string{"set webhook custom header", "add webhook header", "configure webhook header", "create webhook custom header"},
 		related:     []string{"project.hook_delete_custom_header", actionProjectHookGet, actionProjectHookEdit},
-		description: "Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
+		description: "Set a custom header on a project webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_delete_custom_header": {
 		usage:       "Delete a custom HTTP header from a project webhook. Send project_id, hook_id, and key.",
@@ -588,10 +618,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Delete a custom header from a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_set_custom_header, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_set_url_variable": {
-		usage:       "Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value. The value is write-only.",
+		usage:       "Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value. The value is write-only. " + toolutil.HookSetValueUsage,
 		aliases:     []string{"set webhook url variable", "add webhook url placeholder", "configure webhook url variable", "create webhook url variable"},
 		related:     []string{"project.hook_delete_url_variable", actionProjectHookGet, actionProjectHookEdit},
-		description: "Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
+		description: "Set a URL variable on a project webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_delete_url_variable": {
 		usage:       "Delete a URL variable from a project webhook. Send project_id, hook_id, and key.",
@@ -672,7 +702,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	toolProjectEditPushRule: {
 		aliases:     []string{"edit push rule", "update project push rule", "change commit rules"},
 		related:     []string{actionProjectGetPushRules, actionProjectAddPushRule, actionProjectDeletePushRule},
-		description: "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+		description: "Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
 	},
 	"gitlab_project_delete_push_rule": {
 		aliases:     []string{"delete push rule", "remove project push rule", "clear commit rules"},

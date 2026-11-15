@@ -69,6 +69,11 @@ type CreateInput struct {
 	CommitID string `json:"commit_id,omitempty" jsonschema:"SHA of the commit to anchor the discussion to (optional)."`
 	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // NoteOutput is a note of a merge request discussion: a type of its own over
@@ -103,6 +108,11 @@ type ReplyInput struct {
 	Body         string               `json:"body"          jsonschema:"Reply body,required"`
 	// CreatedAt backdates the reply note; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // ListInput defines parameters for listing discussions.
@@ -157,6 +167,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
 	if err != nil {
 		return Output{}, fmt.Errorf("mrDiscussionCreate: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "mrDiscussionCreate", input.Body); askErr != nil {
+		return Output{}, askErr
 	}
 	if input.Position != nil {
 		if err = validatePosition(ctx, client, string(input.ProjectID), input.MRIID, input.Position); err != nil {
@@ -229,6 +242,9 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 	if err != nil {
 		return NoteOutput{}, fmt.Errorf("mrDiscussionReply: %w", err)
 	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "mrDiscussionReply", input.Body); askErr != nil {
+		return NoteOutput{}, askErr
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Discussions.AddMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.AddMergeRequestDiscussionNoteOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
@@ -291,6 +307,11 @@ type UpdateNoteInput struct {
 	Resolved     *bool                `json:"resolved,omitempty" jsonschema:"Set to true to resolve, false to unresolve. Omit to leave unchanged."`
 	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteNoteInput defines parameters for deleting a discussion note.
@@ -342,6 +363,9 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	createdAt, err := toolutil.ParseTimeField("created_at", input.CreatedAt)
 	if err != nil {
 		return NoteOutput{}, fmt.Errorf("mrDiscussionNoteUpdate: %w", err)
+	}
+	if askErr := toolutil.ConfirmQuickActions(ctx, "mrDiscussionNoteUpdate", input.Body); askErr != nil {
+		return NoteOutput{}, askErr
 	}
 	opts := &gl.UpdateMergeRequestDiscussionNoteOptions{
 		CreatedAt: createdAt,

@@ -100,10 +100,10 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 		}
 		options.IndividualTool.Description = "Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only). Returns: the created variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_get, gitlab_instance_variable_update."
 	case "instance_update":
-		options.Usage = "Update an instance-level CI/CD variable by key. Admin-only."
+		options.Usage = "Update an instance-level CI/CD variable by key. Admin-only. " + toolutil.VariableValueUsage
 		options.Aliases = []string{individualTool, "update instance variable", "edit instance variable", "change instance ci variable"}
 		options.RelatedActions = []string{actionInstanceVariableGet, actionInstanceVariableList, actionInstanceVariableDelete}
-		options.IndividualTool.Description = "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete."
+		options.IndividualTool.Description = "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Replacing its value requires confirmation. Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete."
 	case "instance_delete":
 		options.Usage = "Delete an instance-level CI/CD variable by key. Admin-only."
 		options.Aliases = []string{individualTool, "delete instance variable", "remove instance variable", "drop instance ci variable"}

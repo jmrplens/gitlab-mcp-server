@@ -1184,3 +1184,39 @@ func TestWrites_CreatedAtThatIsNotATimestamp_IsRefusedBeforeAnyRequest(t *testin
 		})
 	}
 }
+
+// TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest verifies
+// that the three writes of an issue discussion refuse a body that carries a
+// quick action the guard asks about, before any request, naming what the line
+// does and how to proceed ([toolutil.ConfirmQuickActions]). GitLab runs such
+// a line when it saves the note, so the note would move the issue unasked,
+// which issue.move asks about.
+func TestWrites_TextWithAQuickActionThatAsks_IsRefusedBeforeAnyRequest(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	const text = "Done.\n/move group/app"
+	writes := map[string]func() error{
+		"create": func() error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: "42", IssueIID: 1, Body: text})
+			return err
+		},
+		"add_note": func() error {
+			_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "42", IssueIID: 1, DiscussionID: "d1", Body: text})
+			return err
+		},
+		"update_note": func() error {
+			_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: "42", IssueIID: 1, DiscussionID: "d1", NoteID: 7, Body: text})
+			return err
+		},
+	}
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "moves the item to another project or group (`/move group/app`)") || !strings.Contains(err.Error(), "confirm=true") {
+				t.Errorf("%s error = %v, want the refusal that asks about the quick action", name, err)
+			}
+		})
+	}
+}

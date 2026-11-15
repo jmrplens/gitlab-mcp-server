@@ -287,22 +287,22 @@ func modelFacingCalls() []modelFacingCall {
 		{
 			name: "the pull mirror guard", surface: config.ToolSurfaceDynamic,
 			tool: "gitlab_execute_action", args: map[string]any{"action": "project.pull_mirror_configure", "params": mirror},
-			says: "Configure project 42 to pull from https://github.com/example/repo.git and overwrite diverged branches?",
+			says: "Configure project `42` to pull from `https[:]//github.com/example/repo.git` and overwrite diverged branches?",
 		},
 		{
 			name: "the pull mirror guard", surface: config.ToolSurfaceIndividual,
 			tool: "gitlab_project_pull_mirror_configure", args: mirror,
-			says: "Configure project 42 to pull from https://github.com/example/repo.git and overwrite diverged branches?",
+			says: "Configure project `42` to pull from `https[:]//github.com/example/repo.git` and overwrite diverged branches?",
 		},
 		{
 			name: "the work item guard", surface: config.ToolSurfaceDynamic,
 			tool: "gitlab_execute_action", args: map[string]any{"action": "issue.work_item_update", "params": workItem},
-			says: "Remove every assignee (the current list could not be read) from work item group/app#7?",
+			says: "Remove every assignee (the current list could not be read) from work item `group/app`#7?",
 		},
 		{
 			name: "the work item guard", surface: config.ToolSurfaceIndividual,
 			tool: "gitlab_update_work_item", args: workItem,
-			says: "Remove every assignee (the current list could not be read) from work item group/app#7?",
+			says: "Remove every assignee (the current list could not be read) from work item `group/app`#7?",
 		},
 	}
 }

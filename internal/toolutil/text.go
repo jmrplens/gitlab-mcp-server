@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // RedactedSecretValue is the standard placeholder for sensitive values that
@@ -879,8 +880,10 @@ func titleSegment(segment string) string {
 }
 
 // consentURLScheme matches the scheme of a URL a client might render as
-// clickable inside an elicitation form.
-var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
+// clickable inside an elicitation form, wherever it starts: a renderer
+// links an address glued to an underscore or a digit as readily as one
+// after a space.
+var consentURLScheme = regexp.MustCompile(`(?i)(https?)://`)
 
 // EscapeConsentValue renders caller-controlled text for a consent dialog.
 //
@@ -895,8 +898,19 @@ var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
 // reached the user as bold text and a link inside the question they were being
 // asked, all of it attacker-supplied by way of the model.
 //
-// Three things happen here. Line breaks collapse, so a value cannot add
-// paragraphs to the dialog's structure. URL schemes are defanged to https[:]//,
+// Four things happen here. Line breaks collapse, so a value cannot add
+// paragraphs to the dialog's structure: the line feed and the carriage return,
+// and the line and paragraph separators U+2028 and U+2029, which a renderer
+// may break a line at as well (the other breaks Unicode makes mandatory, the
+// vertical tab, the form feed and U+0085, are control bytes and are dropped).
+// The characters that change the direction text is read in are dropped, every
+// one Unicode gives the Bidi_Control property: the marks U+061C, U+200E and
+// U+200F, the embeddings and overrides U+202A to U+202E and the isolates
+// U+2066 to U+2069. An override in a value would show its letters in reverse,
+// and one left open would run past the end of the value into the server's own
+// words, so the value could make the question read otherwise than it is
+// written. Letters of a right-to-left script are text and are kept. URL
+// schemes are defanged to https[:]//,
 // which stays legible while leaving nothing for a client to linkify. And the
 // result is fenced in backticks, so emphasis, headings and link syntax inside
 // it are shown rather than rendered — using a fence longer than any run of
@@ -908,8 +922,7 @@ var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
 func EscapeConsentValue(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "\r\n", " ")
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.Map(consentRune, s)
 	s = consentURLScheme.ReplaceAllString(s, "$1[:]//")
 
 	if s == "" {
@@ -920,6 +933,26 @@ func EscapeConsentValue(s string) string {
 	}
 
 	return backtickSpan(s)
+}
+
+// The line and paragraph separators of Unicode, U+2028 and U+2029, written by
+// their numbers so the source carries no character a reader cannot see.
+const (
+	lineSeparator      = 0x2028
+	paragraphSeparator = 0x2029
+)
+
+// consentRune is what [EscapeConsentValue] writes for one character of a
+// value: a space for a character that ends a line, nothing for one that
+// changes the reading direction, and the character itself otherwise.
+func consentRune(r rune) rune {
+	if r == '\n' || r == '\r' || r == lineSeparator || r == paragraphSeparator {
+		return ' '
+	}
+	if unicode.Is(unicode.Bidi_Control, r) {
+		return -1
+	}
+	return r
 }
 
 // MdCodeSpan renders a GitLab-authored value as an inline code span, for a

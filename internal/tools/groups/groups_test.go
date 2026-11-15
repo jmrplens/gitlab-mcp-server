@@ -2721,6 +2721,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
+	// The request under test is the write, so the server runs with
+	// confirmation switched off: what the guard asks, and when, is held by
+	// its own tests.
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	byTool := newGroupsRouteSpecs(t)
 
 	tools := []struct {

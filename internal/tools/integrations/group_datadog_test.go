@@ -763,6 +763,8 @@ func TestDeleteGroupDatadogOutput_Forbidden(t *testing.T) {
 
 // TestActionSpecs_GroupDatadogPresent verifies the three group_datadog action
 // specs are registered with the expected metadata (Premium edition, group tag).
+// The set is destructive as the delete is: it names where GitLab forwards the
+// group's pipeline data and replaces the key stored before.
 func TestActionSpecs_GroupDatadogPresent(t *testing.T) {
 	specs := ActionSpecs(nil)
 	want := map[string]struct {
@@ -771,7 +773,7 @@ func TestActionSpecs_GroupDatadogPresent(t *testing.T) {
 		hasGroupTag bool
 	}{
 		"integration_get_group_datadog":    {destructive: false, edition: "", hasGroupTag: true},
-		"integration_set_group_datadog":    {destructive: false, edition: "", hasGroupTag: true},
+		"integration_set_group_datadog":    {destructive: true, edition: "", hasGroupTag: true},
 		"integration_delete_group_datadog": {destructive: true, edition: "", hasGroupTag: true},
 	}
 	seen := map[string]bool{}

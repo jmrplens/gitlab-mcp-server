@@ -196,7 +196,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("license_delete", ownerLicense, toolutil.DestructiveVoidAction(client, license.Delete), "gitlab_delete_license"),
 		adminReadSpec("system_hook_list", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.List), "gitlab_list_system_hooks"),
 		adminReadSpec("system_hook_get", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Get), "gitlab_get_system_hook"),
-		adminCreateSpec("system_hook_add", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
+		adminConfirmedCreateSpec("system_hook_add", ownerSystemHooks, toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
 		adminSystemHookEditSpec(client),
 		// Classified as a create, not a read, and deliberately without an
 		// annotation override. Firing a test event makes GitLab POST a sample
@@ -224,7 +224,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("db_migration_mark", ownerDBMigrations, toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
 		adminReadSpec("application_list", ownerApplications, toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", ownerApplications, toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
-		adminCreateSpec("application_renew_secret", ownerApplications, toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
+		adminConfirmedCreateSpec("application_renew_secret", ownerApplications, toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
 		adminDeleteSpec("application_delete", ownerApplications, toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
 		adminApplicationStatisticsGetSpec(client),
 		adminMetadataGetSpec(client),
@@ -292,6 +292,28 @@ func adminCreateSpec(name, owner string, route toolutil.ActionRoute, individualT
 	return toolutil.NewCreateActionSpec(name, route, adminOptions(owner, individualTool))
 }
 
+// adminConfirmedCreateSpec is a create that asks for confirmation. Only the
+// destructive bit is added: the constructor stays the create's, since
+// repeating either call creates another object. Two actions take it:
+//
+//   - application_renew_secret: renewing an OAuth application's secret
+//     invalidates the previous one at once and no call brings it back, so
+//     every client configured with it stops authenticating until it is given
+//     the new value: a credential revoked with another issued in its place,
+//     which the catalog classifies as it does a revocation.
+//   - system_hook_add: a system hook deletes nothing, and from then on GitLab
+//     posts the events of the whole instance (users and projects created,
+//     with their addresses, pushes and merge requests of every project) to
+//     the host named in its url, which is a parameter a model can take from
+//     text the user never read. That is what project.hook_add and
+//     project.mirror_add are destructive for, at the widest scope, and
+//     system_hook_delete stops the delivery without recalling what was sent.
+func adminConfirmedCreateSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := adminOptions(owner, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
 func adminUpdateSpec(name, owner string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, adminOptions(owner, individualTool))
 }
@@ -309,13 +331,13 @@ func adminUpdateCreateIndividualSpec(name, owner string, route toolutil.ActionRo
 
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerSystemHooks, "gitlab_edit_system_hook")
-	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
+	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Pointing it at another URL or replacing a token requires confirmation. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
 	return toolutil.NewUpdateActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
 }
 
 func adminSystemHookSetURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerSystemHooks, "gitlab_set_system_hook_url_variable")
-	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
+	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Replacing a variable the hook already has requires confirmation. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
 	return toolutil.NewUpdateActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
 }
 
@@ -782,10 +804,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Get a system hook by id. Returns: the system hook with url, event triggers, and SSL verification setting. See also: gitlab_list_system_hooks, gitlab_edit_system_hook.",
 	},
 	"gitlab_add_system_hook": {
-		usage:       "Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.",
+		usage:       "Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable. " + toolutil.HookAddUsage,
 		aliases:     []string{"add system hook", "create instance webhook", "register system hook"},
 		related:     []string{actionSystemHookList, actionSystemHookEdit, actionSystemHookTest},
-		description: "Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
+		description: "Add an instance system hook. Requires confirmation. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
 	},
 	"gitlab_test_system_hook": {
 		usage:       "Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.",
@@ -804,12 +826,12 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 	// and RelatedActions are filled here (description omitted to preserve the
 	// builder text).
 	"gitlab_edit_system_hook": {
-		usage:   "Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.",
+		usage:   "Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification. " + toolutil.HookEditUsage,
 		aliases: []string{"edit system hook", "update instance webhook", "change system hook"},
 		related: []string{actionSystemHookGet, actionSystemHookList, actionSystemHookTest},
 	},
 	"gitlab_set_system_hook_url_variable": {
-		usage:   "Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.",
+		usage:   "Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value. " + toolutil.HookSetValueUsage,
 		aliases: []string{"set system hook url variable", "add system hook url variable", "configure system hook variable"},
 		related: []string{"admin.system_hook_delete_url_variable", actionSystemHookEdit, actionSystemHookGet},
 	},
@@ -949,10 +971,10 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		},
 	},
 	"gitlab_renew_application_secret": {
-		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.",
+		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). Destructive: the previous secret is invalidated immediately, so confirm with the user first, and update every client that uses it with the new value returned.",
 		aliases:     []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"},
 		related:     []string{actionApplicationList, actionApplicationCreate},
-		description: "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+		description: "Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
 		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceOAuthApplicationID},
 	},
 	"gitlab_delete_application": {

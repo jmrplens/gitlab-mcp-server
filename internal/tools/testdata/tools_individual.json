@@ -2926,10 +2926,14 @@
   },
   {
     "name": "gitlab_add_email",
-    "description": "Add an email address to the authenticated user's account. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.",
+    "description": "Add an email address to the authenticated user's account. Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "email": {
           "description": "Email address to add",
           "format": "email",
@@ -2943,7 +2947,8 @@
       "required": [
         "email"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -2974,7 +2979,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -2982,10 +2987,14 @@
   },
   {
     "name": "gitlab_add_email_for_user",
-    "description": "Add an email address to a specific user's account (admin only). Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.",
+    "description": "Add an email address to a specific user's account (admin only). Requires confirmation. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "email": {
           "description": "Email address to add",
           "format": "email",
@@ -3004,7 +3013,8 @@
         "email",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -3035,7 +3045,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -3050,6 +3060,10 @@
         "body": {
           "description": "Note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "discussion_id": {
           "description": "Discussion ID to reply to",
@@ -3466,6 +3480,10 @@
         "body": {
           "description": "Note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -3932,12 +3950,16 @@
   },
   {
     "name": "gitlab_add_merge_request_to_merge_train",
-    "description": "Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
+    "description": "Add a merge request to a merge train. Requires confirmation. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "auto_merge": {
           "description": "Enable auto-merge when pipeline succeeds",
+          "type": "boolean"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
           "type": "boolean"
         },
         "merge_request_iid": {
@@ -3968,7 +3990,8 @@
         "merge_request_iid",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -4349,7 +4372,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -4992,10 +5015,14 @@
   },
   {
     "name": "gitlab_add_ssh_key",
-    "description": "Add an SSH key to the current user. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.",
+    "description": "Add an SSH key to the current user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC",
           "format": "date-time",
@@ -5023,7 +5050,8 @@
         "key",
         "title"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -5058,7 +5086,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -5066,10 +5094,14 @@
   },
   {
     "name": "gitlab_add_ssh_key_for_user",
-    "description": "Add an SSH key to a specific user. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
+    "description": "Add an SSH key to a specific user. Requires confirmation. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "Expiry time, an ISO 8601 timestamp such as 2026-12-31T23:00:00Z. A date such as 2026-12-31 is read as midnight UTC",
           "format": "date-time",
@@ -5102,7 +5134,8 @@
         "title",
         "user_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -5137,7 +5170,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -5145,13 +5178,17 @@
   },
   {
     "name": "gitlab_add_system_hook",
-    "description": "Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
+    "description": "Add an instance system hook. Requires confirmation. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "branch_filter_strategy": {
           "description": "Branch filter strategy: wildcard, regex, or all_branches",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "custom_webhook_template": {
           "description": "Custom payload template (JSON) sent instead of the default webhook body",
@@ -5223,7 +5260,8 @@
       "required": [
         "url"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -5351,7 +5389,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -11741,10 +11779,14 @@
   },
   {
     "name": "gitlab_ci_variable_update",
-    "description": "Update a CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete.",
+    "description": "Update a CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
           "type": [
@@ -12389,7 +12431,7 @@
   },
   {
     "name": "gitlab_commit_create",
-    "description": "Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get.",
+    "description": "Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Creating it with force requires confirmation. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12461,8 +12503,12 @@
           "description": "Commit message",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms creating the commit with force, which drops from the target branch the commits its starting point does not have. Pass true only after the user approves that. Only required when force is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "force": {
-          "description": "When true, force-overwrite the target branch even if a conflict exists",
+          "description": "When true, reset the target branch to the starting point (start_branch or start_sha) plus this commit, dropping from the branch the commits the starting point does not have. Needs the user's approval: confirm=true once they approve, or an elicitation prompt",
           "type": "boolean"
         },
         "project_id": {
@@ -16162,6 +16208,10 @@
           "description": "Discussion body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -17304,10 +17354,14 @@
   },
   {
     "name": "gitlab_create_group_ssh_certificate",
-    "description": "Register a new SSH CA certificate on a group from a CA public key and title. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get.",
+    "description": "Register a new SSH CA certificate on a group from a CA public key and title. Requires confirmation. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -17329,7 +17383,8 @@
         "key",
         "title"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -17367,7 +17422,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -18043,6 +18098,10 @@
         "body": {
           "description": "Discussion body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -18900,10 +18959,14 @@
   },
   {
     "name": "gitlab_create_project_external_status_check",
-    "description": "Create an external status check service for a project. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.",
+    "description": "Create an external status check service for a project. Requires confirmation. Returns: the created check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_update_project_external_status_check, gitlab_delete_project_external_status_check.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "external_url": {
           "description": "External URL for the status check",
           "format": "uri",
@@ -18940,7 +19003,8 @@
         "name",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -19022,7 +19086,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -20981,6 +21045,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "create_source": {
           "description": "Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item",
@@ -24382,7 +24450,7 @@
   },
   {
     "name": "gitlab_deploy_key_add",
-    "description": "Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable.",
+    "description": "Add a new SSH deploy key to a project. Requires confirmation. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24392,6 +24460,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "expires_at": {
           "description": "Expiry, an ISO 8601 timestamp such as 2025-01-01T00:00:00Z, or a date such as 2025-01-01 read as midnight UTC",
@@ -24419,7 +24491,8 @@
         "project_id",
         "title"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -24549,7 +24622,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -24774,10 +24847,14 @@
   },
   {
     "name": "gitlab_deploy_key_enable",
-    "description": "Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get.",
+    "description": "Enable an existing deploy key for a project. Requires confirmation. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "deploy_key_id": {
           "description": "Deploy key ID to enable. Do not use deploy_token_id",
           "type": "integer"
@@ -24794,7 +24871,8 @@
         "deploy_key_id",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -24924,7 +25002,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -31228,13 +31306,17 @@
   },
   {
     "name": "gitlab_edit_system_hook",
-    "description": "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.",
+    "description": "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Pointing it at another URL or replacing a token requires confirmation. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "branch_filter_strategy": {
           "description": "Branch filter strategy: wildcard, regex, or all_branches",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms an edit that points the system hook at another URL or replaces its token or signing token, which cannot be read back. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL to a hook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "custom_webhook_template": {
           "description": "Updated custom payload template (JSON) sent instead of the default webhook body. Pass an empty string to remove it. Omit the field to leave it untouched",
@@ -34912,6 +34994,10 @@
             "boolean"
           ]
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "create_source": {
           "description": "Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic",
           "type": "string"
@@ -37436,6 +37522,10 @@
           "description": "Note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -38244,6 +38334,10 @@
           "description": "Updated note body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -38489,7 +38583,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "Global IDs of assignees (empty array to remove all)",
+          "description": "Global IDs of assignees (empty array to remove all). An ID of 0 or below is refused",
           "items": {
             "type": "integer"
           },
@@ -38501,6 +38595,10 @@
         "color": {
           "description": "Epic color (hex format)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms taking the epic out of its parent epic when parent_id is 0, and removing every current assignee when assignee_ids is []. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes something, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "Updated description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
@@ -54658,10 +54756,14 @@
   },
   {
     "name": "gitlab_group_access_token_rotate",
-    "description": "Rotate a group access token, generating a new token value. Optionally set a new expiry date.\n\nSee also: gitlab_group_access_token_list, gitlab_group_access_token_revoke\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate a group access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_group_access_token_list, gitlab_group_access_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -54683,7 +54785,8 @@
         "group_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -54802,7 +54905,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -54810,10 +54913,14 @@
   },
   {
     "name": "gitlab_group_access_token_rotate_self",
-    "description": "Rotate the group access token used for the current request. Returns the new token value.\n\nSee also: gitlab_group_access_token_rotate, gitlab_personal_access_token_rotate_self\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate the group access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_group_access_token_rotate, gitlab_personal_access_token_rotate_self.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -54830,7 +54937,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -54949,7 +55057,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -55130,10 +55238,14 @@
   },
   {
     "name": "gitlab_group_archive",
-    "description": "Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.",
+    "description": "Archive a GitLab group, making it and its projects read-only in GitLab. Requires confirmation. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -55145,7 +55257,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -55173,7 +55286,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -59361,7 +59474,7 @@
   },
   {
     "name": "gitlab_group_edit_push_rule",
-    "description": "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.",
+    "description": "Edit a GitLab group's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -59406,6 +59519,10 @@
             "null",
             "string"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "deny_delete_tag": {
           "description": "Deny tag deletion",
@@ -61041,7 +61158,7 @@
   },
   {
     "name": "gitlab_group_hook_add",
-    "description": "Create a webhook on a GitLab group. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.",
+    "description": "Create a webhook on a GitLab group. Requires confirmation. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61067,6 +61184,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "custom_headers": {
           "description": "Custom HTTP headers added to webhook requests",
@@ -61305,7 +61426,8 @@
         "group_id",
         "url"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -61505,7 +61627,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -61706,7 +61828,7 @@
   },
   {
     "name": "gitlab_group_hook_edit",
-    "description": "Update a GitLab group webhook. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.",
+    "description": "Update a GitLab group webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61732,6 +61854,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "custom_headers": {
           "description": "Custom HTTP headers added to webhook requests",
@@ -62781,10 +62907,14 @@
   },
   {
     "name": "gitlab_group_hook_set_custom_header",
-    "description": "Set a custom header on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get.",
+    "description": "Set a custom header on a GitLab group webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -62847,10 +62977,14 @@
   },
   {
     "name": "gitlab_group_hook_set_url_variable",
-    "description": "Set a URL variable on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get.",
+    "description": "Set a URL variable on a GitLab group webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -75546,10 +75680,14 @@
   },
   {
     "name": "gitlab_group_service_account_pat_rotate",
-    "description": "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.",
+    "description": "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role). Requires confirmation.\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value, which must be captured immediately because it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "Expiration date for the new token (YYYY-MM-DD)",
           "format": "date",
@@ -75573,7 +75711,8 @@
         "service_account_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -75685,7 +75824,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -76988,10 +77127,14 @@
   },
   {
     "name": "gitlab_group_transfer",
-    "description": "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
+    "description": "Transfer a GitLab group under a new parent (or to top level), waiting up to 45 seconds for GitLab to apply the move. Requires confirmation. Returns: the group under its new parent, or with transfer_queued set and its current parent when GitLab has not applied the move yet, or an error when GitLab reports the move failed, with GitLab's reason from 19.5. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path of the group to move",
           "type": [
@@ -77010,7 +77153,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -77876,7 +78020,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -78029,10 +78173,14 @@
   },
   {
     "name": "gitlab_group_transfer_project",
-    "description": "Transfer a project into a GitLab group namespace (administrators only). Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
+    "description": "Transfer a project into a GitLab group namespace (administrators only). Requires confirmation. Returns: the destination group's metadata, not the project's. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -78052,7 +78200,8 @@
         "group_id",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -78914,7 +79063,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -81757,10 +81906,14 @@
   },
   {
     "name": "gitlab_group_variable_update",
-    "description": "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete.",
+    "description": "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Replacing its value requires confirmation. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
           "type": [
@@ -82723,10 +82876,14 @@
   },
   {
     "name": "gitlab_import_project_from_file",
-    "description": "Import a project from an export archive. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
+    "description": "Import a project from an export archive. Overwriting an existing project requires confirmation. Returns: the new project's import status, type, correlation id, any import error, and the relations that failed to import. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms overwriting the project that is already at the path, which no call brings back. Pass true only after the user approves that. Only required when overwrite is true. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "content_base64": {
           "description": "Base64-encoded export archive content. Only one of file_path or content_base64 should be provided.",
           "type": "string"
@@ -83021,7 +83178,7 @@
           ]
         },
         "overwrite": {
-          "description": "If true, overwrite an existing project with the same path",
+          "description": "If true, overwrite an existing project with the same path, which replaces it whole. Needs the user's approval: confirm=true once they approve, or an elicitation prompt",
           "type": [
             "null",
             "boolean"
@@ -83555,10 +83712,14 @@
   },
   {
     "name": "gitlab_instance_variable_update",
-    "description": "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.",
+    "description": "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Replacing its value requires confirmation. Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing the variable's value, which no call restores. Pass true only after the user approves that. Only required when the call sends value. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Updated variable description. Pass an empty string to remove it. Omit the field to leave it untouched",
           "type": [
@@ -86789,6 +86950,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Creation date override (ISO 8601, requires admin permissions)",
@@ -96218,10 +96383,14 @@
   },
   {
     "name": "gitlab_issue_move",
-    "description": "Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
+    "description": "Move an issue to another project. Requires confirmation. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "issue_iid": {
           "description": "Issue internal ID",
           "type": "integer"
@@ -96243,7 +96412,8 @@
         "project_id",
         "to_project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -96948,7 +97118,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -98407,6 +98577,10 @@
         "body": {
           "description": "Note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
@@ -100046,6 +100220,10 @@
         "body": {
           "description": "Updated note body (Markdown supported)",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "issue_iid": {
           "description": "Issue internal ID",
@@ -103395,7 +103573,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] to remove every assignee. Omit the field to leave them untouched",
+          "description": "User IDs that replace the issue's assignees. More than one needs Premium or Ultimate: below them, on an unlicensed instance or a Free GitLab.com namespace, GitLab keeps only the first. Pass [] or [0] to remove every assignee. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -103410,6 +103588,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms taking the issue out of its epic when epic_id is 0, and removing every current assignee when assignee_ids is [] or begins with 0, or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes something, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "New description (Markdown supported). Pass an empty string to remove the description. Omit the field to leave it untouched",
@@ -109810,10 +109992,14 @@
   },
   {
     "name": "gitlab_label_promote",
-    "description": "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.",
+    "description": "Promote a project label to a group label, sharing it across the group's projects. Requires confirmation. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "label_id": {
           "description": "Label ID or name",
           "type": [
@@ -109833,7 +110019,8 @@
         "label_id",
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -109861,7 +110048,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -132706,7 +132893,7 @@
   },
   {
     "name": "gitlab_modify_user",
-    "description": "Modify an existing user. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.",
+    "description": "Modify an existing user. Replacing the password, the email address or the external identity requires confirmation. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -132769,6 +132956,10 @@
             "null",
             "string"
           ]
+        },
+        "confirm": {
+          "description": "Confirms replacing what the account signs in or is recovered with: its password, its email address or its external identity. Pass true only after the user approves that. Only required when the call sends password, email, provider or extern_uid. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "email": {
           "description": "New email address",
@@ -137630,6 +137821,10 @@
             "array"
           ]
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Merge request description (Markdown supported)",
           "type": "string"
@@ -142029,6 +142224,10 @@
           "description": "SHA of the commit to anchor the discussion to (optional).",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
@@ -143434,6 +143633,10 @@
           "description": "New body text (Markdown). Leave empty to keep current body.",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
@@ -143777,6 +143980,10 @@
         "body": {
           "description": "Reply body",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "created_at": {
           "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
@@ -144481,6 +144688,10 @@
         "commit_id": {
           "description": "SHA of the commit to comment on",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "in_reply_to_discussion_id": {
           "description": "Discussion ID to reply to",
@@ -145357,6 +145568,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms running the quick actions the summary note carries. Pass true only after the user approves that. Only required when a line of note begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the note. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "internal": {
           "description": "Whether the summary note is internal, visible only to members who can see internal notes. Defaults to false and applies only together with note",
           "type": [
@@ -145432,6 +145647,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "description": "Merge request internal ID",
           "type": "integer"
@@ -153507,6 +153726,10 @@
           "description": "Comment body (Markdown supported)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
@@ -154740,6 +154963,10 @@
         "body": {
           "description": "Updated comment body",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
@@ -159764,7 +159991,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched",
+          "description": "User IDs that replace the merge request's assignees. Pass [] or [0] to remove every assignee. Omit the field to leave them untouched",
           "items": {
             "type": "integer"
           },
@@ -159772,6 +159999,10 @@
             "null",
             "array"
           ]
+        },
+        "confirm": {
+          "description": "Confirms removing every current assignee when assignee_ids is [] or begins with 0, or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "description": {
           "description": "New description. Pass an empty string to remove it. Omit the field to leave it untouched",
@@ -165981,10 +166212,14 @@
   },
   {
     "name": "gitlab_personal_access_token_rotate",
-    "description": "Rotate a personal access token, generating a new token value. Optionally set a new expiry date.\n\nSee also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate a personal access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -165998,7 +166233,8 @@
       "required": [
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -166117,7 +166353,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -166125,17 +166361,22 @@
   },
   {
     "name": "gitlab_personal_access_token_rotate_self",
-    "description": "Rotate the personal access token used for the current request. Returns the new token value.\n\nSee also: gitlab_personal_access_token_rotate, gitlab_project_access_token_rotate_self\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate the personal access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_personal_access_token_rotate, gitlab_project_access_token_rotate_self.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
           "type": "string"
         }
       },
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -166254,7 +166495,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -168466,10 +168707,14 @@
   },
   {
     "name": "gitlab_pipeline_schedule_edit_variable",
-    "description": "Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
+    "description": "Edit a pipeline schedule variable. Requires confirmation. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "key": {
           "description": "Variable key to edit",
           "type": "string"
@@ -168504,7 +168749,8 @@
         "schedule_id",
         "value"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -168540,7 +168786,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -169408,10 +169654,14 @@
   },
   {
     "name": "gitlab_pipeline_schedule_take_ownership",
-    "description": "Take ownership of a pipeline schedule. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.",
+    "description": "Take ownership of a pipeline schedule. Requires confirmation. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -169428,7 +169678,8 @@
         "project_id",
         "schedule_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -169602,7 +169853,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -173051,10 +173302,14 @@
   },
   {
     "name": "gitlab_project_access_token_rotate",
-    "description": "Rotate a project access token, generating a new token value. Optionally set a new expiry date.\n\nSee also: gitlab_project_access_token_list, gitlab_project_access_token_revoke\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate a project access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_project_access_token_list, gitlab_project_access_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -173076,7 +173331,8 @@
         "project_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -173195,7 +173451,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -173203,10 +173459,14 @@
   },
   {
     "name": "gitlab_project_access_token_rotate_self",
-    "description": "Rotate the project access token used for the current request. Returns the new token value.\n\nSee also: gitlab_project_access_token_rotate, gitlab_personal_access_token_rotate_self\n\nReturns: JSON with the rotated access token including the new token value.",
+    "description": "Rotate the project access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_project_access_token_rotate, gitlab_personal_access_token_rotate_self.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
           "format": "date",
@@ -173223,7 +173483,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -173342,7 +173603,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -175219,10 +175480,14 @@
   },
   {
     "name": "gitlab_project_archive",
-    "description": "Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
+    "description": "Archive a project, making it read-only in GitLab. Requires confirmation. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -175234,7 +175499,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -176260,7 +176526,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -180977,7 +181243,7 @@
   },
   {
     "name": "gitlab_project_edit_push_rule",
-    "description": "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+    "description": "Edit a project's push rules. Relaxing a rule requires confirmation. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -181022,6 +181288,10 @@
             "null",
             "string"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that relaxes the push rules: a rule turned off, a pattern removed or replaced by another, or a larger or removed max_file_size. Pass true only after the user approves that. Only required when the call relaxes a rule that is set now, or when the current rules cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "deny_delete_tag": {
           "description": "Deny tag deletion",
@@ -183797,7 +184067,7 @@
   },
   {
     "name": "gitlab_project_hook_add",
-    "description": "Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
+    "description": "Add a webhook to a project. Requires confirmation. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -183818,6 +184088,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "custom_headers": {
           "description": "Custom HTTP headers sent with each webhook request (key/value pairs)",
@@ -184043,7 +184317,8 @@
         "project_id",
         "url"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -184236,7 +184511,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -184437,7 +184712,7 @@
   },
   {
     "name": "gitlab_project_hook_edit",
-    "description": "Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
+    "description": "Edit a project webhook. Pointing it at another URL or replacing a secret requires confirmation. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -184458,6 +184733,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Confirms an edit that points the webhook at another URL or replaces a secret that cannot be read back: its token, its signing token, or a URL variable or custom header it already has. Pass true only after the user approves that. Only required when the call does one of those, or sends a URL, a URL variable or a custom header to a webhook that cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "custom_headers": {
           "description": "Custom HTTP headers sent with each webhook request (key/value pairs)",
@@ -185412,10 +185691,14 @@
   },
   {
     "name": "gitlab_project_hook_set_custom_header",
-    "description": "Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
+    "description": "Set a custom header on a project webhook. Replacing a header the webhook already has requires confirmation. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing a custom header the webhook already has, whose current value cannot be read back. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "hook_id": {
           "description": "Webhook ID",
           "type": "integer"
@@ -185478,10 +185761,14 @@
   },
   {
     "name": "gitlab_project_hook_set_url_variable",
-    "description": "Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
+    "description": "Set a URL variable on a project webhook. Replacing a variable the webhook already has requires confirmation. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing a URL variable the webhook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the webhook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "hook_id": {
           "description": "Webhook ID",
           "type": "integer"
@@ -198242,10 +198529,14 @@
   },
   {
     "name": "gitlab_project_service_account_pat_rotate",
-    "description": "Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.",
+    "description": "Rotate a personal access token for a GitLab project service account. Requires confirmation. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "expires_at": {
           "description": "New expiration date in YYYY-MM-DD format",
           "format": "date",
@@ -198272,7 +198563,8 @@
         "service_account_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -198384,7 +198676,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -214604,10 +214896,14 @@
   },
   {
     "name": "gitlab_renew_application_secret",
-    "description": "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+    "description": "Renew an instance OAuth application secret. Requires confirmation. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Application ID whose secret should be renewed",
           "type": "integer"
@@ -214616,7 +214912,8 @@
       "required": [
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -214669,7 +214966,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -219821,10 +220118,14 @@
   },
   {
     "name": "gitlab_runner_controller_token_rotate",
-    "description": "Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
+    "description": "Rotate a runner controller token (admin-only). Requires confirmation. Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "controller_id": {
           "description": "Runner controller ID",
           "type": "integer"
@@ -219838,7 +220139,8 @@
         "controller_id",
         "token_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -219882,7 +220184,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -220132,10 +220434,14 @@
   },
   {
     "name": "gitlab_runner_enable_project",
-    "description": "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
+    "description": "Assign an existing runner to a project by project_id and runner_id. Requires confirmation. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -220152,7 +220458,8 @@
         "project_id",
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -220262,7 +220569,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222410,10 +222717,14 @@
   },
   {
     "name": "gitlab_runner_reset_group_reg_token",
-    "description": "Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.",
+    "description": "Reset a group's runner registration token by group_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": [
@@ -222425,7 +222736,8 @@
       "required": [
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222452,7 +222764,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222460,11 +222772,17 @@
   },
   {
     "name": "gitlab_runner_reset_instance_reg_token",
-    "description": "Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
+    "description": "Reset the instance-level runner registration token (deprecated, admin only). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
-      "type": "object"
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222491,7 +222809,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222499,10 +222817,14 @@
   },
   {
     "name": "gitlab_runner_reset_project_reg_token",
-    "description": "Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.",
+    "description": "Reset a project's runner registration token by project_id (deprecated). Requires confirmation. Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": [
@@ -222514,7 +222836,8 @@
       "required": [
         "project_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222541,7 +222864,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222549,10 +222872,14 @@
   },
   {
     "name": "gitlab_runner_reset_token",
-    "description": "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
+    "description": "Reset a runner's authentication token by runner_id. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "runner_id": {
           "description": "Runner ID",
           "type": "integer"
@@ -222561,7 +222888,8 @@
       "required": [
         "runner_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222588,7 +222916,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -222596,10 +222924,14 @@
   },
   {
     "name": "gitlab_runner_reset_token_by_token",
-    "description": "Reset a runner's authentication token with its current authentication token. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
+    "description": "Reset a runner's authentication token with its current authentication token. Requires confirmation. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_reset_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
         "token": {
           "description": "Current runner authentication token, which the reset invalidates",
           "type": "string",
@@ -222609,7 +222941,8 @@
       "required": [
         "token"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -222636,7 +222969,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -223392,10 +223725,14 @@
   },
   {
     "name": "gitlab_schedule_project_export",
-    "description": "Schedule an asynchronous project export. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
+    "description": "Schedule an asynchronous project export. Uploading it to a URL requires confirmation. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms having GitLab upload the export archive, the whole project, to the URL the call names. Pass true only after the user approves that. Only required when the call names an upload URL. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "description": {
           "description": "Override the project description in the export",
           "type": "string"
@@ -227179,7 +227516,7 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). api_key is required on every call, use_inherited_settings=true included. api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility and archive_trace_events are optional. Requires confirmation.\n\nReturns: JSON with the updated Datadog integration details, whose configuration lives in the nested properties object.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -227200,6 +227537,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "datadog_ci_visibility": {
           "description": "Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility",
@@ -227255,7 +227596,8 @@
         "api_key",
         "group_id"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -227414,7 +227756,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -227422,7 +227764,7 @@
   },
   {
     "name": "gitlab_set_group_integration",
-    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration.",
+    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields. Requires confirmation.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -227431,6 +227773,10 @@
           "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body)",
           "properties": {},
           "type": "object"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
@@ -227448,7 +227794,8 @@
         "group_id",
         "slug"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -227567,7 +227914,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -227575,7 +227922,7 @@
   },
   {
     "name": "gitlab_set_integration",
-    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration.",
+    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`). Requires confirmation.\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -227584,6 +227931,10 @@
           "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook. Harbor expects url, project_name, username, password. Jenkins expects jenkins_url, project_name, username, password",
           "properties": {},
           "type": "object"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -227601,7 +227952,8 @@
         "project_id",
         "slug"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -227720,7 +228072,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -227728,7 +228080,7 @@
   },
   {
     "name": "gitlab_set_jira_integration",
-    "description": "Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration.",
+    "description": "Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers. Requires confirmation.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -227759,6 +228111,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "customize_jira_issue_enabled": {
           "description": "Customize the Jira issue created for vulnerabilities",
@@ -227918,7 +228274,8 @@
         "project_id",
         "url"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -228037,7 +228394,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -228122,10 +228479,14 @@
   },
   {
     "name": "gitlab_set_system_hook_url_variable",
-    "description": "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.",
+    "description": "Create or update one URL variable for an instance system hook. Replacing a variable the hook already has requires confirmation. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "Confirms replacing a URL variable the system hook already has, whose current value cannot be read back and may be part of the address it delivers to. Pass true only after the user approves that. Only required when the hook has the key, or cannot be read. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "id": {
           "description": "System hook ID",
           "type": "integer"
@@ -235156,11 +235517,17 @@
   },
   {
     "name": "gitlab_todo_mark_all_done",
-    "description": "Mark all pending to-do items as done. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.",
+    "description": "Mark all pending to-do items as done. Requires confirmation. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
-      "type": "object"
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -235184,7 +235551,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false
@@ -236438,6 +236805,10 @@
           "description": "Updated note body",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "epic_iid": {
           "description": "Epic IID within the group",
           "type": "integer"
@@ -237114,6 +237485,10 @@
           "description": "Updated note body",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
+        },
         "created_at": {
           "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
@@ -237536,13 +237911,17 @@
   },
   {
     "name": "gitlab_update_project_external_status_check",
-    "description": "Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
+    "description": "Update a project external status check service. Sending external_url or shared_secret requires confirmation. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "check_id": {
           "description": "External status check ID to update",
           "type": "integer"
+        },
+        "confirm": {
+          "description": "Confirms pointing the check at the host external_url names, or replacing its shared secret. Pass true only after the user approves that. Only required when the call sends external_url or shared_secret. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "type": "boolean"
         },
         "external_url": {
           "description": "Updated external URL",
@@ -238960,7 +239339,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched",
+          "description": "Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. An ID of 0 or below is refused. Omit the field to leave assignees untouched",
           "items": {
             "type": "integer"
           },
@@ -238974,11 +239353,11 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted",
+          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array, required only when entries would actually be deleted, and taking the work item out of its parent when parent_id is 0. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Pass true only after the user approves",
           "type": "boolean"
         },
         "crm_contact_ids": {
-          "description": "CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched",
+          "description": "CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. An ID of 0 or below is refused. Omit the field to leave contacts untouched",
           "items": {
             "type": "integer"
           },

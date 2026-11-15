@@ -98,8 +98,31 @@ func TestProjectHooks_Lifecycle_HeadersVariablesAndDelivery(t *testing.T) {
 			e.T.Errorf("hook_get answered hook %d at %s, want %d at %s", got.ID, got.URL, added.ID, receiver)
 		}
 
+		// An edit of events alone hands nothing over and asks nothing: the
+		// guard in internal/tools/projects reads the hook only for an edit
+		// that sends an address or a key.
+		noted := harness.Do[projects.HookOutput](s, actionProjectHookEdit, withParams(hook, map[string]any{"note_events": true}))
+		if noted.URL != receiver || !noted.NoteEvents {
+			e.T.Errorf("hook_edit answered %+v, want note events on and the hook still at %s", noted, receiver)
+		}
+
+		// Pointing the hook at another address sends its events elsewhere, so
+		// the edit is refused unconfirmed on every surface, before anything is
+		// written, and the hook stays where it was. The new address is on the
+		// receiver's own host, so the question says the edit keeps that host
+		// and changes the path.
 		updatedReceiver := fixture.ServiceURL(e, hookReceiverUpdatedPath)
-		edited := harness.Do[projects.HookOutput](s, actionProjectHookEdit, withParams(hook, map[string]any{"url": updatedReceiver, "issues_events": true}))
+		unconfirmed := harness.ExpectToolError(s, actionProjectHookEdit,
+			withParams(hook, map[string]any{"url": updatedReceiver, "issues_events": true}), "confirm=true")
+		assertMentions(e, "the unconfirmed edit of the hook's address", unconfirmed, "changes the path or the query it delivers to")
+		if kept := harness.Do[projects.HookOutput](s, actionProjectHookGet, hook); kept.URL != receiver || kept.IssuesEvents {
+			e.T.Errorf("hook_get answered %s with issue events %v after the refused edit, want %s and none", kept.URL, kept.IssuesEvents, receiver)
+		}
+
+		// The same edit goes through with confirm, which is what a caller
+		// sends once the user has approved it.
+		edited := harness.Do[projects.HookOutput](s, actionProjectHookEdit,
+			withParams(hook, map[string]any{"url": updatedReceiver, "issues_events": true, "confirm": true}))
 		if edited.ID != added.ID || edited.URL != updatedReceiver || !edited.IssuesEvents {
 			e.T.Errorf("hook_edit answered %+v, want hook %d at %s with issue events on", edited, added.ID, updatedReceiver)
 		}
@@ -121,7 +144,10 @@ func TestProjectHooks_Lifecycle_HeadersVariablesAndDelivery(t *testing.T) {
 }
 
 // assertHookCustomHeaderRoundTrips sets a custom header on the hook, sees
-// its key on the read, deletes it and sees it gone.
+// its key on the read, replaces it, deletes it and sees it gone. The set is
+// made three ways: a new key, which asks nothing, the same key again, which
+// would replace a value nobody can read back and is refused unconfirmed, and
+// that one confirmed.
 func assertHookCustomHeaderRoundTrips(e *harness.Env, s *harness.Session, hook map[string]any) {
 	e.T.Helper()
 	const key = "X-E2E-Header"
@@ -133,6 +159,14 @@ func assertHookCustomHeaderRoundTrips(e *harness.Env, s *harness.Session, hook m
 	withHeader := harness.Do[projects.HookOutput](s, actionProjectHookGet, hook)
 	if !containsKey(hookHeaderKeys(withHeader), key) {
 		e.T.Errorf("the hook carries the custom headers %v after the set, want %q among them", hookHeaderKeys(withHeader), key)
+	}
+
+	replacement := withParams(hook, map[string]any{"key": key, "value": "e2e-replaced"})
+	unconfirmed := harness.ExpectToolError(s, actionProjectHookSetCustomHeader, replacement, "confirm=true")
+	assertMentions(e, "the unconfirmed replacement of a custom header", unconfirmed, "replaces the custom_headers entry `"+key+"`")
+	replaced := harness.Do[toolutil.VoidOutput](s, actionProjectHookSetCustomHeader, withParams(replacement, map[string]any{"confirm": true}))
+	if replaced.Status != voidStatusSuccess {
+		e.T.Errorf("the confirmed hook_set_custom_header answered %+v, want a %s status", replaced, voidStatusSuccess)
 	}
 
 	harness.DoVoid(s, actionProjectHookDeleteCustomHeader, withParams(hook, map[string]any{"key": key}))

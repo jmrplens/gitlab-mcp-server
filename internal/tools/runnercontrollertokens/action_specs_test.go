@@ -229,6 +229,37 @@ func TestDecorateRunnerControllerTokenMeta_UnknownToolFallback(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Rotations_AreDestructive holds the rotation to the answer
+// the revocation gives: it invalidates the secret the controller
+// authenticates with, which is the effect controller_token_revoke is
+// destructive for. The spec, its route and the individual tool's annotation
+// say so, the usage tells a model why, and the rest of the update is as it
+// was.
+func TestActionSpecs_Rotations_AreDestructive(t *testing.T) {
+	byTool := runnerControllerTokenSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerTokenActionHandler())))
+	for _, name := range []string{"gitlab_runner_controller_token_rotate"} {
+		t.Run(name, func(t *testing.T) {
+			spec := byTool[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s: spec destructive %v, route destructive %v, want both true", name, spec.Destructive, spec.Route.Destructive)
+			}
+			if spec.ReadOnly || !spec.Idempotent || spec.Edition != "ultimate" {
+				t.Errorf("%s: read-only %v idempotent %v edition %q, want the Ultimate update it was", name, spec.ReadOnly, spec.Idempotent, spec.Edition)
+			}
+			if !strings.Contains(spec.Usage, "Destructive: ") || !strings.Contains(spec.IndividualTool.Description, "Requires confirmation. Returns: ") {
+				t.Errorf("%s: usage %q and description %q do not both say the action asks", name, spec.Usage, spec.IndividualTool.Description)
+			}
+			tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+			}
+			if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint {
+				t.Errorf("%s: destructiveHint is not true: %+v", name, tool.Annotations)
+			}
+		})
+	}
+}
+
 func runnerControllerTokenActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

@@ -54,9 +54,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineScheduleUpdateSpec("schedule_update", toolutil.RouteAction(client, Update), "gitlab_pipeline_schedule_update"),
 		pipelineScheduleDeleteSpec("schedule_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_pipeline_schedule_delete"),
 		pipelineScheduleUpdateSpec("schedule_run", toolutil.RouteAction(client, Run), "gitlab_pipeline_schedule_run"),
-		pipelineScheduleUpdateSpec("schedule_take_ownership", toolutil.RouteAction(client, TakeOwnership), "gitlab_pipeline_schedule_take_ownership"),
+		pipelineScheduleConfirmedUpdateSpec("schedule_take_ownership", toolutil.RouteAction(client, TakeOwnership), "gitlab_pipeline_schedule_take_ownership"),
 		pipelineScheduleCreateSpec("schedule_create_variable", toolutil.RouteAction(client, CreateVariable), "gitlab_pipeline_schedule_create_variable"),
-		pipelineScheduleUpdateSpec("schedule_edit_variable", toolutil.RouteAction(client, EditVariable), "gitlab_pipeline_schedule_edit_variable"),
+		pipelineScheduleConfirmedUpdateSpec("schedule_edit_variable", toolutil.RouteAction(client, EditVariable), "gitlab_pipeline_schedule_edit_variable"),
 		pipelineScheduleDeleteSpec("schedule_delete_variable", toolutil.DestructiveAction(client, deleteVariableOutput), "gitlab_pipeline_schedule_delete_variable"),
 		pipelineScheduleReadSpec("schedule_list_triggered_pipelines", toolutil.RouteAction(client, ListTriggeredPipelines), "gitlab_pipeline_schedule_list_triggered_pipelines"),
 	}
@@ -88,6 +88,22 @@ func pipelineScheduleCreateSpec(name string, route toolutil.ActionRoute, individ
 
 func pipelineScheduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
+}
+
+// pipelineScheduleConfirmedUpdateSpec is an update that asks for
+// confirmation, for the two updates of a schedule no other call undoes.
+// Taking ownership makes the caller the schedule's owner, so its pipelines
+// run with the caller's permissions from then on, protected branches and
+// variables included, and no route hands the schedule back: only the previous
+// owner can take it again. Editing a variable always sends a value, which
+// replaces the one the variable holds, the effect the three CI/CD variable
+// updates ask about when they send one and schedule_delete_variable is
+// destructive for. Every call of either has the effect, so they carry the
+// destructive bit rather than a guard. Only the bit is added to the update.
+func pipelineScheduleConfirmedUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := pipelineScheduleOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func pipelineScheduleDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -199,7 +215,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		description: "Run a pipeline schedule immediately. Returns: the schedule's current state after triggering. See also: gitlab_pipeline_schedule_get, gitlab_pipeline_schedule_list_triggered_pipelines.",
 	},
 	"gitlab_pipeline_schedule_take_ownership": {
-		usage:   "Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others.",
+		usage:   "Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others. Destructive: the schedule's pipelines run as the authenticated user from then on and no call hands ownership back to the previous owner, so confirm with the user first.",
 		aliases: []string{"take ownership of pipeline schedule", "claim schedule ownership", "become schedule owner"},
 		related: []string{actionScheduleGet, actionScheduleUpdate, actionScheduleRun},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -209,7 +225,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 				ExampleBinding: exampleScheduleID,
 			},
 		},
-		description: "Take ownership of a pipeline schedule. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.",
+		description: "Take ownership of a pipeline schedule. Requires confirmation. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.",
 	},
 	"gitlab_pipeline_schedule_create_variable": {
 		usage:   "Create a pipeline schedule variable. Provide key and value. Value is always required. Only the schedule owner can manage variables.",
@@ -226,7 +242,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		description: "Create a pipeline schedule variable. Returns: the created variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_edit_variable, gitlab_pipeline_schedule_delete_variable.",
 	},
 	"gitlab_pipeline_schedule_edit_variable": {
-		usage:   "Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables.",
+		usage:   "Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables. Destructive: every call replaces the value the variable holds, which no call restores, so confirm with the user first.",
 		aliases: []string{"edit pipeline schedule variable", "update schedule variable", "change schedule env var"},
 		related: []string{actionScheduleGet, actionScheduleCreateVariable, actionScheduleDeleteVariable},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -236,7 +252,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 				ExampleBinding: `params.key:"DEPLOY_ENV"`,
 			},
 		},
-		description: "Edit a pipeline schedule variable. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
+		description: "Edit a pipeline schedule variable. Requires confirmation. Returns: the updated variable with key, value, variable_type, and raw. See also: gitlab_pipeline_schedule_create_variable, gitlab_pipeline_schedule_delete_variable.",
 	},
 	"gitlab_pipeline_schedule_delete_variable": {
 		usage:   "Delete a pipeline schedule variable by key. Destructive. Confirm project_id, schedule_id, and key before calling.",

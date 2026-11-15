@@ -68,6 +68,10 @@ func PersonalRevokeSelfOutput(ctx context.Context, client *gitlabclient.Client, 
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted personal access token."}, nil
 }
 
+// accessTokenRotationWarning is what every rotation's usage says about the
+// token it replaces.
+const accessTokenRotationWarning = "Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first."
+
 func accessTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
@@ -76,8 +80,16 @@ func accessTokenCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
+// accessTokenRotateSpec is a create that asks for confirmation. GitLab revokes
+// the rotated token in the same request and no call brings it back, which is
+// what token_*_revoke does and why those are destructive: whatever still
+// holds the old value stops authenticating at once. Only the destructive bit
+// is added. The constructor stays the create's, since a rotation repeated
+// issues another token rather than the same one.
 func accessTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
+	options := accessTokenOptions(name, individualTool)
+	options.Destructive = true
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -101,6 +113,10 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		// itself; without this sentence they read identically to their
 		// token_id-taking siblings and a model has no signal to pick one.
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens: this action %s the %s-scoped token that authenticates this request itself, with no token_id parameter.", scope, accessTokenOperationPhrase(operation), scope)
+	}
+	if operation == "rotate" || operation == "rotate_self" {
+		options.Usage += " " + accessTokenRotationWarning
+		options.IndividualTool.Description = accessTokenRotateDescription(scope, operation)
 	}
 	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {
@@ -135,6 +151,23 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 	}
 	return options
+}
+
+// accessTokenRotateDescription is the individual tool description of a
+// rotation. Every other action of the package takes the description the
+// individual surface has always served, but a rotation is destructive and
+// asks, and its description says so, as every action that replaces a
+// credential does. The self variant names the counterpart of another scope
+// it has always named.
+func accessTokenRotateDescription(scope, operation string) string {
+	if operation == "rotate_self" {
+		counterpart := "personal"
+		if scope == "personal" {
+			counterpart = "project"
+		}
+		return fmt.Sprintf("Rotate the %s access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_%s_access_token_rotate, gitlab_%s_access_token_rotate_self.", scope, scope, counterpart)
+	}
+	return fmt.Sprintf("Rotate a %s access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_%s_access_token_list, gitlab_%s_access_token_revoke.", scope, scope, scope)
 }
 
 func accessTokenAliases(scope, operation string) []string {

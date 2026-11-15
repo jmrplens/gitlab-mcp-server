@@ -40,7 +40,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		runnerControllerTokenReadSpec(actionNameTokenList, toolutil.RouteAction(client, List), "gitlab_runner_controller_token_list"),
 		runnerControllerTokenReadSpec(actionNameTokenGet, toolutil.RouteAction(client, Get), "gitlab_runner_controller_token_get"),
 		runnerControllerTokenCreateSpec(actionNameTokenCreate, toolutil.RouteAction(client, Create), "gitlab_runner_controller_token_create"),
-		runnerControllerTokenUpdateSpec(actionNameTokenRotate, toolutil.RouteAction(client, Rotate), "gitlab_runner_controller_token_rotate"),
+		runnerControllerTokenRotateSpec(actionNameTokenRotate, toolutil.RouteAction(client, Rotate), "gitlab_runner_controller_token_rotate"),
 		runnerControllerTokenDeleteSpec(actionNameTokenRevoke, toolutil.DestructiveAction(client, revokeOutput), "gitlab_runner_controller_token_revoke"),
 	}
 }
@@ -61,8 +61,15 @@ func runnerControllerTokenCreateSpec(name string, route toolutil.ActionRoute, in
 	return toolutil.NewCreateActionSpec(name, route, runnerControllerTokenOptions(individualTool))
 }
 
-func runnerControllerTokenUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, runnerControllerTokenOptions(individualTool))
+// runnerControllerTokenRotateSpec is an update that asks for confirmation.
+// The rotation invalidates the secret the controller authenticates with and
+// no call brings it back, which is what controller_token_revoke does and why
+// that one is destructive: the controller is locked out until it is given the
+// new value. Only the destructive bit is added to the update.
+func runnerControllerTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := runnerControllerTokenOptions(individualTool)
+	options.Destructive = true
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func runnerControllerTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -133,10 +140,10 @@ var runnerControllerTokenActionMeta = map[string]runnerControllerTokenActionMeta
 		description: "Create a runner controller token (admin-only). Returns: the new token including its one-time secret value, id, runner controller id, and description. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_rotate": {
-		usage:       "Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Use to roll a credential without changing the token id. The new secret value is returned only once.",
+		usage:       "Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Destructive: the controller stops authenticating until it is given the new secret, so confirm with the user first. Use to roll a credential without changing the token id. The new secret value is returned only once.",
 		aliases:     []string{"rotate runner controller token", "roll runner controller token secret", "regenerate a runner controller authentication token"},
 		related:     []string{canonicalID(actionNameTokenGet), canonicalID(actionNameTokenList), canonicalID(actionNameTokenRevoke)},
-		description: "Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
+		description: "Rotate a runner controller token (admin-only). Requires confirmation. Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_revoke": {
 		usage:       "Permanently revoke a runner controller token (admin-only). Destructive and irreversible. Confirm controller_id and token_id before calling, as any runner controller using the token will lose access.",
