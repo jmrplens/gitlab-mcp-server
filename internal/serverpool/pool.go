@@ -356,8 +356,7 @@ type Metrics struct {
 	// UnauthorizedKept counts 401s that named no cause and after which the
 	// credential probe found GitLab still accepting the credential, so the
 	// entry was kept. Each is a permission refusal GitLab answered with 401
-	// rather than 403 (entry 55 of docs/development/upstream-bugs.md), and
-	// before the probe each one ended a valid credential's entry.
+	// rather than 403, and before the probe each one ended a valid credential's entry.
 	//
 	// It is read in the snapshot and exported nowhere else, like
 	// RevalidationsTransient: it is not an eviction, so it belongs to none of
@@ -1052,9 +1051,8 @@ const unauthorizedConfirmCooldown = tenancy.UnexplainedRefusalCooldown // regist
 // GitLab answers 401 for two different things. A 401 naming the credential
 // (the RFC 6750 invalid_token code, or any 401 from the GraphQL endpoint) is
 // GitLab's verdict on the token, and the entry goes at once. A 401 naming
-// nothing is ambiguous: GitLab answers a permission refusal that way at the
-// sites entry 55 of docs/development/upstream-bugs.md lists, approving a merge
-// request one opened among them, and answers a token it no longer finds with
+// nothing is ambiguous: GitLab answers a permission refusal that way at a
+// family of REST routes, approving a merge request one opened among them, and answers a token it no longer finds with
 // the same bytes. Evicting on it ended a valid user's subscriptions,
 // terminated their sessions and told them to re-authenticate a token that
 // works; ignoring it would serve a deleted token until the next revalidation.

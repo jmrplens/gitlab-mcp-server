@@ -2070,10 +2070,10 @@ func TestBuildActionCatalog_ExclusionByIndividualToolNameHoldsOnTheRealCatalog(t
 	}
 }
 
-// entry55Route is one served action whose GitLab route refuses a valid
+// permission401Route is one served action whose GitLab route refuses a valid
 // credential a permission with 401 rather than 403, the site of GitLab's
 // source that does it, and the arguments that reach that route.
-type entry55Route struct {
+type permission401Route struct {
 	action actioncatalog.ActionID
 	site   string // GitLab's file:line at b183f4fad4bd
 	params map[string]any
@@ -2083,10 +2083,10 @@ type entry55Route struct {
 	hintIsAboutTheToken bool
 }
 
-// entry55Routes is entry 55 of docs/development/upstream-bugs.md as the
-// served surface reaches it: every action whose route GitLab answers a
-// permission refusal with 401 on, and the site that answers it. The sites
-// entry 55 lists that this server serves no action for (security_scans.rb:54,
+// permission401Routes is GitLab's 401 permission refusal as the served
+// surface reaches it: every action whose route GitLab answers a permission
+// refusal with 401 on, and the site that answers it. The sites that answer so
+// and that this server serves no action for (security_scans.rb:54,
 // ee/lib/ee/api/helpers.rb:193 and the MLflow helpers) are deliberately
 // absent, since a row whose action the catalog does not serve fails.
 //
@@ -2094,7 +2094,7 @@ type entry55Route struct {
 // nothing records which status a GitLab route refuses with, so a new 401 site
 // is found by reading GitLab and added here, and the handler behind it gets
 // its hint from toolutil.IsPermissionRefusal.
-func entry55Routes() []entry55Route {
+func permission401Routes() []permission401Route {
 	project := map[string]any{"project_id": "42"}
 	with := func(base, more map[string]any) map[string]any {
 		out := make(map[string]any, len(base)+len(more))
@@ -2106,7 +2106,7 @@ func entry55Routes() []entry55Route {
 	mirror := with(project, map[string]any{"mirror_id": 7})
 	checkOnMR := with(mergeRequest, map[string]any{"check_id": 3})
 	samlLink := map[string]any{"group_id": "10", "saml_group_name": "devs"}
-	return []entry55Route{
+	return []permission401Route{
 		{action: "merge_request.approve", site: "lib/api/merge_request_approvals.rb:105", params: mergeRequest},
 		{action: "merge_request.approval_reset", site: "lib/api/merge_request_approvals.rb:148", params: mergeRequest},
 		{action: "merge_request.merge", site: "lib/api/merge_requests.rb:896", params: mergeRequest},
@@ -2156,10 +2156,10 @@ func entry55Routes() []entry55Route {
 	}
 }
 
-// entry55Answer runs route's action in catalog against a GitLab that answers
+// permission401Answer runs route's action in catalog against a GitLab that answers
 // every request with status and body, and returns the text of the error the
 // action hands a model.
-func entry55Answer(t *testing.T, route entry55Route, status int, body string) string {
+func permission401Answer(t *testing.T, route permission401Route, status int, body string) string {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, status, body)
@@ -2177,7 +2177,7 @@ func entry55Answer(t *testing.T, route entry55Route, status int, body string) st
 }
 
 // TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint
-// ties entry 55 to the served surface. Every action whose GitLab route
+// ties GitLab's 401 permission refusal to the served surface. Every action whose GitLab route
 // refuses a valid credential a permission with 401 is driven through its
 // catalog handler against Grape's own refusal body, and must hand the model a
 // suggestion: before issue 908, 39 of these 46 carried none, because their
@@ -2192,16 +2192,16 @@ func entry55Answer(t *testing.T, route entry55Route, status int, body string) st
 // the status and whose wording the licensed end-to-end suite quotes.
 func TestPermissionRefusedWith401_EveryServedUnauthorizedRoute_CarriesAHint(t *testing.T) {
 	const revokedToken = `{"error":"invalid_token","error_description":"Token was revoked. You have to re-authorize from the user."}` //#nosec G101 -- test fixture, not a credential
-	for _, route := range entry55Routes() {
+	for _, route := range permission401Routes() {
 		t.Run(string(route.action), func(t *testing.T) {
-			refused := entry55Answer(t, route, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+			refused := permission401Answer(t, route, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
 			if !strings.Contains(refused, "Suggestion:") {
 				t.Errorf("%s (%s) refused with 401 = %q, want a suggestion naming the permission", route.action, route.site, refused)
 			}
 			if route.hintIsAboutTheToken {
 				return
 			}
-			rejected := entry55Answer(t, route, http.StatusUnauthorized, revokedToken)
+			rejected := permission401Answer(t, route, http.StatusUnauthorized, revokedToken)
 			if strings.Contains(rejected, "Suggestion:") {
 				t.Errorf("%s (%s) after a revoked token = %q, want no permission suggestion", route.action, route.site, rejected)
 			}

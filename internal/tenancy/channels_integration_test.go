@@ -2403,7 +2403,7 @@ func TestSubscriptionsListenResult_BuiltByApplicationCode_AnswersOnlyInPlaceOfTh
 func TestListenRefusal_BeforeTheAcknowledgment_UnseenByTheModernSDKClient(t *testing.T) {
 	sdk := sdkName()
 	refusal := &jsonrpc.Error{Code: tenancy.CodeTooManyRequests, Message: refusalText}
-	fix := "The Refusal channels section of docs/development/tenant-policy-spec.md states this, and so do row 67 of docs/development/upstream-bugs.md and the subscriptions page of the site in English and Spanish (capabilities/subscriptions): edit them, and the listen row of Carriages() if its channels moved, in this same pull request."
+	fix := "The Refusal channels section of docs/development/tenant-policy-spec.md states this, and so does the subscriptions page of the site in English and Spanish (capabilities/subscriptions): edit them, and the listen row of Carriages() if its channels moved, in this same pull request."
 	servers := []struct {
 		name  string
 		build func() *mcp.Server

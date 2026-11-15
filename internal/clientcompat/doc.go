@@ -12,9 +12,9 @@
 // Codex's build, where Cargo feature unification turns serde_json's
 // arbitrary_precision on for the whole binary, so a buffered decimal reaches
 // the float field as serde_json's private number map, the field refuses it and
-// the untagged result falls through to rmcp's CustomResult (row 17 of
-// docs/development/upstream-bugs.md). The fix is released in rmcp 3.5.0, and
-// no Codex release builds on it yet. This package detects Codex and writes
+// the untagged result falls through to rmcp's CustomResult
+// (https://github.com/openai/codex/issues/38979). The fix is released in rmcp
+// 3.5.0, and no Codex release builds on it yet. This package detects Codex and writes
 // the priority as the nearest spec-legal integer (0 or 1) for that session;
 // audience, structuredContent, outputSchema, icons, and every other field are
 // preserved, and every other client keeps the exact float values.
@@ -37,7 +37,7 @@
 // "(Realtime API)" with no title and reads a fractional priority without
 // error. A ChatGPT web tool call carries the User-Agent
 // "openai-mcp/1.0.0 (Codex)", whose clientInfo is the one label still
-// unmeasured; neither match catches the word in it. Row 17 records both.
+// unmeasured; neither match catches the word in it.
 //
 // Choosing a response from clientInfo is a deliberate deviation from MCP
 // 2026-07-28, which says implementations SHOULD NOT use it "to change the

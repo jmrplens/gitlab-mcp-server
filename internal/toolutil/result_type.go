@@ -52,8 +52,8 @@ const inputRequiredResultType = "input_required"
 // too, the answer the SDK would have sent: no refusal this server makes is one,
 // since each is a text block and an error flag.
 //
-// It is the workaround for row 66 of docs/development/upstream-bugs.md, which
-// go-sdk fixed after v1.8.0 in e40f35d, the merge of its pull request 1226.
+// It is the workaround for a go-sdk defect fixed after v1.8.0 in e40f35d, the
+// merge of https://github.com/modelcontextprotocol/go-sdk/pull/1226.
 // TestSDK_MiddlewareToolResult_GoesOutUnlabeled fails on the bump that brings
 // the fix and says what to delete.
 func LabelForRevision(req mcp.Request, result *mcp.CallToolResult) *mcp.CallToolResult {

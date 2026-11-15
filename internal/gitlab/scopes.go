@@ -201,8 +201,7 @@ const ScopeGranular = "granular"
 // decodes of the PAT self endpoint this server already asks. GitLab sends the
 // kind there too, as granular: true on every token
 // (lib/api/entities/personal_access_token.rb), but client-go's
-// PersonalAccessToken does not model that field (row 32 of
-// docs/development/upstream-bugs.md); a reader that needs it takes it from the
+// PersonalAccessToken does not model that field; a reader that needs it takes it from the
 // captured response (ADR-0021). For every token GitLab can mint the two agree,
 // since the service that sets granular also sets this list. The RFC 6750 code
 // insufficient_granular_scope does not prove the kind: GitLab answers a classic

@@ -120,8 +120,9 @@ func FlowFromRequest(ctx context.Context, req *mcp.CallToolRequest) (*Flow, erro
 	// client asked for in initialize and not the one negotiated: a client that
 	// asked for 2026-07-28 is negotiated down to 2025-11-25 and still served the
 	// multi round-trip flow. The SDK's own check reads the same value, and
-	// agreeing with it is deliberate (row 11 of docs/development/upstream-bugs.md,
-	// go-sdk#1258); test/e2e/stdio/elicitation_declared_version_test.go pins it.
+	// agreeing with it is deliberate
+	// (https://github.com/modelcontextprotocol/go-sdk/issues/1258);
+	// test/e2e/stdio/elicitation_declared_version_test.go pins it.
 	if !multiRoundTrip(req.ProtocolVersion()) {
 		return f, nil
 	}

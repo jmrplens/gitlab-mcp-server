@@ -50,8 +50,7 @@ type workItemNull struct {
 // ask for none.
 //
 // The option exists because client-go's UpdateWorkItemOptions cannot express
-// a removal (register row 119, "UpdateWorkItemOptions cannot remove a
-// reference, a date or the health status", whose weight is the same gap): it
+// a removal of a reference, a date, the health status or the weight: it
 // wraps any reference, 0 included, into a global ID, so 0 reached GitLab as
 // gid://gitlab/Milestone/0 and was refused as "No object found", and its
 // widget fields are omitted when unset, so an empty date or health status sent

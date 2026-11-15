@@ -271,7 +271,7 @@ const resultTypeFix = "Retire the workaround in this same pull request. " +
 	"internal/tenancy/decisions_allow.go and on rows AUT-007 and AUT-008 in internal/tenancy/decisions_authorize.go, from " +
 	"the paragraph on F-20 in docs/development/tenant-policy-spec.md, from Transport end-to-end modules in CLAUDE.md, from " +
 	"HTTP transport module in test/e2e/README.md and from the header of test/e2e/http/result_type_test.go. " +
-	"Mark row 66 of docs/development/upstream-bugs.md merged with the version and retire its workaround, and " +
+	"Retire the workaround, and " +
 	"keep TestRateLimitedToolCall_EachRevision_CarriesTheResultTypeTheServedCallDoes and " +
 	"TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes in test/e2e/http passing."
 
@@ -365,7 +365,7 @@ func rawModernToolCall(t *testing.T, conn mcp.Connection, id int64, tool string)
 // result rather than about the revision, the transport or the tool. go-sdk
 // fixed this after v1.8.0 in e40f35d, the merge of its pull request 1226, and
 // the bump that brings it fails here, saying what the workaround it retires
-// is; that is row 66 of docs/development/upstream-bugs.md.
+// is.
 func TestSDK_MiddlewareToolResult_GoesOutUnlabeled(t *testing.T) {
 	t.Parallel()
 	conn := middlewareMadeTools(t)
@@ -377,7 +377,7 @@ func TestSDK_MiddlewareToolResult_GoesOutUnlabeled(t *testing.T) {
 	refused := rawModernToolCall(t, conn, 2, "refused")
 	if got, present := refused["resultType"]; present {
 		t.Errorf("a result a middleware made now carries resultType %v: the go-sdk this module builds against labels it itself, "+
-			"which is e40f35d, the merge of go-sdk's pull request 1226, and row 66 of docs/development/upstream-bugs.md. %s", got, resultTypeFix)
+			"which is e40f35d, the merge of go-sdk's pull request 1226. %s", got, resultTypeFix)
 	}
 }
 

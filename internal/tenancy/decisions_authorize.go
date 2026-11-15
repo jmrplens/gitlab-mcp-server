@@ -268,8 +268,8 @@ func authorizeDecisions() []Decision {
 			// (INV-008). The refusal the call middleware makes of a registered
 			// tool's call is a tool result built before the SDK's dispatcher,
 			// which labels only what it answers, so the middleware gives it
-			// the resultType its revision requires (toolutil.LabelForRevision,
-			// upstream-bugs row 66), as the rate limiter does its own, and the
+			// the resultType its revision requires (toolutil.LabelForRevision),
+			// as the rate limiter does its own, and the
 			// row carries no F-20; the one dynamic execute makes in its
 			// handler is labeled by the dispatcher like any served call.
 			ID: "AUT-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
@@ -536,8 +536,8 @@ func authorizeDecisions() []Decision {
 			// Issue 959 keeps it as a deliberate deviation: it changes only
 			// how a priority is written, never who a caller is or what it may
 			// do (INV-001), GITLAB_MCP_CLIENT_COMPAT=off removes it, and it
-			// retires with the Codex defect it works around (row 17 of
-			// docs/development/upstream-bugs.md). The match is Codex's own two
+			// retires with the Codex defect it works around
+			// (https://github.com/openai/codex/issues/38979). The match is Codex's own two
 			// spellings, a codex-mcp-client name prefix or a title of exactly
 			// Codex, so an openai-mcp client, which needs no profile, is not
 			// caught by a label that carries the word.

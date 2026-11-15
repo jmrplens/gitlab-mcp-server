@@ -65,7 +65,7 @@ func ReviewerFilter(field string, value StringOrInt) (*gl.ReviewerIDValue, error
 
 // Int64UserIDFilter reads a user ID filter for an option struct that types
 // it *int64 and so cannot carry None or Any, which is how client-go's issue
-// statistics options declare assignee_id (upstream register row 125). A user
+// statistics options declare assignee_id. A user
 // ID comes back as the pointer for the option. None and Any come back as a
 // request option that writes the literal into the query under field, the
 // option struct's field left nil. A filter left out returns neither, and a

@@ -66,8 +66,7 @@ func (d DiffOutput) Status() string {
 // DiffExtra is what Entities::Diff sends on a file diff that client-go's Diff
 // does not model: whether GitLab collapsed the diff or left it out as too
 // large, which is why a diff can arrive empty, and whether the file is
-// generated. All three are exposed with no condition. The gap is recorded in
-// docs/development/upstream-bugs.md.
+// generated. All three are exposed with no condition.
 type DiffExtra struct {
 	Collapsed     bool `json:"collapsed"`
 	TooLarge      bool `json:"too_large"`

@@ -69,8 +69,7 @@
 // within the noise of a shared machine. An ordinary build is unchanged: the
 // initializer reads the setting and changes nothing. An ordinary build keeps
 // the parallel loads and the unguarded read with them, in the commands and in
-// their tests alike; docs/development/upstream-bugs.md says why that read
-// changes no answer on this tree, and what would make it.
+// their tests alike.
 //
 // # What holds it in place
 //
@@ -93,5 +92,4 @@
 // named type no checker owns without reading the field. When the Go release
 // go.mod pins carries it, this package, its blank imports and its entry in the
 // cmd/server dependency test are deleted together.
-// docs/development/upstream-bugs.md records the entry and that condition.
 package serialtypecheck

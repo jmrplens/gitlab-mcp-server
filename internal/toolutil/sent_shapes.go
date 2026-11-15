@@ -17,7 +17,6 @@ import (
 // response beside the SDK's own decode (ADR-0021) and named after the Grape
 // entity that renders it. A reader takes the capture of one request and
 // decodes it into the shape; a list reader holds its count to the SDK's.
-// Every gap here is recorded in docs/development/upstream-bugs.md.
 
 // UserBasicOutput mirrors lib/api/entities/user_basic.rb, the user object
 // GitLab renders on a note's author and resolver and on a runner's creator.
@@ -196,8 +195,7 @@ func CapturedResourceTokens(capture *gitlabclient.ResponseCapture, decoded int) 
 // them: null for a pipeline that has not run (created, skipped, waiting on a
 // manual job), which client-go's Pipeline and PipelineInfo decode as int64
 // and so read as 0, a pipeline that ran for no time at all. Read from the
-// captured response (ADR-0021); recorded as register row 116 of
-// docs/development/upstream-bugs.md.
+// captured response (ADR-0021).
 type PipelineMeasures struct {
 	Duration       *int64 `json:"duration"`
 	QueuedDuration *int64 `json:"queued_duration"`
@@ -216,8 +214,7 @@ type PipelineExtra struct {
 // as GitLab sends them: null for a job that never started, or that reported
 // no coverage, which client-go's Job and Bridge decode as float64 and so read
 // as 0. A pointer keeps both meanings, so a job measured at 0 seconds or at
-// 0% coverage keeps its 0. Read from the captured response (ADR-0021);
-// recorded as register row 116 of docs/development/upstream-bugs.md.
+// 0% coverage keeps its 0. Read from the captured response (ADR-0021).
 type JobMeasures struct {
 	Duration       *float64 `json:"duration"`
 	QueuedDuration *float64 `json:"queued_duration"`
@@ -609,8 +606,7 @@ type BasicGroupDetailsOutput struct {
 // condition and leaves null on a board that belongs to a project, and the
 // weight the board is scoped to as GitLab sent it: null for a board with no
 // weight scope, which client-go's IssueBoard decodes as int64 and so reads as a
-// board scoped to weight 0 (register row 116 of
-// docs/development/upstream-bugs.md).
+// board scoped to weight 0.
 type BoardExtra struct {
 	Group  *BasicGroupDetailsOutput `json:"group"`
 	Weight *int64                   `json:"weight"`
@@ -630,7 +626,7 @@ func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]Board
 // GroupBoardExtra is the weight a group's board is scoped to as GitLab sent it:
 // null for a board with no weight scope, which client-go's GroupIssueBoard
 // decodes as int64 and so reads as a board scoped to weight 0, a scope of its
-// own (register row 116 of docs/development/upstream-bugs.md).
+// own.
 //
 // It is a shape of its own rather than [BoardExtra] because GroupIssueBoard
 // models the board's group, which IssueBoard lacks.
@@ -1292,8 +1288,7 @@ func CapturedGroups(capture *gitlabclient.ResponseCapture, decoded int) ([]Group
 // answer as an instance that does not count them.
 //
 // The weight is one client-go models, as an int64, and is read here as a
-// pointer for the reason of register row 116 ("A measure GitLab sends as null
-// decodes as 0"): GitLab sends null for an issue without a weight, which
+// pointer because a measure GitLab sends as null decodes as 0: GitLab sends null for an issue without a weight, which
 // client-go decodes as the weight 0, and 0 is a weight of its own (issue
 // 1390).
 type IssueBasicExtra struct {
