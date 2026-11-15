@@ -48,7 +48,6 @@ testing reference live in subfolders here.
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                                                                                   |
 | [Test Infrastructure](test-infrastructure.md)                             | The shared test transport, and the rules every unit test is held to                                                                |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                                                                        |
-| [Upstream Bugs and Gaps](upstream-bugs.md)                                | Defects found in dependencies, and what we contributed back                                                                        |
 | [Documentation Audit, September 2026](documentation-audit-2026-09.md)     | The five end-to-end paths executed, the organisation review, and the plan                                                          |
 | [Security Review, October 2026](security-review-2026-10.md)               | SECURITY.md's requirements and trust boundaries checked against the code, the tools run, and the findings                          |
 | [Refusing Plain HTTP off Loopback](plaintext-http-refusal-analysis.md)    | Who a default refusal of a plaintext listener would stop, the alternatives, and the decision: a hardened mode an operator asks for |

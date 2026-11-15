@@ -98,8 +98,8 @@ approvals, adding to a merge train, remote mirrors, access token reads, lists
 and rotation, external status checks, security settings, group SAML links,
 award emoji removal, group updates and fork links. Approving a merge request
 you opened, on an instance that prevents approval by the author, is the
-common one. The upstream half is
-[entry 55 of the upstream bugs register](upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403).
+common one. The routes this server serves are listed in
+`permission401Routes` (`internal/tools/action_catalog_test.go`).
 
 The status cannot tell the two apart, so `ClassifyHTTPStatus(401)` names both
 and ends with the test that separates them. It opens with "unauthorized"
@@ -200,7 +200,7 @@ returns, which is what it does to a fine-grained token the payload's type does
 not admit: it checks the mutation before the write and the payload's object
 only after it, so the object comes back `null` with no error, or nulled below a
 non-null position with graphql-ruby's `Cannot return null for non-nullable ...`
-entries (issue 1103, [row 88 of the upstream register](upstream-bugs.md#a-declared-mutation-whose-payload-type-declares-nothing-commits-the-write-and-answers-null)).
+entries (issue 1103).
 Read as "not done", that answer makes a model repeat a committed write. So a
 GraphQL write's handler answers its error through `toolutil.UnconfirmedWrite`
 (client-go's not-found and empty-response sentinels on an HTTP 200, and an
@@ -218,9 +218,9 @@ Which writes can be answered this way is the fine-grained table's to say, and
 so a regeneration that adds one fails until its handler is looked at. There
 are 27 at 19.5.0, as at 19.4.1, in two kinds that moved between them:
 
-- The 19 the table denies as committed and then answered `null`: the 19 of
-  row 88, whose payload type declares nothing, `group.epic_create` among them
-  since its epic resolves the group boundary 19.5 added (row 89) and its
+- The 19 the table denies as committed and then answered `null`: the 19
+  whose payload type declares nothing, `group.epic_create` among them
+  since its epic resolves the group boundary 19.5 added and its
   answer stops at `WorkItemType` instead. They are withheld from every
   session that carries an authority, in every phase, so their handlers'
   answer is for a table recorded from a later release that stops withholding
@@ -268,8 +268,7 @@ caller can read the project, refuses every other method that names the
 project by an old path with 405 and the message
 `Non GET methods are not allowed for moved projects`. Most project endpoints
 look `:id` up through it; the few that use `find_project` follow the redirect
-for every method
-([row 92 of the upstream bugs register](upstream-bugs.md#the-rest-api-page-does-not-say-a-non-get-request-to-a-moved-projects-old-path-is-answered-405)).
+for every method.
 The 405 sentence of `ClassifyHTTPStatus` read as a statement about the merge
 request, issue or branch the call was about, so a model looked there for the
 reason and never retried with the ID (issue 1133).
@@ -407,8 +406,7 @@ sentinel, and a status hint on 404 matches through the sentinel.
 
 A hint that names a role, a license or an owner is keyed on
 `IsPermissionRefusal(err)`, never on a status alone. At the routes
-[entry 55](upstream-bugs.md#a-permission-refusal-is-answered-401-rather-than-403)
-lists, GitLab refuses a missing permission with 401, so a hint scoped to 403
+`permission401Routes` lists, GitLab refuses a missing permission with 401, so a hint scoped to 403
 is never shown there, and a hint keyed on 401 alone would follow the verdict
 that GitLab rejected the token itself, which it then contradicts.
 `IsPermissionRefusal` is true for a REST 401 or 403 whose body carries no RFC

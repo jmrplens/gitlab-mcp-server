@@ -533,7 +533,7 @@ carrying a copy of the params without the key. It used to strip the key in place
 and restore it after the send, which held only while the SDK delivered to one
 session at a time; go-sdk's main after v1.8.0 sends to each session on a
 goroutine of its own, and that design then lost notifications and sent the key
-to clients (row 23 of `docs/development/upstream-bugs.md`). The `_meta` map is
+to clients. The `_meta` map is
 never written to either: the stripped one is a new map, and on v1.8.0 the shared
 one is where the SDK stamps its own subscription id.
 
@@ -587,8 +587,7 @@ seen until the SDK's sending path was read: tag the notification with its owner
 and filter delivery on the way out. It needs no second shell, no body parser in
 the authentication path, and it works identically on both transports. When
 per-session delivery is released upstream, the tag and the filter go away and
-nothing else changes. The ask is recorded in
-[upstream-bugs.md](upstream-bugs.md).
+nothing else changes.
 
 ### What the shared server measured
 

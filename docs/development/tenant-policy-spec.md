@@ -563,8 +563,8 @@ and its negatives against the binary).
 It is the workaround for a Codex build that rejects a fractional priority, it changes how
 one number is written and nothing a model reads, it never decides who a caller is or what
 it may do, `GITLAB_MCP_CLIENT_COMPAT=off` removes it, and it retires only once a Codex
-built on an rmcp carrying the fix is widely deployed, not merely released (row 17 of
-[`upstream-bugs.md`](upstream-bugs.md#a-non-integer-annotation-priority-breaks-a-tool-call)).
+built on an rmcp carrying the fix is widely deployed, not merely released
+(<https://github.com/openai/codex/issues/38979>).
 
 ## Validation checklist
 
@@ -1031,7 +1031,7 @@ which stays open for F-21, F-22 and F-24. go-sdk v1.8.0 labels a `tools/call` re
 the `resultType` 2026-07-28 requires only inside its own tool dispatcher, so `RTC-001`'s
 refusal of a `tools/call`, a tool error its middleware returns in the dispatcher's place,
 reached a 2026-07-28 client without the field. The middleware now labels it
-(`toolutil.LabelForRevision`, row 66 of `docs/development/upstream-bugs.md`): a request
+(`toolutil.LabelForRevision`): a request
 naming 2026-07-28 or later in its `_meta` is refused with `resultType: "complete"`, as a
 call the dispatcher serves is answered, and one of an earlier revision with no
 `resultType`. That is the test go-sdk v1.8.0 applies to the results it labels once the
