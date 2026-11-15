@@ -144,8 +144,7 @@ The administrator route that creates a personal access token for another user ta
 no grant at GitLab 19.5, while the impersonation token route and the route above do.
 This server's own token creation actions, `user.create_current_user_pat` among them,
 send classic scopes only
-([upstream-bugs row 82](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them),
-[issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
 
 An administrator's token reaches the admin routes its `instance` scope grants, and on
 an instance that enforces Admin Mode it needs nothing more: GitLab lets every
@@ -186,9 +185,7 @@ matters. This is GitLab's design rather than a defect: its
 [authorization principles](https://docs.gitlab.com/development/permissions/granular_access/authorization_principles/)
 check a fine-grained token against the resource the request path names and nothing
 else the operation touches, so this warning stands for as long as GitLab keeps that
-rule. The
-[upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
-records the changes that settled it.
+rule.
 :::
 
 ## What a session is shown
@@ -314,8 +311,9 @@ send its GraphQL request instead, GitLab answers that request empty, and the ans
 carries a note saying so.
 
 The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
-names the reason for each. Making GitLab declare the missing permissions is tracked in
-[row 87 of the upstream register](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission), and serving
+names the reason for each. An action leaves this set once a GitLab release declares
+the permission it lacks and this server records its table from that release, as the
+custom emoji actions did with 19.5; until then the way out is a classic token, and serving
 over REST what GraphQL cannot reach is
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 

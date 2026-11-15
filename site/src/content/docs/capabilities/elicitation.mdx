@@ -105,7 +105,7 @@ The wizard runs again from the start on every round, replaying the answers carri
 
 The version that decides is the one the client **declared**, not the one its session negotiated, and on the legacy handshake those two can differ. `initialize` is deprecated in `2026-07-28`, so the Go SDK this server is built on (v1.8.0) answers an `initialize` asking for `2026-07-28` with `2025-11-25`, while keeping the version the client asked for. The server reads the version the request states, which a `2026-07-28` client sends with every request and an older client stated once in `initialize`. A client that asks for `2026-07-28` in `initialize` is therefore served multi-round-trip input requests although its session negotiated `2025-11-25`.
 
-The SDK decides the same way, and its own client answers `inputRequests` whatever version it negotiated, so a client built on it is unaffected. A client that claimed `2026-07-28` in `initialize` and cannot handle `inputRequests` would receive a result it cannot act on. The negotiated version should drive both sides, which is the SDK's to change; the defect is [recorded upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr).
+The SDK decides the same way, and its own client answers `inputRequests` whatever version it negotiated, so a client built on it is unaffected. A client that claimed `2026-07-28` in `initialize` and cannot handle `inputRequests` would receive a result it cannot act on. The negotiated version should drive both sides, which is the SDK's to change; until it does, a client that cannot handle `inputRequests` should not ask for `2026-07-28` in `initialize`.
 
 ### What is `resultType`?
 

@@ -554,8 +554,9 @@ metric after the process ends.
 
 One attribute the convention asks for is missing, and it cannot be supplied:
 `jsonrpc.request.id`. The Go SDK gives a receiving middleware no access to the
-JSON-RPC id of the message it is handling, so there is nothing to record. It is
-[registered upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-receiving-middleware-cannot-read-the-json-rpc-request-id).
+JSON-RPC id of the message it is handling, so there is nothing to record. To
+find a call, use its `trace_id` and `span_id` instead, which every log record
+written while serving it carries.
 
 Seconds, not milliseconds. The convention fixes that, and it is the opposite of
 the `duration` field in this server's log records.
