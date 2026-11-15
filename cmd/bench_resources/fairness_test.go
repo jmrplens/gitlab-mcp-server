@@ -1467,6 +1467,9 @@ func TestLaneAddress_IsOneEgressForTheQuietAndOneEachForTheNoisy(t *testing.T) {
 	if laneAddress(populationQuiet, 0) != laneAddress(populationQuiet, 7) {
 		t.Error("two quiet lanes arrive from different addresses, want the one egress address they share")
 	}
+	if got := laneAddress(populationQuiet, 0); got != "198.18.0.1" {
+		t.Errorf("laneAddress(quiet, 0) = %q, want 198.18.0.1, the RFC 2544 benchmarking address", got)
+	}
 	for _, tc := range []struct {
 		position int
 		want     string
