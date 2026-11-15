@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"errors"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -3455,12 +3456,14 @@ func TestPythonInt_Value_AppliesPythonsBoolRule(t *testing.T) {
 	cases := []struct {
 		value    any
 		name     string
-		wantDays int
+		wantDays int64
 		wantOK   bool
 	}{
 		{name: "int", value: 7, wantDays: 7, wantOK: true},
 		{name: "int64", value: int64(7), wantDays: 7, wantOK: true},
+		{name: "int64 beyond 32 bits is not truncated", value: int64(1<<32 + 1), wantDays: 1<<32 + 1, wantOK: true},
 		{name: "uint64", value: uint64(7), wantDays: 7, wantOK: true},
+		{name: "uint64 beyond int64 is held at its maximum", value: uint64(math.MaxUint64), wantDays: math.MaxInt64, wantOK: true},
 		{name: "true counts as one", value: true, wantDays: 1, wantOK: true},
 		{name: "false counts as zero", value: false, wantDays: 0, wantOK: true},
 		{name: "string is not an integer", value: "7", wantOK: false},

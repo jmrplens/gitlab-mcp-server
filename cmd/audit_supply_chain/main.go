@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1322,15 +1323,20 @@ func pythonReprFloat(value float64) string {
 }
 
 // pythonInt reports the integer a decoded YAML scalar carries, applying
-// Python's rule that a bool is an int.
-func pythonInt(value any) (days int, ok bool) {
+// Python's rule that a bool is an int. The count is an int64 so that no value
+// is narrowed: a YAML integer beyond int64, which Python reads exactly, is
+// held at math.MaxInt64, which is just as far above the floor.
+func pythonInt(value any) (days int64, ok bool) {
 	switch typed := value.(type) {
 	case int:
-		return typed, true
+		return int64(typed), true
 	case int64:
-		return int(typed), true
+		return typed, true
 	case uint64:
-		return int(typed), true //#nosec G115 -- a Dependabot cooldown window, compared against a 3-day floor.
+		if typed > math.MaxInt64 {
+			return math.MaxInt64, true
+		}
+		return int64(typed), true
 	case bool:
 		if typed {
 			return 1, true

@@ -6,8 +6,10 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
+	"math"
 	"slices"
 	"testing"
 
@@ -824,5 +826,39 @@ func TestTypeName_NamesANamedTypeThroughAPointer(t *testing.T) {
 	}
 	if got := typeName(types.Universe.Lookup("error").Type()); got != "" {
 		t.Fatalf("typeName of error = %q, want empty: it has no package", got)
+	}
+}
+
+// TestFoldInt_FoldsOnlyAnIntegerThatFitsAnInt verifies foldInt reads an
+// expression's constant as an int only when it is an integer within int's
+// range on every platform: a whole float folds, while a string, a fractional
+// float, a value one past the int64 range and an expression with no constant
+// fold to nothing rather than to a truncated number.
+func TestFoldInt_FoldsOnlyAnIntegerThatFitsAnInt(t *testing.T) {
+	beyondInt64 := constant.BinaryOp(constant.MakeInt64(math.MaxInt64), token.ADD, constant.MakeInt64(1))
+	cases := []struct {
+		name   string
+		value  constant.Value
+		want   int
+		wantOK bool
+	}{
+		{name: "status", value: constant.MakeInt64(429), want: 429, wantOK: true},
+		{name: "negative code", value: constant.MakeInt64(-32603), want: -32603, wantOK: true},
+		{name: "whole float", value: constant.MakeFloat64(503), want: 503, wantOK: true},
+		{name: "fractional float", value: constant.MakeFloat64(1.5)},
+		{name: "string", value: constant.MakeString("429")},
+		{name: "beyond int64", value: beyondInt64},
+		{name: "below int64", value: constant.UnaryOp(token.SUB, constant.BinaryOp(beyondInt64, token.ADD, constant.MakeInt64(1)), 0)},
+		{name: "no constant"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			expr := &ast.BasicLit{}
+			info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{expr: {Value: tc.value}}}
+			got, ok := foldInt(info, expr)
+			if got != tc.want || ok != tc.wantOK {
+				t.Errorf("foldInt(%v) = %d, %t; want %d, %t", tc.value, got, ok, tc.want, tc.wantOK)
+			}
+		})
 	}
 }
