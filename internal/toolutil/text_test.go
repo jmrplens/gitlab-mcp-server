@@ -615,6 +615,10 @@ func TestFormatTarget(t *testing.T) {
 func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 	t.Parallel()
 
+	// between writes r between an a and a b, by its number, so the source
+	// carries no character a reader cannot see.
+	between := func(r rune) string { return "a" + string(r) + "b" }
+
 	tests := []struct {
 		name string
 		in   string
@@ -631,22 +635,22 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 		{name: "a trailing backtick is padded", in: "a`", want: "`` a` ``"},
 		{name: "a control sequence is dropped", in: "demo\x1b[2Jproj", want: "`demo[2Jproj`"},
 		{name: "a lone carriage return collapses", in: "demo\rmore", want: "`demo more`"},
-		{name: "the line separator collapses", in: "demo **Approved**", want: "`demo **Approved**`"},
-		{name: "the paragraph separator collapses", in: "demo **Approved**", want: "`demo **Approved**`"},
+		{name: "the line separator collapses", in: "demo" + string(rune(0x2028)) + "**Approved**", want: "`demo **Approved**`"},
+		{name: "the paragraph separator collapses", in: "demo" + string(rune(0x2029)) + "**Approved**", want: "`demo **Approved**`"},
 		{name: "the vertical tab, the form feed and the next line are dropped", in: "a\vb\fc\u0085d", want: "`abcd`"},
-		{name: "the Arabic letter mark is dropped", in: "a؜b", want: "`ab`"},
-		{name: "the left-to-right mark is dropped", in: "a‎b", want: "`ab`"},
-		{name: "the right-to-left mark is dropped", in: "a‏b", want: "`ab`"},
-		{name: "the left-to-right embedding is dropped", in: "a‪b", want: "`ab`"},
-		{name: "the right-to-left embedding is dropped", in: "a‫b", want: "`ab`"},
-		{name: "the pop directional formatting is dropped", in: "a‬b", want: "`ab`"},
-		{name: "the left-to-right override is dropped", in: "a‭b", want: "`ab`"},
-		{name: "the right-to-left override is dropped", in: "demo/‮devorppa", want: "`demo/devorppa`"},
-		{name: "the left-to-right isolate is dropped", in: "a⁦b", want: "`ab`"},
-		{name: "the right-to-left isolate is dropped", in: "a⁧b", want: "`ab`"},
-		{name: "the first strong isolate is dropped", in: "a⁨b", want: "`ab`"},
-		{name: "the pop directional isolate is dropped", in: "a⁩b", want: "`ab`"},
-		{name: "a value of direction controls alone keeps the span closed", in: "‮⁦‏", want: "` `"},
+		{name: "the Arabic letter mark is dropped", in: between(0x061C), want: "`ab`"},
+		{name: "the left-to-right mark is dropped", in: between(0x200E), want: "`ab`"},
+		{name: "the right-to-left mark is dropped", in: between(0x200F), want: "`ab`"},
+		{name: "the left-to-right embedding is dropped", in: between(0x202A), want: "`ab`"},
+		{name: "the right-to-left embedding is dropped", in: between(0x202B), want: "`ab`"},
+		{name: "the pop directional formatting is dropped", in: between(0x202C), want: "`ab`"},
+		{name: "the left-to-right override is dropped", in: between(0x202D), want: "`ab`"},
+		{name: "the right-to-left override is dropped", in: "demo/" + string(rune(0x202E)) + "devorppa", want: "`demo/devorppa`"},
+		{name: "the left-to-right isolate is dropped", in: between(0x2066), want: "`ab`"},
+		{name: "the right-to-left isolate is dropped", in: between(0x2067), want: "`ab`"},
+		{name: "the first strong isolate is dropped", in: between(0x2068), want: "`ab`"},
+		{name: "the pop directional isolate is dropped", in: between(0x2069), want: "`ab`"},
+		{name: "a value of direction controls alone keeps the span closed", in: string([]rune{0x202E, 0x2066, 0x200F}), want: "` `"},
 		{name: "letters of a right-to-left script are kept", in: "שלום/مرحبا", want: "`שלום/مرحبا`"},
 		{name: "a tab stays on the line", in: "a\tb", want: "`a\tb`"},
 	}

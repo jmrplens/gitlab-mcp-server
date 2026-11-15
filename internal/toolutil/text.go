@@ -933,11 +933,18 @@ func EscapeConsentValue(s string) string {
 	return backtickSpan(s)
 }
 
+// The line and paragraph separators of Unicode, U+2028 and U+2029, written by
+// their numbers so the source carries no character a reader cannot see.
+const (
+	lineSeparator      = 0x2028
+	paragraphSeparator = 0x2029
+)
+
 // consentRune is what [EscapeConsentValue] writes for one character of a
 // value: a space for a character that ends a line, nothing for one that
 // changes the reading direction, and the character itself otherwise.
 func consentRune(r rune) rune {
-	if r == '\n' || r == '\r' || r == ' ' || r == ' ' {
+	if r == '\n' || r == '\r' || r == lineSeparator || r == paragraphSeparator {
 		return ' '
 	}
 	if unicode.Is(unicode.Bidi_Control, r) {
