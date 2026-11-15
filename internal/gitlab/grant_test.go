@@ -74,11 +74,14 @@ func grantClient(t *testing.T, url string) *Client {
 }
 
 // TestReadGrant_ReadsTheAnswerOrSaysWhyNot verifies each answer the grant read
-// can meet: a grant decoded, a refusal of the token's own description read as
-// unreadable, a token that says it is not fine-grained or holds a scope that
-// cannot be placed read as of unknown shape, a body decoded by client-go
-// whose captured copy does not decode read the same way, and a status that is
-// no verdict on the read reported as no answer, with an error.
+// can meet: a grant decoded, an empty list read as a grant of nothing, a
+// refusal of the token's own description read as unreadable, a token that
+// says it is not fine-grained or holds a scope that cannot be placed (a null
+// one among them) read as of unknown shape, a scope list client-go's decoder
+// refuses for a value of the wrong type and a body it decoded whose captured
+// copy does not decode read the same way, and a body that is no JSON at all,
+// a wrong type in a field outside the scope list, or a status that is no
+// verdict on the read reported as no answer, with an error.
 func TestReadGrant_ReadsTheAnswerOrSaysWhyNot(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -93,6 +96,14 @@ func TestReadGrant_ReadsTheAnswerOrSaysWhyNot(t *testing.T) {
 		{name: "not fine-grained", status: http.StatusOK, body: `{"id":9,"granular":false}`, reason: finegrained.FallbackGrantShape, answered: true},
 		{name: "trailing bytes", status: http.StatusOK, body: grantBody + ` trailing`, reason: finegrained.FallbackGrantShape, answered: true},
 		{name: "no scopes", status: http.StatusOK, body: `{"id":9,"granular":true}`, reason: finegrained.FallbackGrantUnreadable, answered: true},
+		{name: "an empty list", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[]}`, reason: finegrained.FallbackNone, answered: true},
+		{name: "a null scope", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[null]}`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "a numeric access", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[{"access":1,"permissions":["project_read"]}]}`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "permissions as a string", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[{"access":"user","permissions":"project_read"}]}`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "the list as an object", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":{"access":"user"}}`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "a project id as a string", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[{"access":"selected_memberships","permissions":["project_read"],"project_id":"7"}]}`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "not JSON", status: http.StatusOK, body: `<html>`, reason: finegrained.FallbackNone},
+		{name: "a name of the wrong type", status: http.StatusOK, body: `{"id":9,"name":1,"granular":true,"granular_scopes":[{"access":"user","permissions":["project_read"]}]}`, reason: finegrained.FallbackNone},
 		{name: "server error", status: http.StatusInternalServerError, body: `{}`, reason: finegrained.FallbackNone},
 		{name: "not found", status: http.StatusNotFound, body: `{}`, reason: finegrained.FallbackNone},
 	}

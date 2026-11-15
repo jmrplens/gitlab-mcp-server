@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -38,10 +39,11 @@ const (
 // the given id, which must be the token the client authenticates with
 // ([DetectToken] read it from the self endpoint).
 //
-// client-go does not model the grant, and the self endpoint does not present
-// it, so it is decoded from the captured response of GET
-// /personal_access_tokens/:id (ADR-0021), read under [GrantMaxBytes] and
-// decoded with at most [GrantMaxScopes] scopes ([finegrained.DecodeGrant]).
+// The self endpoint does not present the grant, so it is read from GET
+// /personal_access_tokens/:id under [GrantMaxBytes]: the granular scopes from
+// what client-go decodes, and the granular flag, which client-go does not
+// model, from the captured response (ADR-0021), and evaluated with at most
+// [GrantMaxScopes] scopes ([finegrained.GrantFromScopes]).
 //
 // What comes back says which of three things happened. A grant and
 // [finegrained.FallbackNone]: it was read and can be evaluated. A reason and
@@ -55,7 +57,7 @@ const (
 // Nothing of the grant is logged here, and the body is dropped once decoded.
 func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Grant, finegrained.FallbackReason, error) {
 	ctx, capture := WithResponseCapture(WithResponseLimit(ctx, GrantMaxBytes))
-	_, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessTokenByID(id, gl.WithContext(ctx))
+	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessTokenByID(id, gl.WithContext(ctx))
 	// Separate ifs rather than a tagless switch, whose case expressions carry
 	// no statement counter for the mutation tool to measure.
 	if errors.Is(err, ErrResponseTooLarge) {
@@ -64,18 +66,75 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 	if isStatus(err, http.StatusForbidden) {
 		return finegrained.Grant{}, finegrained.FallbackGrantUnreadable, nil
 	}
+	// client-go decodes only a 2xx answer, so a value of the wrong type in the
+	// scope list is GitLab answering with a grant this server does not know:
+	// a shape the authority names, not a read that failed. Any other decode
+	// failure (no JSON at all, or a wrong type in a field the token read
+	// already modeled) stays an error, as it was before client-go decoded the
+	// scopes.
+	if isGrantShapeError(err) {
+		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil
+	}
 	if err != nil {
 		return finegrained.Grant{}, finegrained.FallbackNone, fmt.Errorf("read the token's grant: %w", err)
 	}
-	var body json.RawMessage
-	// An answer that is not JSON is a reason the authority names, not a read
-	// that failed, so it is no error.
-	decoded := capture.Decode(&body) == nil
+	var extra grantExtra
+	// An answer that is not JSON as a whole (client-go's decoder stops at the
+	// first value and ignores what trails it) is a reason the authority names,
+	// not a read that failed, so it is no error.
+	decoded := capture.Decode(&extra) == nil
 	if !decoded {
 		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil
 	}
-	grant, reason := finegrained.DecodeGrant(body, GrantMaxScopes)
+	grant, reason := finegrained.GrantFromScopes(extra.Granular, grantScopes(token.GranularScopes), GrantMaxScopes)
 	return grant, reason, nil
+}
+
+// isGrantShapeError reports whether err is client-go's JSON decoder refusing
+// a value of the wrong type in granular_scopes, the list itself or a field of
+// one of its entries (the decoder names those granular_scopes.0.access and
+// the like).
+func isGrantShapeError(err error) bool {
+	var typeErr *json.UnmarshalTypeError
+	if !errors.As(err, &typeErr) {
+		return false
+	}
+	return typeErr.Field == grantScopesField || strings.HasPrefix(typeErr.Field, grantScopesField+".")
+}
+
+// grantScopesField is the JSON name of the granular scope list.
+const grantScopesField = "granular_scopes"
+
+// grantExtra is what GET /personal_access_tokens/:id sends on a token that
+// client-go's PersonalAccessToken does not model: the granular flag, a
+// pointer so that an answer without it is told from one that says false.
+type grantExtra struct {
+	Granular *bool `json:"granular"`
+}
+
+// grantScopes hands the granular scopes client-go decoded to
+// [finegrained.GrantFromScopes] in its own type, keeping nil (the answer
+// carried no list, or null) apart from empty (it carried an empty one). A
+// null entry becomes a scope with no access level, which the evaluation reads
+// as a shape it does not know.
+func grantScopes(scopes []*gl.GranularScope) []finegrained.GrantScope {
+	if scopes == nil {
+		return nil
+	}
+	out := make([]finegrained.GrantScope, 0, len(scopes))
+	for _, scope := range scopes {
+		if scope == nil {
+			out = append(out, finegrained.GrantScope{})
+			continue
+		}
+		out = append(out, finegrained.GrantScope{
+			Access:      string(scope.Access),
+			Permissions: scope.Permissions,
+			ProjectID:   scope.ProjectID,
+			GroupID:     scope.GroupID,
+		})
+	}
+	return out
 }
 
 // ReadFineGrained reads what a fine-grained token's authority is judged from

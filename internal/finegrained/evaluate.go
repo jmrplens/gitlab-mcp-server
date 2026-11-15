@@ -46,7 +46,7 @@ func (b bitset) has(i int) bool {
 // grant it was created with, or why the grant cannot be evaluated, and the
 // version the instance reported.
 type Reading struct {
-	// Grant is the token's grant, as [DecodeGrant] read it.
+	// Grant is the token's grant, as [GrantFromScopes] read it.
 	Grant Grant
 	// Fallback is why the grant cannot be evaluated, or [FallbackNone] when it
 	// can: a reason the grant read gave, or, when the version read left no

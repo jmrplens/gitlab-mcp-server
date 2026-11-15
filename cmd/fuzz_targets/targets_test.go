@@ -226,7 +226,7 @@ func TestFindTargets_Repository_FindsItsTargetsWithTheRealToolchain(t *testing.T
 	}
 	for _, known := range []target{
 		{pkg: "./cmd/server", name: "FuzzRefuseUnreadable"},
-		{pkg: "./internal/finegrained", name: "FuzzDecodeGrant"},
+		{pkg: "./internal/finegrained", name: "FuzzGrantFromScopes"},
 		{pkg: "./internal/tenancy", name: "FuzzBudgetOn"},
 		{pkg: "./internal/tenancy", name: "FuzzMeterFor"},
 		{pkg: "./internal/tools/search", name: "FuzzFormatCodeMarkdown"},
