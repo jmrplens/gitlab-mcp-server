@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "Go MCP server for GitLab: 2 dynamic tools reach ~879 actions on Free/CE, up to ~1106 on Ultimate.",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -29,9 +29,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.5.0/gitlab-mcp-server-darwin.mcpb",
-      "version": "3.5.0",
-      "fileSha256": "76e5e495e391ea9006eae42f9a4c910c5a8ad565bac608a8b5dda06a4b85beb9",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.6.0/gitlab-mcp-server-darwin.mcpb",
+      "version": "3.6.0",
+      "fileSha256": "5c4148d5d896b656a2e62f25f7669d139f3291791141cb4a92e02d126c2f9953",
       "transport": {
         "type": "stdio"
       },
@@ -109,9 +109,9 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.5.0/gitlab-mcp-server-windows.mcpb",
-      "version": "3.5.0",
-      "fileSha256": "c453b0ed8e70a27c91483e1eb97a9bdcebbd60c5be246f493471f310af27adab",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.6.0/gitlab-mcp-server-windows.mcpb",
+      "version": "3.6.0",
+      "fileSha256": "7ddb874e5452bf5a5484dffb09fcfb761f26748a3e23a7f42242226cd78c283c",
       "transport": {
         "type": "stdio"
       },
@@ -189,9 +189,9 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.5.0/gitlab-mcp-server-linux.mcpb",
-      "version": "3.5.0",
-      "fileSha256": "41654f3d6b264a7e6268e50bf087d67b7d813bc417baba52d1f0770873dba101",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.6.0/gitlab-mcp-server-linux.mcpb",
+      "version": "3.6.0",
+      "fileSha256": "aafbd38654da68cc653a790d469da26b6d1cd8f9aca900869c41a3b068b98286",
       "transport": {
         "type": "stdio"
       },
@@ -269,7 +269,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.5.0@sha256:8e2d7f34c47ac5856600eb50b5a1916b5292bb71d7d7a595811853ac9d1b4138",
+      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.6.0@sha256:d3f776ffa9f0e247059e8acbf727b5b411d5baa31b9f6523735cf7732e252e4f",
       "transport": {
         "type": "stdio"
       },
@@ -436,7 +436,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.5.0@sha256:8e2d7f34c47ac5856600eb50b5a1916b5292bb71d7d7a595811853ac9d1b4138",
+      "identifier": "docker.io/jmrplens/gitlab-mcp-server:3.6.0@sha256:d3f776ffa9f0e247059e8acbf727b5b411d5baa31b9f6523735cf7732e252e4f",
       "transport": {
         "type": "stdio"
       },
@@ -604,7 +604,7 @@
     {
       "registryType": "npm",
       "identifier": "@jmrp.io/gitlab-mcp-server",
-      "version": "3.5.0",
+      "version": "3.6.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -774,7 +774,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jmrplens-gitlab-mcp-server",
-      "version": "3.5.0",
+      "version": "3.6.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -944,7 +944,7 @@
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "gitlab-mcp-server",
-      "version": "3.5.0",
+      "version": "3.6.0",
       "runtimeHint": "dnx",
       "transport": {
         "type": "stdio"
