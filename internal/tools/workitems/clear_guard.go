@@ -57,6 +57,12 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 		return nil
 	}
 	losses := pendingClearLosses(ctx, client, input)
+	// A read the caller abandoned is answered with the context's error, as
+	// toolutil.ConfirmAssigneesCleared answers one, rather than with a
+	// question nobody is there to answer.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
 	if len(losses) == 0 {
 		return nil
 	}

@@ -17,6 +17,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -194,6 +195,30 @@ func TestConfirmListClearing_UnreadableWorkItem_StillAsks(t *testing.T) {
 		" This replaces the list and cannot be undone from the response."
 	if prompt.Message != question {
 		t.Errorf("prompt =\n%q\nwant\n%q", prompt.Message, question)
+	}
+}
+
+// TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled verifies that an
+// update whose caller goes away while the guard reads the work item ends with
+// the cancellation, as issue.update does, rather than with the question nobody
+// is there to answer, and sends nothing after the read.
+func TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	var requests atomic.Int64
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{}}`)
+	})
+	_, err := Update(ctx, client, UpdateInput{FullPath: "acme/widgets", IID: 7, AssigneeIDs: []int64{}})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Update() error = %v, want context.Canceled", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "confirm=true") {
+		t.Errorf("error %q asks a question nobody is there to answer", err)
+	}
+	if got := requests.Load(); got > 1 {
+		t.Errorf("GitLab received %d request(s), want the read alone", got)
 	}
 }
 
