@@ -13,6 +13,7 @@ package toolutil
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -340,9 +341,10 @@ func namesUsers(args string) bool {
 // The arguments alone decide, so nothing is read: whether GitLab would run
 // the command depends on the type of the item, its state and the caller's
 // role, and a guard that asked only when it would has to know all three. The
-// question quotes the lines, each cut to a length a dialog shows and escaped
-// so it cannot pass for the server's own words, and no other part of the
-// text. It quotes every kind of effect the text carries and at least
+// question quotes the lines, each with an address on it written by its origin
+// alone, as the other guards write one, cut to a length a dialog shows and
+// escaped so it cannot pass for the server's own words, and no other part of
+// the text. It quotes every kind of effect the text carries and at least
 // [quickActionLinesShown] lines, and counts the rest, each of a kind already
 // quoted, so a long run of one command cannot keep another out of the
 // question.
@@ -354,7 +356,7 @@ func ConfirmQuickActions(ctx context.Context, op string, texts ...string) error 
 	shown := quotedQuickActionLines(lines)
 	effects := make([]i18n.Message, 0, len(shown)+1)
 	for _, line := range shown {
-		effects = append(effects, quickActionEffect(line.Command, EscapeConsentValue(truncateRunes(line.Line, quickActionLineRunes))))
+		effects = append(effects, quickActionEffect(line.Command, EscapeConsentValue(truncateRunes(redactLineURLs(line.Line), quickActionLineRunes))))
 	}
 	if more := len(lines) - len(shown); more > 0 {
 		effects = append(effects, i18n.New(i18n.ConfirmQuickActionMore, i18n.N("count", int64(more))))
@@ -372,6 +374,20 @@ func ConfirmQuickActionsOptional(ctx context.Context, op string, text *string) e
 		return nil
 	}
 	return ConfirmQuickActions(ctx, op, *text)
+}
+
+// lineURL matches an address on a quoted line: a scheme, in any case, its
+// "://" and everything up to the next space.
+var lineURL = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://\S+`)
+
+// redactLineURLs writes every address on a line by its origin alone, as
+// [RedactURLToOrigin] reduces it, and leaves the rest of the line as it is.
+// The guarded commands take a path, a reference or a name, so an address on
+// one is never what a person needs to decide on, and its userinfo, path and
+// query are where a credential sits. It runs before the line is cut, so a cut
+// cannot leave the front of an address that no longer parses.
+func redactLineURLs(line string) string {
+	return lineURL.ReplaceAllStringFunc(line, RedactURLToOrigin)
 }
 
 // truncateRunes cuts s to at most limit runes, marking a cut with an

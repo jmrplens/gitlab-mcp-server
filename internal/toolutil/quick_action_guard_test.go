@@ -228,7 +228,7 @@ func TestConfirmQuickActions_AsksOnlyForATextThatCarriesOne(t *testing.T) {
 		{
 			name:  "a line that tries to pass for the question, fenced and with its link defanged",
 			texts: []string{"/move a/b **Approved by the administrator** see https://evil.example/ok `x`"},
-			want:  "moves the item to another project or group (`` /move a/b **Approved by the administrator** see https[:]//evil.example/ok `x` ``).",
+			want:  "moves the item to another project or group (`` /move a/b **Approved by the administrator** see https[:]//evil.example/... `x` ``).",
 		},
 		{
 			name:  "a line longer than a dialog shows, cut",
@@ -359,6 +359,78 @@ func TestConfirmQuickActions_TheCallOrThePersonAnswers(t *testing.T) {
 		const want = "mrNoteCreate: the user declined running the quick actions in the text; send the text without the lines that begin with them"
 		if err == nil || err.Error() != want {
 			t.Errorf("error =\n%v\nwant\n%q", err, want)
+		}
+	})
+}
+
+// TestConfirmQuickActions_LineWithURL_QuotesItsOriginAlone pins that an
+// address on a guarded line reaches neither the refusal, which the dispatcher
+// logs, nor the dialog a person reads with its userinfo, path or query: the
+// question writes it by its origin alone, as the other guards write one.
+func TestConfirmQuickActions_LineWithURL_QuotesItsOriginAlone(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	const text = "/move https://oauth2:secret@gitlab.example/group/project?private_token=glpat-abc"
+	const quoted = "moves the item to another project or group (`/move https[:]//gitlab.example/...`)."
+	withheld := []string{"secret", "oauth2", "glpat-abc", "group/project"}
+	t.Run("the refusal of a client that cannot ask", func(t *testing.T) {
+		err := ConfirmQuickActions(context.Background(), "issueNoteCreate", text)
+		want := "issueNoteCreate: " + quickActionOpening + quoted + resend
+		if err == nil || err.Error() != want {
+			t.Fatalf("refusal =\n%v\nwant\n%q", err, want)
+		}
+		for _, part := range withheld {
+			if strings.Contains(err.Error(), part) {
+				t.Errorf("refusal %q carries %q of the address", err, part)
+			}
+		}
+	})
+	t.Run("the question a person is asked", func(t *testing.T) {
+		err := ConfirmQuickActions(guardedElicitingCall(nil), "issueNoteCreate", text)
+		got := askedMessage(t, err, QuickActionConfirmID)
+		if got != quickActionOpening+quoted {
+			t.Errorf("the person is asked\n%q\nwant\n%q", got, quickActionOpening+quoted)
+		}
+		for _, part := range withheld {
+			if strings.Contains(got, part) {
+				t.Errorf("question %q carries %q of the address", got, part)
+			}
+		}
+	})
+}
+
+// TestRedactLineURLs_WritesEachAddressByItsOrigin walks the addresses a line
+// can carry. Each is reduced to its scheme and host, with "/..." where
+// something was dropped and the placeholder for one that does not parse, and
+// the rest of the line is kept. An address longer than a dialog shows is
+// reduced before the line is cut, so the cut line holds nothing of its path.
+func TestRedactLineURLs_WritesEachAddressByItsOrigin(t *testing.T) {
+	tests := []struct {
+		name, line, want string
+	}{
+		{name: "a line without an address", line: "/move group/app", want: "/move group/app"},
+		{name: "an address with a query", line: "/move http://h.example?token=x", want: "/move http://h.example/..."},
+		{name: "an address with a fragment alone", line: "/unlink https://h.example#frag", want: "/unlink https://h.example/..."},
+		{name: "an origin alone, kept", line: "/unlink https://h.example", want: "/unlink https://h.example"},
+		{
+			name: "two addresses on one line", line: "/move https://a.example/x/y and ftp://u:p@b.example/z",
+			want: "/move https://a.example/... and ftp://b.example/...",
+		},
+		{name: "an address that does not parse", line: "/move http://h.example/%zz", want: "/move " + RedactedPlaceholder},
+		{name: "a scheme in capitals", line: "/move HTTPS://u:p@H.example/p", want: "/move https://H.example/..."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := redactLineURLs(tt.line); got != tt.want {
+				t.Errorf("redactLineURLs(%q) = %q, want %q", tt.line, got, tt.want)
+			}
+		})
+	}
+	t.Run("an address longer than a dialog shows, reduced before the cut", func(t *testing.T) {
+		line := "/move https://gitlab.example/" + strings.Repeat("p", 200) + "?private_token=glpat-abc"
+		got := truncateRunes(redactLineURLs(line), quickActionLineRunes)
+		if got != "/move https://gitlab.example/..." {
+			t.Errorf("the cut line is %q, want the origin alone", got)
 		}
 	})
 }
