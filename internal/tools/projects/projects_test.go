@@ -79,7 +79,7 @@ func TestUpdate_EmptyValues_ReachTheBody(t *testing.T) {
 // checks point 5 of issue 1671 against this server's pagination. RFC 8288
 // lets a Link entry's first parameter carry no value (`<url>; anchor;
 // rel="next"`), and client-go indexed past the end of such an entry and
-// panicked the call until v3.38.1, which skips it (register row 129). It still
+// panicked the call until v3.38.1, which skips it. It still
 // reads rel from the first parameter alone, so the skipped entry names no next
 // page: the list answers the page it has, with no next_page_token and
 // has_more false, and the next entry beside it, written the way GitLab writes
@@ -299,8 +299,7 @@ func TestUpdate_ZeroSettings_ReachTheBody(t *testing.T) {
 // neither as 0 (the artifact size must be above 0, and pipelines are kept at
 // least a day), and null is what puts each back to its default: the instance's
 // artifact size limit, and pipelines kept for ever. client-go's pointers are
-// tagged omitempty and cannot carry a null (issue 1306, upstream register row
-// 122).
+// tagged omitempty and cannot carry a null (issue 1306).
 func TestUpdate_ZeroLimits_GoOutAsNull(t *testing.T) {
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"project_id": "42", "max_artifacts_size": 0, "ci_delete_pipelines_in_seconds": 0,
@@ -10375,8 +10374,8 @@ func TestProjectGet_EachScalarIsPublishedUnderItsOwnKey(t *testing.T) {
 		t.Fatalf(fmtGetUnexpErr, err)
 	}
 	assertPublishedAsSent(t, fixture, out, map[string]string{
-		"build_coverage_regex":    "client-go models it and no GitLab entity sends it (upstream-bugs.md)",
-		"operations_access_level": "client-go models the name GitLab renamed to monitor_access_level (upstream-bugs.md)",
+		"build_coverage_regex":    "client-go models it and no GitLab entity sends it",
+		"operations_access_level": "client-go models the name GitLab renamed to monitor_access_level",
 	})
 }
 
@@ -10390,14 +10389,14 @@ func TestProjectGet_EachScalarIsPublishedUnderItsOwnKey(t *testing.T) {
 func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
 	derivedFromLevel := "the entity computes it from the access level; the deprecated copy client-go decodes is not read"
 	derived := map[string]flagOutcome{
-		"public_builds":                   {why: "client-go models the name GitLab renamed to public_jobs in 9.0, and no entity sends it (upstream-bugs.md)"},
+		"public_builds":                   {why: "client-go models the name GitLab renamed to public_jobs in 9.0, and no entity sends it"},
 		"issues_enabled":                  {why: derivedFromLevel},
 		"merge_requests_enabled":          {why: derivedFromLevel},
 		"jobs_enabled":                    {why: derivedFromLevel},
 		"wiki_enabled":                    {why: derivedFromLevel},
 		"snippets_enabled":                {why: derivedFromLevel},
 		"container_registry_enabled":      {why: derivedFromLevel},
-		"ci_opt_in_jwt":                   {why: "client-go models it and no GitLab entity sends it (upstream-bugs.md)"},
+		"ci_opt_in_jwt":                   {why: "client-go models it and no GitLab entity sends it"},
 		"issues_access_level":             {publishes: []string{"issues_enabled"}, why: "an enabled level is what the older flag reports"},
 		"merge_requests_access_level":     {publishes: []string{"merge_requests_enabled"}, why: "an enabled level is what the older flag reports"},
 		"builds_access_level":             {publishes: []string{"jobs_enabled"}, why: "an enabled level is what the older flag reports"},
@@ -10606,11 +10605,10 @@ func TestProjectLists_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 // a user's contributed projects are never asked for by keyset. GitLab serves
 // the route a keyset page and writes an id_before or id_after into its next
 // link, but the route's finder never reads either (ContributedProjectsFinder
-// takes no params), so following the link answers the first page again
-// (upstream-bugs row 112). The action offers neither pagination nor
-// page_token, refuses each as a field the input does not have before any
-// request, and an offset listing still pages by next_page. The owned and
-// starred lists, which share its filters, keep both.
+// takes no params), so following the link answers the first page again. The
+// action offers neither pagination nor page_token, refuses each as a field the
+// input does not have before any request, and an offset listing still pages by
+// next_page. The owned and starred lists, which share its filters, keep both.
 func TestListUserContributedProjects_KeysetArguments_AreNotOffered(t *testing.T) {
 	routes := map[string]toolutil.ActionRoute{
 		"list_user_contributed": toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListUserContributedProjects),
@@ -10910,9 +10908,8 @@ func TestCreate_WithAvatar_UploadsItBesideTheOptions(t *testing.T) {
 // around: UploadRequest writes each multipart field with fields.Get, the
 // first of its values, so the second topic never leaves the process. A
 // client-go that writes more fails it, and that is when each of those sites
-// is looked at again (row 151 of docs/development/upstream-bugs.md): Rack
-// keeps the last value of a field sent twice under one name, so a join may
-// still be what GitLab needs.
+// is looked at again: Rack keeps the last value of a field sent twice under
+// one name, so a join may still be what GitLab needs.
 func TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone(t *testing.T) {
 	forms := make(chan avatarForm, 1)
 	client := testutil.NewTestClient(t, avatarFormHandler(t, "/api/v4/projects", forms))
@@ -10926,7 +10923,7 @@ func TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone(t *testing.T) {
 	}
 	if got := (<-forms).values["topics"]; !slices.Equal(got, []string{"go"}) {
 		t.Errorf("topics = %q, want only the first, go: client-go's upload now writes more than the first value of a field "+
-			"(row 151 of docs/development/upstream-bugs.md), so look again at commaJoined, groups.attachAvatar and the alert "+
+			"so look again at commaJoined, groups.attachAvatar and the alert "+
 			"list refusal of groups.Create", got)
 	}
 }

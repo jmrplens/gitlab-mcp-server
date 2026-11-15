@@ -3178,8 +3178,9 @@ func (w *sseAwareWriter) WriteHeader(code int) {
 // commits a streamed POST: it never calls WriteHeader, and its first Write is
 // its first event. The heartbeat starts there and not before, so on go-sdk
 // v1.8.0 a tool call that sends nothing before its result puts no byte on the
-// wire, its headers included, until the result ends the stream; row 8 of
-// docs/development/upstream-bugs.md records it.
+// wire, its headers included, until the result ends the stream. A go-sdk
+// release carrying https://github.com/modelcontextprotocol/go-sdk/pull/1477
+// ends that.
 func (w *sseAwareWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)

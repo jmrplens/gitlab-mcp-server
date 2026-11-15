@@ -127,7 +127,7 @@ func toOutput(d *gl.Dependency, extra toolutil.DependencyExtra) Output {
 
 // exportExtra is what API::Entities::DependencyListExport sends that
 // client-go's DependencyListExport does not model: it carries four of the
-// eight fields (upstream-bugs row 113), and the four left out are the ones a
+// eight fields, and the four left out are the ones a
 // caller waiting on an export needs, its status first.
 type exportExtra struct {
 	Status     string     `json:"status"`

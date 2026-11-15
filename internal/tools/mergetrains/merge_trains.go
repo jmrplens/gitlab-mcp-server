@@ -97,8 +97,7 @@ type ListOutput struct {
 // trainMeasures is how long a car and its pipeline took, as GitLab sends
 // them: null for a car whose train has not run, which client-go's MergeTrain
 // and Pipeline decode as int64 and so read as 0. Read from the captured
-// response (ADR-0021); recorded as register row 116 of
-// docs/development/upstream-bugs.md.
+// response (ADR-0021).
 type trainMeasures struct {
 	Duration *int64                     `json:"duration"`
 	Pipeline *toolutil.PipelineMeasures `json:"pipeline"`

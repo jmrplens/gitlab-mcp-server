@@ -113,8 +113,7 @@ func (e *unresolvedError) Unwrap() error { return e.cause }
 
 // resolveGroupID answers the integer client-go's storage move methods take.
 // GitLab's routes take the ID of the group or its URL-encoded path, and client-go
-// types the parameter as an int64 (docs/development/upstream-bugs.md, row 158),
-// so a value that is not a number is read into its ID first. A number sends
+// types the parameter as an int64, so a value that is not a number is read into its ID first. A number sends
 // nothing, and one no group can have is refused here as a missing one.
 func resolveGroupID(ctx context.Context, client *gitlabclient.Client, operation string, value toolutil.StringOrInt) (int64, error) {
 	id, err := value.Int64()

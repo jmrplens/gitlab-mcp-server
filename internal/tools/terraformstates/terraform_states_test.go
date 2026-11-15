@@ -645,7 +645,7 @@ func deleteHandler(t *testing.T, lockedAt string, deleted *atomic.Bool) http.Han
 // TestDelete_LockedState_IsRefusedWithTheUnlockHint verifies a locked state
 // is refused before the delete is sent. GitLab answers the REST delete of a
 // locked state with 200 and deletes nothing, so sending it reported a delete
-// that never happened (upstream-bugs row 118); the state is read first and a
+// that never happened; the state is read first and a
 // lock is reported with the action that releases it.
 func TestDelete_LockedState_IsRefusedWithTheUnlockHint(t *testing.T) {
 	var deleted atomic.Bool

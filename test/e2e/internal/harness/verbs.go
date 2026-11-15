@@ -248,9 +248,10 @@ func (s *Session) Subscribe(uri string, opts ...CallOption) *Subscription {
 // it has, since the SDK discards the listen's answer. A subscribe that lands
 // first is acknowledged and recorded ok, while the SDK's per-session delivery
 // table on the server has already lost it, so no update ever reaches the
-// session. That is the SDK defect recorded in docs/development/upstream-bugs.md
-// as "A session's second listen on a URI overwrites the first's subscription,
-// and its close deletes both"; cmd/server's bridge keeps the watch itself
+// session. That is the SDK defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1359, a session's
+// second listen on a URI overwriting the first's subscription and its close
+// deleting both; cmd/server's bridge keeps the watch itself
 // alive, so what is lost is the delivery. A test that subscribes, closes and
 // subscribes one URI again takes a private session for each subscription.
 func (s *Session) TrySubscribe(uri string, opts ...CallOption) (*Subscription, error) {

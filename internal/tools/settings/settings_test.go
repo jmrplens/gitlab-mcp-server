@@ -998,7 +998,7 @@ func TestUpdate_KeysOfBothKinds_AreNamedInOneRefusal(t *testing.T) {
 // held here because both halves move: a client-go release models settings the
 // route never took (v3.17.0 added autocomplete_users), and a GitLab release
 // declares or retires them. Either fails this test until the list says what
-// the pair says, which is what upstream register row 135 records.
+// the pair says.
 func TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "development", "gitlab-api-live.json"))
 	if err != nil {

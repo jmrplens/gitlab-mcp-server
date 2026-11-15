@@ -19,8 +19,7 @@ import (
 
 // siteExtra is what ee/lib/api/entities/geo_site.rb sends on a Geo site that
 // client-go's GeoSite does not carry, read from the captured response beside
-// the SDK's own decode (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// the SDK's own decode (ADR-0021).
 type siteExtra struct {
 	SelectiveSyncOrganizationIDs            []int64 `json:"selective_sync_organization_ids"`
 	BlobDownloadTimeout                     int64   `json:"blob_download_timeout"`

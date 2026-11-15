@@ -1317,15 +1317,11 @@ const (
 	reasonSnippetContent    = "Snippet validates the presence of its content (app/models/snippet.rb)"
 	// reasonServiceAccountEmail is GitLab's answer to an empty address on
 	// the three service account updates: 200 with the address kept, empty
-	// and null alike, where a 400 would say so (measured on 19.5.0-ee; the
-	// upstream-bugs entry "A service account update with an empty email
-	// answers 200 and keeps the address").
+	// and null alike, where a 400 would say so (measured on 19.5.0-ee).
 	reasonServiceAccountEmail = "a user account always has an email; GitLab answers an empty or null one with 200 and keeps the address (measured on 19.5.0-ee)"
 	reasonSnippetFileName     = "a snippet file has a name; GitLab replaces an empty one with snippetfile1.txt and ignores null (measured on 19.5.0-ee)"
 	// reasonReleasedAt is GitLab's answer to an empty date on a release
-	// update, a 500 where a 400 belongs (measured on 19.5.0-ee; the
-	// upstream-bugs entry "A release update with an empty `released_at`
-	// answers 500 from a not-null violation").
+	// update, a 500 where a 400 belongs (measured on 19.5.0-ee).
 	reasonReleasedAt = "a release has a release date: releases.released_at is NOT NULL, and GitLab answers an empty or null one with 500 PG::NotNullViolation (measured on 19.5.0-ee)"
 )
 
@@ -1343,9 +1339,7 @@ var clearingCompanions = map[string]map[string]any{
 	"project.pages_domain_update.key":         {"certificate": ""},
 	// PUT /projects/:id leaves mirror_branch_regex out of its at-least-one-of
 	// list, so a body carrying it alone, empty or not, is refused, and beside
-	// any other setting it is stored (measured on 19.5.0-ee; the upstream-bugs
-	// entry "A project update that sends only `mirror_branch_regex` is refused
-	// as sending nothing"). Removing the regex can widen the branches an
+	// any other setting it is stored (measured on 19.5.0-ee). Removing the regex can widen the branches an
 	// overwriting pull mirror reaches, so both calls that send it read the
 	// mirror and ask before they write unless the overwrite goes off with it,
 	// which the probe sends beside it.

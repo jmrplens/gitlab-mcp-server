@@ -288,8 +288,7 @@ func resolvedInputSchema(t *testing.T, schema any) *jsonschema.Resolved {
 // TestApprovalRuleInputs_OfferNoAccessLevelDescription verifies that neither
 // approval rule shape offers access_level_description. client-go's options
 // carry it, and neither the protect nor the update route declares it, so
-// GitLab drops it and a caller who set it changed nothing (upstream register
-// row 139). The deploy access levels never offered it.
+// GitLab drops it and a caller who set it changed nothing. The deploy access levels never offered it.
 func TestApprovalRuleInputs_OfferNoAccessLevelDescription(t *testing.T) {
 	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler())))
 	for _, tool := range []string{"gitlab_protected_environment_protect", "gitlab_protected_environment_update"} {

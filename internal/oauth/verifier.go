@@ -304,8 +304,7 @@ func readRefusal(resp *http.Response) []byte {
 //
 // The distinction is only in the body. GitLab does not send WWW-Authenticate on
 // a 403: the Forbidden class it inherits never builds that header, which its own
-// source marks as a known standards deviation. The quote and the upstream
-// reference are in docs/development/upstream-bugs.md. A server reading the
+// source marks as a known standards deviation. A server reading the
 // challenge would therefore fall through on every real rejection while looking
 // correct. What it does send
 // is rack-oauth2's JSON error document. A 403 raised by Grape's own forbidden!

@@ -27,8 +27,8 @@ const (
 // attribute and category mutations. Up to v3.46.0 the wrappers never read the
 // response's top-level errors array, so a mutation GitLab refused with HTTP
 // 200 came back as a success, an empty result or a bare ErrNotFound; v3.46.1
-// returns that array as a *GraphQLResponseError (gitlab-org/api/client-go!3066,
-// upstream-bugs row 19). What still keeps the handlers on their own documents
+// returns that array as a *GraphQLResponseError (gitlab-org/api/client-go!3066).
+// What still keeps the handlers on their own documents
 // is how the wrappers hand the refusal over: UpdateSecurityAttribute,
 // CreateSecurityCategory and UpdateSecurityCategory return it as an error that
 // also matches ErrNotFound, which toolutil.IsHTTPStatus reads as a 404 and
@@ -37,8 +37,8 @@ const (
 // write was probably committed; DestroySecurityCategory selects no
 // deletedAttributesGid, the attributes the delete reports; and the other four
 // would change the text of every refusal the handlers' tests hold. Moving them
-// is recorded as row 19's remaining work in docs/development/upstream-bugs.md.
-const securityWrapperRefusalReading = "since v3.46.1 the wrapper returns the response's top-level GraphQL errors (client-go!3066), but three of the eight (UpdateSecurityAttribute, CreateSecurityCategory, UpdateSecurityCategory) wrap a refusal so it also matches ErrNotFound, which toolutil reads as a 404 and as a write answered without its object, DestroySecurityCategory selects no deletedAttributesGid, and the move of the rest changes every refusal's text; the raw handler reads the array through toolutil.GraphQLTopLevelError until that move is made. Recorded as row 19 of docs/development/upstream-bugs.md (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
+// is tracked in https://github.com/jmrplens/gitlab-mcp-server/issues/430.
+const securityWrapperRefusalReading = "since v3.46.1 the wrapper returns the response's top-level GraphQL errors (client-go!3066), but three of the eight (UpdateSecurityAttribute, CreateSecurityCategory, UpdateSecurityCategory) wrap a refusal so it also matches ErrNotFound, which toolutil reads as a 404 and as a write answered without its object, DestroySecurityCategory selects no deletedAttributesGid, and the move of the rest changes every refusal's text; the raw handler reads the array through toolutil.GraphQLTopLevelError until that move is made (https://github.com/jmrplens/gitlab-mcp-server/issues/430)"
 
 // certificateClusters is the shared reason behind the three cluster services.
 // GitLab deprecated the certificate-based Kubernetes integration for the agent
@@ -183,8 +183,8 @@ var graphqlDecisions = map[string]decision{
 	// since v3.46.1, where GitLab reports a rejected mutation with HTTP 200,
 	// but three of them hand the refusal over as one that also matches
 	// ErrNotFound and the category delete selects less than the handler
-	// reports. Recorded as row 19 of docs/development/upstream-bugs.md and
-	// examined in https://github.com/jmrplens/gitlab-mcp-server/issues/430.
+	// reports. Examined in
+	// https://github.com/jmrplens/gitlab-mcp-server/issues/430.
 	"securityattributes.createSecurityAttributes":       {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
 	"securityattributes.updateSecurityAttribute":        {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
 	"securityattributes.destroySecurityAttribute":       {Decision: decisionKeep, Reason: securityWrapperRefusalReading},
@@ -200,15 +200,12 @@ var graphqlDecisions = map[string]decision{
 	// GitLab caps the connection at 100 nodes, so a project holding more states
 	// read as holding 100 (issue 1341). The handler's document selects of each
 	// state exactly what List and Get select; it retires when client-go's List
-	// pages, which upstream-bugs row 104 records as a commit not yet sent: it
-	// was to be added to gitlab-org/api/client-go!3063, closed unmerged on
-	// 2026-10-21, and goes out instead in a small merge request on its topic.
-	// The handlers call TerraformStates for every other read, so the decision
+	// pages. The handlers call TerraformStates for every other read, so the decision
 	// names List as the method it reads in place of, and R-ACTION does not list
 	// it as an action to write.
 	"terraformstates.listPage": {
 		Decision: decisionKeep,
-		Reason:   "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages (docs/development/upstream-bugs.md row 104)",
+		Reason:   "TerraformStates.List takes no first or after and selects no count or pageInfo, so a project with more than 100 states read as holding 100; the handler's paged document selects of each state what List and Get select, and retires when client-go's List pages",
 		Replaces: []string{"TerraformStates.List"},
 	},
 
@@ -216,9 +213,7 @@ var graphqlDecisions = map[string]decision{
 	// on 2026-10-27 and -28 (gitlab-org/gitlab!265633, !264745, !265998 and
 	// !266009), and GitLab answers each of these through GraphQL instead, which
 	// the service has no method for. Its Query and QueryRaw, the one route
-	// still served, are what orbit.Query calls. Each method that sends a
-	// removed route is a row of docs/development/upstream-bugs.md. These
-	// replace no method here: acceptedMissingMethods answers the Orbit methods
+	// still served, are what orbit.Query calls. These replace no method here: acceptedMissingMethods answers the Orbit methods
 	// as SUPERSEDED_UPSTREAM, the decision R-ROUTE carries onto the removed
 	// routes, and R-ACTION refuses a method two tables answer.
 	"orbit.Status":                 {Decision: decisionKeep, Reason: orbitRoutesRemoved},
@@ -229,7 +224,7 @@ var graphqlDecisions = map[string]decision{
 }
 
 // orbitRoutesRemoved is the shared reason behind the Orbit GraphQL operations.
-const orbitRoutesRemoved = "client-go's Orbit.GetStatus, GetSchema and GetGraphStatus send GET /orbit/status, /orbit/schema and /orbit/graph_status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 and !264745 removed them (2026-10-27 and -28); GitLab answers the same through GraphQL (Query.orbit.serviceStatus, Query.orbit.schema, Group.orbit and Project.orbit), which the service has no method for (docs/development/upstream-bugs.md)"
+const orbitRoutesRemoved = "client-go's Orbit.GetStatus, GetSchema and GetGraphStatus send GET /orbit/status, /orbit/schema and /orbit/graph_status, which GitLab.com answers 404 since gitlab-org/gitlab!265633 and !264745 removed them (2026-10-27 and -28); GitLab answers the same through GraphQL (Query.orbit.serviceStatus, Query.orbit.schema, Group.orbit and Project.orbit), which the service has no method for"
 
 // optionStructDeclarations answers the option structs nothing fills, keyed by
 // the struct's client-go name, and the fields a copy leaves out on purpose,

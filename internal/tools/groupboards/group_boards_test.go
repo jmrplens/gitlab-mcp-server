@@ -335,8 +335,8 @@ func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
 
 // TestUpdateGroupBoard_ListSwitches_ReachTheBodyOnlyWhenSet pins the whole PUT
 // body for the two list switches GitLab's group board update takes on every
-// tier, which client-go's UpdateGroupIssueBoardOptions models since v3.39.0
-// (register row 98). The group update offered neither, so a group board's Open
+// tier, which client-go's UpdateGroupIssueBoardOptions models since v3.39.0.
+// The group update offered neither, so a group board's Open
 // and Closed lists could not be hidden or shown (issue 1241). Each case is built
 // from the parameters a model sends, so the switches are read as the catalog
 // reads them, and false is sent as false rather than read as unset. The two
@@ -1095,8 +1095,7 @@ func TestUpdateGroupBoard_RefusalOfWhatWasSent_ReportedInGitLabsWordsWithNoHint(
 // characters at most (app/models/board.rb), so Boards::UpdateService's update
 // of a longer one saves nothing; update_board then reads the board twice
 // more, through a helper that loads it anew each time, and finds the stored
-// copy valid, so GitLab answers 200 with the board as it was (register row
-// 94 of docs/development/upstream-bugs.md). The handler sends the name it was
+// copy valid, so GitLab answers 200 with the board as it was. The handler sends the name it was
 // given and reports the board GitLab answered with, the old name included,
 // rather than the name it asked for.
 func TestUpdateGroupBoard_NameGitLabCannotSave_ReturnsTheBoardGitLabKept(t *testing.T) {
@@ -1321,7 +1320,7 @@ func TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) 
 // admin_issue_board_list on the group, which a role below Planner lacks and an
 // archived group withholds from every role, is refused by authorize! with a
 // plain 403, or a plain 401 where GitLab answers a permission refusal that way
-// (register row 55), and gets the role hint, keyed on the refusal rather than
+// and gets the role hint, keyed on the refusal rather than
 // on the status: a 403 naming an RFC 6750 code refuses the token's scope and is
 // told nothing about roles. A 422 is not an answer this route gives, and a 404
 // names a group or board this call cannot see, so neither carries a hint.
@@ -2081,7 +2080,7 @@ func suggestionOf(msg string) string {
 // groupBoardRefusals are the answers GitLab gives a group board route that
 // refuses the caller, written as GitLab writes them at v19.4.1-ee: authorize!
 // and forbidden! render a plain 403, some routes answer a missing permission
-// with a plain 401 (register row 55), the API guard names an RFC 6750 code
+// with a plain 401, the API guard names an RFC 6750 code
 // when what is missing is the token's scope and states its reason when it
 // refuses the account itself, and a group or board the caller cannot see is a
 // 404. Only the first two can be a role or a license the caller lacks, which

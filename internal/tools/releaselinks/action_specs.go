@@ -185,8 +185,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 // response carries. client-go still models ReleaseLink.External, which is what
 // makes the other reading tempting and wrong: filling an output field from it
 // would publish a bool that is false for every link on every instance, which is
-// the class of defect [issue 580] was about. The stale SDK field is recorded in
-// docs/development/upstream-bugs.md instead.
+// the class of defect [issue 580] was about.
 //
 // [issue 580]: https://github.com/jmrplens/gitlab-mcp-server/issues/580
 var releaseLinkDescriptions = map[string]string{

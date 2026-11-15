@@ -66,8 +66,7 @@ func validateCodeSearchParams(contextLines *int64) error {
 }
 
 // codeSearchParams adds num_context_lines and regex to the query client-go
-// encoded, which its SearchOptions does not model (upstream register row
-// 132), the way [toolutil.PaginationRequestOption] adds a page to a method
+// encoded, which its SearchOptions does not model, the way [toolutil.PaginationRequestOption] adds a page to a method
 // that takes no options for one. Each is sent only when the caller set it:
 // GitLab Enterprise refuses either parameter on a backend that does not take
 // it whatever its value, so an unset one has to stay absent rather than go

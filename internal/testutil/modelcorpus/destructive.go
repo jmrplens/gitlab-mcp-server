@@ -39,8 +39,7 @@ package modelcorpus
 // One text changed after the port, and it changes what the model is asked:
 // MT-066 gives the model the project's numeric ID and not its path. The job
 // token allowlist writes take project_id as an integer, because GitLab's
-// routes refuse a path although its page says they take one
-// (docs/development/upstream-bugs.md, row 157), so a path is a value the
+// routes refuse a path although its page says they take one, so a path is a value the
 // schema refuses and the case would be completable only through a lookup call
 // the key does not name: MT-007's reason in mutating.go.
 //

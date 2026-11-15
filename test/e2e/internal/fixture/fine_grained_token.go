@@ -268,8 +268,7 @@ func waitForGrantedAccess(ctx context.Context, client *gitlabclient.Client, scop
 // createFineGrainedToken sends one creation request with the creating user's
 // own client and reads back the token it made.
 //
-// client-go has no method for the route with a grant (upstream-bugs row 82),
-// so the request is built through its NewRequest, which still carries the
+// client-go has no method for the route with a grant, so the request is built through its NewRequest, which still carries the
 // retries, the context and the base URL every other call of the client does.
 // An answer GitLab did not mark granular is refused: a token created without
 // its grant would make every scenario on it test a classic token instead,

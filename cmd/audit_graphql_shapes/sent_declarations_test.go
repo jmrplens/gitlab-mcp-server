@@ -167,7 +167,8 @@ func TestDeclaredSent_EveryEntryMeetsTheBarTheTableSetsItself(t *testing.T) {
 		categoryTierAboveDomain:    true,
 		// A document of this repository's that stands in for a client-go one
 		// selects what client-go's does, so the two answers about one object
-		// agree, and what both leave out is the gap the register records.
+		// agree, and what both leave out is client-go's gap, which the
+		// declaration's reason names.
 		categoryRecordedUpstream: true,
 	}
 	seen := map[string]bool{}

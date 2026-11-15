@@ -190,7 +190,6 @@ func carrierFor(req mcp.Request) propagation.TextMapCarrier {
 //
 // The SDK knows the case exists: Params declares isNil for exactly this. It is
 // unexported, so a middleware outside that package has to ask reflect instead.
-// Registered in docs/development/upstream-bugs.md.
 func paramsOf(req mcp.Request) mcp.Params {
 	if req == nil {
 		return nil

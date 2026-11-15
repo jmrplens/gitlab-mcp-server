@@ -41,7 +41,7 @@ func statisticsWithParams[I any](get func(context.Context, *gitlabclient.Client,
 // three statistics actions to what GitLab's filter takes: a user ID, None for
 // issues nobody is assigned, and Any for issues somebody is. client-go types
 // the option *int64, so None and Any reach the query through a request option
-// (upstream register row 125), and 0 is refused rather than counted as the
+// and 0 is refused rather than counted as the
 // issues of a user nobody is (issue 1354).
 func TestStatistics_AssigneeID_TakesAUserIDNoneOrAny(t *testing.T) {
 	gets := []struct {

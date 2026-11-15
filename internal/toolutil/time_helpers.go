@@ -171,8 +171,7 @@ func ClearableDateInputs(inputs ...ClearableDateInput) error {
 
 // TimestampParam returns the request option that sends a timestamp parameter
 // as the instant the caller gave, for a parameter GitLab declares DateTime
-// that a client-go option struct carries as a date (upstream register row
-// 126). Such a field encodes as YYYY-MM-DD, which GitLab reads as midnight
+// that a client-go option struct carries as a date. Such a field encodes as YYYY-MM-DD, which GitLab reads as midnight
 // UTC: an SSH key asked to expire at 23:00 expired 23 hours early, and a list
 // bounded at 18:00 was bounded at the start of its day.
 //

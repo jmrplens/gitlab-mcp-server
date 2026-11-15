@@ -513,7 +513,7 @@ const (
 // annotated with.
 const reasonClosesIssuesPresentsIssues = "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents " +
 	"Entities::IssueBasic beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and " +
-	"never a note. Recorded in docs/development/upstream-bugs.md for the documentation merge request."
+	"never a note."
 
 // reasonTodoGroupOnProjectRoutes answers the group of the to-do the two
 // create_todo routes present.
@@ -1040,7 +1040,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 			"*GeoSite while POST /geo_sites/:id/repair is annotated `success Entities::GeoSiteStatus` and presents " +
 			"a status; that puts the status entity into the union of the five endpoints readSDKRoutes reads for " +
 			"gl.GeoSite, and the four that do answer with a site send none of these keys, so publishing them on " +
-			"the site type would invent them. Both halves are recorded in docs/development/upstream-bugs.md.",
+			"the site type would invent them.",
 	},
 
 	// The rendered markup on the milestone and commit merge request rows,
@@ -1175,8 +1175,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: groupLDAPPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonLDAPGroupProbe},
 	{Package: accessRequestsPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonMinimalAccessGroupProbe},
 
-	// The reads a name goes through on the three packages client-go narrows
-	// (register row 158): each keeps the ID of the answer and nothing else.
+	// The reads a name goes through on the three packages client-go narrows:
+	// each keeps the ID of the answer and nothing else.
 	{Package: customAttributesPkg, Entity: projectWithAccessEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
 	{Package: customAttributesPkg, Entity: groupDetailEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
 	{Package: customAttributesPkg, Entity: userBasicEntity, Field: declaredSegment, Category: categoryReadForItsOwnUse, Reason: reasonNameLookup},
@@ -1365,7 +1365,7 @@ const (
 // reasonNameLookup answers the read of a project, a group or a user a caller
 // named by its path or username, on the routes that take a name and whose
 // client-go method takes an integer, as one literal for the same reason.
-const reasonNameLookup = "client-go types the parameter of the custom attribute and repository storage move methods as an int64 where GitLab takes a name as well (docs/development/upstream-bugs.md, row 158), so a handler given a path or a username reads it through GET /projects/:id, GET /groups/:id or GET /users first. It keeps the ID of the answer and returns nothing else: project.get, group.get and user.list are the actions that answer with those objects."
+const reasonNameLookup = "client-go types the parameter of the custom attribute and repository storage move methods as an int64 where GitLab takes a name as well, so a handler given a path or a username reads it through GET /projects/:id, GET /groups/:id or GET /users first. It keeps the ID of the answer and returns nothing else: project.get, group.get and user.list are the actions that answer with those objects."
 
 // reasonLDAPGroupProbe answers the group the LDAP link listing reads when its
 // own route answered 404.

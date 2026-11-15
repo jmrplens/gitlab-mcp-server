@@ -562,7 +562,7 @@ func TestKeysetPagination_ProjectLabelList_PagesByOffsetAlone(t *testing.T) {
 // TestKeysetPagination_ContributedProjects_PageByOffsetAlone holds a user's
 // contributed projects to the offset pages GitLab serves them in. Their route
 // writes a keyset link naming an id_before its finder never reads, so every
-// keyset page was the first again (upstream-bugs row 112); the action takes
+// keyset page was the first again; the action takes
 // neither pagination nor page_token, refuses both before any request, and a
 // page of the run user's contributed projects names its successor, when it
 // has one, by page number and publishes no next_page_token.

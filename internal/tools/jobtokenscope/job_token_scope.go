@@ -142,7 +142,7 @@ func ListInboundAllowlist(ctx context.Context, client *gitlabclient.Client, inpu
 // spelling: GitLab declares :id an Integer on the four write routes
 // (lib/api/project_job_token_scope.rb) and refuses a URL-encoded path with
 // 400 {"error":"id is invalid"}, although its API page says a path is
-// accepted (docs/development/upstream-bugs.md, row 157).
+// accepted.
 type AddProjectAllowlistInput struct {
 	ProjectID       int64 `json:"project_id" jsonschema:"Numeric ID of the project whose allowlist this changes. GitLab refuses a URL-encoded path on this route, so read the ID with project.get first,required"`
 	TargetProjectID int64 `json:"target_project_id" jsonschema:"ID of the project to add to the allowlist,required"`

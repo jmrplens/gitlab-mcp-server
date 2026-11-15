@@ -118,7 +118,7 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 			// (id_asc, id_desc, created_at_asc, created_at_desc,
 			// created_date, updated_asc, updated_desc, updated_at_asc and
 			// updated_at_desc), although the documentation's own example
-			// sends id_desc (docs/development/upstream-bugs.md, row 143).
+			// sends id_desc.
 			toolutil.SchemaEnumOverride("sort",
 				"created_asc", "created_desc", "expires_asc", "expires_desc",
 				"last_used_asc", "last_used_desc", "name_asc", "name_desc"),

@@ -98,7 +98,7 @@ func TestUserSSHKeys_Lookups_ByIDAndByFingerprint(t *testing.T) {
 // Before the fix the timestamp did not parse as a date and was dropped, as
 // was the malformed one, so both keys were created with no expiry at all. The
 // instant rather than its day is what GitLab takes here, and what the server
-// sends past client-go's date-typed field (register row 126); a key that
+// sends past client-go's date-typed field; a key that
 // came back expiring at midnight would mean the time of day was lost.
 func TestUserSSHKeys_Expiry_TakesATimestampAndRefusesAMalformedDate(t *testing.T) {
 	e := harness.New(t)

@@ -1581,8 +1581,7 @@ func buildUpdateOpts(input UpdateInput) (*gl.EditProjectOptions, toolutil.BodyEd
 	// pipelines are kept at least a day. Each goes back to its default, the
 	// instance's limit and no deletion, only on null, which client-go's
 	// pointers tagged omitempty cannot send, so a 0 is written into the body
-	// as null through a request option (issue 1306, upstream register row
-	// 122).
+	// as null through a request option (issue 1306).
 	var nulls toolutil.BodyEdit
 	opts.MaxArtifactsSize = toolutil.NullWhenZero(input.MaxArtifactsSize, "max_artifacts_size", &nulls)
 	opts.CIDeletePipelinesInSeconds = toolutil.NullWhenZero(input.CIDeletePipelinesInSeconds, "ci_delete_pipelines_in_seconds", &nulls)
@@ -1912,9 +1911,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // mirror branch regex. PUT /projects/:id declares mirror_branch_regex, and
 // its at-least-one-of list leaves it out, so a body carrying it alone, empty
 // or not, is answered 400 "at least one parameter must be provided" (measured
-// on 19.5.0-ee; ee/lib/ee/api/helpers/projects_helpers.rb; the upstream-bugs
-// entry "A project update that sends only `mirror_branch_regex` is refused as
-// sending nothing"). Beside any other setting it is stored, so the refusal
+// on 19.5.0-ee; ee/lib/ee/api/helpers/projects_helpers.rb). Beside any other setting it is stored, so the refusal
 // says to send one.
 func checkMirrorBranchRegexNotAlone(opts *gl.EditProjectOptions, nulls toolutil.BodyEdit) error {
 	if opts.MirrorBranchRegex == nil || len(nulls.Set) > 0 {
@@ -2402,7 +2399,7 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 
 // projectHookAPI is a project hook as GitLab answers it: client-go's
 // ProjectHook and duo_flow_callback_enabled, which GitLab 19.4 added and
-// ProjectHook does not model (row 58 of docs/development/upstream-bugs.md).
+// ProjectHook does not model.
 type projectHookAPI struct {
 	gl.ProjectHook
 	DuoFlowCallbackEnabled *bool `json:"duo_flow_callback_enabled"`
@@ -3096,8 +3093,7 @@ type ShareProjectInput struct {
 // ShareProjectOutput holds the result of sharing a project: the sentence this
 // server composes, and the link GitLab created (Entities::ProjectGroupLink),
 // which client-go's ShareProjectWithGroup does not decode and is read from the
-// captured response (ADR-0021); the gap is recorded in
-// docs/development/upstream-bugs.md. member_role_id is sent when the project
+// captured response (ADR-0021). member_role_id is sent when the project
 // can carry a custom role on the link, which is an Ultimate feature.
 type ShareProjectOutput struct {
 	toolutil.HintableOutput
@@ -3256,8 +3252,7 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 // projects. It offers no pagination or page_token: GitLab serves the route a
 // keyset page and writes an id_before or id_after into its next link, but the
 // route builds ContributedProjectsFinder with no params, so the finder never
-// reads either and the link answers the first page again (upstream-bugs row
-// 112). The list is read on with page and per_page.
+// reads either and the link answers the first page again. The list is read on with page and per_page.
 type ListUserContributedProjectsInput struct {
 	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
 	userProjectFilterInput
@@ -3922,8 +3917,7 @@ type CreateForkRelationInput struct {
 // real body fills, so the wrapper decoded five zero values out of a project and
 // this action published them. The request is therefore issued directly, into
 // gl.Project, and the action returns the project the endpoint answers with, the
-// same [Output] every other project action returns. Recorded in
-// docs/development/upstream-bugs.md.
+// same [Output] every other project action returns.
 func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input CreateForkRelationInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err

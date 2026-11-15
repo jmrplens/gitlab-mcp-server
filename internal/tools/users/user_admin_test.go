@@ -199,8 +199,7 @@ func TestFormatAdminActionMarkdownString_NoteField_IsEscaped(t *testing.T) {
 // 201 whether or not it changed anything, and says which in the body: true
 // when the state changed, false or null when it did not (an unblock of an
 // active user answers false, a block of a blocked user and a second
-// deactivate answer null). client-go reads the status alone (upstream-bugs
-// row 117), so each of those used to read as done.
+// deactivate answer null). client-go reads the status alone, so each of those used to read as done.
 func TestStateChanges_ReportWhatGitLabAnswered(t *testing.T) {
 	actions := []stateChangeCase{
 		{"BlockUser", BlockUser, "/api/v4/users/42/block", "already blocked"},

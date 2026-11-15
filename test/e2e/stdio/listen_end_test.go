@@ -5,7 +5,8 @@
 
 // listen_end_test.go holds what this server sends when it tears down a
 // subscriptions/listen on stdio at 2026-07-28. It is the fourth item of issue
-// 961 and row 10 of docs/development/upstream-bugs.md.
+// 961 and the go-sdk defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1263.
 //
 // 2026-07-28 says a server MUST send notifications/cancelled referencing a
 // listen's request id when it tears that subscription down, and go-sdk offers
@@ -26,7 +27,7 @@ import (
 
 // listenEndFix is what a failure about the missing notification asks the pull
 // request to do.
-const listenEndFix = "Update row 10 of docs/development/upstream-bugs.md and its section, the section of " +
+const listenEndFix = "Update the section of " +
 	"docs/development/adr/adr-0015-polled-resource-subscriptions.md on how a listen ends, F-24 in " +
 	"internal/tenancy/decision.go, and this test, keeping the watch-end reason on the completion result (PAT-005), " +
 	"in this same pull request."

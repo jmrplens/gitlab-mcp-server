@@ -2911,8 +2911,7 @@ const (
 // The three invalid_token bodies are rack-oauth2's rendering of what
 // lib/api/api_guard.rb answers an expired, a revoked and an impersonation
 // token with. The refusal body is GitLab's API helper unauthorized! (lib/api/helpers.rb),
-// which every permission refusal in entry 55 of docs/development/upstream-bugs.md
-// goes through, and which a token GitLab has no record of gets too. The
+// which every permission refusal GitLab answers with 401 goes through, and which a token GitLab has no record of gets too. The
 // GraphQL body is what GraphqlController#authorize_access_api! renders for a
 // token it could not use.
 const (
@@ -3038,9 +3037,8 @@ func requestLineRefusal(response *http.Response) error {
 // verifies that a 401 whose response does not say the credential was refused
 // is described with the sentence true of both of a 401's causes.
 //
-// GitLab answers 401 for an unusable credential and, at the routes entry 55 of
-// docs/development/upstream-bugs.md lists, for a valid credential refused a
-// permission. Only the first carries a signal, so every other answer has to
+// GitLab answers 401 for an unusable credential and, at a family of REST
+// routes, for a valid credential refused a permission. Only the first carries a signal, so every other answer has to
 // keep the sentence that names both: Grape's refusal body, which is also what
 // a token GitLab has no record of gets, and what a request carrying no token
 // gets; a JSON object whose code is not invalid_token, both the default code

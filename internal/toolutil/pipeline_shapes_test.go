@@ -197,7 +197,7 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 	}
 	// Pointer + time fields use omitempty and must NOT appear when empty. The
 	// two durations are pointers since GitLab measures a pipeline that never
-	// ran as null rather than as zero seconds (register row 116).
+	// ran as null rather than as zero seconds.
 	for _, key := range []string{`"user"`, `"updated_at"`, `"created_at"`, `"started_at"`, `"finished_at"`, `"committed_at"`, `"detailed_status"`, `"duration"`, `"queued_duration"`} {
 		t.Run(key, func(t *testing.T) {
 			if strings.Contains(string(raw), key) {

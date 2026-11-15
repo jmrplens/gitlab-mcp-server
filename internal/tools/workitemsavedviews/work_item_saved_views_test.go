@@ -582,7 +582,7 @@ func TestCreate_ServerError(t *testing.T) {
 // anything is recorded. The input hint each used to carry named a sort enum
 // and an ID, and sent the caller to change values that were never wrong. The
 // body is the one GitLab's GraphQL controller writes for an unhandled
-// exception (docs/development/upstream-bugs.md, entry 72).
+// exception.
 func TestMutations_InternalServerError_SayWhatTheFailureLeftBehind(t *testing.T) {
 	internalError := func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusInternalServerError, `{"errors":[{"message":"Internal server error"}]}`)

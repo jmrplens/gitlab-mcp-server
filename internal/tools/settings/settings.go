@@ -213,8 +213,7 @@ func unsendableSettingKeys(patch map[string]any) (unmodeled, undeclared []string
 
 // undeclaredSettingKeys are the settings client-go's update options model and
 // GitLab's PUT /application/settings does not declare, as the pinned live
-// record of GitLab 19.5.0 and client-go v3.49.0 have them (upstream register
-// row 135). GitLab's handler reads the declared params alone, so a patch
+// record of GitLab 19.5.0 and client-go v3.49.0 have them. GitLab's handler reads the declared params alone, so a patch
 // naming one of these beside a setting it takes is applied without it and
 // answered 200.
 //

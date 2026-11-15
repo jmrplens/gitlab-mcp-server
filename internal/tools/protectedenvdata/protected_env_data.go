@@ -27,7 +27,7 @@ func (d DeployAccessLevelInput) EnvironmentAccess() toolutil.EnvironmentAccess {
 // mirrors gl.EnvironmentApprovalRuleOptions and
 // gl.GroupEnvironmentApprovalRuleOptions, which carry the same fields, field
 // for field but for access_level_description, which neither the protect nor
-// the update route declares, so GitLab drops it (upstream register row 139).
+// the update route declares, so GitLab drops it.
 type ApprovalRuleInput struct {
 	UserID                *int64 `json:"user_id,omitempty"                  jsonschema:"ID of a user who may approve. Name at least one of access_level, user_id or group_id."`
 	GroupID               *int64 `json:"group_id,omitempty"                 jsonschema:"ID of a group whose members may approve. Name at least one of access_level, user_id or group_id."`
@@ -63,7 +63,7 @@ func (d UpdateDeployAccessLevelInput) EnvironmentAccess() toolutil.EnvironmentAc
 // environment. It mirrors gl.UpdateEnvironmentApprovalRuleOptions and
 // gl.UpdateGroupEnvironmentApprovalRuleOptions, which carry the same fields,
 // field for field but for access_level_description, which the update route
-// does not declare, so GitLab drops it (upstream register row 139).
+// does not declare, so GitLab drops it.
 type UpdateApprovalRuleInput struct {
 	ID                    *int64 `json:"id,omitempty"                       jsonschema:"ID of the existing approval rule to change or remove. A rule without one adds a rule."`
 	UserID                *int64 `json:"user_id,omitempty"                  jsonschema:"ID of a user who may approve. Name at least one of access_level, user_id or group_id unless _destroy is true, on an existing rule as well."`

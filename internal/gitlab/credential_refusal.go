@@ -19,7 +19,7 @@ import (
 // GitLab answers 401 for two different things, and they must not be acted on
 // alike. Its API guard answers it for a credential it cannot use, and at a
 // family of REST routes GitLab's API helper unauthorized! (lib/api/helpers.rb)
-// answers it for a valid credential that lacks a permission (entry 55 of docs/development/upstream-bugs.md). The
+// answers it for a valid credential that lacks a permission. The
 // first is a reason to stop serving the credential; the second is an ordinary
 // refusal of one call, and ending the caller's subscriptions over it tells them
 // to re-authenticate a token that works.
@@ -93,8 +93,7 @@ func UnauthorizedNamesCredential(req *http.Request, body []byte) bool {
 // Only a REST 401 or 403 whose body carries no RFC 6750 error code, and whose
 // message does not refuse the account, qualifies. GitLab's API helpers
 // unauthorized!, forbidden! and render_api_error!, which every permission
-// refusal goes through (the 401 ones are entry 55 of
-// docs/development/upstream-bugs.md), render {"message": ...} and nothing
+// refusal goes through, render {"message": ...} and nothing
 // else. GitLab's API guard refuses the credential rather than the call in two
 // ways, and neither qualifies. Its token and scope refusals carry a code:
 // invalid_token, dpop_error and restricted_language_server_client_error on a

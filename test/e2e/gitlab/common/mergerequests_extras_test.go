@@ -120,8 +120,7 @@ func contextCommitBySHA(commits []mrcontextcommits.CommitItem, sha string) (mrco
 }
 
 // assertCommitWithLinkKeys holds the two context commit routes to the
-// entities their handlers present, which is what upstream-bugs row 77 reads
-// from GitLab's source: the list presents CommitWithLink, so the commit the
+// entities their handlers present, as GitLab's source reads: the list presents CommitWithLink, so the commit the
 // token's own user authored carries that user as its author and a rendered
 // title, and the create answer presents Commit and carries neither.
 func assertCommitWithLinkKeys(e *harness.Env, pinned mrcontextcommits.CreateOutput, listed mrcontextcommits.ListOutput, sha string) {

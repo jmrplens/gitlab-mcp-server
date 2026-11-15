@@ -448,8 +448,7 @@ Twenty-six pages carry no banner: all 17 ADRs, plus `docs/README.md` itself,
 `docs/guides/client-compatibility.md`,
 `docs/guides/claude-desktop-extension.md`,
 `docs/reference/resource-benchmark.md`, `docs/reference/tools/README.md`,
-`docs/development/upstream-bugs.md` and
-`docs/development/testing/model-results.md`.
+the upstream defects page and `docs/development/testing/model-results.md`.
 
 ---
 

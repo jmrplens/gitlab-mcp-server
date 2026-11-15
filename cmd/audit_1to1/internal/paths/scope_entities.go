@@ -73,7 +73,7 @@ var scopedEntities = slices.Concat(
 	scopeMethods("snippet_titles", snippetEntity, false, "Search.SnippetTitles"),
 	scopeMethods("users", userBasicEntity, false, "Search.Users", "Search.UsersByGroup", "Search.UsersByProject"),
 	// client-go decodes the wiki_blobs scope into its Wiki page struct, none
-	// of whose keys GitLab sends (docs/development/upstream-bugs.md row 130).
+	// of whose keys GitLab sends.
 	scopeMethods("wiki_blobs", blobEntity, true, "Search.WikiBlobs", "Search.WikiBlobsByGroup", "Search.WikiBlobsByProject"),
 )
 

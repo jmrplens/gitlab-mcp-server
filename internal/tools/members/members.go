@@ -365,8 +365,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	// GitLab takes a custom role off a member only on null, and an expiry is
 	// removed by null too (Member validates expires_at allow_blank), neither
 	// of which the option's omitempty pointers can carry, so 0 and "" are
-	// written into the body as null through a request option (issue 1306,
-	// upstream register row 122).
+	// written into the body as null through a request option (issue 1306).
 	var nulls toolutil.BodyEdit
 	expiresAt, err := memberExpiry(toolutil.NullWhenZero(input.ExpiresAt, "expires_at", &nulls))
 	if err != nil {

@@ -191,7 +191,7 @@ first stripped the key in place and put it back after the send, which held only
 while delivery within one `ResourceUpdated` call was sequential: go-sdk v1.8.0
 delivers one session at a time, and go-sdk's main after it sends to each session
 on a goroutine of its own, where that design lost notifications and sent the key
-to clients (row 23 of `docs/development/upstream-bugs.md`). The map itself is
+to clients. The map itself is
 never mutated: the stripped `_meta` is a new map, which matters because on
 v1.8.0 the per-session copies share one and the SDK stamps its own subscription
 id into it.
@@ -239,7 +239,7 @@ the completion result the specification asks for; the client's next request
 builds a new entry. Where a terminated session is involved, re-initializing is
 the client's to do, and a client that follows the 2025-11-25 transport does;
 the Go SDK client (v1.8.0) does not, and fails its connection or stays on the
-dead session instead (row 68 of `docs/development/upstream-bugs.md`).
+dead session instead.
 
 That reaches everything a 2026-07-28 subscriber holds, because there the
 subscription **is** an open request. A session-era `resources/subscribe` holds
@@ -299,8 +299,8 @@ between the two: `ResourceUpdated`, `notifySubscribedSessions`,
 `injectMetaSubscriptionID`, `notifySessions`, `newRequest`, `handleNotify` and
 `defaultSendingMethodHandler` are the same code in both tags, and so are the
 subscription table's type and `GetSessionID`'s signature. go-sdk's main after
-v1.8.0 sends to each session on a goroutine of its own (row 23 of
-`docs/development/upstream-bugs.md`), which the sending middleware below
+v1.8.0 sends to each session on a goroutine of its own, which the sending
+middleware below
 already allows for; the section is verified again when the dependency is next
 bumped (issue 961).
 
@@ -489,7 +489,7 @@ bumped (issue 961).
   rebuilt entry for the same credential is a different owner. A client whose
   entry is rebuilt mid-session is refused on its session id with a 404, and
   re-initializes if it follows the 2025-11-25 transport; the Go SDK client
-  (v1.8.0) does not (row 68 of `docs/development/upstream-bugs.md`), so its
+  (v1.8.0) does not, so its
   application has to reconnect. That was already true when the session tag was
   per server.
 
@@ -519,9 +519,8 @@ bumped (issue 961).
   parser in the authentication path.
 - **Per-session delivery in the go-sdk.** `ServerSession.ResourceUpdated(ctx,
   params)`, reading the session's own request id from the table, would make the
-  filter unnecessary. It is the right long-term shape and is recorded as a
-  deferred upstream ask in
-  [upstream-bugs.md](../upstream-bugs.md); nothing here can use it until it is
+  filter unnecessary. It is the right long-term shape and a deferred upstream
+  ask; nothing here can use it until it is
   released, and the filter is what makes the sharing possible today. Propagating
   the caller's context to the sending middleware would be an equivalent fix,
   since the owner could then travel on the context instead of in the params.

@@ -15,9 +15,9 @@ import (
 )
 
 // WorklistEntry is one GraphQL type or mutation this server reaches that
-// keeps a fine-grained token out, which row 87 of
-// docs/development/upstream-bugs.md tracks: an upstream declaration for each
-// retires the entry at the release that ships it.
+// keeps a fine-grained token out because it declares no fine-grained
+// permission: an upstream declaration for each retires the entry at the
+// release that ships it.
 type WorklistEntry struct {
 	Element string `json:"element"`
 	// Kind is mutation, union or interface, or type, as the record holds the

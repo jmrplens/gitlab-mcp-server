@@ -71,8 +71,7 @@ func TestUpdate_LockedSetting_SaysToWaitUntilTheTimeGitLabNames(t *testing.T) {
 // TestPermissionRefusal_NamesWhatTheSettingsNeed holds a refusal of a missing
 // permission, at 401 as well as 403, to the hint naming the administrator and
 // the license the settings need, on the read and on the update. GitLab
-// answers a missing permission with 401 at some routes (entry 55 of
-// docs/development/upstream-bugs.md), so a hint keyed on 403 alone was never
+// answers a missing permission with 401 at some routes, so a hint keyed on 403 alone was never
 // shown there. A refusal of the token itself names neither.
 func TestPermissionRefusal_NamesWhatTheSettingsNeed(t *testing.T) {
 	const hint = "require an administrator and an Ultimate license"

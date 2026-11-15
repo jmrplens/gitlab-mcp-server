@@ -532,12 +532,12 @@ func TestDraftNotePublishAll_Success(t *testing.T) {
 //
 // The empty case is the one with a history. client-go v3.12.0 made
 // PublishAllDraftNotes delegate to PublishAllDraftNotesWithOptions with a nil
-// options pointer, which NewRequestToURL marshals as the four bytes "null"
-// (recorded in docs/development/upstream-bugs.md). PublishAll now calls the
-// options variant itself with a non-nil value, so a call naming nothing sends
-// the empty object: a body that parses to a Hash with no keys, which is what
-// Grape reads as no parameters. An internal of false is asserted as sent, so a
-// handler that forwards the flag only when it is true fails here.
+// options pointer, which NewRequestToURL marshals as the four bytes "null".
+// PublishAll now calls the options variant itself with a non-nil value, so a
+// call naming nothing sends the empty object: a body that parses to a Hash
+// with no keys, which is what Grape reads as no parameters. An internal of
+// false is asserted as sent, so a handler that forwards the flag only when it
+// is true fails here.
 func TestDraftNotePublishAll_Body_CarriesExactlyTheReviewOptionsGiven(t *testing.T) {
 	internalOff, internalOn := false, true
 	tests := []struct {

@@ -121,7 +121,7 @@ type LatestPipelineResourceOutput struct {
 //
 // Duration is left out for a job that never started, which GitLab measures
 // as null rather than as zero seconds; it is read from the captured answer
-// because client-go decodes it as float64 (register row 116).
+// because client-go decodes it as float64.
 type JobResourceOutput struct {
 	ID            int64    `json:"id"`
 	Name          string   `json:"name"`

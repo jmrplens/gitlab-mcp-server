@@ -77,8 +77,7 @@ type ExportStatusItem struct {
 // exportStatusExtra is the key of lib/api/entities/bulk_imports/export_status.rb
 // that client-go's GroupRelationStatus does not model: how many objects the
 // relation's export holds, across every batch. It is exposed with no
-// condition, and read from the captured response (ADR-0021). The gap is
-// recorded in docs/development/upstream-bugs.md.
+// condition, and read from the captured response (ADR-0021).
 type exportStatusExtra struct {
 	TotalObjectsCount int64 `json:"total_objects_count"`
 }
@@ -154,7 +153,6 @@ type relationStatus struct {
 // ListExportStatus decodes every answer into a slice, which refuses an
 // object, so the filter failed on every instance. The request is issued here
 // with the same client-go options the list sends and decoded into one status.
-// The gap is recorded in docs/development/upstream-bugs.md.
 func exportStatusOfRelation(ctx context.Context, client *gitlabclient.Client, groupID toolutil.StringOrInt, opts *gl.ListGroupRelationsStatusOptions) (*ListExportStatusOutput, error) {
 	status, err := getRelationStatus(ctx, client, "groups/"+gl.PathEscape(string(groupID))+"/export_relations/status", opts)
 	if err != nil {

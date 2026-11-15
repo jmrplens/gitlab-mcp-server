@@ -243,7 +243,7 @@ func DeleteSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input
 // as a success (issue 1308). GitLab takes a timestamp here, while client-go
 // carries the field as a date, which would reach GitLab as midnight UTC and
 // expire a key asked to last until 23:00 at the start of its day, or refuse
-// one asked to expire later today as already expired (register row 126). The
+// one asked to expire later today as already expired. The
 // option struct's field is therefore left unset and the expiry is written as
 // the instant given by [toolutil.TimestampParam].
 func buildAddSSHKeyOptions(input AddSSHKeyInput) (*gl.AddSSHKeyOptions, gl.RequestOptionFunc, error) {

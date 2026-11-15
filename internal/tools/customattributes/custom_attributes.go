@@ -34,9 +34,9 @@ type AttributeItem struct {
 // resolveResourceID answers the integer client-go's custom attribute methods
 // take. GitLab's routes take the ID of the resource, the URL-encoded path of a
 // group or a project, or the username of a user, and client-go types the
-// parameter as an int64 (docs/development/upstream-bugs.md, row 158), so a value
-// that is not a number is read into its ID first. A number sends nothing, and
-// one no resource can have is refused here as a missing one.
+// parameter as an int64, so a value that is not a number is read into its ID
+// first. A number sends nothing, and one no resource can have is refused here
+// as a missing one.
 //
 // resource_id is not one of the path identifiers the dispatchers decode by name,
 // so the URL-encoded form is decoded here: client-go escapes the path itself.

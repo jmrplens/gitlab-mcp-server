@@ -170,8 +170,7 @@ hold either way. gobco runs its own `go test` without `GOPATH`, so where
 `GOPATH` names a directory other than the default that `go test` would read
 another module cache and download every dependency into it; the script hands
 gobco `GOMODCACHE` as `go env` reports it, and the `go test` reads the cache
-`go mod download` filled until gobco passes `GOPATH` on
-([upstream-bugs entry 153](../upstream-bugs.md#gobco-drops-gopath-from-its-go-test-which-then-reads-another-module-cache)).
+`go mod download` filled until gobco passes `GOPATH` on.
 
 **The platform halves the copy leaves out are measured where they build.**
 The Windows and non-Linux halves of `cmd/server` (four source files:
@@ -302,10 +301,8 @@ not instrument, so its names reach the external tests and its conditions stay
 out of the report as a test file's do; and an external test package that
 imports nothing of its package is given a test file that imports it. Both are
 gobco's to fix, in
-[upstream-bugs entry 97](../upstream-bugs.md#gobco-cannot-instrument-a-package-whose-export_testgo-feeds-its-external-test-package)
-and
-[entry 140](../upstream-bugs.md#gobco-bridges-a-black-box-test-package-through-an-import-it-may-not-find),
-and the staging is temporary: the maintainer decided on 27 October 2026 to
+<https://github.com/rillig/gobco/pull/43> and
+<https://github.com/rillig/gobco/pull/39>, and the staging is temporary: the maintainer decided on 27 October 2026 to
 keep it, superseding the decision of 6 October to leave both to gobco, until
 gobco publishes a release with both fixes, and it goes then.
 `make check-spec-conditions`, which reads those 149, still reports a package

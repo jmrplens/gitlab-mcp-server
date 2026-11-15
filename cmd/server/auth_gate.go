@@ -541,8 +541,9 @@ const mcpSessionIDHeader = "Mcp-Session-Id"
 // 404 is the prescribed answer: it is the terminated-session signal, and the
 // 2025-11-25 transport requires a client that receives it to start a new
 // session without an ID, so for a conforming client the refusal self-heals.
-// The go-sdk client does not yet (row 68 of docs/development/upstream-bugs.md,
-// pinned in test/e2e/http/session_not_found_test.go): it keeps the refused
+// The go-sdk client does not yet
+// (https://github.com/modelcontextprotocol/go-sdk/issues/1299, pinned in
+// test/e2e/http/session_not_found_test.go): it keeps the refused
 // session on a call and fails the connection on its stream or a notification.
 //
 // Both cases get the same answer (issue 1102, row ADM-007). Telling them apart

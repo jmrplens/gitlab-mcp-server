@@ -374,8 +374,8 @@ func TestSet_AllOptionalFields(t *testing.T) {
 // a feature_set request needs. GitLab refuses a feature_set whose scope fields
 // are present but empty, answering "mutually exclusive", which is why the
 // handler built the body itself while client-go's SetFeatureFlagOptions tagged
-// its scopes without omitempty, and what the options carry since v3.34.0
-// (register row 6). Nothing above the wire can see that: GitLab echoes the
+// its scopes without omitempty, and what the options carry since v3.34.0.
+// Nothing above the wire can see that: GitLab echoes the
 // flag either way, so a scope sent empty, or one the caller named dropped,
 // leaves every other assertion in this file passing. The request itself is
 // therefore the assertion, in both directions: a caller who named no scope

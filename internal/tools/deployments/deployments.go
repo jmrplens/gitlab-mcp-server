@@ -448,8 +448,7 @@ type ApproveOrRejectInput struct {
 // deployment: the sentence this server composes, and the approval GitLab
 // recorded (Entities::Deployments::Approval), which client-go's
 // ApproveOrRejectProjectDeployment does not decode at all and is read from the
-// captured response (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// captured response (ADR-0021).
 type ApproveOrRejectOutput struct {
 	toolutil.HintableOutput
 	Message  string                             `json:"message"`

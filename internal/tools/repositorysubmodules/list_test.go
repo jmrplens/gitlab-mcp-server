@@ -71,8 +71,8 @@ func parseAndResolve(t *testing.T, content string) []SubmoduleEntry {
 // superproject's ("../appx/lib" from group/app) is a sibling, not a path
 // inside the superproject, and the ssh:// spelling of an SCP clone URL, a
 // host written in capitals or the default port written out all name the same
-// instance (see "SubmoduleHelper compares submodule URLs as text" in
-// docs/development/upstream-bugs.md).
+// instance, which GitLab's SubmoduleHelper, comparing them as text, does not
+// see.
 func TestSubmoduleResolver_ResolvesTheProjectTheRemoteNames(t *testing.T) {
 	base, err := url.Parse("https://example.com/gitlab/api/v4/")
 	if err != nil {

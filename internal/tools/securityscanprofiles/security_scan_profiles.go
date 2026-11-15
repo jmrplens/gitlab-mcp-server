@@ -66,8 +66,7 @@ const DefaultProfileFloors = "sast needs GitLab 18.10 and dependency_scanning ne
 // the key of none of them. FindOrCreateService answers each with "Could not find
 // a default scan profile for this type", which the attach mutation replaces
 // with a generic resource-not-available error naming none of this, and that
-// is why the handler's hint says it (upstream register, "the scan profile
-// attach mutation drops the reason it refused a name").
+// is why the handler's hint says it.
 const RefusedByName = "container_scanning has no default profile, and the bare triage_and_remediation names none of its presets, so attach refuses both by name"
 
 // gidAuthority is the authority every global ID GitLab issues carries, as in

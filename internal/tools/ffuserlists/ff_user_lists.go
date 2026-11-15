@@ -195,7 +195,7 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 	}
 	// client-go types the users as a string tagged omitempty, so the empty
 	// one that empties the list (measured on 19.5.0-ee) is written into the
-	// body through a request option (issue 1306, upstream register row 122).
+	// body through a request option (issue 1306).
 	opts := &gl.UpdateFeatureFlagUserListOptions{Name: input.Name}
 	var emptied toolutil.BodyEdit
 	if input.UserXIDs != nil {

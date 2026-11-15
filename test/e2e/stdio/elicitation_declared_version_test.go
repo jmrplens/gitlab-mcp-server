@@ -4,9 +4,11 @@
 //go:build stdioe2e
 
 // elicitation_declared_version_test.go pins which protocol revision decides how
-// a guided flow asks its questions on stdio, which is row 11 of
-// docs/development/upstream-bugs.md and issue 1319, and tells its failure
-// apart from the one row 66 of the same register causes (issue 1403).
+// a guided flow asks its questions on stdio, which is the go-sdk defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1258 and issue 1319,
+// and tells its failure apart from the one the go-sdk defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1225 causes (issue
+// 1403).
 //
 // A client that sends initialize asking for 2026-07-28 is negotiated down to
 // 2025-11-25, since 2026-07-28 deprecates initialize, and the go-sdk this
@@ -16,22 +18,22 @@
 // answers the 2026-07-28 shape, resultType input_required with its
 // inputRequests, on a session whose protocol carries elicitation as a
 // server-initiated elicitation/create request. The server agrees with the SDK
-// on purpose (row 11's workaround: none taken), and go-sdk#1266 is the fix.
+// on purpose (no workaround taken), and go-sdk#1266 is the fix.
 //
-// go-sdk#1226, row 66, merged four commits past the v1.8.0 tag and so in no
+// go-sdk#1226 merged four commits past the v1.8.0 tag and so in no
 // release yet, sets resultType only when a request names the new protocol in
 // its _meta, while the dispatcher still chooses the multi round-trip shape by
 // the declared version. A release that carries it without go-sdk#1266
 // answers this session inputRequests with no resultType at all, which a
 // 2025-11-25 client reads as a complete result whose content is null, and the
 // flow's question is lost. That fails the pin too, and is a reason to hold the
-// bump rather than a sign that row 11's fix landed, so declaredVersionVerdict
+// bump rather than a sign that go-sdk#1266 landed, so declaredVersionVerdict
 // tells the two apart.
 //
 // The defect shows only against the real SDK and the real binary, so the pin
 // lives here. It fails on the go-sdk release that carries go-sdk#1266 with
 // declaredVersionFix, naming what to update, and on one that carries
-// go-sdk#1226 without it with a message naming rows 11 and 66 and saying the
+// go-sdk#1226 without it with a message naming both changes and saying the
 // bump is to be held or the case answered, not the test rewritten.
 package stdioe2e
 
@@ -46,7 +48,7 @@ import (
 // to do when the flow sends elicitation/create, which only go-sdk#1266
 // produces.
 const declaredVersionFix = "go-sdk now selects the multi round-trip flow by the negotiated version (go-sdk#1266). " +
-	"Update row 11 of docs/development/upstream-bugs.md and its section, the comment on the version check in " +
+	"Update the comment on the version check in " +
 	"internal/elicitation/flow.go, the elicitation page's \"Which protocol version decides?\" section " +
 	"(site/src/content/docs/capabilities/elicitation.mdx and its Spanish twin), and turn this " +
 	"test into the assertion of the legacy flow, in this same pull request."
@@ -69,8 +71,8 @@ func TestElicitation_InitializeAskingForNewRevision_IsServedTheMultiRoundTripSha
 	if negotiated := result["protocolVersion"]; negotiated != "2025-11-25" {
 		// Not declaredVersionFix: that names the upstream fix, and this
 		// failure says nothing about whether it landed.
-		t.Fatalf("initialize asking for 2026-07-28 negotiated %v, want 2025-11-25: the SDK's negotiation changed, and with it the premise of row 11 of docs/development/upstream-bugs.md, "+
-			"that such a client is negotiated down to 2025-11-25 while the SDK reads the version it asked for. Reread row 11 and its section against the new negotiation before changing this test.",
+		t.Fatalf("initialize asking for 2026-07-28 negotiated %v, want 2025-11-25: the SDK's negotiation changed, and with it the premise of go-sdk#1258, "+
+			"that such a client is negotiated down to 2025-11-25 while the SDK reads the version it asked for. Reread go-sdk#1258 against the new negotiation before changing this test.",
 			negotiated)
 	}
 	s.send(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
@@ -108,15 +110,15 @@ func TestElicitation_InitializeAskingForNewRevision_IsServedTheMultiRoundTripSha
 // declaredVersionVerdict reads the result member of the answer the guided flow
 // gave on the session negotiated down to 2025-11-25, once the flow has sent
 // no elicitation/create, and returns what the pin fails with, or "" for the
-// answer row 11 pins today.
+// answer the pin holds today.
 //
-// The shapes it tells apart are the ones the go-sdk releases around rows 11
-// and 66 produce: resultType input_required is v1.8.0's answer, and
-// inputRequests with no resultType is go-sdk#1226 without go-sdk#1266. A
-// resultType that is present but null is not an absent one, and inputRequests
-// that ask for nothing lose no question, so both fall to the shape neither row
-// predicts. No failure here names declaredVersionFix, because what row 11's
-// fix produces is the elicitation/create the caller fails on before it reads a
+// The shapes it tells apart are the ones the go-sdk releases around
+// go-sdk#1226 and go-sdk#1266 produce: resultType input_required is v1.8.0's
+// answer, and inputRequests with no resultType is go-sdk#1226 without
+// go-sdk#1266. A resultType that is present but null is not an absent one, and
+// inputRequests that ask for nothing lose no question, so both fall to the
+// shape neither change predicts. No failure here names declaredVersionFix,
+// because what go-sdk#1266 produces is the elicitation/create the caller fails on before it reads a
 // result. A failure prints result as it arrived rather than the object read
 // from it, so an absent or null result reads <nil> and not as an empty object.
 func declaredVersionVerdict(result any) string {
@@ -127,16 +129,16 @@ func declaredVersionVerdict(result any) string {
 	}
 	if inputs, _ := called["inputRequests"].(map[string]any); !labeled && len(inputs) > 0 {
 		return fmt.Sprintf("the guided flow answered the 2025-11-25 session with inputRequests and no resultType: %v. "+
-			"That is go-sdk#1226 (row 66 of docs/development/upstream-bugs.md) without go-sdk#1266 (row 11): the SDK still chooses the multi round-trip shape "+
+			"That is go-sdk#1226 without go-sdk#1266: the SDK still chooses the multi round-trip shape "+
 			"by the version the client declared in initialize, and sets resultType only when a request names the new protocol in its _meta, "+
 			"so a 2025-11-25 client reads a complete result whose content is null and the flow's question is lost. "+
 			"The SDK is not serving the legacy flow, so do not turn this test into that flow's assertion: hold the go-sdk bump until the release carries go-sdk#1266, "+
-			"or answer the case in internal/elicitation (for example by labeling the result for that session) and record the decision on rows 11 and 66.",
+			"or answer the case in internal/elicitation (for example by labeling the result for that session) and record the decision in its comment.",
 			result)
 	}
-	return fmt.Sprintf("the guided flow answered the 2025-11-25 session with %v, which neither row 11 nor row 66 of docs/development/upstream-bugs.md predicts: "+
+	return fmt.Sprintf("the guided flow answered the 2025-11-25 session with %v, which neither go-sdk#1226 nor go-sdk#1266 predicts: "+
 		"go-sdk v1.8.0 answers resultType input_required, go-sdk#1226 without go-sdk#1266 answers inputRequests with no resultType, "+
-		"and go-sdk#1266 sends an elicitation/create instead. Reread both rows and their sections against the go-sdk this module is built against "+
+		"and go-sdk#1266 sends an elicitation/create instead. Reread both changes against the go-sdk this module is built against "+
 		"before changing this test.",
 		result)
 }
@@ -148,13 +150,13 @@ func declaredVersionVerdict(result any) string {
 // wire.
 func TestDeclaredVersionVerdict_EachResultShape_NamesWhatProducedIt(t *testing.T) {
 	asksTitle := map[string]any{"title": map[string]any{"method": "elicitation/create"}}
-	row66 := []string{
+	withoutTheFix := []string{
 		"inputRequests and no resultType",
-		"row 66", "row 11", "go-sdk#1226", "go-sdk#1266",
+		"go-sdk#1226 without go-sdk#1266",
 		"a 2025-11-25 client", "question is lost",
 		"do not turn this test into", "hold the go-sdk bump", "internal/elicitation",
 	}
-	unpredicted := []string{"neither row 11 nor row 66", "Reread both rows"}
+	unpredicted := []string{"neither go-sdk#1226 nor go-sdk#1266", "Reread both changes"}
 	for _, tc := range []struct {
 		name string
 		// result is the answer's result member as encoding/json decodes it
@@ -174,19 +176,19 @@ func TestDeclaredVersionVerdict_EachResultShape_NamesWhatProducedIt(t *testing.T
 			result: map[string]any{"resultType": "input_required"},
 		},
 		{
-			name:   "inputRequests with no resultType is row 66 without row 11",
+			name:   "inputRequests with no resultType is go-sdk#1226 without go-sdk#1266",
 			result: map[string]any{"content": nil, "requestState": "state", "inputRequests": asksTitle},
-			want:   row66,
+			want:   withoutTheFix,
 			refuse: []string{declaredVersionFix},
 		},
 		{
-			name:   "no resultType and no inputRequests is a shape neither row predicts",
+			name:   "no resultType and no inputRequests is a shape neither change predicts",
 			result: map[string]any{"content": []any{}},
 			want:   unpredicted,
 			refuse: []string{declaredVersionFix, "turn this test into"},
 		},
 		{
-			name:   "no resultType and an empty inputRequests asks nothing, so neither row predicts it",
+			name:   "no resultType and an empty inputRequests asks nothing, so neither change predicts it",
 			result: map[string]any{"inputRequests": map[string]any{}},
 			want:   unpredicted,
 			refuse: []string{declaredVersionFix, "turn this test into"},
@@ -198,13 +200,13 @@ func TestDeclaredVersionVerdict_EachResultShape_NamesWhatProducedIt(t *testing.T
 			refuse: []string{declaredVersionFix, "turn this test into"},
 		},
 		{
-			name:   "complete with inputRequests is a shape neither row predicts",
+			name:   "complete with inputRequests is a shape neither change predicts",
 			result: map[string]any{"resultType": "complete", "inputRequests": asksTitle},
 			want:   unpredicted,
 			refuse: []string{declaredVersionFix, "turn this test into"},
 		},
 		{
-			name:   "complete is a shape neither row predicts",
+			name:   "complete is a shape neither change predicts",
 			result: map[string]any{"resultType": "complete", "content": []any{}},
 			want:   unpredicted,
 			refuse: []string{declaredVersionFix, "turn this test into"},

@@ -400,8 +400,7 @@ func TestTimestampParam_NilIsNoOption(t *testing.T) {
 // timestampParamInstant is the instant the TimestampParam tests send, written
 // with an offset so a test can tell it was not moved to UTC or truncated to
 // its day: client-go carries these parameters as dates, which reach GitLab as
-// midnight UTC, so an SSH key asked to expire at 23:00 expired 23 hours early
-// (register row 126).
+// midnight UTC, so an SSH key asked to expire at 23:00 expired 23 hours early.
 const timestampParamInstant = "2026-12-31T23:00:00-05:00"
 
 // applyTimestampParam builds a request the way client-go would, with the given

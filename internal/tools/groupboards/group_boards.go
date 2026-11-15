@@ -319,8 +319,7 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 		// board_parent.boards.find on every call, so the check and the answer
 		// each load the stored board again. A name the update cannot save
 		// (over 255 characters) is therefore answered 200 with the board
-		// GitLab kept and the rename dropped (register row 94 of
-		// docs/development/upstream-bugs.md). The scope is never refused
+		// GitLab kept and the rename dropped. The scope is never refused
 		// either: Boards::UpdateService drops a milestone the group cannot
 		// use, clears the assignee for an id no user has, creates a label for
 		// a title the group does not have, and drops all of them where scoped

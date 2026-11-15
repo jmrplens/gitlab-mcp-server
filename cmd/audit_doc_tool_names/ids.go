@@ -56,12 +56,12 @@ const metaEntryPrefix = "gitlab_"
 // An entry that excuses nothing is reported, on the terms every declaration
 // table in this repository is held to.
 var allowedIDs = map[string]string{
-	"achievement.namespace":    "a GraphQL field path, quoted in upstream-bugs.md as the selection client-go sends",
+	"achievement.namespace":    "a GraphQL field path, quoted in the contributor pages as the selection client-go sends",
 	"gotest.tools":             "the Go module gotest.tools, named in the static analysis page",
-	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in upstream-bugs.md",
+	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in the contributor pages",
 	"mcp.schema":               "the middle of the Agent Plugins schema file name, mcp.schema.json",
 	"plugin.schema":            "the middle of the plugin manifest schema file name, plugin.schema.json, the one .plugin/plugin.json names",
-	"project.security_setting": "GitLab's own entity name, quoted in upstream-bugs.md as the thing the endpoint answers with",
+	"project.security_setting": "GitLab's own entity name, quoted in the contributor pages as the thing the endpoint answers with",
 	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
 	"result.content":           "a jq path into a JSON-RPC response, in the CI/CD examples",
 	"server.address":           "the OpenTelemetry attribute the upstream request count and the GitLab call duration name the host by",

@@ -1004,8 +1004,8 @@ func TestOrbitLiveGitLabCom_DetectTier_IsAtLeastTheFixtureGroupsPlan(t *testing.
 // anywhere else the session falls back to phase A, listed everything but what
 // no fine-grained token reaches, with nothing in a run saying so. That is how
 // GitLab.com moving from 19.5.0-pre to 19.6.0-pre put every fine-grained
-// session there in phase A against the 19.4 table, found by a reading of the
-// upstream register rather than by a test. The version is read the way the
+// session there in phase A against the 19.4 table, found by reading by hand
+// rather than by a test. The version is read the way the
 // server reads the one it judges a grant at ([gitlabclient.Client.ReadVersion]),
 // and the rule is internal/testutil/e2erelease's, the one -check-release and
 // the e2e harness stop a run with ([gitLabComReleaseProblem]). It needs no

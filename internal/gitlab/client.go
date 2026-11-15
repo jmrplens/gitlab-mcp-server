@@ -501,9 +501,7 @@ func (c *Client) GL() *gl.Client {
 // ML model package files route declares its token types sent through the
 // Bearer header and reads no other, so the PRIVATE-TOKEN header a personal
 // access token client sends everywhere else leaves the request
-// unauthenticated there, and a private project answers 404 (see "The ML model
-// package route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token"
-// in docs/development/upstream-bugs.md). The option adds the header beside the
+// unauthenticated there, and a private project answers 404. The option adds the header beside the
 // client's own rather than replacing it, since client-go applies the client's
 // header after the request options and only when that header is absent; an
 // OAuth client already sends the same Bearer value, so on one it changes

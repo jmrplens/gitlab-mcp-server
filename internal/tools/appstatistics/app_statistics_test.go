@@ -68,8 +68,7 @@ func TestGet_Error(t *testing.T) {
 // count encoded as a JSON string, since it renders each through Rails'
 // number_with_delimiter, and the SDK types every field of
 // ApplicationStatistics as int64, so the SDK call fails outright and
-// rawStatistics is the only reason the tool answers anything
-// (docs/development/upstream-bugs.md, entry 7). A fixture sending JSON
+// rawStatistics is the only reason the tool answers anything. A fixture sending JSON
 // numbers, which the SDK would have decoded too, could not stop the
 // workaround being collapsed back to int64 with the suite still green.
 //

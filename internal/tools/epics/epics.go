@@ -1378,8 +1378,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 //
 // The parent, milestone, dates and health status follow the clearing
 // convention of [toolutil.WorkItemWidgetInputs]: 0 removes a reference and ""
-// removes a date or the health status, which client-go cannot send by itself
-// (register row 119). An empty description is sent as one.
+// removes a date or the health status, which client-go cannot send by itself.
+// An empty description is sent as one.
 func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.RequestOptionFunc, error) {
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {

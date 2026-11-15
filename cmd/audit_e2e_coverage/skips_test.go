@@ -27,7 +27,7 @@ const (
 	reasonNoBitbucket       = "bitbucket fixture unavailable: BITBUCKET_SERVER_URL is not set, so the bitbucket fixture is not provisioned for this run"
 	reasonTierFallback      = "the run's token read no license, so the probe's tier (free) is the fallback rather than a reading"
 	reasonWorkItemWidgets   = "client-go v3.0.0's work item get, create and update documents select five licensed widgets " +
-		"that Community Edition's schema does not have (docs/development/upstream-bugs.md, entry 45),so the lifecycle " +
+		"that Community Edition's schema does not have, so the lifecycle " +
 		"cannot run on a Community image"
 	savedViewAnswer = "create_work_item_saved_view: GitLab internal server error: the server encountered an unexpected " +
 		"condition. Suggestion: verify namespace_path is a full group or project path you can write to, and that sort " +

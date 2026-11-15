@@ -287,7 +287,7 @@ func TestElicitingCall_DoesNotKillTheProcess(t *testing.T) {
 // message per line, so the next line is an independent message. serveStdio
 // therefore filters stdin ahead of the SDK: an unreadable line is answered and
 // dropped, and the session goes on. The underlying SDK behavior is unchanged
-// and recorded in docs/development/upstream-bugs.md.
+// (https://github.com/modelcontextprotocol/go-sdk/issues/1209).
 //
 // Every case checks the same two things — the answer carries the right code,
 // and the session still works afterwards — because either alone would miss the

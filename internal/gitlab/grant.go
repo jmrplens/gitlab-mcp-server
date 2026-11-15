@@ -38,8 +38,7 @@ const (
 // the given id, which must be the token the client authenticates with
 // ([DetectToken] read it from the self endpoint).
 //
-// client-go does not model the grant (row 32 of
-// docs/development/upstream-bugs.md), and the self endpoint does not present
+// client-go does not model the grant, and the self endpoint does not present
 // it, so it is decoded from the captured response of GET
 // /personal_access_tokens/:id (ADR-0021), read under [GrantMaxBytes] and
 // decoded with at most [GrantMaxScopes] scopes ([finegrained.DecodeGrant]).

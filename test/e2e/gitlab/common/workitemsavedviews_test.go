@@ -9,7 +9,7 @@
 // GitLab introduced saved views in 18.7 as an experiment, and on 19.4 two of
 // its mutations answer 500 to a caller authenticated with a token nearly
 // every time: subscribing locks the user row while the sign-in tracking has
-// left unsaved changes on it (docs/development/upstream-bugs.md, entry 72).
+// left unsaved changes on it.
 // The create meets it after it has saved the view, and the subscribe before
 // it records anything. The lifecycle therefore runs on every GitLab and
 // holds both answers: a create that failed is held to the hint that the view
@@ -66,7 +66,7 @@ func TestWorkItemSavedViews_List_AnswersTheNamespace(t *testing.T) {
 // view in a group of each surface's own, reads it with its filters,
 // changes its sort and description, subscribes to it and unsubscribes,
 // finds it in the listing and deletes it. Where GitLab answers the create or
-// the subscribe with the 500 of entry 72, the answer is held to what it left
+// the subscribe with that 500, the answer is held to what it left
 // behind and the scenario goes on (see the file comment).
 //
 // Replaces: TestMeta_WorkItemSavedViews
@@ -127,7 +127,7 @@ func TestWorkItemSavedViews_Lifecycle_CreateGetUpdateSubscribeDelete(t *testing.
 }
 
 // savedViewLeftByAFailedCreate holds a create GitLab answered with the 500 of
-// upstream-bugs entry 72 to what that answer leaves behind, and returns the
+// the user row lock to what that answer leaves behind, and returns the
 // view it left so the lifecycle goes on with it.
 //
 // Two things are held. The refusal has to say the view may exist and name the
@@ -141,7 +141,7 @@ func savedViewLeftByAFailedCreate(e *harness.Env, s *harness.Session, namespace 
 	e.T.Helper()
 	text := err.Error()
 	if !strings.Contains(text, "500") {
-		e.T.Fatalf("work_item_saved_view_create failed with something other than the server error of upstream-bugs entry 72: %v", err)
+		e.T.Fatalf("work_item_saved_view_create failed with something other than the server error of the user row lock: %v", err)
 	}
 	assertMentions(e, "the create's server error", text,
 		"look for this name before creating it again", string(actionSavedViewList))
@@ -159,7 +159,7 @@ func savedViewLeftByAFailedCreate(e *harness.Env, s *harness.Session, namespace 
 }
 
 // assertSubscribeRecordedNothing holds a subscribe GitLab answered with the
-// 500 of upstream-bugs entry 72 to its hint and to the view's subscription
+// 500 of the user row lock to its hint and to the view's subscription
 // being what it was before the call, which is what the hint tells the caller.
 // The state before is passed in rather than assumed unfollowed: a create that
 // succeeded subscribed its creator, and a subscribe failing after it leaves
@@ -168,7 +168,7 @@ func assertSubscribeRecordedNothing(e *harness.Env, s *harness.Session, viewInNa
 	e.T.Helper()
 	text := err.Error()
 	if !strings.Contains(text, "500") {
-		e.T.Fatalf("work_item_saved_view_subscribe failed with something other than the server error of upstream-bugs entry 72: %v", err)
+		e.T.Fatalf("work_item_saved_view_subscribe failed with something other than the server error of the user row lock: %v", err)
 	}
 	assertMentions(e, "the subscribe's server error", text, "before recording the subscription")
 

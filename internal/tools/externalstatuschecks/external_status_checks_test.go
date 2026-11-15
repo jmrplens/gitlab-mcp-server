@@ -1331,8 +1331,7 @@ func TestStatusChecks_CreateRefusedWith500NotAllowed_NamesTheMaintainerRole(t *t
 // The merge request routes answer a caller whose role on the merge request
 // falls short with 403 from authorize! (status_checks.rb:172, 204 and 235),
 // and from 19.5 the create and the delete answer a caller without the
-// Maintainer role on the project with 403 from authorize! too (entries 56 and
-// 57 of docs/development/upstream-bugs.md). None of those is the license, so
+// Maintainer role on the project with 403 from authorize! too. None of those is the license, so
 // the license hint must not follow it. The two project lists and the update
 // answer no 403 of their own, so a plain one there is read like their 401.
 func TestStatusChecks_RoleRefusedWith403_NameTheRoleNotTheLicense(t *testing.T) {
@@ -1369,8 +1368,7 @@ func TestStatusChecks_RoleRefusedWith403_NameTheRoleNotTheLicense(t *testing.T) 
 // TestStatusChecks_CreateAndDeleteRefusedWith403_NameTheMaintainerRoleInOneSentence
 // verifies the hint the create and the delete give the 403 GitLab answers a
 // caller without the Maintainer role from 19.5, where both routes authorize
-// the ability their service checks before the service runs (entries 56 and
-// 57 of docs/development/upstream-bugs.md). Both handlers hinted the license
+// the ability their service checks before the service runs. Both handlers hinted the license
 // on it, which sent a Developer to check a license the namespace already had.
 //
 // The hint names the role on the project and sends the caller to project.get

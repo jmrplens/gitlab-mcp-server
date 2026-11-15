@@ -944,7 +944,8 @@ modeleval-probe:
 # behind //go:build gc, which go builds and gobco does not instrument; and
 # gobco bridges to it through an import of the package it may not find, so an
 # external test package that imports nothing of the package is given one,
-# until a gobco release fixes both (upstream-bugs entries 97 and 140). A
+# until a gobco release fixes both (https://github.com/rillig/gobco/pull/43
+# and https://github.com/rillig/gobco/pull/39). A
 # package gobco could already read, a constraint on the platform alone
 # included, is run where it is, as before.
 # TAGS names build tags for a package behind one (TAGS=e2e), passed to go list
@@ -2224,7 +2225,7 @@ audit-1to1-grants:
 ## every action's permissions in GitLab's words with the directive or declaration that
 ## shaped its requests, the actions no fine-grained token reaches by cause, the parts of an
 ## answer served empty, the REST operations a public project or group serves with no grant,
-## the GraphQL worklist of upstream register row 87 with its REST leads, and the derivation
+## the GraphQL worklist (the types and mutations that declare no fine-grained permission) with its REST leads, and the derivation
 ## held to the request inventory and, when a Docker run left shards under $(E2E_CALLS_DIR),
 ## to each action's request count. It reports and gates on nothing audit-1to1-grants does
 ## not.

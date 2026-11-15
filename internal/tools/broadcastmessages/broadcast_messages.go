@@ -236,8 +236,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	// client-go tags the levels omitempty, so an empty list would leave the
 	// body, and [] is what GitLab reads as every role. It is written into
-	// the body through a request option (issue 1306, upstream register row
-	// 122).
+	// the body through a request option (issue 1306).
 	var everyRole toolutil.BodyEdit
 	if input.TargetAccessLevels != nil && len(input.TargetAccessLevels) == 0 {
 		everyRole.Set = map[string]any{"target_access_levels": []any{}}

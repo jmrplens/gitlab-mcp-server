@@ -102,8 +102,7 @@ func toOutput(t *gl.Todo, extra todoExtra) Output {
 // reads in a way the output cannot use, read off the captured answer
 // (ADR-0021). The weight is modeled as an int64, which reads GitLab's null,
 // an issue without a weight, as the weight 0, a weight of its own (issue
-// 1390), for the reason of register row 116 ("A measure GitLab sends as null
-// decodes as 0").
+// 1390), since a measure GitLab sends as null decodes as 0.
 type todoExtra struct {
 	Target struct {
 		Weight *int64 `json:"weight"`

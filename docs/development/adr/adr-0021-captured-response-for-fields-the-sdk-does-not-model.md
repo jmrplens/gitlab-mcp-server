@@ -12,7 +12,7 @@ Every handler in this repository calls a client-go service method, which spells 
 
 The answer this repository had for that was a request of the handler's own: `internal/tools/invites` decodes the `queued_users` map client-go's `InvitesResult` does not model by building the POST with `client.GL().NewRequest`, spelling the route itself, and decoding into a struct that embeds the SDK's. Seventeen other packages do the same for one endpoint or another. It works, and it costs what it costs: the route is spelled twice, once in client-go and once here; the options are encoded here rather than by the method that knows them; a list loses the pagination the SDK method would have read; and the request inventory records the handler's spelling, so a divergence between the two spellings is invisible to the audit that reads it. The notes alone would need it in some fifty handlers across eight packages.
 
-Contributing the fields to client-go is the right end state and is recorded per gap in `docs/development/upstream-bugs.md`; it is not an answer for this release, since an upstream change lands in a version this server bumps to later, and the surface has to be whole now.
+Contributing the fields to client-go is the right end state; it is not an answer for this release, since an upstream change lands in a version this server bumps to later, and the surface has to be whole now.
 
 ## Decision
 
@@ -48,4 +48,4 @@ The `invites` pattern is not retired. A request client-go has no method for at a
 
 - NEG-001: A captured body is held in memory twice for the life of the call, once in the capture and once in the SDK's decoder's buffer. Bounded by the response ceiling, and only for the calls that ask.
 - NEG-002: The handler's extra type has to name the field the way GitLab spells it, and nothing checks that spelling against GitLab but the sent dimension of the audit, which is where the field came from.
-- NEG-003: A field read this way is one more thing an upstream contribution retires, so each gap is recorded in `docs/development/upstream-bugs.md` with the handler that carries the workaround.
+- NEG-003: A field read this way is one more thing an upstream contribution retires, so each capture names in its comment the client-go gap it works around, and the 1:1 audit's waits table holds when client-go closes it.

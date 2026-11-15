@@ -417,9 +417,9 @@ func answeredRequest(glErr *gl.ErrorResponse) *http.Request {
 // unauthorized! answers it for a valid credential that lacks a permission: approving a merge
 // request the caller opened where author approval is prevented, merging
 // without push access, reading remote mirrors or access tokens without the
-// role (entry 55 of docs/development/upstream-bugs.md). The status cannot tell
-// the two apart, so the one sentence true of every 401 names both and ends with
-// the test a reader can run to tell which applies. It opens with
+// role. The status cannot tell the two apart, so the one sentence true of
+// every 401 names both and ends with the test a reader can run to tell which
+// applies. It opens with
 // "unauthorized" rather than "authentication failed", because for the second
 // cause authentication succeeded, and a model told otherwise checked the
 // credential, found nothing wrong with it and stopped. The credential is
@@ -869,9 +869,9 @@ func IsHTTPStatus(err error, code int) bool {
 // hint naming a role, a license or an owner on, where [IsHTTPStatus] with 403
 // used to be.
 //
-// The 401 is the reason it exists. At the routes entry 55 of
-// docs/development/upstream-bugs.md lists, GitLab refuses a missing permission
-// with 401, so a hint scoped to 403 was never shown there. A hint scoped to 401
+// The 401 is the reason it exists. At a family of REST routes (the ones this
+// server serves are listed in permission401Routes, internal/tools), GitLab
+// refuses a missing permission with 401, so a hint scoped to 403 was never shown there. A hint scoped to 401
 // alone is wrong the other way: [ClassifyError] describes a 401 that GitLab
 // said was about the credential as the token itself being refused, and a role
 // suggestion after that verdict contradicts it. This predicate is false for
@@ -886,12 +886,12 @@ func IsHTTPStatus(err error, code int) bool {
 // A handler whose route answers a 403 that means something else, a license or
 // an archived project rather than a role, pairs it with IsHTTPStatus to tell
 // the two apart. The 403 is kept here because it is what these routes would
-// answer if GitLab retired entry 55, and then a handler that keys one hint on
-// this predicate alone needs no change. The handlers that pair it with a
+// answer if GitLab stopped answering a missing permission with 401 there, and
+// then a handler that keys one hint on this predicate alone needs no change. The handlers that pair it with a
 // status do, since each reads the status as the cause: the security settings
 // routes, the three external status check merge request routes and the
 // create and the delete of a project's status check, the fork link and the
-// merge train add. Those are the ones to revisit when entry 55 is retired.
+// merge train add. Those are the ones to revisit when that 401 goes.
 func IsPermissionRefusal(err error) bool {
 	glErr, ok := gitLabResponseOf(err)
 	return ok && gitlabclient.RefusalMayBePermission(answeredStatus(glErr), answeredRequest(glErr), glErr.Body)

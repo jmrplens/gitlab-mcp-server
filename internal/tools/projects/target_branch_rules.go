@@ -144,8 +144,7 @@ const (
 // client-go's three target branch rule methods decode the top-level errors
 // GitLab refuses a request with and never read them, so a refused list and a
 // refused creation reach a caller as the not-found sentinel the null beside
-// the errors becomes, and a refused delete as a success (row 103 of
-// docs/development/upstream-bugs.md). The capture holds the same bytes the
+// the errors becomes, and a refused delete as a success. The capture holds the same bytes the
 // SDK decoded (ADR-0021). An answer that is not GraphQL's, a 404 page of the
 // endpoint among them, carries no refusal of GraphQL's, so err stands.
 func refusalOr(operation string, err error, capture *gitlabclient.ResponseCapture) error {

@@ -5,7 +5,8 @@
 
 // keep_alive_test.go holds what the binary puts on the wire while a tool call
 // waits on GitLab and has nothing to report: on go-sdk v1.8.0, not a byte, its
-// response headers included, until the result (register row 8).
+// response headers included, until the result. A go-sdk release carrying
+// https://github.com/modelcontextprotocol/go-sdk/pull/1477 changes that.
 package httpe2e
 
 import (
@@ -27,7 +28,7 @@ const silentCallHold = 35 * time.Second
 
 // silentCallFix is what a failure here asks for.
 const silentCallFix = "the binary now puts bytes on the wire of a tool call that has nothing to report before its result, " +
-	"which on go-sdk v1.8.0 it does not: update row 8 of docs/development/upstream-bugs.md, the keep-alive paragraph of " +
+	"which on go-sdk v1.8.0 it does not: update the keep-alive paragraph of " +
 	"site/src/content/docs/operations/http-server.mdx, the read timeout row and the Cloudflare paragraph of " +
 	"site/src/content/docs/operations/remote-deployment.mdx, the proxy row of " +
 	"site/src/content/docs/operations/troubleshooting.mdx, each with its Spanish twin, the comment of sseAwareWriter.Write in " +

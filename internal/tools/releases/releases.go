@@ -184,8 +184,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // no ref was given to create it from, which is a missing tag rather than a
 // release that already exists. The role hint is keyed on
 // toolutil.IsPermissionRefusal rather than on 403, because GitLab answers a
-// missing permission with 401 at some routes (entry 55 of
-// docs/development/upstream-bugs.md), while a refusal of the token itself
+// missing permission with 401 at some routes, while a refusal of the token itself
 // names no role.
 //
 // The branches are separate ifs rather than the cases of one switch, because a
@@ -213,7 +212,7 @@ func createError(err error) error {
 // omitempty, so a field left nil goes out as null and GitLab stores it: the
 // notes are erased and the title falls back to the tag. The request option
 // takes those two keys out of the body whenever the caller did not set them
-// (issue 1305, upstream register row 121).
+// (issue 1305).
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -221,8 +220,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("releaseUpdate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
-	// client-go writes the title and the notes as null when they are nil
-	// (register row 121), so a field left out is dropped from the body, and
+	// client-go writes the title and the notes as null when they are nil, so
+	// a field left out is dropped from the body, and
 	// one given, "" included, is sent as given: Release validates their
 	// length only, so an empty title or empty notes are values GitLab
 	// stores (issue 1306).

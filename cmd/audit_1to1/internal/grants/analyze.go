@@ -40,8 +40,8 @@ type Report struct {
 	// -gaps-only.
 	Degraded         []DegradedAction  `json:"degraded,omitempty"`
 	PublicOperations []PublicOperation `json:"public_operations,omitempty"`
-	// Worklist is row 87's of docs/development/upstream-bugs.md: the
-	// undeclared GraphQL elements this server reaches.
+	// Worklist is the GraphQL worklist: the types and mutations this server
+	// reaches that declare no fine-grained permission.
 	Worklist []WorklistEntry `json:"graphql_worklist"`
 	// Classic is what a classic or OAuth token needs: the actions per scope,
 	// the routes that are not a GET a read_api token is served, and the
@@ -82,8 +82,8 @@ type Summary struct {
 	// which PublicKnown says.
 	PublicOperations int  `json:"public_operations"`
 	PublicKnown      bool `json:"public_sets_known"`
-	// WorklistElements counts the GraphQL elements of the upstream register's
-	// row 87 worklist, and WorklistLeads those a REST route this server calls
+	// WorklistElements counts the GraphQL elements of the worklist, and
+	// WorklistLeads those a REST route this server calls
 	// is a lead for.
 	WorklistElements int `json:"graphql_worklist_elements"`
 	WorklistLeads    int `json:"graphql_worklist_elements_with_a_rest_lead"`

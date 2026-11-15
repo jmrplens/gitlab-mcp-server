@@ -753,8 +753,7 @@ var routeFamilies = []routeFamily{
 	// The Orbit domain (issueOrbitRoutes). The status, schema, tool, query
 	// DSL and index routes the orbit.* actions sent until GitLab.com removed
 	// them inherit SUPERSEDED_UPSTREAM; the actions read GraphQL and the POST
-	// of the MCP endpoint instead (rows 144 to 148 of
-	// docs/development/upstream-bugs.md).
+	// of the MCP endpoint instead.
 	tracked(issueOrbitRoutes, 1, on(http.MethodGet), "/orbit/mcp",
 		"the SSE listener of Orbit's MCP endpoint; orbit.tools, orbit.dsl and orbit.schema send its JSON-RPC POST through orbit.callMCP and read the one answer it gives"),
 	tracked(issueOrbitRoutes, 1, on(http.MethodGet), "/orbit/query/templates",

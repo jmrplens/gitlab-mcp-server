@@ -125,8 +125,7 @@ func declaredRequiredness() map[declarationKey]declaration {
 			"PUT .../pipeline_schedules/:pipeline_schedule_id/variables/:key declares value optional, and " +
 				"client-go's EditPipelineScheduleVariableOptions writes it with no omitempty, so a call without " +
 				"one sends null, which lib/api/ci/pipeline_schedules.rb passes on through declared_params and the " +
-				"save service assigns over the stored value; the handler therefore always sends a value " +
-				"(docs/development/upstream-bugs.md, entry 54)",
+				"save service assigns over the stored value; the handler therefore always sends a value",
 		},
 
 		// Requirements GitLab states inside a given block.

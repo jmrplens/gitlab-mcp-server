@@ -39,15 +39,15 @@ var sdkCategories = map[string]bool{
 // [shortName] spells it: a client-go service type and a method of it.
 var methodName = regexp.MustCompile(`^[A-Z][A-Za-z]*Service\.[A-Za-z]+$`)
 
-// upstreamRow matches the register row a recorded-upstream answer names.
-var upstreamRow = regexp.MustCompile(`[Uu]pstream-bugs row \d+`)
+// clientGoGap matches the opening [recorded] gives a recorded-upstream answer.
+var clientGoGap = regexp.MustCompile(`^A client-go gap: `)
 
 // TestDeclaredSDK_EveryEntryMeetsTheBarTheTablesSetThemselves verifies the
 // committed client-go tables rather than a fixture's, which no run over a
 // stand-in module can do: every entry names what it answers in the spelling
 // the run reports, from the closed set of categories, with a reason a
-// reviewer can judge; a recorded-upstream answer names the register row that
-// records it, which is what a reader follows to see the state of the fix; and
+// reviewer can judge; a recorded-upstream answer is written through
+// [recorded], which says the gap is client-go's; and
 // no two entries of a table share a key, since the second could only ever read
 // stale.
 func TestDeclaredSDK_EveryEntryMeetsTheBarTheTablesSetThemselves(t *testing.T) {
@@ -91,8 +91,8 @@ func checkSDKDeclaration(t *testing.T, seen map[string]bool, key, category, reas
 	if len(reason) < 80 {
 		t.Errorf("reason = %q, which is too short to judge whether it still holds", reason)
 	}
-	if category == categoryRecordedUpstream && !upstreamRow.MatchString(reason) {
-		t.Errorf("reason = %q records the gap upstream and names no register row", reason)
+	if category == categoryRecordedUpstream && !clientGoGap.MatchString(reason) {
+		t.Errorf("reason = %q records the gap upstream and is not written through recorded", reason)
 	}
 	if seen[key] {
 		t.Errorf("a second declaration carries the key %s, so one of them can only ever read stale", key)

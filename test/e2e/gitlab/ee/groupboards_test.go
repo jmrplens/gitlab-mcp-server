@@ -11,7 +11,7 @@
 // weight it is scoped to and the metric each limited column is counted by
 // (issue 1283), the text of the board listing, which names each limited
 // column with its ceilings and its metric (issue 1284), and the assignee and
-// milestone columns a column create makes (register row 96). The label
+// milestone columns a column create makes. The label
 // column actions, and the reads and the rename of a board the fixture library
 // built, are Free and live in the common package.
 
@@ -87,7 +87,7 @@ func TestGroupBoards_Create_ListsReadsAndDeletesTheBoard(t *testing.T) {
 
 // TestGroupBoards_CreateList_ScopesAColumnToAnAssigneeOrAMilestone creates a
 // group board on every surface and adds the two licensed column types the
-// column create takes since client-go v3.39.0 modeled them (register row 96):
+// column create takes since client-go v3.39.0 modeled them:
 // one scoped to the caller and one to a group milestone, and holds each
 // answer to the scope it was asked for and to no other. Assignee and
 // milestone lists are Premium, which is why the scenario lives here; the label

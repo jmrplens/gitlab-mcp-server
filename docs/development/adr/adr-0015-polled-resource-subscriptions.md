@@ -98,8 +98,8 @@ make the worst case something an operator can predict.
   own teardown deletes that entry outright, so after either stream ends the
   session sees the notification on **neither**, while the watch this bridge
   correctly kept alive for the surviving stream goes on polling GitLab on the
-  subscriber's token until its lifetime runs out. Recorded as a defect of the
-  SDK in [upstream-bugs](../upstream-bugs.md); nothing here can repair delivery,
+  subscriber's token until its lifetime runs out. It is a defect of the SDK;
+  nothing here can repair delivery,
   because the table that lost the request ID is the SDK's.
 - **The legacy `resources/subscribe` is refused in stateless HTTP mode**,
   where the session ends with the POST that created it and no notification

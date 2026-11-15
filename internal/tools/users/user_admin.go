@@ -35,7 +35,7 @@ type AdminActionOutput struct {
 // anything, and says which in the body: true when the user's state changed,
 // false or null when it did not, as for an unblock of a user who is not
 // blocked, a block of a blocked one or a second deactivate. client-go reads
-// the status alone and drops the body (upstream-bugs row 117), so the body is
+// the status alone and drops the body, so the body is
 // read from the captured response (ADR-0021). unchanged names what a user
 // GitLab answers so for usually is.
 func stateChangeOutput(capture *gitlabclient.ResponseCapture, op string, userID int64, action, unchanged string) (AdminActionOutput, error) {

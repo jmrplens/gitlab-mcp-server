@@ -14,8 +14,7 @@ import (
 
 // awardExtra is the one key of lib/api/entities/award_emoji.rb that
 // client-go's AwardEmoji does not model, read from the captured response
-// beside the SDK's own decode (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// beside the SDK's own decode (ADR-0021).
 //
 // The entity exposes url with no condition, and app/models/award_emoji.rb
 // fills it only for a custom emoji, the group's own image: a standard emoji

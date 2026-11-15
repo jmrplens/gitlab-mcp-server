@@ -2135,8 +2135,7 @@ const (
 // CancelAutoMerge cancels the "merge when pipeline succeeds" (auto-merge)
 // setting on a merge request. Returns the updated merge request.
 //
-// It has two routes, chosen by the instance's release (register row 46 of
-// docs/development/upstream-bugs.md). From 19.5 on it posts to
+// It has two routes, chosen by the instance's release. From 19.5 on it posts to
 // cancel_auto_merge, which answers 201 with the merge request, 409 when there
 // is nothing to cancel and 403 to a caller who may not cancel it
 // ([cancelAutoMergeRoute]). An instance older than that, or one whose release

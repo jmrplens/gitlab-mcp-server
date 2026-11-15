@@ -570,8 +570,8 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 		return AddChangelogOutput{}, errors.New("addChangelog: version is required")
 	}
 	// GitLab takes a timestamp for the release date while client-go carries
-	// it as a date, which would send midnight UTC of the day it names
-	// (register row 126), so the field is left unset and the date written as
+	// it as a date, which would send midnight UTC of the day it names, so
+	// the field is left unset and the date written as
 	// the instant given.
 	date, err := toolutil.ParseTimeField("date", input.Date)
 	if err != nil {

@@ -183,7 +183,7 @@ func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDef
 
 // Set creates or updates a feature flag. A scope the caller left empty is
 // left out of the request, which client-go's SetFeatureFlagOptions does from
-// v3.34.0 (register row 6): GitLab counts a scope that is present as given,
+// v3.34.0: GitLab counts a scope that is present as given,
 // and refuses two of them together as mutually exclusive.
 func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetOutput, error) {
 	opts := &gl.SetFeatureFlagOptions{

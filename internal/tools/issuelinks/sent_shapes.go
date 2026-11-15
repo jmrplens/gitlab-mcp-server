@@ -49,8 +49,7 @@ type RelationLinksOutput struct {
 
 // relationExtra is what lib/api/entities/related_issue.rb sends on a related
 // issue that client-go's IssueRelation does not carry, read from the captured
-// response beside the SDK's own decode (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// response beside the SDK's own decode (ADR-0021).
 //
 // RelatedIssue inherits API::Entities::Issue, so nineteen of these are on
 // every response of GET /projects/:id/issues/:issue_iid/links. Four are
@@ -88,8 +87,7 @@ type relationExtra struct {
 	Type                 string                      `json:"type"`
 	Upvotes              int64                       `json:"upvotes"`
 	// Weight is one IssueRelation models, as an int64, and is read here as a
-	// pointer for the reason of register row 116 ("A measure GitLab sends
-	// as null decodes as 0"): an issue without a weight is sent null, which
+	// pointer because a measure GitLab sends as null decodes as 0: an issue without a weight is sent null, which
 	// the SDK reads as the weight 0, a weight of its own (issue 1390).
 	Weight *int64 `json:"weight"`
 }

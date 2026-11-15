@@ -534,10 +534,9 @@ func TestUpdate_SendsOnlyTheFieldsTheCallerNamed(t *testing.T) {
 // It went red on the pin that carried it, as the test it replaces said it
 // would: client-go tagged the two fields without omitempty until v3.38.0, so
 // an unnamed one reached GitLab as JSON null, was read as blank and refused,
-// and Update answered the 422 with a hint telling the caller to send both
-// (docs/development/upstream-bugs.md, row 52, "UpdatePackageProtectionRulesOptions
-// sends two explicit nulls on every partial update"). The guard keeping an
-// empty input out of the options is what keeps the key out now.
+// and Update answered the 422 with a hint telling the caller to send both.
+// The guard keeping an empty input out of the options is what keeps the key
+// out now.
 func TestUpdate_LeavesAnUnnamedPatternOutOfTheRequest(t *testing.T) {
 	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
 		if _, err := Update(context.Background(), client, UpdateInput{
@@ -772,7 +771,7 @@ func TestUpdate_APIError(t *testing.T) {
 // the caller is handed GitLab's own reason and no listing hint, which would
 // send it to look for a rule it already has. The 422 once carried a hint to
 // send the pattern and the type on every update, which client-go v3.38.0
-// retired by leaving an unnamed one out of the request (register row 52).
+// retired by leaving an unnamed one out of the request.
 func TestUpdate_AnswersEachRefusalWithItsOwnHint(t *testing.T) {
 	cases := []struct {
 		name   string

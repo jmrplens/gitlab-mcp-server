@@ -260,7 +260,7 @@ func TestUpdateClears_ProjectSnippet_Description(t *testing.T) {
 // audience as [], which GitLab reads as every page and every role, and holds
 // a fresh read to a message with neither. The audience is the one field here
 // that only an empty list clears, which client-go's options leave out of the
-// body (upstream register row 122).
+// body.
 func TestUpdateClears_BroadcastMessage_TargetPathAndAudience(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin), harness.Locks(harness.LockInstanceGlobal))
 
@@ -709,8 +709,7 @@ func TestUpdateClears_Wiki_Content(t *testing.T) {
 // TestUpdateClears_FeatureFlagUserList_UserXIDs creates a user list of two
 // users, then sends the users empty and holds the answer and a fresh read to
 // a list of none. client-go leaves an empty user_xids out of the body, so the
-// empty string reaches GitLab only through the request option that writes it
-// (upstream register row 122).
+// empty string reaches GitLab only through the request option that writes it.
 func TestUpdateClears_FeatureFlagUserList_UserXIDs(t *testing.T) {
 	e := harness.New(t)
 

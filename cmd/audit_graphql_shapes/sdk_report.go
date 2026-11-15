@@ -22,7 +22,7 @@ func sdkGatingReason() string {
 	return "Every finding of this run fails it unless a declaration answers it, in sdk_declarations.go for a " +
 		"disagreement or an unjudged send and in sdk_declarations_sent.go for a sent field, and so does every " +
 		"declaration that answers nothing. The surface is client-go's and small, an answer to a field it leaves out " +
-		"is a declaration naming the upstream-bugs row that records the gap, and the tables are the record of the " +
+		"is a declaration saying what client-go leaves out, and the tables are the record of the " +
 		"one-time triage: a client-go bump that starts selecting a declared field leaves the declaration stale, and " +
 		"one that stops selecting a field, or a re-pin that adds one, leaves a finding nothing answers, except on a " +
 		"type declared whole rather than field by field, whose new fields that declaration already answers. The run reads the " +

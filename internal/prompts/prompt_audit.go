@@ -273,7 +273,7 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 
 	// The custom role names of the access levels are read off the captured
 	// answer, as the protected branch tools read them, since client-go does
-	// not model member_role_name (upstream register row 138). An answer whose
+	// not model member_role_name. An answer whose
 	// names do not decode leaves the section unread, as a failed call does.
 	branchCtx, branchCapture := gitlabclient.WithResponseCapture(ctx)
 	s.branches, _, s.branchesErr = client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{

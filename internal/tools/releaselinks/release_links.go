@@ -298,8 +298,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	// GitLab refuses "" as a path and removes one only on null, which the
 	// option struct cannot carry, so an empty path is written into the body
-	// as null through a request option (issue 1306, upstream register row
-	// 122).
+	// as null through a request option (issue 1306).
 	var nulls toolutil.BodyEdit
 	opts.FilePath = toolutil.NullWhenZero(input.FilePath, "filepath", &nulls)
 	opts.DirectAssetPath = toolutil.NullWhenZero(input.DirectAssetPath, "direct_asset_path", &nulls)

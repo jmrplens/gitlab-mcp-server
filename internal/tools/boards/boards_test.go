@@ -2332,7 +2332,7 @@ func TestBoards_UnreadableCapturedGroup(t *testing.T) {
 // projectBoardRefusals are the answers GitLab gives a project board route
 // that refuses the caller, written as GitLab writes them at v19.4.1-ee:
 // authorize! renders a plain 403, some routes answer a missing permission
-// with a plain 401 (register row 55), the API guard names an RFC 6750 code
+// with a plain 401, the API guard names an RFC 6750 code
 // when what is missing is the token's scope and states its reason when it
 // refuses the account itself, and a project or board the caller cannot see
 // is a 404. Only the first two can be a role the caller lacks, which is what

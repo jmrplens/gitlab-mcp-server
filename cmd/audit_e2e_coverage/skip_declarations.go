@@ -95,8 +95,7 @@ var skipRuntimes = map[string]bool{
 // The saved view lifecycle was declared on both runtimes until the complete
 // runs of the wave 1 stack read GitLab's exceptions log: the 500 comes from a
 // lock on the caller's user row that every token-authenticated create and
-// subscribe meets on 19.4, after the create has saved the view
-// (docs/development/upstream-bugs.md, entry 72). Nothing a client sends avoids
+// subscribe meets on 19.4, after the create has saved the view. Nothing a client sends avoids
 // it, so the scenario now asserts what GitLab does, the view the create left
 // in the listing and a subscribe that recorded nothing, and runs on every
 // release instead of skipping on the one that has the defect.

@@ -56,7 +56,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	// GitLab requires the key on every update and removes the binding only on
 	// null, which client-go cannot send: its pointer writes 0 as 0. A 0 is
 	// therefore written into the body as null through a request option (issue
-	// 1306, upstream register row 122).
+	// 1306).
 	var nulls toolutil.BodyEdit
 	opts := &gl.UpdateAdminCompliancePolicySettingsOptions{
 		CSPNamespaceID: toolutil.NullWhenZero(in.CSPNamespaceID, "csp_namespace_id", &nulls),
@@ -96,8 +96,7 @@ func updateError(err error) error {
 // permissionError gives a refusal of a missing permission the hint naming
 // what the settings need, and any other error GitLab's own words. It is keyed
 // on toolutil.IsPermissionRefusal rather than on 403, because GitLab answers a
-// missing permission with 401 at some routes (entry 55 of
-// docs/development/upstream-bugs.md) and a hint keyed on 403 alone was never
+// missing permission with 401 at some routes and a hint keyed on 403 alone was never
 // shown there, while a refusal of the token itself gets no role hint.
 func permissionError(op string, err error) error {
 	if toolutil.IsPermissionRefusal(err) {
