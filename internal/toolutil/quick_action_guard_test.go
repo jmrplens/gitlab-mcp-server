@@ -379,10 +379,8 @@ func TestConfirmQuickActions_LineWithURL_QuotesItsOriginAlone(t *testing.T) {
 		if err == nil || err.Error() != want {
 			t.Fatalf("refusal =\n%v\nwant\n%q", err, want)
 		}
-		for _, part := range withheld {
-			if strings.Contains(err.Error(), part) {
-				t.Errorf("refusal %q carries %q of the address", err, part)
-			}
+		if leaked := containedParts(err.Error(), withheld); len(leaked) > 0 {
+			t.Errorf("refusal %q carries %q of the address", err, leaked)
 		}
 	})
 	t.Run("the question a person is asked", func(t *testing.T) {
@@ -391,12 +389,21 @@ func TestConfirmQuickActions_LineWithURL_QuotesItsOriginAlone(t *testing.T) {
 		if got != quickActionOpening+quoted {
 			t.Errorf("the person is asked\n%q\nwant\n%q", got, quickActionOpening+quoted)
 		}
-		for _, part := range withheld {
-			if strings.Contains(got, part) {
-				t.Errorf("question %q carries %q of the address", got, part)
-			}
+		if leaked := containedParts(got, withheld); len(leaked) > 0 {
+			t.Errorf("question %q carries %q of the address", got, leaked)
 		}
 	})
+}
+
+// containedParts returns the parts that s contains, in the order given.
+func containedParts(s string, parts []string) []string {
+	var found []string
+	for _, part := range parts {
+		if strings.Contains(s, part) {
+			found = append(found, part)
+		}
+	}
+	return found
 }
 
 // TestRedactLineURLs_WritesEachAddressByItsOrigin walks the addresses a line
