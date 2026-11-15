@@ -1559,22 +1559,26 @@ func validGitLabRoleAccessLevelInt64(value int64) (int, bool) {
 	return 0, false
 }
 
+// validGitLabRoleAccessLevelFloat64 matches a JSON-decoded float64 the same
+// way: each level is widened to float64 and the level itself is returned, so
+// no value read from a request is ever converted to int. A huge, fractional,
+// infinite or NaN value equals no level and is not a role.
 func validGitLabRoleAccessLevelFloat64(value float64) (int, bool) {
-	switch value {
-	case 0, 10, 20, 30, 40, 50, 60:
-		return int(value), true
-	default:
-		return 0, false
+	for _, level := range gitLabRoleAccessLevels {
+		if float64(level) == value {
+			return level, true
+		}
 	}
+	return 0, false
 }
 
 func validGitLabRoleAccessLevel(value int) (int, bool) {
-	switch value {
-	case 0, 10, 20, 30, 40, 50, 60:
-		return value, true
-	default:
-		return 0, false
+	for _, level := range gitLabRoleAccessLevels {
+		if level == value {
+			return level, true
+		}
 	}
+	return 0, false
 }
 
 func newParamValidationError(format string, args ...any) error {
