@@ -3191,7 +3191,7 @@ func assertServedInputSchemas(t *testing.T, cfg *config.ServerConfig, dotcom boo
 		_, hasDefs := schema["$defs"]
 		defined = defined || hasDefs
 	}
-	if inline := cfg.MetaParamSchema == config.MetaParamSchemaCompact || cfg.MetaParamSchema == config.MetaParamSchemaFull; inline && !defined {
+	if (cfg.MetaParamSchema == config.MetaParamSchemaCompact || cfg.MetaParamSchema == config.MetaParamSchemaFull) && !defined {
 		t.Errorf("no tool serves $defs under %s, so the listing was not made in that mode", cfg.MetaParamSchema)
 	}
 	orbit := slices.ContainsFunc(listed, func(tool *mcp.Tool) bool { return tool.Name == "gitlab_orbit" })
@@ -16149,7 +16149,7 @@ func TestRunHTTP_AnnouncesThePlaintextListenerItWasConfiguredFor(t *testing.T) {
 			// what is asserted is the line written before it, unless the
 			// hardened mode refused the listener first.
 			err := runHTTPExpectingRefusal(t, plaintextListenerConfig(t, tc.flag, tc.tlsCert, tc.tlsKey))
-			if refusal := err != nil && strings.HasPrefix(err.Error(), "--allow-plaintext-http=false"); refusal != tc.refused {
+			if (err != nil && strings.HasPrefix(err.Error(), "--allow-plaintext-http=false")) != tc.refused {
 				t.Errorf("runHTTP() = %v, want the hardened mode's refusal: %t", err, tc.refused)
 			}
 

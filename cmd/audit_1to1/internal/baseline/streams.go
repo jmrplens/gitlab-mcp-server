@@ -264,16 +264,20 @@ type pathsField struct {
 	SDKType string `json:"sdk_type"`
 }
 
+// pathsTypedShapes is the typed half of the paths scope's shape comparisons:
+// the fields nested in a published type that the output leaves out.
+type pathsTypedShapes struct {
+	Ran               bool         `json:"ran"`
+	NestedUnpublished []pathsField `json:"nested_unpublished"`
+	NestedUnsurfaced  []pathsField `json:"nested_unsurfaced"`
+}
+
 // pathsReport is what the paths scope's report holds of its streams.
 type pathsReport struct {
 	Shapes struct {
-		Ran         bool         `json:"ran"`
-		Unpublished []pathsField `json:"unpublished"`
-		Typed       struct {
-			Ran               bool         `json:"ran"`
-			NestedUnpublished []pathsField `json:"nested_unpublished"`
-			NestedUnsurfaced  []pathsField `json:"nested_unsurfaced"`
-		} `json:"typed"`
+		Ran         bool             `json:"ran"`
+		Unpublished []pathsField     `json:"unpublished"`
+		Typed       pathsTypedShapes `json:"typed"`
 	} `json:"shapes"`
 	AlwaysSent struct {
 		Ran      bool `json:"ran"`

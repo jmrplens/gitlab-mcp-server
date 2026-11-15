@@ -494,7 +494,7 @@ func (c *classifier) classifyReturns(decl *funcDecl, index int, e *env, depth in
 	// binding is one that left it higher than it found it; asking that rather
 	// than whether it moved at all is what makes the direction it is counted
 	// in part of the rule, where a count that fell would read the same.
-	if throughBinding := c.bindHits > before; !throughBinding {
+	if c.bindHits <= before {
 		c.returnMemo[key] = worst
 	}
 	return worst, reason

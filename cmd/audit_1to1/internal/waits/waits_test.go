@@ -61,7 +61,7 @@ func TestEntries_ACallerEditingTheResult_LeavesTheTableAsItWas(t *testing.T) {
 	if slices.Contains(edited[:], false) {
 		t.Fatalf("edited sites, unseen, replaces, predicates = %v, want an entry of the table listing each", edited)
 	}
-	if got := fmt.Sprintf("%+v", Entries()); got != want {
+	if fmt.Sprintf("%+v", Entries()) != want {
 		t.Error("writing into the lists of what Entries returned changed the table")
 	}
 }

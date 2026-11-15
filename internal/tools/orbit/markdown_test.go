@@ -605,7 +605,7 @@ func TestFormatOrbitNotFound_NamesWhatOrbitNeeds(t *testing.T) {
 // fallback of the JSON fences: a value JSON cannot encode is written as Go
 // formats it rather than lost.
 func TestPrettyAny_ValueThatDoesNotEncode_FallsBackToItsText(t *testing.T) {
-	if got := prettyAny(func() {}); got == "" {
+	if prettyAny(func() {}) == "" {
 		t.Fatal("prettyAny() returned empty fallback")
 	}
 }

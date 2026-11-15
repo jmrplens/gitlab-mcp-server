@@ -7335,7 +7335,7 @@ func TestMetaParamsGuard_HoldsNothingItCannotRead(t *testing.T) {
 		"get":    map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}},
 		"broken": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "pattern": "("}}},
 	}}
-	if guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaOpaque); guard != nil {
+	if metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaOpaque) != nil {
 		t.Error("opaque mode has a params check, want none")
 	}
 	guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaFull)

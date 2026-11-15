@@ -707,7 +707,7 @@ func TestStartTelemetry_AnUnusableIdentitySetting_RefusesTheStartWhileTelemetryI
 				t.Fatal("startTelemetry returned a nil provider or stop; the deferred call in runWithContext would panic")
 			}
 			t.Cleanup(func() { stop(boundedShutdown(t)) })
-			if refused := err != nil; refused != tc.refused {
+			if (err != nil) != tc.refused {
 				t.Fatalf("startTelemetry() error = %v, want a refusal: %v", err, tc.refused)
 			}
 			if provider.Enabled() {
