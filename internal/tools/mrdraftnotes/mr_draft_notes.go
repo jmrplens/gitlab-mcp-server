@@ -538,8 +538,8 @@ type storedDraft struct {
 // The position is decoded from the captured response ([capturedPosition])
 // into the PositionOptions the update sends, whose keys are the ones GitLab
 // answers with, because client-go's NotePosition carries no width, height, x
-// or y, and an image draft would come back
-// without its point. A key GitLab answers as null is left out of the request.
+// or y, and an image draft would come back without its point. A key GitLab
+// answers as null is left out of the request.
 // GitLab answers a draft that has no position with an all-null text position,
 // and one with no start or head commit or no file is published as a general
 // comment whatever it carries ([toolutil.ValidatePositionAnchor]), so neither

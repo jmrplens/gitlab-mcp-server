@@ -269,9 +269,9 @@ func authorizeDecisions() []Decision {
 			// tool's call is a tool result built before the SDK's dispatcher,
 			// which labels only what it answers, so the middleware gives it
 			// the resultType its revision requires (toolutil.LabelForRevision),
-			// as the rate limiter does its own, and the
-			// row carries no F-20; the one dynamic execute makes in its
-			// handler is labeled by the dispatcher like any served call.
+			// as the rate limiter does its own, and the row carries no F-20;
+			// the one dynamic execute makes in its handler is labeled by the
+			// dispatcher like any served call.
 			ID: "AUT-007", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
 			Resource: "the actions no fine-grained token can reach at the GitLab release the table was recorded from",
 			Key:      KeyEntry, StdioKey: KeyProcess,

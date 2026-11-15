@@ -56,9 +56,9 @@
 // is GraphQL's); the positions served empty; the REST operations a public
 // project or group serves with no grant at all; the GraphQL worklist, each
 // type or mutation that declares no fine-grained permission this server
-// reaches with the actions
-// it blocks and, as a lead and never a verdict, the REST routes this server
-// already calls that declare a permission for the same resource; and two
+// reaches with the actions it blocks and, as a lead and never a verdict, the
+// REST routes this server already calls that declare a permission for the
+// same resource; and two
 // cross-checks of the derivation, at package grain against the request
 // inventory and at action grain against an end-to-end run's request counts
 // and the routes its client spans reached. Both cross-checks are leads: the

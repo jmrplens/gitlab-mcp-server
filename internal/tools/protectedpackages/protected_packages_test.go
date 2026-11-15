@@ -535,8 +535,8 @@ func TestUpdate_SendsOnlyTheFieldsTheCallerNamed(t *testing.T) {
 // would: client-go tagged the two fields without omitempty until v3.38.0, so
 // an unnamed one reached GitLab as JSON null, was read as blank and refused,
 // and Update answered the 422 with a hint telling the caller to send both.
-// The guard keeping an
-// empty input out of the options is what keeps the key out now.
+// The guard keeping an empty input out of the options is what keeps the key
+// out now.
 func TestUpdate_LeavesAnUnnamedPatternOutOfTheRequest(t *testing.T) {
 	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
 		if _, err := Update(context.Background(), client, UpdateInput{

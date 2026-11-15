@@ -9,8 +9,7 @@
 // Enterprise half, and on a Community image it still cannot run whole, for a
 // reason that is client-go's rather than GitLab's: the SDK's get, create and
 // update documents select five licensed widgets that Community Edition's
-// schema does not define. The
-// lifecycle used to skip there, which held nothing at all; it now runs what
+// schema does not define. The lifecycle used to skip there, which held nothing at all; it now runs what
 // Community Edition does today and pins the refusal of the other three, so the
 // day a client-go release carrying the fix is taken here, that assertion fails
 // and says to run the whole lifecycle on Community Edition again.
@@ -195,8 +194,8 @@ const workItemTaskTypeName = "Task"
 // so the update answered success with the date still set.
 //
 // On a Community image the update document is refused whatever it carries,
-// so it holds that refusal for
-// the removal too: [workItemRemovalsOnCommunity].
+// so it holds that refusal for the removal too:
+// [workItemRemovalsOnCommunity].
 func TestWorkItems_Update_RemovesParentMilestoneAndDueDate(t *testing.T) {
 	e := harness.New(t)
 	removals := workItemRemovals

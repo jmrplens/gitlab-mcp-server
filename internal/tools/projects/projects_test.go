@@ -10606,10 +10606,9 @@ func TestProjectLists_KeysetPage_FollowsTheNextPageToken(t *testing.T) {
 // the route a keyset page and writes an id_before or id_after into its next
 // link, but the route's finder never reads either (ContributedProjectsFinder
 // takes no params), so following the link answers the first page again. The
-// action offers neither pagination nor
-// page_token, refuses each as a field the input does not have before any
-// request, and an offset listing still pages by next_page. The owned and
-// starred lists, which share its filters, keep both.
+// action offers neither pagination nor page_token, refuses each as a field the
+// input does not have before any request, and an offset listing still pages by
+// next_page. The owned and starred lists, which share its filters, keep both.
 func TestListUserContributedProjects_KeysetArguments_AreNotOffered(t *testing.T) {
 	routes := map[string]toolutil.ActionRoute{
 		"list_user_contributed": toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListUserContributedProjects),
@@ -10909,9 +10908,8 @@ func TestCreate_WithAvatar_UploadsItBesideTheOptions(t *testing.T) {
 // around: UploadRequest writes each multipart field with fields.Get, the
 // first of its values, so the second topic never leaves the process. A
 // client-go that writes more fails it, and that is when each of those sites
-// is looked at again: Rack
-// keeps the last value of a field sent twice under one name, so a join may
-// still be what GitLab needs.
+// is looked at again: Rack keeps the last value of a field sent twice under
+// one name, so a join may still be what GitLab needs.
 func TestSDK_CreateProjectWithAvatar_WritesTheFirstTopicAlone(t *testing.T) {
 	forms := make(chan avatarForm, 1)
 	client := testutil.NewTestClient(t, avatarFormHandler(t, "/api/v4/projects", forms))

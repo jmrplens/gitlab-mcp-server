@@ -109,8 +109,8 @@ type ListProjectStatusChecksInput struct {
 // the create and the delete authorize the ability their service checks
 // before the service runs, and answer a missing role with 403. Before 19.5
 // they lost the role refusal on the way out, answering it with 500 and with
-// 204. Theirs are
-// therefore keyed on the status, like the merge request routes'.
+// 204. Theirs are therefore keyed on the status, like the merge request
+// routes'.
 const (
 	// hintStatusCheckLicense is the license every route checks first.
 	hintStatusCheckLicense = "external status checks need an Ultimate license on the project's namespace (on GitLab.com, the plan of its top-level group), and GitLab answers a project without it with 401 on every status check route"

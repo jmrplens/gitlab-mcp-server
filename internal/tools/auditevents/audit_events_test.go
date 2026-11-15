@@ -56,8 +56,8 @@ func TestListInstance_Success(t *testing.T) {
 
 // TestListInstance_EntityFilters_ReachTheQuery verifies the instance list sends
 // entity_type and entity_id, which GET /audit_events takes and client-go's
-// ListAuditEventsOptions does not model, and
-// sends neither when the caller sets neither.
+// ListAuditEventsOptions does not model, and sends neither when the caller sets
+// neither.
 func TestListInstance_EntityFilters_ReachTheQuery(t *testing.T) {
 	for _, tc := range []struct {
 		name               string

@@ -245,10 +245,9 @@ func TestFineGrained_TwoCredentialsOnOneShape_PhaseAIsDecidedPerRequest(t *testi
 //
 // The middleware answers before the SDK's dispatcher, which labels only what
 // it answers, so the refusal goes out through toolutil.LabelForRevision, as the
-// rate limiter's does. The
-// served call is the control: it is what makes the refusal's label about who
-// built the result rather than about the revision, the transport or the
-// credential.
+// rate limiter's does. The served call is the control: it is what makes the
+// refusal's label about who built the result rather than about the revision,
+// the transport or the credential.
 func TestFineGrained_WithheldCall_EachRevision_CarriesTheResultTypeTheServedCallDoes(t *testing.T) {
 	cases := []struct {
 		name string

@@ -27,8 +27,7 @@ const (
 	// categoryRecordedUpstream is a gap in client-go itself that this server
 	// would surface if client-go selected or decoded it. The reason says what
 	// is missing, and names the change to client-go that closes it when one is
-	// open; the declaration
-	// goes stale on the bump that brings that change.
+	// open; the declaration goes stale on the bump that brings that change.
 	categoryRecordedUpstream = "recorded-upstream"
 	// categoryDecodedNeverRead is a field a client-go decoder declares, which
 	// the document never selects and which client-go never reads either, so

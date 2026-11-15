@@ -6,8 +6,9 @@
 // elicitation_declared_version_test.go pins which protocol revision decides how
 // a guided flow asks its questions on stdio, which is the go-sdk defect
 // https://github.com/modelcontextprotocol/go-sdk/issues/1258 and issue 1319,
-// and tells its failure apart from the one
-// https://github.com/modelcontextprotocol/go-sdk/pull/1226 causes (issue 1403).
+// and tells its failure apart from the one the go-sdk defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1225 causes (issue
+// 1403).
 //
 // A client that sends initialize asking for 2026-07-28 is negotiated down to
 // 2025-11-25, since 2026-07-28 deprecates initialize, and the go-sdk this
