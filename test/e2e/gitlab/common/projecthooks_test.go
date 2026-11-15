@@ -108,11 +108,13 @@ func TestProjectHooks_Lifecycle_HeadersVariablesAndDelivery(t *testing.T) {
 
 		// Pointing the hook at another address sends its events elsewhere, so
 		// the edit is refused unconfirmed on every surface, before anything is
-		// written, and the hook stays where it was.
+		// written, and the hook stays where it was. The new address is on the
+		// receiver's own host, so the question says the edit keeps that host
+		// and changes the path.
 		updatedReceiver := fixture.ServiceURL(e, hookReceiverUpdatedPath)
 		unconfirmed := harness.ExpectToolError(s, actionProjectHookEdit,
 			withParams(hook, map[string]any{"url": updatedReceiver, "issues_events": true}), "confirm=true")
-		assertMentions(e, "the unconfirmed edit of the hook's address", unconfirmed, "points it at")
+		assertMentions(e, "the unconfirmed edit of the hook's address", unconfirmed, "changes the path or the query it delivers to")
 		if kept := harness.Do[projects.HookOutput](s, actionProjectHookGet, hook); kept.URL != receiver || kept.IssuesEvents {
 			e.T.Errorf("hook_get answered %s with issue events %v after the refused edit, want %s and none", kept.URL, kept.IssuesEvents, receiver)
 		}
@@ -161,7 +163,7 @@ func assertHookCustomHeaderRoundTrips(e *harness.Env, s *harness.Session, hook m
 
 	replacement := withParams(hook, map[string]any{"key": key, "value": "e2e-replaced"})
 	unconfirmed := harness.ExpectToolError(s, actionProjectHookSetCustomHeader, replacement, "confirm=true")
-	assertMentions(e, "the unconfirmed replacement of a custom header", unconfirmed, "replaces the custom_headers entry "+key)
+	assertMentions(e, "the unconfirmed replacement of a custom header", unconfirmed, "replaces the custom_headers entry `"+key+"`")
 	replaced := harness.Do[toolutil.VoidOutput](s, actionProjectHookSetCustomHeader, withParams(replacement, map[string]any{"confirm": true}))
 	if replaced.Status != voidStatusSuccess {
 		e.T.Errorf("the confirmed hook_set_custom_header answered %+v, want a %s status", replaced, voidStatusSuccess)

@@ -101,9 +101,11 @@ func TestGroupHooks_Lifecycle_AddListGetEditDelete(t *testing.T) {
 		// the edit is refused unconfirmed, before anything is written, and
 		// goes through with the confirmation a caller sends once the user
 		// approves. The edits of flags and of the name below ask nothing.
+		// Both addresses are on example.com, so the question says the edit
+		// keeps that host and changes the path.
 		redirect := withParams(hook, map[string]any{"url": hookEditedURL, "issues_events": true})
 		unconfirmed := harness.ExpectToolError(s, actionGroupHookEdit, redirect, "confirm=true")
-		assertMentions(e, "the unconfirmed edit of the group hook's address", unconfirmed, "points it at")
+		assertMentions(e, "the unconfirmed edit of the group hook's address", unconfirmed, "changes the path or the query it delivers to")
 		edited := harness.Do[groups.HookOutput](s, actionGroupHookEdit, withParams(redirect, map[string]any{"confirm": true}))
 		if edited.ID != added.ID || edited.URL != hookEditedURL || !edited.IssuesEvents {
 			e.T.Errorf("hook_edit answered %+v, want hook %d on %s with issue events on", edited, added.ID, hookEditedURL)

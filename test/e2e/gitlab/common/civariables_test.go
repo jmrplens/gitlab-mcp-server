@@ -95,7 +95,7 @@ func TestCIVariable_ProjectLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		// Replacing the value is refused unconfirmed on every surface, before
 		// anything is written, and the variable keeps the value it had.
 		unconfirmed := harness.ExpectToolError(s, actionCIVariableUpdate, withParams(update, map[string]any{"value": "updated-value"}), "confirm=true")
-		assertMentions(e, "the unconfirmed replacement of the variable's value", unconfirmed, "Replace the value of the CI/CD variable "+key)
+		assertMentions(e, "the unconfirmed replacement of the variable's value", unconfirmed, "Replace the value of the CI/CD variable `"+key+"`")
 		if kept := harness.Do[civariables.Output](s, actionCIVariableGet, withParams(params, variableScopeDefault)); kept.Value != "hello-e2e" {
 			e.T.Errorf("variable get answered the value %q after the refused update, want hello-e2e kept", kept.Value)
 		}
