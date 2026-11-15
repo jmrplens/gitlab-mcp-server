@@ -504,7 +504,7 @@ func issueAdditiveSpec(name string, route toolutil.ActionRoute, individualTool s
 // override and explicit guidance for the close/reopen aliases.
 func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
-	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen. Dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
+	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen. Dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically. epic_id 0 takes the issue out of its epic and requires confirm=true (or an approved elicitation prompt). assignee_ids [], an assignee_ids list that begins with 0, or assignee_id 0 removes every assignee and requires confirm=true unless the issue has none."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
 	options.RelatedActions = []string{actionIssueGet, actionIssueDelete, actionIssueList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

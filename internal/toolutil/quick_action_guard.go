@@ -86,6 +86,15 @@ const (
 // issue_type. A few, such as /clone and /page, have no action here to
 // compare them with.
 //
+// /award and /react are the one stated exception to the catalog's rule. They
+// toggle a reaction on the item (AwardEmojis::ToggleService in GitLab), so on
+// an item the caller has already reacted to with that emoji they remove the
+// reaction, which is what issue.emoji_issue_delete and
+// merge_request.emoji_mr_delete ask about. They are not guarded: removing a
+// reaction is undone at once by adding it again, and a question before every
+// reaction would be one nobody reads. The test of the action catalog declares
+// the pair, so the exception is a decision and not an oversight.
+//
 // Of the 26 actions that send such a text, the guard is the only question
 // 22 ask; issue.update, merge_request.update, issue.work_item_update and
 // group.epic_update also ask before the fields that do what /remove_epic,

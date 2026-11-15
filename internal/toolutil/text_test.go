@@ -608,6 +608,10 @@ func TestFormatTarget(t *testing.T) {
 // defanged so nothing linkifies, and the result is fenced so emphasis and link
 // syntax are shown rather than rendered — with a fence longer than any run of
 // backticks inside it, which is the rule Markdown itself uses for nesting code.
+// The line and paragraph separators collapse as a line feed does, and each
+// character Unicode gives the Bidi_Control property is dropped, one case per
+// character, so a value cannot show its letters in reverse or turn the
+// direction of the words after it.
 func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 	t.Parallel()
 
@@ -626,6 +630,25 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 		{name: "a leading backtick is padded", in: "`a", want: "`` `a ``"},
 		{name: "a trailing backtick is padded", in: "a`", want: "`` a` ``"},
 		{name: "a control sequence is dropped", in: "demo\x1b[2Jproj", want: "`demo[2Jproj`"},
+		{name: "a lone carriage return collapses", in: "demo\rmore", want: "`demo more`"},
+		{name: "the line separator collapses", in: "demo **Approved**", want: "`demo **Approved**`"},
+		{name: "the paragraph separator collapses", in: "demo **Approved**", want: "`demo **Approved**`"},
+		{name: "the vertical tab, the form feed and the next line are dropped", in: "a\vb\fc\u0085d", want: "`abcd`"},
+		{name: "the Arabic letter mark is dropped", in: "a؜b", want: "`ab`"},
+		{name: "the left-to-right mark is dropped", in: "a‎b", want: "`ab`"},
+		{name: "the right-to-left mark is dropped", in: "a‏b", want: "`ab`"},
+		{name: "the left-to-right embedding is dropped", in: "a‪b", want: "`ab`"},
+		{name: "the right-to-left embedding is dropped", in: "a‫b", want: "`ab`"},
+		{name: "the pop directional formatting is dropped", in: "a‬b", want: "`ab`"},
+		{name: "the left-to-right override is dropped", in: "a‭b", want: "`ab`"},
+		{name: "the right-to-left override is dropped", in: "demo/‮devorppa", want: "`demo/devorppa`"},
+		{name: "the left-to-right isolate is dropped", in: "a⁦b", want: "`ab`"},
+		{name: "the right-to-left isolate is dropped", in: "a⁧b", want: "`ab`"},
+		{name: "the first strong isolate is dropped", in: "a⁨b", want: "`ab`"},
+		{name: "the pop directional isolate is dropped", in: "a⁩b", want: "`ab`"},
+		{name: "a value of direction controls alone keeps the span closed", in: "‮⁦‏", want: "` `"},
+		{name: "letters of a right-to-left script are kept", in: "שלום/مرحبا", want: "`שלום/مرحبا`"},
+		{name: "a tab stays on the line", in: "a\tb", want: "`a\tb`"},
 	}
 
 	for _, tt := range tests {

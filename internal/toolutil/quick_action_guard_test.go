@@ -41,6 +41,12 @@ func TestGuardedQuickActionLines_ReadsATextAsGitLabDoesAndWider(t *testing.T) {
 			name:  "commands the guard leaves alone",
 			texts: []string{"/label ~bug\n/assign @dev\n/reassign @dev\n/reassign me\n/reassign @a, and @b\n/unassign_reviewer\n/add_contacts [contact:a@example.com]\n/close\n/rebase\n/approve\n/remove_time_spent\n/remove_estimate\n/promote_to incident\n/type task"},
 		},
+		{
+			// The stated exception: a reaction toggled off is given back by
+			// the same command, so the pair asks nothing.
+			name:  "the reaction toggles, which remove a reaction already given",
+			texts: []string{"/award :thumbsup:\n/react :tada:\n/AWARD :x:"},
+		},
 		{name: "a word that begins like a command", texts: []string{"/merged\n/mover a/b\n/merge_when_ready\n/publisher\n/unlinked\n/unapproved\n/remove_children\n/remove_parents\n/unassigned\n/reassigned\n/remove_contact"}},
 		{
 			name: "every unassign, and contacts removed", texts: []string{"/unassign\n/UNASSIGN \t\n/unassign @dev\n/unassign ,\n/unassign and\n/remove_contacts [contact:a@example.com]"},

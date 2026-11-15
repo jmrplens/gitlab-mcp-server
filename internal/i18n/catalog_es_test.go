@@ -242,7 +242,7 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" y convierte el issue en un ticket de Service Desk cuyo autor es una dirección de correo externa (`/convert_to_ticket a@example.com`)" +
 				" y añade direcciones de correo externas que reciben los comentarios del issue (`/add_email b@example.com`)" +
 				" y publica el issue en la página de estado (`/publish`)" +
-				" y retira la aprobación del merge request de quien llama (`/unapprove`)" +
+				" y retira la aprobación que quien llama dio al merge request (`/unapprove`)" +
 				" y quita el enlace entre este elemento y otro (`/unlink #3`)" +
 				" y saca el elemento de su épica o de su padre (`/remove_epic`)" +
 				" y saca un hijo del elemento (`/remove_child #4`)" +

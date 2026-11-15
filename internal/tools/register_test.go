@@ -2183,6 +2183,65 @@ func quickActionTextActions() map[string]effectGuard {
 	}
 }
 
+// quickActionException is a quick action GitLab runs with the effect of an
+// action that asks, and that the text guard leaves alone on purpose.
+type quickActionException struct {
+	// line is a line of a text that runs the command.
+	line string
+	// actions are the destructive actions, by canonical ID, whose effect the
+	// command has.
+	actions []string
+	// reason is why the command asks nothing all the same.
+	reason string
+}
+
+// quickActionExceptions are the stated exceptions to the rule the class "text
+// GitLab runs as quick actions" holds: a command whose effect an action asks
+// about is guarded in a text. Each is a decision, written where the security
+// page and the comment of toolutil's guard state it.
+func quickActionExceptions() []quickActionException {
+	const toggle = "it toggles a reaction (AwardEmojis::ToggleService), removing it when the caller has already given it; " +
+		"removing a reaction is undone at once by adding it again, and a question before every reaction would be one nobody reads"
+	return []quickActionException{
+		{line: "/award :thumbsup:", actions: []string{"issue.emoji_issue_delete", "merge_request.emoji_mr_delete"}, reason: toggle},
+		{line: "/react :thumbsup:", actions: []string{"issue.emoji_issue_delete", "merge_request.emoji_mr_delete"}, reason: toggle},
+	}
+}
+
+// TestQuickActionGuard_DeclaredExceptions_DescribeTheCatalog holds each
+// stated exception to the text guard to what it states: the command asks
+// nothing in a text, and every action it names exists and asks. A command the
+// guard starts to ask about, or an action that stops asking or is renamed,
+// leaves a declaration that excuses nothing, and that fails here rather than
+// staying behind as a reason nobody can check.
+func TestQuickActionGuard_DeclaredExceptions_DescribeTheCatalog(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, newGitLabDotComClient(t), ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	destructive := map[string]bool{}
+	for _, action := range catalog.Actions() {
+		destructive[string(action.ID)] = action.Route.Destructive
+	}
+	for _, exception := range quickActionExceptions() {
+		t.Run(exception.line, func(t *testing.T) {
+			if exception.reason == "" {
+				t.Error("the exception states no reason")
+			}
+			if lines := toolutil.GuardedQuickActionLines(exception.line); len(lines) != 0 {
+				t.Errorf("toolutil.GuardedQuickActionLines(%q) = %v: the guard asks about the command now, so remove the declaration", exception.line, lines)
+			}
+			for _, id := range exception.actions {
+				asks, found := destructive[id]
+				if !found {
+					t.Errorf("%s is no action of the catalog; name the action whose effect %q has", id, exception.line)
+					continue
+				}
+				if !asks {
+					t.Errorf("%s does not ask for confirmation, so %q is no exception to the rule; remove it from the declaration", id, exception.line)
+				}
+			}
+		})
+	}
+}
+
 // inAnyEffectClass reports whether a write action of this name belongs to an
 // effect class, which is what allows it to be destructive without a
 // destructive verb in its name: the class that permits it is the one that

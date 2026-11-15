@@ -141,7 +141,7 @@ var spanish = map[Key]string{
 	ConfirmQuickActionTicket:           "convierte el issue en un ticket de Service Desk cuyo autor es una dirección de correo externa ({line})",
 	ConfirmQuickActionAddEmail:         "añade direcciones de correo externas que reciben los comentarios del issue ({line})",
 	ConfirmQuickActionPublish:          "publica el issue en la página de estado ({line})",
-	ConfirmQuickActionUnapprove:        "retira la aprobación del merge request de quien llama ({line})",
+	ConfirmQuickActionUnapprove:        "retira la aprobación que quien llama dio al merge request ({line})",
 	ConfirmQuickActionUnlink:           "quita el enlace entre este elemento y otro ({line})",
 	ConfirmQuickActionRemoveParent:     "saca el elemento de su épica o de su padre ({line})",
 	ConfirmQuickActionRemoveChild:      "saca un hijo del elemento ({line})",
