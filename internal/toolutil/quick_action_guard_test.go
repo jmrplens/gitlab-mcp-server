@@ -370,29 +370,42 @@ func TestConfirmQuickActions_TheCallOrThePersonAnswers(t *testing.T) {
 func TestConfirmQuickActions_LineWithURL_QuotesItsOriginAlone(t *testing.T) {
 	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
 	t.Setenv("AUTOPILOT", "")
-	const text = "/move https://oauth2:secret@gitlab.example/group/project?private_token=glpat-abc"
-	const quoted = "moves the item to another project or group (`/move https[:]//gitlab.example/...`)."
 	withheld := []string{"secret", "oauth2", "glpat-abc", "group/project"}
-	t.Run("the refusal of a client that cannot ask", func(t *testing.T) {
-		err := ConfirmQuickActions(context.Background(), "issueNoteCreate", text)
-		want := "issueNoteCreate: " + quickActionOpening + quoted + resend
-		if err == nil || err.Error() != want {
-			t.Fatalf("refusal =\n%v\nwant\n%q", err, want)
-		}
-		if leaked := containedParts(err.Error(), withheld); len(leaked) > 0 {
-			t.Errorf("refusal %q carries %q of the address", err, leaked)
-		}
-	})
-	t.Run("the question a person is asked", func(t *testing.T) {
-		err := ConfirmQuickActions(guardedElicitingCall(nil), "issueNoteCreate", text)
-		got := askedMessage(t, err, QuickActionConfirmID)
-		if got != quickActionOpening+quoted {
-			t.Errorf("the person is asked\n%q\nwant\n%q", got, quickActionOpening+quoted)
-		}
-		if leaked := containedParts(got, withheld); len(leaked) > 0 {
-			t.Errorf("question %q carries %q of the address", got, leaked)
-		}
-	})
+	for _, tc := range []struct{ name, text, quoted string }{
+		{
+			name:   "an address after a space",
+			text:   "/move https://oauth2:secret@gitlab.example/group/project?private_token=glpat-abc",
+			quoted: "moves the item to another project or group (`/move https[:]//gitlab.example/...`).",
+		},
+		{
+			name:   "an address after an underscore",
+			text:   "/move _https://oauth2:secret@gitlab.example/group/project?private_token=glpat-abc",
+			quoted: "moves the item to another project or group (`/move _https[:]//gitlab.example/...`).",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("the refusal of a client that cannot ask", func(t *testing.T) {
+				err := ConfirmQuickActions(context.Background(), "issueNoteCreate", tc.text)
+				want := "issueNoteCreate: " + quickActionOpening + tc.quoted + resend
+				if err == nil || err.Error() != want {
+					t.Fatalf("refusal =\n%v\nwant\n%q", err, want)
+				}
+				if leaked := containedParts(err.Error(), withheld); len(leaked) > 0 {
+					t.Errorf("refusal %q carries %q of the address", err, leaked)
+				}
+			})
+			t.Run("the question a person is asked", func(t *testing.T) {
+				err := ConfirmQuickActions(guardedElicitingCall(nil), "issueNoteCreate", tc.text)
+				got := askedMessage(t, err, QuickActionConfirmID)
+				if got != quickActionOpening+tc.quoted {
+					t.Errorf("the person is asked\n%q\nwant\n%q", got, quickActionOpening+tc.quoted)
+				}
+				if leaked := containedParts(got, withheld); len(leaked) > 0 {
+					t.Errorf("question %q carries %q of the address", got, leaked)
+				}
+			})
+		})
+	}
 }
 
 // containedParts returns the parts that s contains, in the order given.
@@ -425,6 +438,14 @@ func TestRedactLineURLs_WritesEachAddressByItsOrigin(t *testing.T) {
 		},
 		{name: "an address that does not parse", line: "/move http://h.example/%zz", want: "/move " + RedactedPlaceholder},
 		{name: "a scheme in capitals", line: "/move HTTPS://u:p@H.example/p", want: "/move https://H.example/..."},
+		{
+			name: "an address in Markdown bold", line: "/move __https://oauth2:secret@gitlab.example/g/p__",
+			want: "/move __https://gitlab.example/...",
+		},
+		{name: "an address after an underscore", line: "/move _https://u:p@h.example/x", want: "/move _https://h.example/..."},
+		{name: "an address after a digit", line: "/move 1https://u:p@h.example/x", want: "/move 1https://h.example/..."},
+		{name: "a scheme-relative address", line: "/move //u:p@h.example/x and g/p", want: "/move " + RedactedPlaceholder + " and g/p"},
+		{name: "a slash alone, kept", line: "/move g/p / x", want: "/move g/p / x"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

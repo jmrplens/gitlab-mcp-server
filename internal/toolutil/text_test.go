@@ -629,6 +629,8 @@ func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
 		{name: "line breaks collapse", in: "demo\n\nSECURITY NOTICE", want: "`demo  SECURITY NOTICE`"},
 		{name: "a carriage return pair collapses once", in: "demo\r\nmore", want: "`demo more`"},
 		{name: "a URL is defanged", in: "see https://evil.example/verify", want: "`see https[:]//evil.example/verify`"},
+		{name: "a URL after an underscore is defanged", in: "__https://h.example__", want: "`__https[:]//h.example__`"},
+		{name: "a URL after a digit is defanged", in: "1http://h.example", want: "`1http[:]//h.example`"},
 		{name: "a backtick is fenced by a longer run", in: "a`b", want: "``a`b``"},
 		{name: "a run of backticks is exceeded", in: "a```b", want: "````a```b````"},
 		{name: "a leading backtick is padded", in: "`a", want: "`` `a ``"},

@@ -377,8 +377,11 @@ func ConfirmQuickActionsOptional(ctx context.Context, op string, text *string) e
 }
 
 // lineURL matches an address on a quoted line: a scheme, in any case, its
-// "://" and everything up to the next space.
-var lineURL = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://\S+`)
+// "://" and everything up to the next space, wherever the scheme starts, so
+// an address glued to an underscore, a digit or Markdown emphasis is matched
+// as well; or a scheme-relative "//" and what follows it up to the next
+// space, which has no origin to write and is written as the placeholder.
+var lineURL = regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://\S+|//[^\s/]\S*`)
 
 // redactLineURLs writes every address on a line by its origin alone, as
 // [RedactURLToOrigin] reduces it, and leaves the rest of the line as it is.

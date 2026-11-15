@@ -880,8 +880,10 @@ func titleSegment(segment string) string {
 }
 
 // consentURLScheme matches the scheme of a URL a client might render as
-// clickable inside an elicitation form.
-var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
+// clickable inside an elicitation form, wherever it starts: a renderer
+// links an address glued to an underscore or a digit as readily as one
+// after a space.
+var consentURLScheme = regexp.MustCompile(`(?i)(https?)://`)
 
 // EscapeConsentValue renders caller-controlled text for a consent dialog.
 //
