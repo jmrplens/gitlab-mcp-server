@@ -16,6 +16,7 @@ package common
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/avatar"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
@@ -307,6 +309,37 @@ func TestUserPAT_CurrentUser_MintsAK8sProxyToken(t *testing.T) {
 		e.Defer("token "+name, func(ctx context.Context) error { return revokePersonalToken(ctx, e, minted.ID) })
 		if minted.Name != name || minted.UserID != rt.UserID || !slices.Contains(minted.Scopes, selfTokenScope) {
 			e.T.Errorf("create_current_user_pat answered name %q user %d scopes %v, want %q %d [%s]", minted.Name, minted.UserID, minted.Scopes, name, rt.UserID, selfTokenScope)
+		}
+	})
+}
+
+// TestUserPAT_CurrentUser_MintsAFineGrainedToken mints a fine-grained token
+// for the run user on every surface, with a grant at the user boundary and
+// no classic scopes, which this route limits to k8s_proxy and self_rotate,
+// checks the answer is granular and carries the grant as it was sent, and
+// revokes it afterwards. The grant could not be sent before client-go
+// modeled it (issue 1115).
+func TestUserPAT_CurrentUser_MintsAFineGrainedToken(t *testing.T) {
+	e := harness.New(t)
+	rt := e.Runtime()
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		name := e.Name("selffg")
+
+		minted := harness.Do[users.CurrentUserPATOutput](s, actionUserCreateCurrentUserPAT, map[string]any{
+			"name":            name,
+			"granular_scopes": []map[string]any{{"access": fixture.AccessUser, "permissions": []string{"read_user"}}},
+			"expires_at":      time.Now().Add(selfTokenLifetime).Format(time.DateOnly),
+		})
+		if minted.ID == 0 || minted.Token == "" {
+			e.T.Fatalf("create_current_user_pat answered %+v, want a token with an ID and its secret", minted)
+		}
+		e.Defer("token "+name, func(ctx context.Context) error { return revokePersonalToken(ctx, e, minted.ID) })
+		want := []toolutil.TokenGranularScopeOutput{{Access: fixture.AccessUser, Permissions: []string{"read_user"}}}
+		if minted.UserID != rt.UserID || !minted.Granular || !reflect.DeepEqual(minted.GranularScopes, want) {
+			e.T.Errorf("create_current_user_pat answered user %d granular %t granular_scopes %+v, want %d true %+v",
+				minted.UserID, minted.Granular, minted.GranularScopes, rt.UserID, want)
 		}
 	})
 }

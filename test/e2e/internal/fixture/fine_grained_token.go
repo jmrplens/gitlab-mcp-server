@@ -36,6 +36,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -84,23 +85,31 @@ func StartupScopes() []GranularScope {
 	}
 }
 
-// fineGrainedTokenRequest is the body POST /user/personal_access_tokens takes
+// fineGrainedTokenRequest is what POST /user/personal_access_tokens is sent
 // with a grant. The route takes a grant or classic scopes, never both, so the
-// body carries no scopes at all.
+// request carries no scopes at all. A nil ExpiresAt sends no expiry.
 type fineGrainedTokenRequest struct {
-	Name           string          `json:"name"`
-	ExpiresAt      string          `json:"expires_at"`
-	GranularScopes []GranularScope `json:"granular_scopes"`
+	Name           string
+	ExpiresAt      *gl.ISOTime
+	GranularScopes []GranularScope
 }
 
-// fineGrainedTokenAnswer is the part of the creation answer the builder
-// reads: the token's id and value, and GitLab's own word that it is
-// fine-grained.
-type fineGrainedTokenAnswer struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Token    string `json:"token"`
-	Granular bool   `json:"granular"`
+// options spells the request as client-go's creation options.
+func (r fineGrainedTokenRequest) options() *gl.CreatePersonalAccessTokenForCurrentUserOptions {
+	scopes := make([]*gl.GranularScopeOptions, 0, len(r.GranularScopes))
+	for _, scope := range r.GranularScopes {
+		scopes = append(scopes, &gl.GranularScopeOptions{
+			Access:      new(gl.GranularScopeAccessValue(scope.Access)),
+			Permissions: scope.Permissions,
+			ProjectIDs:  scope.ProjectIDs,
+			GroupIDs:    scope.GroupIDs,
+		})
+	}
+	return &gl.CreatePersonalAccessTokenForCurrentUserOptions{
+		Name:           new(r.Name),
+		ExpiresAt:      r.ExpiresAt,
+		GranularScopes: scopes,
+	}
 }
 
 // NewFineGrainedToken mints a fine-grained personal access token for user
@@ -127,8 +136,8 @@ func NewFineGrainedToken(e *harness.Env, user User, scopes ...GranularScope) Tok
 	awaitAccess(e, user, client, scopes)
 
 	name := e.Name("fgtok")
-	expiry := time.Now().Add(tokenLifetime + 24*time.Hour).UTC().Format(time.DateOnly)
-	request := fineGrainedTokenRequest{Name: name, ExpiresAt: expiry, GranularScopes: mergeScopes(scopes)}
+	expiry := gl.ISOTime(time.Now().Add(tokenLifetime + 24*time.Hour).UTC())
+	request := fineGrainedTokenRequest{Name: name, ExpiresAt: &expiry, GranularScopes: mergeScopes(scopes)}
 	token, err := retryTransient(e, "create fine-grained token "+name, createRetries, func() (Token, error) {
 		return createFineGrainedToken(e.Ctx, client, request)
 	})
@@ -268,24 +277,23 @@ func waitForGrantedAccess(ctx context.Context, client *gitlabclient.Client, scop
 // createFineGrainedToken sends one creation request with the creating user's
 // own client and reads back the token it made.
 //
-// client-go has no method for the route with a grant, so the request is built through its NewRequest, which still carries the
-// retries, the context and the base URL every other call of the client does.
+// The granular flag GitLab answers with is not modeled by client-go's
+// PersonalAccessToken, so it is read from the captured response (ADR-0021).
 // An answer GitLab did not mark granular is refused: a token created without
 // its grant would make every scenario on it test a classic token instead,
 // and pass.
 func createFineGrainedToken(ctx context.Context, client *gitlabclient.Client, body fineGrainedTokenRequest) (Token, error) {
-	req, err := client.GL().NewRequest(http.MethodPost, "user/personal_access_tokens", body, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	captureCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	created, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(body.options(), gl.WithContext(captureCtx))
 	if err != nil {
-		return Token{}, fmt.Errorf("building the creation request: %w", err)
-	}
-	var created fineGrainedTokenAnswer
-	if _, err = client.GL().Do(req, &created); err != nil {
 		return Token{}, err
 	}
 	if created.Token == "" {
 		return Token{}, fmt.Errorf("fine-grained token %q was created without a value", body.Name)
 	}
-	if !created.Granular {
+	// The capture holds the body the SDK has just decoded, so it cannot fail
+	// to decode here; an error would read as a token not marked granular.
+	if extra, captureErr := toolutil.CapturedToken(captured); captureErr != nil || !extra.Granular {
 		return Token{}, fmt.Errorf("token %q was created, and GitLab does not report it as fine-grained", body.Name)
 	}
 	return Token{ID: created.ID, Value: created.Token, Name: created.Name}, nil

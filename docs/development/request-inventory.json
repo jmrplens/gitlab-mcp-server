@@ -10347,7 +10347,9 @@
       "method": "POST",
       "path": "/users/:user_id/impersonation_tokens",
       "body": [
+        "description",
         "expires_at",
+        "granular_scopes",
         "name",
         "scopes"
       ],
@@ -20252,6 +20254,7 @@
       "body": [
         "description",
         "expires_at",
+        "granular_scopes",
         "name",
         "scopes"
       ]

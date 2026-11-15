@@ -91,11 +91,12 @@ func ResolveProjectWebURLs(ctx context.Context, projects gl.ProjectsServiceInter
 // PersonalTokenOutput mirrors gl.PersonalAccessToken as surfaced by the
 // impersonation-token and current-user PAT tools: identity, scopes, and
 // RFC3339/ISO-date lifecycle timestamps. The token value is only present on
-// creation responses. It also carries what
+// creation responses. Its granular scopes, set when the token is granular and
+// the endpoint asked for them, come from the SDK. It also carries what
 // lib/api/entities/personal_access_token.rb sends and the SDK struct does not
 // model, read from the captured response (ADR-0021): whether the token is
-// granular, its granular scopes when it is and the endpoint asked for them,
-// and the addresses it was last used from while the instance exposes them.
+// granular, and the addresses it was last used from while the instance
+// exposes them.
 type PersonalTokenOutput struct {
 	ID             int64                      `json:"id"`
 	Name           string                     `json:"name"`
@@ -124,7 +125,7 @@ func NewPersonalTokenOutput(t *gl.PersonalAccessToken, extra TokenExtra) Persona
 		Token:          t.Token,
 		Scopes:         t.Scopes,
 		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
+		GranularScopes: NewTokenGranularScopes(t.GranularScopes),
 		Revoked:        t.Revoked,
 		Description:    t.Description,
 		UserID:         t.UserID,
@@ -140,4 +141,47 @@ func NewPersonalTokenOutput(t *gl.PersonalAccessToken, extra TokenExtra) Persona
 		o.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
 	}
 	return o
+}
+
+// TokenGranularScopeOutput mirrors
+// lib/api/entities/personal_access_token_granular_scope.rb, one entry of the
+// granular_scopes array a granular token carries. project_id is set only when
+// the scope's namespace is a project and group_id only when it is a group, so
+// each is absent rather than zero on the other kind.
+type TokenGranularScopeOutput struct {
+	Access      string   `json:"access"`
+	Permissions []string `json:"permissions"`
+	ProjectID   int64    `json:"project_id,omitempty"`
+	GroupID     int64    `json:"group_id,omitempty"`
+}
+
+// NewTokenGranularScopes converts the granular scopes client-go decodes on a
+// token into the output shape, skipping a nil entry and reading an absent
+// project or group id as zero, which the output omits. It returns nil for a
+// token that carries none.
+func NewTokenGranularScopes(scopes []*gl.GranularScope) []TokenGranularScopeOutput {
+	if len(scopes) == 0 {
+		return nil
+	}
+	out := make([]TokenGranularScopeOutput, 0, len(scopes))
+	for _, s := range scopes {
+		if s == nil {
+			continue
+		}
+		out = append(out, TokenGranularScopeOutput{
+			Access:      string(s.Access),
+			Permissions: s.Permissions,
+			ProjectID:   derefInt64(s.ProjectID),
+			GroupID:     derefInt64(s.GroupID),
+		})
+	}
+	return out
+}
+
+// derefInt64 reads an optional id, zero when it is absent.
+func derefInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }

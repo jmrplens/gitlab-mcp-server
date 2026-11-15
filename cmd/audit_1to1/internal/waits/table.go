@@ -125,12 +125,6 @@ var upstreamWaits = []Entry{
 	},
 	{
 		Category:   CategoryUpstream,
-		Sites:      []string{"fixture.createFineGrainedToken"},
-		Predicates: []Predicate{LacksKey{Type: "CreatePersonalAccessTokenForCurrentUserOptions", Key: "granular_scopes"}},
-		Reason:     "no client-go create option carries granular_scopes, so the e2e fixture builds the fine-grained token creation through NewRequest",
-	},
-	{
-		Category:   CategoryUpstream,
 		Sites:      []string{"modelregistry.downloadFromPackageRoot"},
 		Predicates: []Predicate{NoMethodFor{Route: "GET /projects/:/packages/ml_models/:/files/:"}},
 		Reason:     "DownloadMachineLearningModelPackage always sends the file's path segment, so a file at the package root is fetched through a GET of the handler's own",

@@ -75,9 +75,9 @@ const (
 	docIssuesList       = "issues.md#list-issues"
 	docProjectsGet      = "projects.md#get-a-single-project"
 	docProjectUsersList = "projects.md#list-a-projects-users"
-	// The personal access tokens page prints granular_scopes and
-	// last_used_ips in its list example and names both in its notes;
-	// granular, impersonation and the resource pair are exposed by the
+	// The personal access tokens page prints last_used_ips in its list
+	// example and names it in its notes; granular, impersonation and the
+	// resource pair are exposed by the
 	// entities and printed on no page, which is why the entity is cited in
 	// the comment beside each block below.
 	// doc/api/merge_requests.md prints merge_status and reference in every
@@ -663,36 +663,29 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	"namespaces.Output.ci_minutes_usage": docNamespaces,
 
 	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
-	// every token, and the entities inheriting it add granular_scopes and
-	// last_used_ips under a condition; an impersonation token adds its own
-	// flag and the description and user_id gl.ImpersonationToken does not
-	// model, and a project or group token adds the resource pair of
-	// lib/api/entities/resource_access_token.rb. All are read from the
-	// captured response (ADR-0021, the token readers in
-	// toolutil/sent_shapes.go).
-	"users.CurrentUserPATOutput.granular":              docPATList,
-	"users.CurrentUserPATOutput.granular_scopes":       docPATList,
-	"users.CurrentUserPATOutput.last_used_ips":         docPATList,
-	"impersonationtokens.PATOutput.granular":           docPATList,
-	"impersonationtokens.PATOutput.granular_scopes":    docPATList,
-	"impersonationtokens.PATOutput.last_used_ips":      docPATList,
-	"impersonationtokens.Output.granular":              docImpersonationPage,
-	"impersonationtokens.Output.granular_scopes":       docImpersonationPage,
-	"impersonationtokens.Output.last_used_ips":         docImpersonationPage,
-	"impersonationtokens.Output.impersonation":         docImpersonationPage,
-	"impersonationtokens.Output.description":           docImpersonationPage,
-	"impersonationtokens.Output.user_id":               docImpersonationPage,
-	"groupserviceaccounts.PATOutput.granular":          docServiceAccountPATs,
-	"groupserviceaccounts.PATOutput.granular_scopes":   docServiceAccountPATs,
-	"groupserviceaccounts.PATOutput.last_used_ips":     docServiceAccountPATs,
-	"projectserviceaccounts.PATOutput.granular":        docServiceAccountPATs,
-	"projectserviceaccounts.PATOutput.granular_scopes": docServiceAccountPATs,
-	"projectserviceaccounts.PATOutput.last_used_ips":   docServiceAccountPATs,
-	"accesstokens.Output.granular":                     docProjectTokensList,
-	"accesstokens.Output.granular_scopes":              docProjectTokensList,
-	"accesstokens.Output.last_used_ips":                docProjectTokensList,
-	"accesstokens.Output.resource_type":                docGroupTokensList,
-	"accesstokens.Output.resource_id":                  docGroupTokensList,
+	// every token, and the entities inheriting it add last_used_ips under a
+	// condition; an impersonation token adds its own flag and the user_id
+	// gl.ImpersonationToken does not model, and a project or group token adds
+	// the resource pair of lib/api/entities/resource_access_token.rb. All are
+	// read from the captured response (ADR-0021, the token readers in
+	// toolutil/sent_shapes.go); granular_scopes and the impersonation token's
+	// description come from client-go since v3.50.0.
+	"users.CurrentUserPATOutput.granular":            docPATList,
+	"users.CurrentUserPATOutput.last_used_ips":       docPATList,
+	"impersonationtokens.PATOutput.granular":         docPATList,
+	"impersonationtokens.PATOutput.last_used_ips":    docPATList,
+	"impersonationtokens.Output.granular":            docImpersonationPage,
+	"impersonationtokens.Output.last_used_ips":       docImpersonationPage,
+	"impersonationtokens.Output.impersonation":       docImpersonationPage,
+	"impersonationtokens.Output.user_id":             docImpersonationPage,
+	"groupserviceaccounts.PATOutput.granular":        docServiceAccountPATs,
+	"groupserviceaccounts.PATOutput.last_used_ips":   docServiceAccountPATs,
+	"projectserviceaccounts.PATOutput.granular":      docServiceAccountPATs,
+	"projectserviceaccounts.PATOutput.last_used_ips": docServiceAccountPATs,
+	"accesstokens.Output.granular":                   docProjectTokensList,
+	"accesstokens.Output.last_used_ips":              docProjectTokensList,
+	"accesstokens.Output.resource_type":              docGroupTokensList,
+	"accesstokens.Output.resource_id":                docGroupTokensList,
 
 	// merge requests: what lib/api/entities/merge_request_basic.rb sends on
 	// every merge request that neither gl.BasicMergeRequest nor gl.MergeRequest
@@ -1158,6 +1151,11 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"projects.userProjectFilter.repository_checksum_failed": projectChecksumFiltersUnread,
 	"projects.userProjectFilter.wiki_checksum_failed":       projectChecksumFiltersUnread,
 
+	// A param client-go models before the pinned GitLab takes it.
+	"impersonationtokens.CreatePATInput.granular_scopes": "POST /users/:user_id/personal_access_tokens takes granular_scopes " +
+		"from GitLab 19.6 on; the live record is pinned at 19.5.0, where the route requires classic scopes and drops the grant, " +
+		"so the action offers it with the re-pin",
+
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).
 	"snippets.ProjectCreateInput.file_path":           "modeled on the nested files[] object (CreateFileInput.FilePath)",
@@ -1246,7 +1244,7 @@ func (r *diffRun) isAcceptedMissingInput(pkg, mcpType, tag string, through []str
 
 // keysetListFields are the two parameters of gl.ListOptions that ask GitLab
 // for a keyset page, pagination and page_token, which client-go declares on
-// ListOptions and on no other struct (gitlab.go at v3.49.0).
+// ListOptions and on no other struct (gitlab.go at v3.50.0).
 //
 // R-INPUT leaves both to the keyset half of R-PAGE (issue 1165), which asks
 // at the action's grain, from the routes the live record says it sends,

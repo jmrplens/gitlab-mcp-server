@@ -13,19 +13,20 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const errUserIDPositive = "user_id must be a positive integer"
 
 // Output represents an impersonation token: what [gl.ImpersonationToken]
-// decodes, plus what lib/api/entities/impersonation_token.rb sends and the
-// SDK struct does not carry, read from the captured response (ADR-0021). The
-// description and user_id come from the personal access token entity it
-// inherits, which the SDK models on PersonalAccessToken alone; impersonation
-// and granular are on every impersonation token, granular_scopes on a
-// granular one the endpoint asked them for, and last_used_ips while the
-// instance exposes them.
+// decodes, its description and granular_scopes (set on a granular token the
+// endpoint asked them for) included, plus what
+// lib/api/entities/impersonation_token.rb sends and the SDK struct does not
+// carry, read from the captured response (ADR-0021). The user_id comes from
+// the personal access token entity it inherits, which the SDK models on
+// PersonalAccessToken alone; impersonation and granular are on every
+// impersonation token, and last_used_ips while the instance exposes them.
 type Output struct {
 	toolutil.HintableOutput
 	ID             int64                               `json:"id"`
@@ -87,12 +88,16 @@ type GetInput struct {
 	TokenID int64 `json:"token_id" jsonschema:"Impersonation token ID,required"`
 }
 
-// CreateInput holds parameters for creating an impersonation token.
+// CreateInput holds parameters for creating an impersonation token: a
+// classic one with scopes or a fine-grained one with granular_scopes, never
+// both.
 type CreateInput struct {
-	UserID    int64    `json:"user_id" jsonschema:"GitLab user ID,required"`
-	Name      string   `json:"name" jsonschema:"Name of the impersonation token,required"`
-	Scopes    []string `json:"scopes" jsonschema:"Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy),required"`
-	ExpiresAt string   `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
+	UserID         int64                               `json:"user_id" jsonschema:"GitLab user ID,required"`
+	Name           string                              `json:"name" jsonschema:"Name of the impersonation token,required"`
+	Description    string                              `json:"description,omitempty" jsonschema:"Description of the token, up to 255 characters"`
+	Scopes         []string                            `json:"scopes,omitempty" jsonschema:"Classic scopes of the token (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy). Send this or granular_scopes, not both"`
+	GranularScopes []tokengrantdata.GranularScopeInput `json:"granular_scopes,omitempty" jsonschema:"Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, not both"`
+	ExpiresAt      string                              `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
 }
 
 // RevokeInput identifies a token to revoke.
@@ -120,9 +125,9 @@ func toOutput(t *gl.ImpersonationToken, extra toolutil.ImpersonationTokenExtra) 
 		Token:          t.Token,
 		Scopes:         t.Scopes,
 		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
+		GranularScopes: toolutil.NewTokenGranularScopes(t.GranularScopes),
 		Revoked:        t.Revoked,
-		Description:    extra.Description,
+		Description:    t.Description,
 		UserID:         extra.UserID,
 		Impersonation:  extra.Impersonation,
 		LastUsedIPs:    extra.LastUsedIPs,
@@ -137,6 +142,24 @@ func toOutput(t *gl.ImpersonationToken, extra toolutil.ImpersonationTokenExtra) 
 		o.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
 	}
 	return o
+}
+
+// granularScopeOptions spells a validated grant as client-go's options, one
+// entry per scope, and nil for no grant, which client-go leaves out.
+func granularScopeOptions(scopes []tokengrantdata.GranularScopeInput) []*gl.GranularScopeOptions {
+	if len(scopes) == 0 {
+		return nil
+	}
+	out := make([]*gl.GranularScopeOptions, 0, len(scopes))
+	for _, scope := range scopes {
+		out = append(out, &gl.GranularScopeOptions{
+			Access:      new(gl.GranularScopeAccessValue(scope.Access)),
+			Permissions: scope.Permissions,
+			ProjectIDs:  scope.ProjectIDs,
+			GroupIDs:    scope.GroupIDs,
+		})
+	}
+	return out
 }
 
 func toPATOutput(t *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput {
@@ -214,16 +237,23 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Name == "" {
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(input.Scopes) == 0 {
-		return Output{}, errors.New("scopes is required and must not be empty")
-	}
-	opts := &gl.CreateImpersonationTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
 	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
 		return Output{}, fmt.Errorf("create_impersonation_token: %w", err)
+	}
+	if grantErr := tokengrantdata.CheckGrant(input.Scopes, input.GranularScopes); grantErr != nil {
+		return Output{}, grantErr
+	}
+	granular := granularScopeOptions(input.GranularScopes)
+	opts := &gl.CreateImpersonationTokenOptions{
+		Name:           new(input.Name),
+		GranularScopes: granular,
+	}
+	if len(input.Scopes) > 0 {
+		opts.Scopes = &input.Scopes
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
 	}
 	if expiresAt != nil {
 		opts.ExpiresAt = new(time.Time(*expiresAt))
@@ -231,7 +261,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreateImpersonationToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("create_impersonation_token", err, http.StatusForbidden,
+		return Output{}, tokengrantdata.WrapCreateErr("create_impersonation_token", err, granular != nil, http.StatusForbidden,
 			"creating impersonation tokens requires admin token; scopes must be from {api, read_user, read_api, read_repository, write_repository, read_registry, write_registry, sudo, admin_mode, create_runner, manage_runner, ai_features, k8s_proxy}; expires_at format YYYY-MM-DD")
 	}
 	return capturedOutput("create_impersonation_token", token, captured)

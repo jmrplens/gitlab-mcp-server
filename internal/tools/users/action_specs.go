@@ -6,6 +6,7 @@ package users
 import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/events"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -279,10 +280,10 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Create a runner linked to the current user. Returns: runner ID, authentication token, and token expiry. See also: gitlab_user_current, gitlab_create_current_user_pat.",
 	},
 	"gitlab_create_current_user_pat": {
-		usage:          "Create a personal access token for the authenticated user with a name, scopes, and optional expiry. Use when the prompt asks to mint a new token for the current account.",
-		aliases:        []string{"create personal access token", "create pat", "new access token"},
+		usage:          "Create a personal access token for the authenticated user with a name, exactly one of scopes (k8s_proxy or self_rotate, the only classic scopes this route takes) or granular_scopes (a fine-grained grant), and an optional description and expiry. Use when the prompt asks to mint a new token for the current account.",
+		aliases:        []string{"create personal access token", "create pat", "new access token", "create fine-grained token"},
 		relatedActions: []string{actionUserCurrent, "user.create_runner"},
-		description:    "Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
+		description:    "Create a personal access token for the current user, classic or fine-grained. Returns: token ID, the secret token, scopes or granular scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
 	},
 	"gitlab_upload_user_avatar": {
 		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user. There is no user_id parameter.",
@@ -535,6 +536,12 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("order_by", "id", "username"),
 		}
+	case "gitlab_create_current_user_pat":
+		// Docs: https://docs.gitlab.com/api/user_tokens/#create-a-personal-access-token
+		// GitLab declares exactly_one_of :scopes, :granular_scopes on this
+		// route and holds scopes to k8s_proxy and self_rotate.
+		return append(tokengrantdata.SchemaOverrides(),
+			toolutil.SchemaItemsOverride("scopes", map[string]any{"enum": []any{"k8s_proxy", "self_rotate"}}))
 	case "gitlab_get_user_memberships":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#list-user-memberships
 		// SDK: GetUserMembershipOptions.Type *string (no consts, string param)

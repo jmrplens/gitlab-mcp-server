@@ -40,10 +40,6 @@ const (
 	// whose every other attribute the action does not send, so a call
 	// without it changes nothing.
 	categorySoleAttribute = "sole-attribute"
-	// categoryModelRequires is a parameter Grape leaves optional and the
-	// model the route builds refuses to save without, so a call without it is
-	// refused all the same, one step later.
-	categoryModelRequires = "model-requires"
 	// categorySDKSendsNull is a parameter GitLab leaves optional that
 	// client-go writes as null when the handler leaves it unset, on a route
 	// that reads the null otherwise than the key left out, so the handler
@@ -105,18 +101,6 @@ func declaredRequiredness() map[declarationKey]declaration {
 			"ee/lib/api/project_security_settings.rb takes at least one of secret_push_protection_enabled, " +
 				"pre_receive_secret_detection_enabled (its older spelling) and fast_dependency_paths_enabled; " +
 				"client-go's options carry the first alone, so it is the one this action sends",
-		},
-
-		// Alternatives of which client-go carries one.
-		{action: "user.create_current_user_pat", field: "scopes"}: {
-			DirectionGitLabOptional, categoryOneAlternative,
-			"POST /user/personal_access_tokens takes exactly one of scopes and granular_scopes, the second behind the " +
-				"granular_personal_access_tokens feature flag; client-go has no granular_scopes, so scopes is the one this action sends",
-		},
-		{action: "user.create_impersonation_token", field: "scopes"}: {
-			DirectionGitLabOptional, categoryModelRequires,
-			"POST /users/:user_id/impersonation_tokens declares scopes optional beside granular_scopes, which client-go does not " +
-				"carry, and PersonalAccessToken validates the presence of scopes, so a token created without them is refused",
 		},
 
 		// A null client-go writes in place of a key left out.

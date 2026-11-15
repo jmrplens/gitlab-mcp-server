@@ -8,7 +8,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 - **Language**: Go 1.27.4
 - **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0
-- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v3.49.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
+- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v3.50.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 
@@ -84,7 +84,7 @@ gitlab-mcp-server/
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── graphqlschema/      # Pinned GitLab GraphQL schemas, gitlab.com's and the release's (SDL embedded as text + provenance) and Validate()
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON); NewTestClient validates every GraphQL document against the pinned schema; netfixture/ is the dead endpoint and the stoppable server a test uses instead of a closed httptest server; docblocks/ reads a block a site page prints by its e2e=<case> fence key
-│   ├── tools/              # Tool orchestration layer + 181 sub-packages
+│   ├── tools/              # Tool orchestration layer + 182 sub-packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── actiongrants/   # The generated fine-grained table (table_gen.go, never edited) the catalog reads each action's requirement from
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
@@ -97,7 +97,7 @@ gitlab-mcp-server/
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 181 sub-packages (182 packages with the root)
+│   │   └── ...             # 182 sub-packages (183 packages with the root)
 │   ├── resources/          # MCP resource implementations
 │   ├── prompts/            # MCP prompt implementations
 │   ├── completions/        # Argument completion handler

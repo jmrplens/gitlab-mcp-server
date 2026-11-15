@@ -115,7 +115,7 @@ func toPATOutput(pat *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutp
 		Description:    pat.Description,
 		Scopes:         pat.Scopes,
 		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
+		GranularScopes: toolutil.NewTokenGranularScopes(pat.GranularScopes),
 		UserID:         pat.UserID,
 		LastUsedIPs:    extra.LastUsedIPs,
 		Active:         pat.Active,

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestCreateFineGrainedToken_Created_SendsTheGrantAndReadsTheToken checks that
@@ -31,7 +33,8 @@ func TestCreateFineGrainedToken_Created_SendsTheGrantAndReadsTheToken(t *testing
 	scopes := append(StartupScopes(), GranularScope{
 		Access: AccessSelectedMemberships, Permissions: []string{"read_project"}, ProjectIDs: []int64{7},
 	})
-	got, err := createFineGrainedToken(t.Context(), client, fineGrainedTokenRequest{Name: "e2e-fgtok", ExpiresAt: "2026-12-31", GranularScopes: scopes})
+	expiry := gl.ISOTime(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
+	got, err := createFineGrainedToken(t.Context(), client, fineGrainedTokenRequest{Name: "e2e-fgtok", ExpiresAt: &expiry, GranularScopes: scopes})
 	if err != nil {
 		t.Fatalf("createFineGrainedToken() error = %v, want nil", err)
 	}

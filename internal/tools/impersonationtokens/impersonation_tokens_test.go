@@ -17,6 +17,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -362,6 +363,50 @@ func TestCreate_EmptyScopes(t *testing.T) {
 	_, err := Create(context.Background(), client, CreateInput{UserID: 42, Name: "test", Scopes: nil})
 	if err == nil {
 		t.Fatal("expected error for empty scopes, got nil")
+	}
+}
+
+// TestCreate_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest covers the
+// two refusals a grant adds: classic scopes beside it, which GitLab declares
+// mutually exclusive, and a scope it would read otherwise than written. The
+// mock counts the requests, so a handler that sent the call and failed on
+// the answer fails here.
+func TestCreate_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  string
+	}{
+		{
+			name: "scopes beside a grant",
+			input: CreateInput{UserID: 42, Name: "tok", Scopes: []string{"api"}, GranularScopes: []tokengrantdata.GranularScopeInput{
+				{Access: "user", Permissions: []string{"read_user"}},
+			}},
+			want: "exactly one of scopes",
+		},
+		{
+			name: "a scope without permissions",
+			input: CreateInput{UserID: 42, Name: "tok", GranularScopes: []tokengrantdata.GranularScopeInput{
+				{Access: "user"},
+			}},
+			want: "granular_scopes[0].permissions is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondJSON(w, http.StatusCreated, tokenJSON)
+			}))
+			_, err := Create(t.Context(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Create() error = %v, want one carrying %q", err, tc.want)
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("Create() sent %d requests, want none", n)
+			}
+		})
 	}
 }
 
@@ -1260,6 +1305,31 @@ func TestCreateHandlers_TheBodyGitLabReceives_CarriesWhatTheCallerGave(t *testin
 			},
 		},
 		{
+			// A fine-grained token: the grant travels in granular_scopes, with
+			// no scopes key beside it, and the description GitLab takes on this
+			// route reaches it.
+			name: "create_impersonation_token with a grant and a description",
+			path: pathCreateToken,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{
+					UserID: 42, Name: "support-session", Description: "ticket 4711",
+					GranularScopes: []tokengrantdata.GranularScopeInput{
+						{Access: "selected_memberships", Permissions: []string{"read_project"}, ProjectIDs: []int64{7}, GroupIDs: []int64{9}},
+						{Access: "user", Permissions: []string{"read_user"}},
+					},
+				})
+				return err
+			},
+			want: map[string]any{
+				"name":        "support-session",
+				"description": "ticket 4711",
+				"granular_scopes": []any{
+					map[string]any{"access": "selected_memberships", "permissions": []any{"read_project"}, "project_ids": []any{float64(7)}, "group_ids": []any{float64(9)}},
+					map[string]any{"access": "user", "permissions": []any{"read_user"}},
+				},
+			},
+		},
+		{
 			name: "create_personal_access_token",
 			path: pathCreatePAT,
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
@@ -1335,6 +1405,18 @@ func TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith(t *testing.T) {
 			hint: "creating impersonation tokens requires admin token",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
 				_, err := Create(ctx, c, CreateInput{UserID: 42, Name: "tok", Scopes: []string{"api"}})
+				return err
+			},
+		},
+		{
+			// A granular call's 404 is the feature flag being off, not the
+			// admin requirement the classic hint names.
+			name: "create with a grant", status: http.StatusNotFound,
+			hint: tokengrantdata.NotFoundHint,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{UserID: 42, Name: "tok", GranularScopes: []tokengrantdata.GranularScopeInput{
+					{Access: "user", Permissions: []string{"read_user"}},
+				}})
 				return err
 			},
 		},

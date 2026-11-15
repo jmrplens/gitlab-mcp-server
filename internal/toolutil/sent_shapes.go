@@ -108,27 +108,13 @@ func CapturedLabels(capture *gitlabclient.ResponseCapture, decoded int) ([]Label
 	return capturedList[LabelExtra](capture, decoded, "labels")
 }
 
-// TokenGranularScopeOutput mirrors
-// lib/api/entities/personal_access_token_granular_scope.rb, one entry of the
-// granular_scopes array a granular token carries. project_id is set only when
-// the scope's namespace is a project and group_id only when it is a group, so
-// each is absent rather than zero on the other kind.
-type TokenGranularScopeOutput struct {
-	Access      string   `json:"access"`
-	Permissions []string `json:"permissions"`
-	ProjectID   int64    `json:"project_id,omitempty"`
-	GroupID     int64    `json:"group_id,omitempty"`
-}
-
 // TokenExtra is what lib/api/entities/personal_access_token.rb and the
 // entities inheriting it send on a token that client-go's
-// PersonalAccessToken does not carry: granular on every token,
-// granular_scopes when the token is granular and the endpoint asked for them,
-// and last_used_ips while the instance has the feature flag on.
+// PersonalAccessToken does not carry: granular on every token, and
+// last_used_ips while the instance has the feature flag on.
 type TokenExtra struct {
-	Granular       bool                       `json:"granular"`
-	GranularScopes []TokenGranularScopeOutput `json:"granular_scopes"`
-	LastUsedIPs    []string                   `json:"last_used_ips"`
+	Granular    bool     `json:"granular"`
+	LastUsedIPs []string `json:"last_used_ips"`
 }
 
 // CapturedToken reads, off the captured answer to a request for one token,
@@ -145,14 +131,13 @@ func CapturedTokens(capture *gitlabclient.ResponseCapture, decoded int) ([]Token
 
 // ImpersonationTokenExtra is what lib/api/entities/impersonation_token.rb
 // sends beyond [TokenExtra] that client-go's ImpersonationToken does not
-// carry. Its impersonation flag is its own; description and user_id come from
-// the personal access token entity it inherits, which the SDK models on
+// carry. Its impersonation flag is its own; user_id comes from the personal
+// access token entity it inherits, which the SDK models on
 // PersonalAccessToken and not on ImpersonationToken.
 type ImpersonationTokenExtra struct {
 	TokenExtra
-	Impersonation bool   `json:"impersonation"`
-	Description   string `json:"description"`
-	UserID        int64  `json:"user_id"`
+	Impersonation bool  `json:"impersonation"`
+	UserID        int64 `json:"user_id"`
 }
 
 // CapturedImpersonationToken reads, off the captured answer to a request for

@@ -11399,8 +11399,8 @@ Action guidance:
 - block: Block a user from signing in by user_id (admin only). Reversible via unblock. Use when the prompt asks to suspend a user's access.
 - contribution_events: List a user's recent contribution events (pushes, comments, merges) by user_id, the user's ID or username, filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.
 - create: Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested.
-- create_current_user_pat: Create a personal access token for the authenticated user with a name, scopes, and optional expiry. Use when the prompt asks to mint a new token for the current account.
-- create_impersonation_token: Create an impersonation token for a user (admin token required). Use to mint a token with explicit scopes and an optional expiry that can act on behalf of the target user.
+- create_current_user_pat: Create a personal access token for the authenticated user with a name, exactly one of scopes (k8s_proxy or self_rotate, the only classic scopes this route takes) or granular_scopes (a fine-grained grant), and an optional description and expiry. Use when the prompt asks to mint a new token for the current account.
+- create_impersonation_token: Create an impersonation token for a user (admin token required). Use to mint a token that can act on behalf of the target user: a classic one with scopes or a fine-grained one with granular_scopes (exactly one of the two), with an optional description and expiry.
 - create_personal_access_token: Create a personal access token for another user (admin token required). Use to provision a PAT with explicit scopes, an optional description, and an optional expiry on behalf of the target user.
 - create_runner: Register a CI runner scoped to the current user as instance, group, or project type. Use when the prompt asks to create a runner and provide an authentication token.
 - create_service_account: Create an instance-level service account with optional name, username, and email. Admin-only. Use when the prompt asks to provision a service account.
@@ -14802,14 +14802,15 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_current_user_pat
 
-Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.
+Create a personal access token for the current user, classic or fine-grained. Returns: token ID, the secret token, scopes or granular scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.
 
 **Parameters:**
 
 - `description` (string): Description for the token
 - `expires_at` (string): Token expiration date (YYYY-MM-DD)
+- `granular_scopes` (array of objects): Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, exactly one
 - `name` (string) (required): Name of the personal access token
-- `scopes` (array of strings) (required): Array of scopes
+- `scopes` (array of strings): Classic scopes of the token, which GitLab limits to k8s_proxy and self_rotate on this route. Send this or granular_scopes, exactly one
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14943,13 +14944,15 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_create_impersonation_token
 
-Create an impersonation token for a user with the given scopes and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.
+Create an impersonation token for a user with classic scopes or a fine-grained granular_scopes grant, an optional description and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, description, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.
 
 **Parameters:**
 
+- `description` (string): Description of the token, up to 255 characters
 - `expires_at` (string): Token expiration date (YYYY-MM-DD)
+- `granular_scopes` (array of objects): Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, not both
 - `name` (string) (required): Name of the impersonation token
-- `scopes` (array of strings) (required): Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy)
+- `scopes` (array of strings): Classic scopes of the token (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy). Send this or granular_scopes, not both
 - `user_id` (integer) (required): GitLab user ID
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true

@@ -113,7 +113,8 @@ const (
 // ---------------------------------------------------------------------------.
 
 // Output represents a GitLab access token in responses: what the SDK's token
-// structs decode, plus what lib/api/entities/personal_access_token.rb and
+// structs decode, granular_scopes included, plus what
+// lib/api/entities/personal_access_token.rb and
 // lib/api/entities/resource_access_token.rb send and neither struct carries,
 // read from the captured response (ADR-0021). granular is on every token and
 // resource_type on every project or group one; granular_scopes, last_used_ips
@@ -192,7 +193,7 @@ func fromProjectToken(t *gl.ProjectAccessToken, extra toolutil.ResourceTokenExtr
 		Active:         t.Active,
 		Scopes:         t.Scopes,
 		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
+		GranularScopes: toolutil.NewTokenGranularScopes(t.GranularScopes),
 		UserID:         t.UserID,
 		AccessLevel:    int(t.AccessLevel),
 		ResourceType:   extra.ResourceType,
@@ -233,7 +234,7 @@ func fromPersonalToken(t *gl.PersonalAccessToken, extra toolutil.TokenExtra) Out
 		Active:         t.Active,
 		Scopes:         t.Scopes,
 		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
+		GranularScopes: toolutil.NewTokenGranularScopes(t.GranularScopes),
 		UserID:         t.UserID,
 		LastUsedIPs:    extra.LastUsedIPs,
 		Token:          t.Token,
