@@ -63,7 +63,7 @@ El servidor se apoya en las API REST y GraphQL de GitLab, en [`client-go`](https
 - **GitLab**: documentación de la API y anotaciones de respuesta corregidas donde no coincidían con lo que envía la API, un arreglo para que una identidad GPG revocada deje de verificar commits, y propuestas como cancelar un merge automático ([merge requests](https://gitlab.com/gitlab-org/gitlab/-/merge_requests?scope=all&state=all&author_username=jmrp)).
 - **SDK de MCP para Go**: arreglos de conformidad con el protocolo en la cancelación, la negociación de la versión del protocolo y el saludo de inicialización ([pull requests](https://github.com/modelcontextprotocol/go-sdk/pulls?q=is%3Apr+author%3Ajmrplens)).
 
-Hasta que un arreglo se publica en una versión sobre la que se construye el servidor, este mantiene un parche para que la carencia no te llegue, y lo retira en cuanto usa esa versión.
+Hasta que un arreglo se publica en una versión sobre la que se construye el servidor, este mantiene un parche cuando es posible, para que la carencia no te llegue, y lo retira en cuanto usa esa versión. Cuando no es posible, la página de esa capacidad explica lo que verás.
 
 ## Reportar problemas y contribuir
 
