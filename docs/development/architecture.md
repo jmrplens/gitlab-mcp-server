@@ -473,7 +473,7 @@ guarded by `toolutil.ConfirmQuickActions` in
 `internal/toolutil/quick_action_guard.go` for the lines that begin with a
 command whose effect asks), an item taken out of its epic or parent (an
 epic or parent id of 0), and the assignees or CRM contacts of an item
-removed (an empty list), the last two guarded by
+removed (an empty list, or a REST list that begins with 0), the last two guarded by
 `internal/toolutil/detach_guard.go` and the work item clear guard. The
 harness counts a GraphQL query as a read, so a guard that reads through
 GraphQL before it asks is held as a REST one is. An action belongs to a class by its name or
