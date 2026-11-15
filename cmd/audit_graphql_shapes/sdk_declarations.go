@@ -25,9 +25,9 @@ func sdkService(name string) string { return sdkModule + "." + name + "Service" 
 // can be.
 const (
 	// categoryRecordedUpstream is a gap in client-go itself that this server
-	// would surface if client-go selected or decoded it, recorded as a row of
-	// docs/development/upstream-bugs.md. The reason names the row, and the
-	// change to client-go that closes it when one is open; the declaration
+	// would surface if client-go selected or decoded it. The reason says what
+	// is missing, and names the change to client-go that closes it when one is
+	// open; the declaration
 	// goes stale on the bump that brings that change.
 	categoryRecordedUpstream = "recorded-upstream"
 	// categoryDecodedNeverRead is a field a client-go decoder declares, which
@@ -175,7 +175,7 @@ func workItemShapes(method, root string) []sdkShapeDeclaration {
 		Method: method, Path: root + ".features.startAndDueDate.isFixed", Category: categoryDecodedNeverRead,
 		Reason: "workItemWidgetStartAndDueDateGQL declares isFixed and the fragment selects startDate and dueDate alone. " +
 			"Its unwrap returns the two dates and nothing else, so isFixed is decoded false and no caller reads it. " +
-			"That the field is worth selecting is a separate gap, recorded in upstream-bugs row 107.",
+			"That the field is worth selecting is a separate client-go gap.",
 	})
 }
 

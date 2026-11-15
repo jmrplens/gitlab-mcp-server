@@ -97,7 +97,7 @@ func (s sdkUnjudgedSend) declared() bool { return s.Category != "" }
 //
 // Unlike the run over our own documents, a sent finding nothing declares
 // fails here. The surface is client-go's and small, an answer is a one-line
-// declaration naming the upstream-bugs row that records the gap, and the table
+// declaration saying what client-go leaves out, and the table
 // is what makes the one-time triage persist: a client-go bump that selects a
 // declared field leaves its declaration stale, and one that drops a selection,
 // or a re-pin that adds a field, leaves a finding nothing answers, and either

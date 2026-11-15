@@ -12,8 +12,7 @@ import "slices"
 
 // jointMergeRequest names the merge request the client-go commits these
 // tables cite were prepared for, and where those commits stand since it was
-// closed: each goes out again in a small merge request on its topic, which the
-// register row a reason names will name once it is opened.
+// closed: each goes out again in a small merge request on its topic.
 const jointMergeRequest = "gitlab-org/api/client-go!3063 (closed unmerged on 2026-10-21; its commits go out again " +
 	"as small merge requests)"
 
@@ -43,15 +42,15 @@ func referenceObject(service, schemaType, object, how, surface string) sentDecla
 	}
 }
 
-// recorded is a field this server would publish if client-go selected it,
-// recorded as a row of docs/development/upstream-bugs.md.
-func recorded(row, what string) string {
-	return "Upstream-bugs row " + row + " records it: " + what
+// recorded is a field this server would publish if client-go selected it, a
+// gap in client-go that the declaration tracks until a bump closes it.
+func recorded(what string) string {
+	return "A client-go gap: " + what
 }
 
 // recordedField declares one field recorded upstream.
-func recordedField(service, schemaType, field, row, what string) sentDeclaration {
-	return sentDeclaration{Package: service, SchemaType: schemaType, Field: field, Category: categoryRecordedUpstream, Reason: recorded(row, what)}
+func recordedField(service, schemaType, field, what string) sentDeclaration {
+	return sentDeclaration{Package: service, SchemaType: schemaType, Field: field, Category: categoryRecordedUpstream, Reason: recorded(what)}
 }
 
 // experimentField declares one field GitLab marks Status: Experiment.
@@ -102,28 +101,28 @@ func declaredSDKSent() []sentDeclaration {
 }
 
 // achievementsSDKSent answers the achievements service, whose namespace and
-// users client-go names by id alone until row 27's commit adds what
+// users client-go names by id alone until a client-go change adds what
 // identifies them: commit 5 of gitlab-org/api/client-go!3063, closed
 // unmerged, which goes out again in a small merge request.
 func achievementsSDKSent() []sentDeclaration {
 	declarations := []sentDeclaration{
-		recordedField(achievementsService, "UserAchievement", "awardMessageHtml", "27",
+		recordedField(achievementsService, "UserAchievement", "awardMessageHtml",
 			"the rendered award message, which commit 5 of "+jointMergeRequest+" selects; the declaration goes "+
 				"stale on the client-go bump that brings it, and achievements then publishes it."),
 	}
 	for _, field := range []string{"avatarUrl", "fullName", "fullPath", "name", "path", "webUrl"} {
-		declarations = append(declarations, recordedField(achievementsService, "Namespace", field, "27",
+		declarations = append(declarations, recordedField(achievementsService, "Namespace", field,
 			"commit 5 of "+jointMergeRequest+" selects the achievement's namespace by its name, paths, "+
 				"avatar and page beside its id; the declaration goes stale on the client-go bump that brings it, and "+
 				"achievements then publishes the namespace beside namespace_id."))
 	}
 	return append(declarations,
 		referenceObject(achievementsService, "Namespace", "namespace",
-			"its id (and, from row 27's commit, the identity fields named above)",
+			"its id (and, from that client-go change, the identity fields named above)",
 			"the group and project surface, which gitlab_group and gitlab_project publish"),
 		referenceObject(achievementsService, "UserCore", "user",
 			"the shared basic user fragment (id, username, name, state, avatar, page and "+
-				"creation time; the award and revoke documents select the id until row 27's commit)",
+				"creation time; the award and revoke documents select the id until that client-go change)",
 			"the users surface, which gitlab_user publishes"),
 	)
 }
@@ -140,13 +139,13 @@ func scanProfilesSDKSent() []sentDeclaration {
 		"them; the declaration is reviewed on the client-go bump that brings the commit."
 	declarations := make([]sentDeclaration, 0, 12)
 	for _, field := range []string{"buildId", "consecutiveFailureCount", "consecutiveSuccessCount", "lastScanAt"} {
-		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileProjectStatus", field, "105", inDefault))
+		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileProjectStatus", field, inDefault))
 	}
 	for _, field := range []string{"createdAt", "description", "gitlabRecommended", "updatedAt"} {
-		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileType", field, "105", inDefault))
+		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileType", field, inDefault))
 	}
 	for _, field := range []string{"projectCount", "triggerSettings"} {
-		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileType", field, "105", optIn))
+		declarations = append(declarations, recordedField(scanProfilesService, "ScanProfileType", field, optIn))
 	}
 	return append(declarations,
 		sentDeclaration{
@@ -170,23 +169,23 @@ func terraformSDKSent() []sentDeclaration {
 	const inDefault = "GitLab has served it on every release that serves Terraform states over GraphQL, so it could " +
 		"join the List and Get documents, and whether a client-go merge request adds it is not yet decided."
 	return []sentDeclaration{
-		recordedField(terraformService, "TerraformState", "versions", "104",
+		recordedField(terraformService, "TerraformState", "versions",
 			"a state's versions are new in GitLab 19.5, and a commit prepared for "+jointMergeRequest+" adds "+
 				"ListVersions to page through them rather than selecting them in List and Get, which an earlier GitLab "+
 				"would refuse."),
-		recordedField(terraformService, "TerraformState", "permanentDeletionAt", "104",
+		recordedField(terraformService, "TerraformState", "permanentDeletionAt",
 			"the field is new in GitLab 19.5 and marked an experiment, so a commit prepared for "+
 				jointMergeRequest+" makes it selectable through ListWithOptions and GetWithOptions and leaves "+
 				"List and Get without it, which an earlier GitLab would refuse."),
-		recordedField(terraformService, "TerraformState", "lockedByUser", "104", "who holds the state's lock: "+inDefault),
+		recordedField(terraformService, "TerraformState", "lockedByUser", "who holds the state's lock: "+inDefault),
 		experimentField(terraformService, "TerraformState", "protectionRuleExists", "19.0", "app/graphql/types/terraform/state_type.rb"),
 		{
 			Package: terraformService, SchemaType: "TerraformState", Field: "id", Category: categoryUnusedIdentifier,
 			Reason: "The state's GraphQL ID. Every client-go Terraform state method and every action of this server " +
 				"names a state by its project path and name, and nothing takes the ID.",
 		},
-		recordedField(terraformService, "TerraformStateVersion", "createdByUser", "104", "who wrote the latest version: "+inDefault),
-		recordedField(terraformService, "TerraformStateVersion", "job", "104", "the CI job that wrote the latest version, by its id, name and page: "+inDefault),
+		recordedField(terraformService, "TerraformStateVersion", "createdByUser", "who wrote the latest version: "+inDefault),
+		recordedField(terraformService, "TerraformStateVersion", "job", "the CI job that wrote the latest version, by its id, name and page: "+inDefault),
 		{
 			Package: terraformService, SchemaType: "TerraformStateVersion", Field: "id", Category: categoryUnusedIdentifier,
 			Reason: "The version's GraphQL ID. A version is fetched by its serial (the download path ends in it), and " +
@@ -200,10 +199,10 @@ func savedViewsSDKSent() []sentDeclaration {
 	const source = "app/graphql/types/work_items/saved_views/saved_view_type.rb"
 	what := "the saved view documents leave it out, and no client-go change is open for it."
 	return []sentDeclaration{
-		recordedField(savedViewsService, "WorkItemSavedViewType", "author", "108", "who created the view: "+what),
-		recordedField(savedViewsService, "WorkItemSavedViewType", "updatedAt", "108", "when the view last changed: "+what),
-		recordedField(savedViewsService, "WorkItemSavedViewType", "shareUrl", "108", "the URL that subscribes a user to the view: "+what),
-		recordedField(savedViewsService, "WorkItemSavedViewType", "filterWarnings", "108",
+		recordedField(savedViewsService, "WorkItemSavedViewType", "author", "who created the view: "+what),
+		recordedField(savedViewsService, "WorkItemSavedViewType", "updatedAt", "when the view last changed: "+what),
+		recordedField(savedViewsService, "WorkItemSavedViewType", "shareUrl", "the URL that subscribes a user to the view: "+what),
+		recordedField(savedViewsService, "WorkItemSavedViewType", "filterWarnings",
 			"the warnings about filter values GitLab could not apply, resolved once per request like the filters "+
 				"GetWorkItemSavedView selects: "+what),
 		experimentField(savedViewsService, "WorkItemSavedViewType", "lastUpdatedBy", "18.10", source),
@@ -235,39 +234,39 @@ func savedViewsSDKSent() []sentDeclaration {
 // workItemsSDKSent answers the work item service's own objects and the
 // objects its documents name.
 func workItemsSDKSent() []sentDeclaration {
-	const row107 = "the work item documents leave it out, and no client-go change is open for it."
+	const leftOut = "the work item documents leave it out, and no client-go change is open for it."
 	const source = "app/graphql/types/work_item_type.rb"
 	declarations := []sentDeclaration{
-		recordedField(workItemsService, "WorkItemFeatures", "decisionLog", "106",
+		recordedField(workItemsService, "WorkItemFeatures", "decisionLog",
 			"the decision log widget, added in GitLab 19.4 and Enterprise only; a commit prepared for "+
 				jointMergeRequest+" adds it as a field ReturnedFields selects, never by default, since an "+
 				"earlier GitLab and Community Edition refuse it, and GitLab resolves its decisions for one work item per request."),
-		recordedField(workItemsService, "WorkItemFeatures", "development", "106",
+		recordedField(workItemsService, "WorkItemFeatures", "development",
 			"the development widget, whose closingMergeRequestsCount GitLab added in 19.4; a commit prepared for "+
 				jointMergeRequest+" adds it as a field ReturnedFields selects, never by default, since an "+
 				"earlier GitLab refuses it."),
 	}
 	for _, field := range []string{"duplicatedToWorkItemUrl", "movedToWorkItemUrl", "promotedToEpicUrl", "hidden", "imported", "reference", "userDiscussionsCount"} {
-		declarations = append(declarations, recordedField(workItemsService, "WorkItem", field, "107", row107))
+		declarations = append(declarations, recordedField(workItemsService, "WorkItem", field, leftOut))
 	}
 	for _, feature := range []string{"customFields", "description", "progress", "timeTracking"} {
-		declarations = append(declarations, recordedField(workItemsService, "WorkItemFeatures", feature, "107", row107))
+		declarations = append(declarations, recordedField(workItemsService, "WorkItemFeatures", feature, leftOut))
 	}
 	// addedIn is what the two recent widgets the issue tools already publish
 	// from REST have in common, given the release that added each.
 	addedIn := func(release string) string {
 		return " GitLab added the widget in " + release + " and an earlier GitLab refuses a document naming it, so " +
-			"client-go could select it only as a field ReturnedFields selects and never by default, as row 106's two " +
-			"are; no client-go change is open for it."
+			"client-go could select it only as a field ReturnedFields selects and never by default, as decisionLog " +
+			"and development are; no client-go change is open for it."
 	}
 	declarations = append(declarations,
-		recordedField(workItemsService, "WorkItemFeatures", "severity", "107",
+		recordedField(workItemsService, "WorkItemFeatures", "severity",
 			"an incident's severity, which the issue tools publish from REST as severity."+addedIn("19.5")),
-		recordedField(workItemsService, "WorkItemFeatures", "requester", "107",
+		recordedField(workItemsService, "WorkItemFeatures", "requester",
 			"the email of the non-GitLab user who opened a Service Desk ticket, obfuscated for a caller who may not "+
 				"read external emails, which the issue tools publish from REST as service_desk_reply_to (the widget "+
 				"reads external_author, an alias of that column in app/models/issue.rb)."+addedIn("19.6")),
-		recordedField(workItemsService, "WorkItem", "closedBy", "107",
+		recordedField(workItemsService, "WorkItem", "closedBy",
 			"the user who closed the work item, which the issue tools publish from REST as closed_by. The pin of "+
 				"2026-10-29 is the first to carry it, so an earlier GitLab refuses a document naming it and client-go "+
 				"could select it only as a field ReturnedFields selects, never by default; no client-go change is open for it."),
@@ -360,7 +359,7 @@ func workItemsSDKSent() []sentDeclaration {
 			"the users surface, which gitlab_user publishes"),
 	)
 	for _, field := range []string{"linkCreatedAt", "linkUpdatedAt", "workItemState"} {
-		declarations = append(declarations, recordedField(workItemsService, "LinkedWorkItemType", field, "107", row107))
+		declarations = append(declarations, recordedField(workItemsService, "LinkedWorkItemType", field, leftOut))
 	}
 	return declarations
 }
@@ -368,7 +367,7 @@ func workItemsSDKSent() []sentDeclaration {
 // workItemWidgetsSDKSent answers the work item features and the fields of
 // each widget client-go reads.
 func workItemWidgetsSDKSent() []sentDeclaration {
-	const row107 = "the work item documents leave it out, and no client-go change is open for it."
+	const leftOut = "the work item documents leave it out, and no client-go change is open for it."
 	// The widget sources the table cites more than once.
 	const (
 		assigneesSource = "app/graphql/types/work_items/widgets/assignees_type.rb"
@@ -452,10 +451,10 @@ func workItemWidgetsSDKSent() []sentDeclaration {
 		declarations = append(declarations, sentDeclaration{Package: workItemsService, SchemaType: widget, Field: "type", Category: categoryRestated, Reason: widgetTypeReason})
 	}
 	for _, field := range []string{"blocked", "blockedByCount", "blockingCount"} {
-		declarations = append(declarations, recordedField(workItemsService, "WorkItemWidgetLinkedItems", field, "107", row107))
+		declarations = append(declarations, recordedField(workItemsService, "WorkItemWidgetLinkedItems", field, leftOut))
 	}
 	for _, field := range []string{"isFixed", "dueDateSourcingMilestone", "dueDateSourcingWorkItem", "startDateSourcingMilestone", "startDateSourcingWorkItem"} {
-		declarations = append(declarations, recordedField(workItemsService, "WorkItemWidgetStartAndDueDate", field, "107", row107))
+		declarations = append(declarations, recordedField(workItemsService, "WorkItemWidgetStartAndDueDate", field, leftOut))
 	}
 	return declarations
 }

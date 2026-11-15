@@ -171,7 +171,7 @@
 // re-pin that adds one, leaves a finding nothing answers. The exception is a
 // type declared whole rather than field by field: the star
 // already answers a field a re-pin adds to it. A recorded-upstream answer
-// names the row of docs/development/upstream-bugs.md that records the gap.
+// says what client-go leaves out.
 //
 // Usage:
 //

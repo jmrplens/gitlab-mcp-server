@@ -12325,7 +12325,7 @@ func TestSSEKeepAlive_ASilentToolCall_GetsNoByteBeforeItsResult(t *testing.T) {
 // as go-sdk#1477 does with a comment of its own after each interval of
 // silence, and the heartbeat now reaches a silent tool call.
 const silentToolCallFix = "go-sdk now commits a streamed POST before its first event, so the heartbeat reaches a silent tool call: " +
-	"update row 8 of docs/development/upstream-bugs.md, the keep-alive paragraph of site/src/content/docs/operations/http-server.mdx, " +
+	"update the keep-alive paragraph of site/src/content/docs/operations/http-server.mdx, " +
 	"the read timeout row and the Cloudflare paragraph of site/src/content/docs/operations/remote-deployment.mdx, " +
 	"the proxy row of site/src/content/docs/operations/troubleshooting.mdx, each with its Spanish twin, " +
 	"the comment of sseAwareWriter.Write and this test, in the same pull request."

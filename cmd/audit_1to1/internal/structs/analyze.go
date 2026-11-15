@@ -515,7 +515,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// toolutil.CapturedNote and CapturedDiscussion) rather than a raw fetch, so
 	// the route, the options and the pagination stay client-go's. The entities
 	// are the evidence; the pages print each field somewhere, and are cited for
-	// where. Recorded in docs/development/upstream-bugs.md.
+	// where.
 	"issuenotes.Output.imported":                     docNotesIssueList,
 	"issuenotes.Output.imported_from":                docNotesIssueList,
 	"issuenotes.Output.commands_changes":             docNotesWikiRetrieve,
@@ -558,7 +558,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// (ADR-0021, toolutil.CapturedMember and CapturedMembers) in the three
 	// packages that present a member. The project struct also lacks the
 	// public_email and group_saml_identity the group struct carries.
-	// Recorded in docs/development/upstream-bugs.md.
 	"groupmembers.Output.locked":              docGroupMembersList,
 	"groupmembers.Output.membership_state":    docGroupMembersList,
 	"groupmembers.Output.two_factor_enabled":  docGroupMembersList,
@@ -579,7 +578,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// runners, cilint, labels, pipelines: one field each (three on a runner)
 	// that the entity sends on every object and the client-go struct does not
 	// declare, read from the captured response (ADR-0021, the readers in
-	// toolutil/sent_shapes.go). Recorded in docs/development/upstream-bugs.md.
+	// toolutil/sent_shapes.go).
 	"runners.Output.created_at":                  docRunnersList,
 	"runners.Output.created_by":                  docRunnersList,
 	"runners.Output.job_execution_status":        docRunnersList,
@@ -595,8 +594,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// entity sends keys the client-go struct does not declare, read from the
 	// captured response (ADR-0021, the readers in toolutil/sent_shapes.go).
 	// A key appears twice where one type embeds the other, because the diff
-	// sees the promoted field on both. Recorded in
-	// docs/development/upstream-bugs.md.
+	// sees the promoted field on both.
 	"groups.Output.allow_personal_snippets":                                 docGroupsList,
 	"groups.Output.auto_duo_code_review_enabled":                            docGroupsList,
 	"groups.Output.built_in_project_templates_enabled":                      docGroupsList,
@@ -662,7 +660,6 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// renders through ee/lib/api/entities/ci/minutes/usage.rb for an owner of
 	// a top-level namespace, which client-go's Namespace does not model, read
 	// from the captured response (ADR-0021, toolutil.CapturedNamespace).
-	// Recorded in docs/development/upstream-bugs.md.
 	"namespaces.Output.ci_minutes_usage": docNamespaces,
 
 	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
@@ -672,8 +669,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// model, and a project or group token adds the resource pair of
 	// lib/api/entities/resource_access_token.rb. All are read from the
 	// captured response (ADR-0021, the token readers in
-	// toolutil/sent_shapes.go). Recorded in
-	// docs/development/upstream-bugs.md.
+	// toolutil/sent_shapes.go).
 	"users.CurrentUserPATOutput.granular":              docPATList,
 	"users.CurrentUserPATOutput.granular_scopes":       docPATList,
 	"users.CurrentUserPATOutput.last_used_ips":         docPATList,
@@ -708,8 +704,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// gl.BasicMergeRequest does not, so a list published the key and filled it
 	// from nothing. The rendered pair is on toolutil.MergeRequestOutput alone,
 	// which the two merge request packages alias, because it is the only shape
-	// serving the one route that declares render_html. Recorded in
-	// docs/development/upstream-bugs.md.
+	// serving the one route that declares render_html.
 	"mergerequests.Output.approvals_before_merge":           docMergeRequests,
 	"mergerequests.Output.merge_status":                     docMergeRequests,
 	"mergerequests.Output.reference":                        docMergeRequests,
@@ -738,8 +733,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// wherever an administrator is answered, and unconfirmed_email on
 	// POST /service_accounts. The three group-scoped types are held to those
 	// same six by the audit and answered in
-	// cmd/audit_1to1/internal/paths/sent_declarations.go instead. Recorded in
-	// docs/development/upstream-bugs.md.
+	// cmd/audit_1to1/internal/paths/sent_declarations.go instead.
 	"users.Output.followers":                      docUsers,
 	"users.Output.following":                      docUsers,
 	"users.Output.is_followed":                    docUsers,
@@ -767,8 +761,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// ones and task_status arrive under their own condition. `subscribed` is
 	// the one key of that entity this type does not publish, because the
 	// route turns its presenter option off, and it is answered in
-	// cmd/audit_1to1/internal/paths/sent_declarations.go instead. Recorded in
-	// docs/development/upstream-bugs.md.
+	// cmd/audit_1to1/internal/paths/sent_declarations.go instead.
 	"issuelinks.RelationOutput._links":                 docIssueLinksRelation,
 	"issuelinks.RelationOutput.blocking_issues_count":  docIssueLinksRelation,
 	"issuelinks.RelationOutput.closed_at":              docIssueLinksRelation,
@@ -800,7 +793,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// issuelinks.capturedLink). lib/api/entities/issue_link.rb renders both
 	// positions using IssueBasic, and doc/api/issue_links.md abbreviates the
 	// two objects, so the citation is the page that prints the basic issue's
-	// keys in full. Recorded in docs/development/upstream-bugs.md.
+	// keys in full.
 	"issuelinks.IssueRefOutput.blocking_issues_count": docIssuesList,
 	"issuelinks.IssueRefOutput.start_date":            docIssuesList,
 	"issuelinks.IssueRefOutput.type":                  docIssuesList,
@@ -809,8 +802,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// API::Entities::MemberRole sends that client-go's MemberRole declares no
 	// field for, read from the captured response (ADR-0021,
 	// memberroles.capturedRole and capturedRoles). All twenty-five are on
-	// every response of all four member role routes. Recorded in
-	// docs/development/upstream-bugs.md.
+	// every response of all four member role routes.
 	"memberroles.Output.admin_ai_catalog_item":           docMemberRolePermissions,
 	"memberroles.Output.admin_ai_catalog_item_consumer":  docMemberRolePermissions,
 	"memberroles.Output.admin_integrations":              docMemberRolePermissions,
@@ -843,8 +835,7 @@ var docAddedFields = &declarationTable{name: "docAddedFields", entries: map[stri
 	// the one route filling this type that presents the full entity, the
 	// merge request pipeline creation in internal/tools/mergerequests. The two
 	// pipeline lists present the basic entity and send none of them, which is
-	// why every one carries omitempty. Recorded in
-	// docs/development/upstream-bugs.md.
+	// why every one carries omitempty.
 	"pipelines.Output.before_sha":      docMRCreatePipeline,
 	"pipelines.Output.tag":             docMRCreatePipeline,
 	"pipelines.Output.yaml_errors":     docMRCreatePipeline,
@@ -981,7 +972,7 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// client-go offers a priority on both group label option structs, which no
 	// group label route declares and GitLab's label helper applies to a project
 	// label only (lib/api/helpers/label_helpers.rb), so it was sent and did
-	// nothing (issue 1306, upstream register row 122).
+	// nothing (issue 1306).
 	"grouplabels.CreateInput.priority": groupLabelPriority,
 	"grouplabels.UpdateInput.priority": groupLabelPriority,
 	// The Bitbucket Cloud app-password pair, which no current GitLab or
@@ -1138,8 +1129,7 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	"deploymentmergerequests.ListInput.with_merge_status_recheck": deploymentMergeRequestsInert,
 	// An SDK options field GitLab discards: app/models/user.rb ignores the
 	// users.skype column since 18.4 and lib/api/users.rb declares no skype
-	// param on POST /users or PUT /users/:id, so Grape drops the key. Recorded
-	// in docs/development/upstream-bugs.md.
+	// param on POST /users or PUT /users/:id, so Grape drops the key.
 	"users.CreateInput.skype": skypeDiscarded,
 	"users.ModifyInput.skype": skypeDiscarded,
 	// job_title is the same gap on the request side alone: the user entity

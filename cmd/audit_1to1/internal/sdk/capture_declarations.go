@@ -135,10 +135,10 @@ const (
 
 // measureReason is why a measure GitLab sends as null is read off the
 // capture.
-const measureReason = "GitLab sends null for a measure that was never taken, which client-go decodes as 0, a measure of zero (register row 116)"
+const measureReason = "GitLab sends null for a measure that was never taken, which client-go decodes as 0, a measure of zero"
 
 // issueWeightReason is why an issue's weight is read off the capture.
-const issueWeightReason = "GitLab sends null for an issue without a weight, which client-go decodes as the weight 0, a weight of its own (register row 116, issue 1390)"
+const issueWeightReason = "GitLab sends null for an issue without a weight, which client-go decodes as the weight 0, a weight of its own (issue 1390)"
 
 // nullCapture declares a key kept for its null, with a FieldKind per field
 // client-go models it with.
@@ -153,16 +153,16 @@ func nullCapture(typeName, key, reason string, kinds ...waits.FieldKind) capture
 // nullCaptures are the keys GitLab sends as null where client-go decodes a
 // number that is not a pointer.
 var nullCaptures = []captureDeclaration{
-	nullCapture("dorametrics.capturedMetric", "value", "GitLab sends null for a data point with no rows, which client-go decodes as 0, the best score a lead time can have (register row 116)",
+	nullCapture("dorametrics.capturedMetric", "value", "GitLab sends null for a data point with no rows, which client-go decodes as 0, the best score a lead time can have",
 		waits.FieldKind{Type: "DORAMetric", Field: "Value", Kind: "float64"}),
 	nullCapture(capturedMergeTrainMeasures, "duration", measureReason, waits.FieldKind{Type: "MergeTrain", Field: "Duration", Kind: "int64"}),
 	nullCapture(capturedMergeTrainMeasures, "pipeline.duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "Duration", Kind: "int64"}),
 	nullCapture(capturedMergeTrainMeasures, "pipeline.queued_duration", measureReason, waits.FieldKind{Type: "Pipeline", Field: "QueuedDuration", Kind: "int64"}),
-	nullCapture("resourceevents.capturedWeight", "weight", "GitLab sends null for an event that took the weight away, which client-go decodes as a weight of 0 (register row 116)",
+	nullCapture("resourceevents.capturedWeight", "weight", "GitLab sends null for an event that took the weight away, which client-go decodes as a weight of 0",
 		waits.FieldKind{Type: "WeightEvent", Field: "Weight", Kind: "int64"}),
-	nullCapture("toolutil.BoardExtra", "weight", "GitLab sends null for a board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
+	nullCapture("toolutil.BoardExtra", "weight", "GitLab sends null for a board with no weight scope, which client-go decodes as a board scoped to weight 0",
 		waits.FieldKind{Type: "IssueBoard", Field: "Weight", Kind: "int64"}),
-	nullCapture("toolutil.GroupBoardExtra", "weight", "GitLab sends null for a group board with no weight scope, which client-go decodes as a board scoped to weight 0 (register row 116)",
+	nullCapture("toolutil.GroupBoardExtra", "weight", "GitLab sends null for a group board with no weight scope, which client-go decodes as a board scoped to weight 0",
 		waits.FieldKind{Type: "GroupIssueBoard", Field: "Weight", Kind: "int64"}),
 	nullCapture("toolutil.IssueBasicExtra", "weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
 	nullCapture("toolutil.IssueExtra", "weight", issueWeightReason, waits.FieldKind{Type: "Issue", Field: "Weight", Kind: "int64"}),
@@ -300,7 +300,7 @@ var valueCaptures = []captureDeclaration{
 			waits.LacksKey{Type: "NotePosition", Key: "x"},
 			waits.LacksKey{Type: "NotePosition", Key: "y"},
 		},
-		Reason: "a draft note update that keeps the draft's position sends it back whole, and client-go's NotePosition cannot hold an image position's width, height, x and y (register row 159), so the position is read into the PositionOptions the update sends",
+		Reason: "a draft note update that keeps the draft's position sends it back whole, and client-go's NotePosition cannot hold an image position's width, height, x and y, so the position is read into the PositionOptions the update sends",
 	},
 }
 
@@ -325,7 +325,7 @@ var siblingCaptures = []captureDeclaration{
 	{
 		Type: "toolutil.RunnerExtra", Key: "token_expires_at", Category: keptForSiblingPairing,
 		Predicates: []waits.Predicate{waits.LacksKey{Type: "RunnerDetails", Key: "token_expires_at"}},
-		Reason:     "client-go's Runner models token_expires_at and RunnerDetails, which a runner's details decode into, does not (register row 133)",
+		Reason:     "client-go's Runner models token_expires_at and RunnerDetails, which a runner's details decode into, does not",
 	},
 	{
 		Type: "toolutil.ServiceAccountExtra", Key: "public_email", Category: keptForSiblingPairing,

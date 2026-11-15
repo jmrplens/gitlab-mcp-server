@@ -32,8 +32,8 @@ const (
 // only the list selected would make one state read two ways depending on
 // which action a caller asked.
 func terraformListMirror(what string) string {
-	return recorded("104", what+" The list sends a document of its own only to page (issue 1341), and it "+
-		"selects of a state exactly what client-go's List and Get select, because the get still sends client-go's "+
+	return recorded(what + " The list sends a document of its own only to page (issue 1341), and it " +
+		"selects of a state exactly what client-go's List and Get select, because the get still sends client-go's " +
 		"and both answer with one StateItem: a field the list alone carried would make one state read two ways.")
 }
 

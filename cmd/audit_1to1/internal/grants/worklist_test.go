@@ -14,7 +14,7 @@ import (
 )
 
 // TestWorklist_TheFixture_ListsEachUndeclaredElementWithItsLeads verifies
-// the upstream register's row 87 worklist over the fixture: a type that
+// the GraphQL worklist over the fixture: a type that
 // withholds an action, a type that withholds one way of another, an
 // undeclared position served
 // empty, and a mutation, each with what it is matched on and the routes this

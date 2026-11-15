@@ -357,7 +357,7 @@
 // rule here sees it, since R-PAGE joins REST routes only. Issue 1024 did not
 // fix it and issue 1341 did: the list sends a document of its own, taking
 // first and after and publishing the connection's count and the forward half
-// of pageInfo, and upstream-bugs row 104 records the client-go half.
+// of pageInfo, until client-go's List pages.
 //
 // A keyset page says where it ends in a next link, so the rule asks a list
 // GitLab can page by keyset other questions (issue 1165), at the action's own

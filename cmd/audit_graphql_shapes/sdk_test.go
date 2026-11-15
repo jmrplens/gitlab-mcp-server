@@ -286,7 +286,7 @@ var sdkDeclared = sdkTables{
 	},
 	sent: []sentDeclaration{
 		{Package: "fixture/sdk.ProjectsService", SchemaType: "Project", Field: "stars", Category: categorySeparateAction, Reason: "stars are read by Standalone"},
-		{Package: "fixture/sdk.ProjectsService", SchemaType: "Features", Field: "wiki", Category: categoryRecordedUpstream, Reason: "row 0 records the wiki"},
+		{Package: "fixture/sdk.ProjectsService", SchemaType: "Features", Field: "wiki", Category: categoryRecordedUpstream, Reason: "client-go leaves the wiki out"},
 		{Package: "fixture/sdk.ProjectsService", SchemaType: "Board", Field: declaredSegment, Category: categoryNotThisResponse, Reason: "the board is named by id"},
 		{Package: "fixture/sdk", SchemaType: "Project", Field: declaredSegment, Category: categoryLookup, Reason: "Standalone reads the stars and nothing else"},
 	},

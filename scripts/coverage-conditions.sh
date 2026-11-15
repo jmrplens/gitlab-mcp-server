@@ -92,9 +92,10 @@
 # This staging of an external test package is TEMPORARY. The maintainer
 # decided on 2026-10-27 to keep it, superseding the decision of 2026-10-06
 # (issue 1099) to leave both limits to gobco, until gobco publishes a release
-# with the fixes of rillig/gobco#43 (for rillig/gobco#42) and rillig/gobco#39
-# (for rillig/gobco#33); it goes then (docs/development/upstream-bugs.md,
-# entries 97 and 140).
+# with the fixes of https://github.com/rillig/gobco/pull/43 (for
+# https://github.com/rillig/gobco/issues/42) and
+# https://github.com/rillig/gobco/pull/39 (for
+# https://github.com/rillig/gobco/issues/33); it goes then.
 #
 # A package with none of these, a constraint on the platform alone included
 # (a _unix_test.go behind //go:build !windows with no Windows counterpart), is
@@ -559,8 +560,7 @@ fi
 # that go test reads another module cache and downloads every dependency into
 # it, which needs the network as much as go run does. GOMODCACHE, which gobco
 # passes on, names the cache go uses here, so its go test reads the one go mod
-# download filled. That goes when a gobco release passes GOPATH on
-# (docs/development/upstream-bugs.md, entry 153).
+# download filled. That goes when a gobco release passes GOPATH on.
 from_path=""
 if pinned_on_path; then
   from_path=yes

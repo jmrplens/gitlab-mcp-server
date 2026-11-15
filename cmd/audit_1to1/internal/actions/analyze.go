@@ -161,7 +161,7 @@ var acceptedMissingMethods = map[string]string{
 	// covered method already drives; one action per endpoint is the rule.
 	"RepositoryFiles.GetRawFile":      "COVERED_VARIANT. Same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
 	"DraftNotes.PublishAllDraftNotes": "COVERED_VARIANT. Same POST .../draft_notes/bulk_publish endpoint; mr_review.draft_note_publish_all calls PublishAllDraftNotesWithOptions, the only binding that carries the route's note, internal and reviewer_state",
-	"Jobs.CancelJob":                  "COVERED_VARIANT. Same POST /projects/:id/jobs/:job_id/cancel endpoint; job.cancel calls CancelJobWithOptions, the only binding that carries the route's force, with a non-nil options value so a call without force sends {} instead of the null CancelJob sends (entry 51 of docs/development/upstream-bugs.md)",
+	"Jobs.CancelJob":                  "COVERED_VARIANT. Same POST /projects/:id/jobs/:job_id/cancel endpoint; job.cancel calls CancelJobWithOptions, the only binding that carries the route's force, with a non-nil options value so a call without force sends {} instead of the null CancelJob sends",
 	"Jobs.GetJobArtifacts":            "COVERED_VARIANT. Same GET /projects/:id/jobs/:job_id/artifacts endpoint; job.artifacts calls GetJobArtifactsWithOptions, the only binding that carries the route's file_type (declared from GitLab 19.4)",
 	"GroupMembers.ShareWithGroup":     "COVERED_VARIANT. Same POST /groups/:id/share endpoint; group.group_member_share and group.share_with_group call Groups.ShareGroupWithGroup, the only binding that carries the route's member_role_id and leaves out an expires_at the caller did not set",
 
@@ -190,15 +190,14 @@ var acceptedMissingMethods = map[string]string{
 	// GitLab.com removed on 2026-10-15, -27 and -28, each replaced by what its
 	// action reads now: GraphQL, or the Orbit MCP endpoint, which client-go has
 	// no method for and orbit.callMCP posts to through NewRequest (a waits
-	// entry, row 150). Not COVERED_GRAPHQL: R-ROUTE carries that decision
-	// onto a route only with a GraphQL action of the self-managed catalog,
-	// which holds no Orbit action, while GitLab replacing the route carries
-	// on its own. Rows 144 to 148 of docs/development/upstream-bugs.md.
-	"Orbit.GetStatus":      "SUPERSEDED_UPSTREAM. GetStatus sends GET /orbit/status, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.serviceStatus, which orbit.status reads (upstream-bugs row 144)",
-	"Orbit.GetSchema":      "SUPERSEDED_UPSTREAM. GetSchema sends GET /orbit/schema, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.schema, which orbit.schema reads with get_graph_schema of POST /orbit/mcp for its llm text (upstream-bugs row 145)",
-	"Orbit.GetTools":       "SUPERSEDED_UPSTREAM. GetTools sends GET /orbit/tools, which gitlab-org/gitlab!265998 removed in favor of the Orbit MCP endpoint; orbit.tools sends tools/list to POST /orbit/mcp through orbit.callMCP (upstream-bugs rows 146 and 150)",
-	"Orbit.GetDsl":         "SUPERSEDED_UPSTREAM. GetDsl sends GET /orbit/schema/dsl, which GitLab.com answers 404 since it read every query as GQL; orbit.dsl sends list_commands to POST /orbit/mcp through orbit.callMCP (upstream-bugs rows 147 and 150)",
-	"Orbit.GetGraphStatus": "SUPERSEDED_UPSTREAM. GetGraphStatus sends GET /orbit/graph_status, which gitlab-org/gitlab!264745 removed in favor of GraphQL Group.orbit and Project.orbit, which orbit.graph_status reads (upstream-bugs row 148)",
+	// entry). Not COVERED_GRAPHQL: R-ROUTE carries that decision onto a route
+	// only with a GraphQL action of the self-managed catalog, which holds no
+	// Orbit action, while GitLab replacing the route carries on its own.
+	"Orbit.GetStatus":      "SUPERSEDED_UPSTREAM. GetStatus sends GET /orbit/status, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.serviceStatus, which orbit.status reads",
+	"Orbit.GetSchema":      "SUPERSEDED_UPSTREAM. GetSchema sends GET /orbit/schema, which gitlab-org/gitlab!265633 removed in favor of GraphQL Query.orbit.schema, which orbit.schema reads with get_graph_schema of POST /orbit/mcp for its llm text",
+	"Orbit.GetTools":       "SUPERSEDED_UPSTREAM. GetTools sends GET /orbit/tools, which gitlab-org/gitlab!265998 removed in favor of the Orbit MCP endpoint; orbit.tools sends tools/list to POST /orbit/mcp through orbit.callMCP",
+	"Orbit.GetDsl":         "SUPERSEDED_UPSTREAM. GetDsl sends GET /orbit/schema/dsl, which GitLab.com answers 404 since it read every query as GQL; orbit.dsl sends list_commands to POST /orbit/mcp through orbit.callMCP",
+	"Orbit.GetGraphStatus": "SUPERSEDED_UPSTREAM. GetGraphStatus sends GET /orbit/graph_status, which gitlab-org/gitlab!264745 removed in favor of GraphQL Group.orbit and Project.orbit, which orbit.graph_status reads",
 
 	// COVERED_RAW is not declared here: a method a raw request, a URL the
 	// handler builds or a generic slug dispatch stands in for is replaced by
