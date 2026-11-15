@@ -149,8 +149,7 @@ La ruta de administrador que crea un token de acceso personal para otro usuario 
 acepta concesión en GitLab 19.5, mientras que la ruta de tokens de suplantación y la de
 arriba sí. Las acciones de este servidor que crean tokens, entre ellas
 `user.create_current_user_pat`, envían solo scopes clásicos
-([fila 82 de upstream-bugs](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#the-admin-token-route-takes-no-granular-scopes-and-no-client-go-create-option-carries-them),
-[issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
 
 El token de un administrador alcanza las rutas de administración que concede su scope
 `instance`, y en una instancia que exige Admin Mode no necesita nada más: GitLab deja
@@ -192,9 +191,7 @@ quítalas con `--exclude-tools` donde importe. Es el diseño de GitLab y no un f
 [principios de autorización](https://docs.gitlab.com/development/permissions/granular_access/authorization_principles/)
 comprueban un token de grano fino contra el recurso que nombra la ruta de la petición y
 contra nada más de lo que toque la operación, así que este aviso se mantiene mientras
-GitLab conserve esa regla. El
-[registro de upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#issue-move-and-clone-and-transfer-are-authorized-at-the-source-boundary-only-for-a-fine-grained-token)
-recoge los cambios que lo dejaron así.
+GitLab conserve esa regla.
 :::
 
 ## Lo que se muestra a una sesión
@@ -324,8 +321,10 @@ petición GraphQL, GitLab responde esa petición vacía, y la respuesta lleva un
 lo dice.
 
 La [referencia de permisos de grano fino](/gitlab-mcp-server/es/reference/fine-grained-permissions/)
-nombra el motivo de cada una. Conseguir que GitLab declare los permisos que faltan se sigue en la
-[fila 87 del registro de upstream](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#graphql-types-and-mutations-this-server-reaches-declare-no-fine-grained-permission), y servir por
+nombra el motivo de cada una. Una acción sale de este conjunto cuando una versión de GitLab
+declara el permiso que le falta y este servidor graba su tabla desde esa versión, como
+hicieron las acciones de emojis personalizados con 19.5; hasta entonces la salida es un
+token clásico, y servir por
 REST lo que GraphQL no alcanza es el
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 

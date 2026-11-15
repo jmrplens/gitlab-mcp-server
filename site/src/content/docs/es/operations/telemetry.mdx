@@ -567,8 +567,8 @@ métrica cuando el proceso ha terminado.
 Falta un atributo que la convención pide y que no se puede aportar:
 `jsonrpc.request.id`. El SDK de Go no da a un middleware receptor ningún acceso
 al identificador JSON-RPC del mensaje que atiende, así que no hay nada que
-registrar. Está
-[registrado aguas arriba](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-receiving-middleware-cannot-read-the-json-rpc-request-id).
+registrar. Para encontrar una llamada, usa en su lugar su `trace_id` y su
+`span_id`, que lleva cada registro de log escrito mientras se atiende.
 
 Segundos, no milisegundos. Lo fija la convención, y es lo contrario del campo
 `duration` de los registros de log de este servidor.

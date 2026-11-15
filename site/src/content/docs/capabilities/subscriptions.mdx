@@ -98,7 +98,7 @@ That is a stateless deployment. Under `--stateless=false` the two `available` va
 
 ### What does a refused subscription cost?
 
-A refused subscription starts no watcher. One refused for its kind, like a top-level collection, costs no GitLab call; one refused because the resource could not be read has spent that one read. On `2026-07-28` the refusal is the JSON-RPC error that answers the `subscriptions/listen` itself, sent before any acknowledgment, so a client that reads the listen's response sees it. The Go SDK client (v1.8.0) never does, because it sends the listen without waiting for its response ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#a-go-sdk-client-never-sees-a-subscriptionslisten-refusal)); the refusal takes effect all the same.
+A refused subscription starts no watcher. One refused for its kind, like a top-level collection, costs no GitLab call; one refused because the resource could not be read has spent that one read. On `2026-07-28` the refusal is the JSON-RPC error that answers the `subscriptions/listen` itself, sent before any acknowledgment, so a client that reads the listen's response sees it. The Go SDK client (v1.8.0) never does, because it sends the listen without waiting for its response; the refusal takes effect all the same, so such a client simply receives no update for that resource.
 
 ## How is a change detected?
 
@@ -235,7 +235,7 @@ On protocol 2026-07-28 a subscription is a `subscriptions/listen` request the cl
 
 The vocabulary is closed and published as `subscriptions.end_reasons` in the enumerating server card at `/.well-known/mcp/server-card.json`, which is served in HTTP mode only (the card at `/server-card` carries no capabilities). On stdio there is no endpoint to read it from, and three of the reasons can reach a client there: `resource_gone`, `lifetime_reached` and `watcher_evicted`. A stdio process that stops answers an open listen with nothing at all, as [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md) records. Treat an unrecognized value as "an ending this client does not know", never as "any ending".
 
-The server sends no `notifications/cancelled` for a listen it ends, although `2026-07-28` asks for one: the Go SDK offers no way to send it for a request the client made ([upstream entry](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/upstream-bugs.md#application-code-cannot-send-notificationscancelled-for-a-listen-stream)). The result on the listen is what tells a client the stream is over.
+The server sends no `notifications/cancelled` for a listen it ends, although `2026-07-28` asks for one: the Go SDK offers no way to send it for a request the client made. The result on the listen is what tells a client the stream is over.
 
 An ending **you** caused carries no reason, because you caused it, and the result may never reach you anyway. Neither does a session-era `resources/subscribe` under `--stateless=false`: it holds no open request, so there is nothing to answer, and terminating the session is the only ending the protocol offers it. Such a client sees its standalone SSE stream end and its next request answered as a new session. The `logging` capability would be the one place left to carry an advisory sentence, and this server deliberately does not declare it, because SEP-2577 deprecated it. Use `subscriptions/listen` if you want the reason.
 
