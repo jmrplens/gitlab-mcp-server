@@ -190,8 +190,7 @@ func awaitFlagSettled(ctx context.Context, name string, lifetime time.Duration) 
 // It sends the value alone: client-go's SetFeatureFlagOptions leaves an empty
 // scope out of the request from v3.34.0, where it once sent key,
 // feature_group and user as empty strings, which Grape counts as given and
-// GitLab refused as mutually exclusive (register row 6 of
-// docs/development/upstream-bugs.md).
+// GitLab refused as mutually exclusive.
 func setFeature(ctx context.Context, e *harness.Env, name string, value bool) error {
 	_, _, err := e.Client().GL().Features.SetFeatureFlag(name, &gl.SetFeatureFlagOptions{Value: value}, gl.WithContext(ctx))
 	if err != nil {

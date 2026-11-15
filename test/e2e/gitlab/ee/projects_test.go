@@ -137,8 +137,7 @@ func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
 		// Clearing the overwrite through project.update asks nothing, and it
 		// leaves the confirmed update below a flag to change rather than one
 		// it could leave as it found it. mirror travels beside the flag
-		// because GitLab refuses an update whose only param is the flag
-		// (docs/development/upstream-bugs.md).
+		// because GitLab refuses an update whose only param is the flag.
 		cleared := harness.Do[projects.Output](s, actionProjectUpdate, map[string]any{
 			"project_id": project.IDParam(), "mirror": true, "mirror_overwrites_diverged_branches": false,
 		})

@@ -16,9 +16,8 @@
 // The creation itself can be refused for a branch that exists. GitLab checks
 // both branches against a Redis cache of the project's branch names, and a
 // read that listed the branches from Gitaly before the source branch was
-// created can write its list back after the creation emptied the cache
-// (upstream-bugs row 152). The cache then answers that the branch does not
-// exist until a push job refreshes it, a few seconds later.
+// created can write its list back after the creation emptied the cache. The
+// cache then answers that the branch does not exist until a push job refreshes it, a few seconds later.
 
 package fixture
 

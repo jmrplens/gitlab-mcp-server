@@ -5,7 +5,8 @@
 
 // result_type_test.go holds the resultType of a tools/call result a receiving
 // middleware made rather than the tool handler, on the real binary. It is the
-// first item of issue 961 and row 66 of docs/development/upstream-bugs.md.
+// first item of issue 961, and the workaround for the go-sdk defect
+// https://github.com/modelcontextprotocol/go-sdk/issues/1225.
 //
 // 2026-07-28 says a server implementing it MUST include resultType on every
 // result, and go-sdk v1.8.0 sets it on a tools/call result only inside its own

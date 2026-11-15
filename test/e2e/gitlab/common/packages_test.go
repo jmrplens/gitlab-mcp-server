@@ -304,7 +304,7 @@ func TestPackage_ProtectionRules_Lifecycle(t *testing.T) {
 		// The update names the pattern alone, and the rule keeps its type:
 		// client-go leaves an unnamed field out of the request from v3.38.0,
 		// where it once sent it as null, which GitLab read as blank and
-		// answered 422 "Package type can't be blank" (register row 52).
+		// answered 422 "Package type can't be blank".
 		updatedPattern := "e2e-" + string(surface) + "-updated-*"
 		updated := harness.Do[protectedpackages.Output](s, actionPackageProtectionRuleUpdate, withParams(byRule, map[string]any{
 			"package_name_pattern": updatedPattern,

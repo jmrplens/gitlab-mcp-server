@@ -245,7 +245,7 @@ func TestFineGrained_TwoCredentialsOnOneShape_PhaseAIsDecidedPerRequest(t *testi
 //
 // The middleware answers before the SDK's dispatcher, which labels only what
 // it answers, so the refusal goes out through toolutil.LabelForRevision, as the
-// rate limiter's does (row 66 of docs/development/upstream-bugs.md). The
+// rate limiter's does. The
 // served call is the control: it is what makes the refusal's label about who
 // built the result rather than about the revision, the transport or the
 // credential.

@@ -9,7 +9,7 @@
 // Enterprise half, and on a Community image it still cannot run whole, for a
 // reason that is client-go's rather than GitLab's: the SDK's get, create and
 // update documents select five licensed widgets that Community Edition's
-// schema does not define (docs/development/upstream-bugs.md, entry 45). The
+// schema does not define. The
 // lifecycle used to skip there, which held nothing at all; it now runs what
 // Community Edition does today and pins the refusal of the other three, so the
 // day a client-go release carrying the fix is taken here, that assertion fails
@@ -152,7 +152,7 @@ func workItemLifecycle(e *harness.Env, surface harness.Surface, project fixture.
 
 // workItemLifecycleOnCommunity is the lifecycle as Community Edition runs it
 // while client-go selects licensed widgets in its get, create and update
-// documents (docs/development/upstream-bugs.md, entry 45).
+// documents.
 //
 // The create is refused, so the item the rest works on is an issue made
 // through the REST API, which is a work item of the Issue type under the same
@@ -194,8 +194,8 @@ const workItemTaskTypeName = "Task"
 // gid://gitlab/Milestone/0, refused as "No object found", and "" sent nothing,
 // so the update answered success with the date still set.
 //
-// On a Community image the update document is refused whatever it carries
-// (docs/development/upstream-bugs.md, entry 45), so it holds that refusal for
+// On a Community image the update document is refused whatever it carries,
+// so it holds that refusal for
 // the removal too: [workItemRemovalsOnCommunity].
 func TestWorkItems_Update_RemovesParentMilestoneAndDueDate(t *testing.T) {
 	e := harness.New(t)
@@ -299,15 +299,15 @@ func assertCommunityWidgetRefusal(e *harness.Env, s *harness.Session, id harness
 	_, err := harness.Try[workitems.GetOutput](s, id, params)
 	if err == nil {
 		e.T.Fatalf("%s answered on Community Edition, where client-go's document selected five licensed widgets "+
-			"its schema does not define (docs/development/upstream-bugs.md, entry 45). The action now sends a "+
+			"its schema does not define. The action now sends a "+
 			"selection Community Edition defines, WorkItemDefaultListFields() from a client-go release that "+
 			"carries the fix, since the default stays Enterprise: run workItemLifecycle on Community Edition too, "+
-			"delete workItemLifecycleOnCommunity, and record the entry as merged", id)
+			"and delete workItemLifecycleOnCommunity", id)
 	}
 	refusal := err.Error()
 	if !strings.Contains(refusal, communitySchemaRefusal) {
 		e.T.Fatalf("%s was refused, but not with GitLab's refusal of a field Community Edition's schema lacks (%q), "+
-			"which is the refusal entry 45 of docs/development/upstream-bugs.md describes: %s", id, communitySchemaRefusal, firstLine(refusal))
+			"which is the refusal client-go's licensed widgets cause there: %s", id, communitySchemaRefusal, firstLine(refusal))
 	}
 	named := map[string]bool{}
 	for _, match := range communityRefusedField.FindAllStringSubmatch(refusal, -1) {
@@ -321,8 +321,8 @@ func assertCommunityWidgetRefusal(e *harness.Env, s *harness.Session, id harness
 	}
 	slices.Sort(unlisted)
 	if len(unlisted) > 0 {
-		e.T.Errorf("%s was refused naming %s, which client-go's document now selects and entry 45 of "+
-			"docs/development/upstream-bugs.md does not list: add it there and to communityMissingWidgets. GitLab "+
+		e.T.Errorf("%s was refused naming %s, which client-go's document now selects and "+
+			"communityMissingWidgets does not list: add it there. GitLab "+
 			"reports at most %d such errors, so a field past the five also pushes a listed one out of the refusal: %s",
 			id, strings.Join(unlisted, ", "), gitLabMaxValidationErrors, firstLine(refusal))
 	}
@@ -333,12 +333,12 @@ func assertCommunityWidgetRefusal(e *harness.Env, s *harness.Session, id harness
 		if len(named) >= gitLabMaxValidationErrors {
 			e.T.Errorf("%s was refused without naming the %s widget, but the refusal already names %d fields, "+
 				"which is all GitLab reports for one document, so client-go may still select it; the field that "+
-				"took its place is the one to add to entry 45 of docs/development/upstream-bugs.md: %s",
+				"took its place is the one to add to communityMissingWidgets: %s",
 				id, widget, len(named), firstLine(refusal))
 			continue
 		}
-		e.T.Errorf("%s was refused without naming the %s widget, one of the five entry 45 of "+
-			"docs/development/upstream-bugs.md lists, while GitLab had room to report it; if client-go "+
-			"stopped selecting it, the entry needs its list corrected: %s", id, widget, firstLine(refusal))
+		e.T.Errorf("%s was refused without naming the %s widget, one of the five communityMissingWidgets "+
+			"lists, while GitLab had room to report it; if client-go "+
+			"stopped selecting it, the list needs correcting: %s", id, widget, firstLine(refusal))
 	}
 }

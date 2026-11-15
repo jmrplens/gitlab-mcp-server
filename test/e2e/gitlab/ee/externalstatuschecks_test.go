@@ -184,7 +184,7 @@ func assertNamesTheRoleNotTheLicense(e *harness.Env, what, text string) {
 // holds the create and the delete to what GitLab answers a caller without the
 // Maintainer role from 19.5: a 403 from the route's authorize! call, which the
 // handlers hint with the role rather than with the license the namespace has,
-// and nothing changed (entries 56 and 57 of docs/development/upstream-bugs.md).
+// and nothing changed.
 // Before 19.5 the create answered 500 and the delete 204 with nothing
 // deleted, so the scenario needs 19.5.
 //

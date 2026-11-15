@@ -394,7 +394,7 @@ func startTwoTenantGitLab(t *testing.T, changingToken, frozenToken string) *twoT
 	})
 	// Approving the merge request is refused whoever asks, with the plain
 	// 401 GitLab answers an author approving their own merge request with
-	// where author approval is prevented (upstream-bugs entry 55).
+	// where author approval is prevented.
 	mux.HandleFunc("POST /api/v4/projects/123/merge_requests/1/approve", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)

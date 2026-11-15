@@ -72,8 +72,7 @@ func TestRobust_MalformedBodies(t *testing.T) {
 // decoderRefusalFix is what a failure of the test below asks for: go-sdk
 // changed how its streamable HTTP handler answers a frame its decoder refuses.
 const decoderRefusalFix = "go-sdk changed how its streamable HTTP handler answers a frame its decoder refuses: " +
-	"update the HTTP half of row 9 of docs/development/upstream-bugs.md (its Blocking bullet) and this test, " +
-	"in this same pull request."
+	"update this test in this same pull request."
 
 // TestRobust_FramesTheSDKDecoderRefuses_AreAnsweredInPlainText pins what the
 // HTTP endpoint answers a POST whose body is a JSON-RPC 2.0 frame go-sdk's
@@ -83,8 +82,9 @@ const decoderRefusalFix = "go-sdk changed how its streamable HTTP handler answer
 // Over HTTP they end nothing, since every POST is decoded on its own. The
 // answer is still not JSON-RPC: the SDK writes a 400 whose body is plain text
 // naming its decode error, so a client that reads the body as a JSON-RPC error
-// finds none. That half is upstream's and has no workaround here; row 9 of the
-// register records it, and this test is what makes the dependency bump that
+// finds none. That half is upstream's
+// (https://github.com/modelcontextprotocol/go-sdk/issues/1209) and has no
+// workaround here, and this test is what makes the dependency bump that
 // changes it say so. A stateful handler refuses 2026-07-28 before it decodes
 // anything, so that revision is asked of the stateless one alone.
 func TestRobust_FramesTheSDKDecoderRefuses_AreAnsweredInPlainText(t *testing.T) {

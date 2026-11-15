@@ -258,13 +258,13 @@ const workItemRename = `mutation($id: WorkItemID!, $title: String!) {
 // TestFineGrainedProbes_GroupWorkItem_ResolvesTheGroupBoundary measures what
 // the permission table recorded from GitLab 19.5.0 rests on for an epic, a
 // group's work item: 19.5 declares WorkItem at the group boundary beside the
-// project one (gitlab-org/gitlab!259765, upstream-bugs row 89), so a
+// project one (gitlab-org/gitlab!259765), so a
 // fine-grained token granted work items on the group reads the epic and gets
 // its write answered with it. Up to 19.4 the read answered null with no error
 // and the write committed and answered null, which is what the group-work-item
 // declarations of cmd/gen_action_grants withheld the epic actions for until the
 // table was recorded from 19.5.0; the epic actions stay withheld there for
-// Namespace, which declares nothing yet (row 87).
+// Namespace, which declares nothing yet.
 func TestFineGrainedProbes_GroupWorkItem_ResolvesTheGroupBoundary(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.Tier(edition.Ultimate), harness.GitLabAtLeast(19, 5)))
 	group := fixture.NewGroup(e)

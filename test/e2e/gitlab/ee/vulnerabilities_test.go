@@ -473,7 +473,7 @@ func TestVulnerabilityLifecycle_SASTReport_ReadsAndMovesEveryState(t *testing.T)
 		}
 
 		// GitLab 19.4 keeps answering the reason a vulnerability was dismissed
-		// with after it moves on (register row 123), so a confirm after the
+		// with after it moves on, so a confirm after the
 		// dismissal must carry none: the reason belongs to the dismissed state
 		// alone (issue 1310). It is dismissed again afterwards, so the next
 		// surface finds the state this one is meant to leave.
