@@ -51,28 +51,25 @@ const metaEntryPrefix = "gitlab_"
 // to be an action name (user.id, resources.subscribe). A path into a document
 // or a data file (stats.tools, result.content). And a name that belongs to
 // somebody else's software, quoted because this documentation is about it
-// (gotest.tools, project.security_setting).
+// (gotest.tools).
 //
 // An entry that excuses nothing is reported, on the terms every declaration
 // table in this repository is held to.
 var allowedIDs = map[string]string{
-	"achievement.namespace":    "a GraphQL field path, quoted in the contributor pages as the selection client-go sends",
-	"gotest.tools":             "the Go module gotest.tools, named in the static analysis page",
-	"graph_query.schema":       "the middle of the Orbit query DSL schema file name, graph_query.schema.json, quoted in the contributor pages",
-	"mcp.schema":               "the middle of the Agent Plugins schema file name, mcp.schema.json",
-	"plugin.schema":            "the middle of the plugin manifest schema file name, plugin.schema.json, the one .plugin/plugin.json names",
-	"project.security_setting": "GitLab's own entity name, quoted in the contributor pages as the thing the endpoint answers with",
-	"resources.subscribe":      "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
-	"result.content":           "a jq path into a JSON-RPC response, in the CI/CD examples",
-	"server.address":           "the OpenTelemetry attribute the upstream request count and the GitLab call duration name the host by",
-	"server.name":              "the io.modelcontextprotocol.server.name image label the registry validates ownership through",
-	"server.type":              "a key of the .mcpb manifest, whose value says the bundle carries a binary",
-	"stats.tools":              "an Astro binding into site/src/data/stats.json, interpolated into a sentence",
-	"user.hash":                "the OpenTelemetry attribute the pseudonymous identity policy emits",
-	"user.id":                  "the OpenTelemetry attribute the full identity policy emits",
-	"user.name":                "the other attribute of that same policy",
-	"issue.close":              "a registered alias, named as an alias by the dynamic tools page that explains what execute accepts",
-	"issue.reopen":             "the other half of that same sentence",
+	"gotest.tools":        "the Go module gotest.tools, named in the static analysis page",
+	"mcp.schema":          "the middle of the Agent Plugins schema file name, mcp.schema.json",
+	"plugin.schema":       "the middle of the plugin manifest schema file name, plugin.schema.json, the one .plugin/plugin.json names",
+	"resources.subscribe": "the MCP method, spelled with a dot by the gateway configuration the MCP gateways page quotes",
+	"result.content":      "a jq path into a JSON-RPC response, in the CI/CD examples",
+	"server.address":      "the OpenTelemetry attribute the upstream request count and the GitLab call duration name the host by",
+	"server.name":         "the io.modelcontextprotocol.server.name image label the registry validates ownership through",
+	"server.type":         "a key of the .mcpb manifest, whose value says the bundle carries a binary",
+	"stats.tools":         "an Astro binding into site/src/data/stats.json, interpolated into a sentence",
+	"user.hash":           "the OpenTelemetry attribute the pseudonymous identity policy emits",
+	"user.id":             "the OpenTelemetry attribute the full identity policy emits",
+	"user.name":           "the other attribute of that same policy",
+	"issue.close":         "a registered alias, named as an alias by the dynamic tools page that explains what execute accepts",
+	"issue.reopen":        "the other half of that same sentence",
 }
 
 // exemptID reports whether a dotted documentation token is one of the three
