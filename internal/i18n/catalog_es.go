@@ -145,7 +145,15 @@ var spanish = map[Key]string{
 	ConfirmQuickActionUnlink:           "quita el enlace entre este elemento y otro ({line})",
 	ConfirmQuickActionRemoveParent:     "saca el elemento de su épica o de su padre ({line})",
 	ConfirmQuickActionRemoveChild:      "saca un hijo del elemento ({line})",
+	ConfirmQuickActionUnassign:         "quita todos los asignados del elemento ({line})",
+	ConfirmQuickActionRemoveContacts:   "quita contactos CRM del elemento ({line})",
 	ConfirmQuickActionMore:             "ejecuta {count} quick actions más de estos tipos",
+	ConfirmIssueEpicRemove:             "¿Sacar de su épica el issue {iid} en {target}? El issue deja de ser hijo de la épica, como cuando se quita de ella.",
+	ConfirmWorkItemParentRemove:        "¿Sacar de su padre el work item {path}#{iid}? El work item deja de ser hijo de su padre, como cuando se quita de él.",
+	ConfirmEpicParentRemove:            "¿Sacar de su épica padre la épica {path}&{iid}? La épica deja de ser hija de su padre, como cuando se quita de él.",
+	ConfirmIssueAssigneesClear:         "¿Quitar {losses} del issue {iid} en {target}? Esto sustituye la lista y no se puede deshacer desde la respuesta.",
+	ConfirmMergeRequestAssigneesClear:  "¿Quitar {losses} del merge request {iid} en {target}? Esto sustituye la lista y no se puede deshacer desde la respuesta.",
+	ConfirmEpicAssigneesClear:          "¿Quitar {losses} de la épica {path}&{iid}? Esto sustituye la lista y no se puede deshacer desde la respuesta.",
 
 	CommonListAnd: " y ",
 

@@ -261,6 +261,60 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and runs 2 more quick actions of these kinds.",
 		},
 		{
+			name: "the two quick actions that empty a list",
+			msg: New(ConfirmQuickActions, L("effects",
+				New(ConfirmQuickActionUnassign, S("line", "`/unassign`")),
+				New(ConfirmQuickActionRemoveContacts, S("line", "`/remove_contacts [contact:a@example.com]`")))),
+			spanish: "¿Enviar este texto con las quick actions que lleva? GitLab las ejecuta al guardar el texto, así que esta llamada" +
+				" quita todos los asignados del elemento (`/unassign`)" +
+				" y quita contactos CRM del elemento (`/remove_contacts [contact:a@example.com]`).",
+			english: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
+				" removes every assignee of the item (`/unassign`)" +
+				" and removes CRM contacts from the item (`/remove_contacts [contact:a@example.com]`).",
+		},
+		{
+			name:    "the issue epic question",
+			msg:     New(ConfirmIssueEpicRemove, N("iid", 7), M("target", New(ConfirmTargetProject, S("id", "`group/app`")))),
+			spanish: "¿Sacar de su épica el issue 7 en el proyecto `group/app`? El issue deja de ser hijo de la épica, como cuando se quita de ella.",
+			english: "Take issue 7 in project `group/app` out of its epic? The issue is no longer a child of the epic, as when it is removed from the epic.",
+		},
+		{
+			name:    "the work item parent question",
+			msg:     New(ConfirmWorkItemParentRemove, S("path", "`group/app`"), N("iid", 7)),
+			spanish: "¿Sacar de su padre el work item `group/app`#7? El work item deja de ser hijo de su padre, como cuando se quita de él.",
+			english: "Take work item `group/app`#7 out of its parent? The work item is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			name:    "the epic parent question",
+			msg:     New(ConfirmEpicParentRemove, S("path", "`group`"), N("iid", 7)),
+			spanish: "¿Sacar de su épica padre la épica `group`&7? La épica deja de ser hija de su padre, como cuando se quita de él.",
+			english: "Take epic `group`&7 out of its parent epic? The epic is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			name: "the issue assignees question",
+			msg: New(ConfirmIssueAssigneesClear, L("losses", New(ConfirmWorkItemAssignees, N("count", 2))), N("iid", 7),
+				M("target", New(ConfirmTargetProject, S("id", "`group/app`")))),
+			spanish: "¿Quitar todos los asignados actuales (2) del issue 7 en el proyecto `group/app`?" +
+				" Esto sustituye la lista y no se puede deshacer desde la respuesta.",
+			english: "Remove all 2 assignees from issue 7 in project `group/app`?" +
+				" This replaces the list and cannot be undone from the response.",
+		},
+		{
+			name: "the merge request assignees question",
+			msg: New(ConfirmMergeRequestAssigneesClear, L("losses", New(ConfirmWorkItemAssigneesUnknown)), N("iid", 7),
+				M("target", New(ConfirmTargetProject, S("id", "`group/app`")))),
+			spanish: "¿Quitar todos los asignados (no se pudo leer la lista actual) del merge request 7 en el proyecto `group/app`?" +
+				" Esto sustituye la lista y no se puede deshacer desde la respuesta.",
+			english: "Remove every assignee (the current list could not be read) from merge request 7 in project `group/app`?" +
+				" This replaces the list and cannot be undone from the response.",
+		},
+		{
+			name:    "the epic assignees question",
+			msg:     New(ConfirmEpicAssigneesClear, L("losses", New(ConfirmWorkItemAssignees, N("count", 2))), S("path", "`group`"), N("iid", 7)),
+			spanish: "¿Quitar todos los asignados actuales (2) de la épica `group`&7? Esto sustituye la lista y no se puede deshacer desde la respuesta.",
+			english: "Remove all 2 assignees from epic `group`&7? This replaces the list and cannot be undone from the response.",
+		},
+		{
 			name: "the import question",
 			msg:  New(ConfirmImportOverwrite, S("path", "acme/app")),
 			spanish: "¿Importar en acme/app y sobrescribir el proyecto que ya está ahí?" +

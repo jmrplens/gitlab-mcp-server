@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -143,37 +142,54 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 //
 // Each of the six is written out in full because the catalog audit reads a
 // question's key and the placeholders it fills from the call that renders it.
+//
+// The project and the source are the caller's own text, so each is fenced as
+// a value through [toolutil.EscapeConsentValue], as every guard's question
+// fences what the call wrote: unfenced, a line break, emphasis or a link in
+// them would read as the server's own words to the person who decides.
 func pullMirrorQuestion(input ConfigurePullMirrorInput, ask mirrorAsk, branches branchFilter) i18n.Message {
+	project := toolutil.EscapeConsentValue(string(input.ProjectID))
 	if ask == askOverwriteWhileOff {
 		if input.URL == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
-				i18n.S("project", string(input.ProjectID)),
+				i18n.S("project", project),
 				i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
 		}
 		return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
-			i18n.S("project", string(input.ProjectID)),
-			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+			i18n.S("project", project),
+			i18n.S("source", pullMirrorSourceShown(input.URL)))
 	}
 	if ask == askWidening {
 		if input.URL == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
-				i18n.S("project", string(input.ProjectID)),
+				i18n.S("project", project),
 				i18n.M("branches", branchesPulled(branches)),
 				i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
 		}
 		return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
-			i18n.S("project", string(input.ProjectID)),
+			i18n.S("project", project),
 			i18n.M("branches", branchesPulled(branches)),
-			i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+			i18n.S("source", pullMirrorSourceShown(input.URL)))
 	}
 	if input.URL == "" {
 		return i18n.New(i18n.ConfirmPullMirrorOverwrite,
-			i18n.S("project", string(input.ProjectID)),
+			i18n.S("project", project),
 			i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
 	}
 	return i18n.New(i18n.ConfirmPullMirrorOverwrite,
-		i18n.S("project", string(input.ProjectID)),
-		i18n.S("source", pullMirrorSourceForPrompt(input.URL)))
+		i18n.S("project", project),
+		i18n.S("source", pullMirrorSourceShown(input.URL)))
+}
+
+// pullMirrorSourceShown is the source a question names: the rendering
+// [pullMirrorSourceForPrompt] makes of the URL, fenced as a value, or the
+// placeholder it withholds a URL with, which is the server's own text.
+func pullMirrorSourceShown(raw string) string {
+	source := pullMirrorSourceForPrompt(raw)
+	if source == toolutil.RedactedPlaceholder {
+		return source
+	}
+	return toolutil.EscapeConsentValue(source)
 }
 
 // pullMirrorSettings restates the pull-mirror settings a project update sends
@@ -285,11 +301,12 @@ func (current branchFilter) widenedBy(next branchFilter) bool {
 
 // branchesPulled names the branches a mirror pulling through filter pulls, for
 // the widening question. A filter [branchFilter.after] returns holds at most
-// one of its two settings. A regex is quoted, since it is the caller's own
-// text and the person has to see where it ends.
+// one of its two settings. A regex is fenced as a value, since it is the
+// caller's own text and the person has to see where it ends, and a quote
+// alone left the emphasis and the links in it to render.
 func branchesPulled(filter branchFilter) i18n.Message {
 	if filter.regex != "" {
-		return i18n.New(i18n.ConfirmPullMirrorBranchesMatching, i18n.S("regex", strconv.Quote(filter.regex)))
+		return i18n.New(i18n.ConfirmPullMirrorBranchesMatching, i18n.S("regex", toolutil.EscapeConsentValue(filter.regex)))
 	}
 	if filter.protectedOnly {
 		return i18n.New(i18n.ConfirmPullMirrorBranchesProtected)

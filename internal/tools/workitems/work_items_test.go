@@ -3431,8 +3431,11 @@ func TestUpdate_Fields_ReachTheWire(t *testing.T) {
 //
 // Before issue 1303, 0 reached GitLab as gid://gitlab/Milestone/0, refused as
 // "No object found", and "" sent nothing at all, so the update answered success
-// with the value still in place.
+// with the value still in place. YOLO mode stands for the confirmation
+// removing the parent asks for, which TestConfirmParentRemoval_AsksOnlyForZero
+// holds.
 func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	zero, empty := int64(0), ""
 	cases := []struct {
 		input UpdateInput

@@ -1,9 +1,10 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// clear_guard.go guards the work item update paths that silently discard data:
-// an explicit empty assignee or CRM contact list replaces the current one with
-// nothing.
+// clear_guard.go guards the work item update paths that silently discard data
+// or take the item out of its place: an explicit empty assignee or CRM contact
+// list replaces the current one with nothing, and parent_id 0 removes the
+// parent, which group.epic_issue_remove and /remove_parent ask about.
 
 package workitems
 
@@ -63,8 +64,10 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 	// The question has two readers: the person it is asked of, in the
 	// request's language, and the model, which reads it in English as the
 	// refusal's opening sentence when the client cannot ask.
+	// The path is the caller's own text, so it is fenced as a value: unfenced
+	// it could add a sentence, emphasis or a link to what the person is asked.
 	question := i18n.New(i18n.ConfirmWorkItemClear,
-		i18n.L("losses", losses...), i18n.S("path", input.FullPath), i18n.N("iid", input.IID))
+		i18n.L("losses", losses...), i18n.S("path", toolutil.EscapeConsentValue(input.FullPath)), i18n.N("iid", input.IID))
 
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
@@ -88,6 +91,16 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 		return errors.New("update_work_item: the user declined removing the current assignees or CRM contacts; omit assignee_ids/crm_contact_ids to leave them untouched")
 	}
 	return nil
+}
+
+// confirmParentRemoval asks before an update sends parent_id 0, which takes
+// the work item out of its parent, and returns nil when the update may
+// proceed. Naming another parent asks nothing. The arguments alone decide,
+// so nothing is read.
+func confirmParentRemoval(ctx context.Context, input UpdateInput) error {
+	return toolutil.ConfirmParentRemoval(ctx, "update_work_item", toolutil.RemovesReference(input.ParentID), "parent_id",
+		i18n.New(i18n.ConfirmWorkItemParentRemove,
+			i18n.S("path", toolutil.EscapeConsentValue(input.FullPath)), i18n.N("iid", input.IID)))
 }
 
 // clearsList reports whether the caller submitted this list as an explicit

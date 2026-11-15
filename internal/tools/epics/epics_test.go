@@ -2533,8 +2533,10 @@ func recordEpicUpdate(t *testing.T) (http.Handler, func() map[string]any) {
 //
 // Before issue 1302 "" sent nothing, so the update answered with the epic's
 // dates and health status still in place, and 0 reached GitLab as a global ID
-// no object carries.
+// no object carries. YOLO mode stands for the confirmation removing the parent
+// asks for, which TestUpdate_ParentRemoval_Asks holds.
 func TestUpdate_Removals_ReachTheWire(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	zero, empty := int64(0), ""
 	cases := []struct {
 		name          string

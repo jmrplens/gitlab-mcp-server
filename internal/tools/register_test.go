@@ -22,6 +22,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -1985,6 +1986,110 @@ func effectClasses() []effectClass {
 			guarded: quickActionTextActions(),
 			exempt:  quickActionTextExempt(),
 		},
+		{
+			name:   "item taken out of its epic or parent",
+			reason: "the item stops being a child of its epic or parent, which group.epic_issue_remove asks about and /remove_epic and /remove_parent in a text ask about",
+			byName: func(id, action string) bool {
+				if _, guarded := parentRemovalActions()[id]; guarded {
+					return true
+				}
+				_, exempt := hierarchyOnlyExempt()[id]
+				return exempt || action == "epic_issue_remove"
+			},
+			byRoute: regexp.MustCompile(`^PUT /projects/:id/issues/:issue_iid$|^MUTATION workItemUpdate$`),
+			// The field removes the parent only when it is sent as 0, and
+			// names another parent otherwise, which the same field undoes, so
+			// the bit would ask before every move under an epic.
+			guarded: parentRemovalActions(),
+			exempt:  hierarchyOnlyExempt(),
+		},
+		{
+			name:   "assignees or CRM contacts removed",
+			reason: "an empty list replaces the item's assignees or CRM contacts with nothing and the response does not say who they were, which issue.work_item_update asks about and /unassign and /remove_contacts in a text ask about",
+			byName: func(id, _ string) bool {
+				if _, guarded := listClearingActions()[id]; guarded {
+					return true
+				}
+				_, exempt := hierarchyOnlyExempt()[id]
+				return exempt
+			},
+			byRoute: regexp.MustCompile(`^PUT /projects/:id/(issues/:issue_iid|merge_requests/:merge_request_iid)$|^MUTATION workItemUpdate$`),
+			// A list clears only when it is sent empty, which the bit cannot
+			// tell from every other edit of the item.
+			guarded: listClearingActions(),
+			exempt:  hierarchyOnlyExempt(),
+		},
+	}
+}
+
+// hierarchyOnlyExempt are the actions that send workItemUpdate with the
+// hierarchy widget alone and never remove a parent: assigning names the epic
+// the issue goes under, and reordering checks first that both items are the
+// epic's children. group.epic_issue_remove sends the same mutation and is
+// destructive, which answers for it.
+func hierarchyOnlyExempt() map[string]string {
+	return map[string]string{
+		"group.epic_issue_assign": "it names the epic the issue goes under and sends the hierarchy widget alone, so it neither removes a parent nor clears a list; naming a parent asks nothing on any action",
+		"group.epic_issue_update": "it reorders an issue the epic already holds, refused unless both items are the epic's children, and sends the hierarchy widget alone, so no item leaves the epic and no list is cleared",
+	}
+}
+
+// parentRemovalActions are the update actions whose field takes the item out
+// of its epic or parent when it is sent as 0, each with that call and, where
+// this fake GitLab can answer it, a call that names another parent.
+func parentRemovalActions() map[string]effectGuard {
+	const graphQL = "the action writes through GraphQL, whose answers this fake GitLab does not give; the tests of its own package send a call that names another parent"
+	return map[string]effectGuard{
+		"issue.update": {
+			call:     map[string]any{"project_id": "42", "issue_iid": 7, "epic_id": 0},
+			harmless: map[string]any{"project_id": "42", "issue_iid": 7, "epic_id": 5},
+		},
+		"issue.work_item_update": {
+			call:              map[string]any{"full_path": "group/project", "work_item_iid": 7, "parent_id": 0},
+			harmlessElsewhere: graphQL,
+		},
+		"group.epic_update": {
+			call:              map[string]any{"full_path": "my-group", "epic_iid": 7, "parent_id": 0},
+			harmlessElsewhere: graphQL,
+		},
+	}
+}
+
+// listClearingActions are the update actions that remove every assignee or
+// CRM contact when a list is sent empty, each with that call and, where this
+// fake GitLab can answer it, a call that names someone. The REST updates read
+// the item first and ask only when it has assignees, so the fake GitLab
+// answers the read with one.
+func listClearingActions() map[string]effectGuard {
+	const (
+		assigned = `{"id":1,"iid":7,"assignees":[{"id":3,"username":"alice"}]}`
+		graphQL  = "the action writes through GraphQL, whose answers this fake GitLab does not give; the tests of its own package send a call that names an assignee"
+	)
+	return map[string]effectGuard{
+		"issue.update": {
+			current:  assigned,
+			call:     map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{}},
+			harmless: map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{5}},
+		},
+		"merge_request.update": {
+			current:  assigned,
+			call:     map[string]any{"project_id": "42", "merge_request_iid": 7, "assignee_id": 0},
+			harmless: map[string]any{"project_id": "42", "merge_request_iid": 7, "assignee_ids": []any{5}},
+		},
+		// The CRM contacts are not on the read model, so the work item asks
+		// on the arguments alone and reads nothing.
+		"issue.work_item_update": {
+			call:              map[string]any{"full_path": "group/project", "work_item_iid": 7, "crm_contact_ids": []any{}},
+			harmlessElsewhere: graphQL,
+		},
+		// The epic reads its assignees through a GraphQL query, which this
+		// fake GitLab answers with no work item, so the guard asks on a list
+		// it could not read.
+		"group.epic_update": {
+			current:           `{"data":{"namespace":null}}`,
+			call:              map[string]any{"full_path": "my-group", "epic_iid": 7, "assignee_ids": []any{}},
+			harmlessElsewhere: graphQL,
+		},
 	}
 }
 
@@ -2094,7 +2199,9 @@ func inAnyEffectClass(id, action string) bool {
 // request merged, a delivery to a host the call names, access to an account
 // or a repository handed over, a stored value overwritten, existing content
 // overwritten on request, the jobs of a project handed to a runner the call
-// names, and a text GitLab runs as quick actions. An action that reaches a class by its
+// names, a text GitLab runs as quick actions, an item taken out of its epic
+// or parent, and the assignees or CRM contacts of an item removed. An action
+// that reaches a class by its
 // name or by a request it sends is destructive, or guarded by its handler, or
 // declared exempt with the reason, and a declaration that stopped describing
 // the catalog fails as an unclassified action does. A guarded action is held
@@ -2287,7 +2394,7 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	t.Helper()
 	var reads, writes atomic.Int64
 	gitlab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && !isGraphQLQuery(r) {
 			writes.Add(1)
 			testutil.RespondJSON(w, http.StatusOK, `{}`)
 			return
@@ -2342,6 +2449,28 @@ func assertEffectGuardHolds(t *testing.T, id string, guard effectGuard) {
 	if got := writes.Load(); got != 1 {
 		t.Errorf("%s sent %d write(s) for a call without the effect, want 1", id, got)
 	}
+}
+
+// isGraphQLQuery reports whether r is a GraphQL request that reads, a query
+// rather than a mutation, which the guard harness counts as a read: a guard
+// that reads through GraphQL posts its query as every GraphQL request is
+// posted. The body is put back for whatever answers the request.
+func isGraphQLQuery(r *http.Request) bool {
+	if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/graphql") {
+		return false
+	}
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	var request struct {
+		Query string `json:"query"`
+	}
+	if json.Unmarshal(raw, &request) != nil {
+		return false
+	}
+	return !strings.HasPrefix(strings.TrimSpace(request.Query), "mutation")
 }
 
 // assertEffectDeclarationsDescribeTheCatalog fails on a guarded or exempt

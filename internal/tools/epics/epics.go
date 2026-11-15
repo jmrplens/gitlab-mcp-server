@@ -539,7 +539,7 @@ type CreateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateInput defines parameters for updating an existing epic.
@@ -578,7 +578,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms taking the epic out of its parent epic when parent_id is 0, and removing every current assignee when assignee_ids is []. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes something, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteInput defines parameters for deleting an epic.
@@ -1359,6 +1359,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, fmt.Errorf("epicUpdate: %w", err)
 	}
 	if askErr := toolutil.ConfirmQuickActionsOptional(ctx, "epicUpdate", input.Description); askErr != nil {
+		return Output{}, askErr
+	}
+	if askErr := confirmUpdateRemovals(ctx, client, input); askErr != nil {
 		return Output{}, askErr
 	}
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx), removals)

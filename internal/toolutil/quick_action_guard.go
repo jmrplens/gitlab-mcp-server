@@ -56,23 +56,39 @@ const (
 //     issue.link_delete asks about,
 //   - /remove_epic, /remove_parent and /remove_parent_epic take the item out
 //     of its epic or its parent, and /remove_child and /remove_child_epic
-//     take a child out of the item, which group.epic_issue_remove asks about.
+//     take a child out of the item, which group.epic_issue_remove asks about,
+//     and so do issue.update with epic_id 0 and issue.work_item_update and
+//     group.epic_update with parent_id 0,
+//   - /unassign with no user after it removes every assignee of the item,
+//     which issue.update and merge_request.update with assignee_ids [] or
+//     assignee_id 0, and issue.work_item_update and group.epic_update with
+//     assignee_ids [], ask about,
+//   - /remove_contacts removes CRM contacts from the item, which
+//     issue.work_item_update with crm_contact_ids [] asks about.
 //
-// The last three groups are undone by the opposite command. They are guarded
-// all the same, because the rule is the catalog's and not this file's: the
-// action that does the same asks, so the text that does it asks.
+// The groups from /unapprove on are undone by the opposite command. They are
+// guarded all the same, because the rule is the catalog's and not this
+// file's: the action that does the same asks, so the text that does it asks.
 //
-// The rest of GitLab's commands are left alone. Each does what an action
-// here does unasked, and is undone the same way: /close and /reopen,
-// /assign and /unassign, /label and /unlabel, /milestone, /due, /lock,
-// /confidential, /approve, /spend and /remove_time_spent, /rebase, and the
-// conversions /type, /promote_to and /promote_to_incident, which change the
-// type issue.update changes through issue_type.
+// The rest of GitLab's commands are left alone. Most do what an action here
+// does unasked, and are undone the same way: /close and /reopen, /assign,
+// /reassign, /unassign followed by the users it removes, /label and
+// /unlabel, /milestone, /due, /lock, /confidential, /approve, /spend and
+// /remove_time_spent, /rebase, /add_contacts, and the conversions /type,
+// /promote_to and /promote_to_incident, which change the type issue.update
+// changes through issue_type. A few, such as /clone and /page, have no
+// action here to compare them with.
+//
+// Of the 26 actions that send such a text, the guard is the only question
+// 22 ask; issue.update, merge_request.update, issue.work_item_update and
+// group.epic_update also ask before the fields that do what /remove_epic,
+// /remove_parent, /unassign and /remove_contacts do.
 var guardedQuickActions = []string{
 	quickActionMove, quickActionMerge, quickActionPromote, quickActionTicket, quickActionAddEmail, quickActionPublish,
 	quickActionUnapprove, quickActionUnlink,
 	quickActionRemoveEpic, quickActionRemoveParent, quickActionRemoveParentEpic,
 	quickActionRemoveChild, quickActionRemoveChildEpic,
+	quickActionUnassign, quickActionRemoveContacts,
 }
 
 // Names of the guarded quick actions, as GitLab spells them after the slash.
@@ -90,6 +106,8 @@ const (
 	quickActionRemoveParentEpic = "remove_parent_epic"
 	quickActionRemoveChild      = "remove_child"
 	quickActionRemoveChildEpic  = "remove_child_epic"
+	quickActionUnassign         = "unassign"
+	quickActionRemoveContacts   = "remove_contacts"
 )
 
 // quickActionEffect says what a guarded command does, quoting its line. Each
@@ -123,6 +141,12 @@ func quickActionEffect(command, line string) i18n.Message {
 	}
 	if command == quickActionRemoveChild || command == quickActionRemoveChildEpic {
 		return i18n.New(i18n.ConfirmQuickActionRemoveChild, i18n.S("line", line))
+	}
+	if command == quickActionUnassign {
+		return i18n.New(i18n.ConfirmQuickActionUnassign, i18n.S("line", line))
+	}
+	if command == quickActionRemoveContacts {
+		return i18n.New(i18n.ConfirmQuickActionRemoveContacts, i18n.S("line", line))
 	}
 	return i18n.New(i18n.ConfirmQuickActionRemoveParent, i18n.S("line", line))
 }
@@ -182,19 +206,30 @@ func GuardedQuickActionLines(texts ...string) []QuickActionLine {
 
 // guardedQuickAction reports the guarded command a trimmed line begins with:
 // a slash, the command's name in any case, and nothing or a space after it.
+//
+// /unassign is guarded only with nothing after it. GitLab removes every
+// assignee for it, and only the users it names for /unassign followed by
+// them, which is what issue.update does unasked with a shorter list. A user
+// it names that GitLab does not resolve, and any /unassign on an item that
+// holds one assignee, also removes every assignee; telling those apart takes
+// the item and the users, which the guard does not read.
 func guardedQuickAction(line string) (string, bool) {
 	rest, slash := strings.CutPrefix(line, "/")
 	if !slash {
 		return "", false
 	}
-	name := rest
+	name, args := rest, ""
 	if end := strings.IndexFunc(rest, unicode.IsSpace); end >= 0 {
-		name = rest[:end]
+		name, args = rest[:end], strings.TrimSpace(rest[end:])
 	}
 	for _, command := range guardedQuickActions {
-		if strings.EqualFold(name, command) {
-			return command, true
+		if !strings.EqualFold(name, command) {
+			continue
 		}
+		if command == quickActionUnassign && args != "" {
+			return "", false
+		}
+		return command, true
 	}
 	return "", false
 }

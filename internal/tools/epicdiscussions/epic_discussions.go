@@ -364,7 +364,7 @@ type CreateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // AddNoteInput defines parameters for adding a note to an epic discussion.
@@ -377,7 +377,7 @@ type AddNoteInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // UpdateNoteInput defines parameters for updating an epic discussion note.
@@ -390,7 +390,7 @@ type UpdateNoteInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // DeleteNoteInput defines parameters for deleting an epic discussion note.

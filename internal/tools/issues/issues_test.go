@@ -5993,8 +5993,10 @@ func TestUpdate_LabelInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 // with "at least one parameter must be provided" when it is the only change,
 // and an empty description, due date, assignee list or label list could not
 // be sent at all, so the update reported success with the issue unchanged
-// (issue 1297).
+// (issue 1297). YOLO mode stands for the confirmation an empty assignee list
+// asks for, which TestUpdate_Removals_Ask holds.
 func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	tests := []struct {
 		name  string
 		input UpdateInput
@@ -6036,6 +6038,7 @@ func TestUpdate_ClearingValues_ReachTheBody(t *testing.T) {
 // dynamic routes use, so what a model writes reaches the body as well as what
 // a Go caller builds.
 func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"project_id": testProjectID, "issue_iid": 10,
 		"weight": 0, "description": "", "due_date": "", "assignee_ids": []any{}, "labels": []any{},
@@ -6061,8 +6064,9 @@ func TestUpdate_ClearingValuesThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 // arguments go. GitLab reads assignee_id 0 as unassigning everybody and an
 // epic_id of 0 as taking the issue out of its epic, and the handler forwarded
 // either only when it was not 0, so neither removal could be sent (issue
-// 1306).
+// 1306). YOLO mode stands for the confirmation both removals ask for.
 func TestUpdate_ZeroReferences_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"project_id": testProjectID, "issue_iid": 10, "assignee_id": 0, "epic_id": 0,
 	})

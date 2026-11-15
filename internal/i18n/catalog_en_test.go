@@ -278,6 +278,7 @@ func frozenEnglishRows() []frozenEnglish {
 	}
 	rows = append(rows, pullMirrorQuestionRows()...)
 	rows = append(rows, pushRuleQuestionRows()...)
+	rows = append(rows, detachQuestionRows()...)
 	return append(rows, guardedCallQuestionRows()...)
 }
 
@@ -451,8 +452,57 @@ func guardedCallQuestionRows() []frozenEnglish {
 			args: []Arg{S("line", quoted)}, want: "takes a child out of the item (" + quoted + ")",
 		},
 		{
+			key: ConfirmQuickActionUnassign, dotted: "confirm.quick_action.unassign",
+			args: []Arg{S("line", quoted)}, want: "removes every assignee of the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionRemoveContacts, dotted: "confirm.quick_action.remove_contacts",
+			args: []Arg{S("line", quoted)}, want: "removes CRM contacts from the item (" + quoted + ")",
+		},
+		{
 			key: ConfirmQuickActionMore, dotted: "confirm.quick_action.more",
 			args: []Arg{N("count", 3)}, want: "runs 3 more quick actions of these kinds",
+		},
+	}
+}
+
+// detachQuestionRows holds the questions asked before an update takes an
+// item out of its epic or its parent, or removes every assignee of an issue,
+// a merge request or an epic. They replaced no literal, so each row pins the
+// English it was written with.
+func detachQuestionRows() []frozenEnglish {
+	project := New(ConfirmTargetProject, S("id", "`42`"))
+	assignees := New(ConfirmWorkItemAssignees, N("count", sampleCount))
+	return []frozenEnglish{
+		{
+			key: ConfirmIssueEpicRemove, dotted: "confirm.parent.issue_epic_remove",
+			args: []Arg{N("iid", sampleIID), M("target", project)},
+			want: "Take issue 42 in project `42` out of its epic? The issue is no longer a child of the epic, as when it is removed from the epic.",
+		},
+		{
+			key: ConfirmWorkItemParentRemove, dotted: "confirm.parent.work_item_remove",
+			args: []Arg{S("path", "`"+samplePath+"`"), N("iid", sampleIID)},
+			want: "Take work item `group/app`#42 out of its parent? The work item is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			key: ConfirmEpicParentRemove, dotted: "confirm.parent.epic_remove",
+			args: []Arg{S("path", "`group`"), N("iid", sampleIID)},
+			want: "Take epic `group`&42 out of its parent epic? The epic is no longer a child of its parent, as when it is removed from the parent.",
+		},
+		{
+			key: ConfirmIssueAssigneesClear, dotted: "confirm.assignees.issue_clear",
+			args: []Arg{L("losses", assignees), N("iid", sampleIID), M("target", project)},
+			want: "Remove all 3 assignees from issue 42 in project `42`? This replaces the list and cannot be undone from the response.",
+		},
+		{
+			key: ConfirmMergeRequestAssigneesClear, dotted: "confirm.assignees.merge_request_clear",
+			args: []Arg{L("losses", assignees), N("iid", sampleIID), M("target", project)},
+			want: "Remove all 3 assignees from merge request 42 in project `42`? This replaces the list and cannot be undone from the response.",
+		},
+		{
+			key: ConfirmEpicAssigneesClear, dotted: "confirm.assignees.epic_clear",
+			args: []Arg{L("losses", New(ConfirmWorkItemAssigneesUnknown)), S("path", "`group`"), N("iid", sampleIID)},
+			want: "Remove every assignee (the current list could not be read) from epic `group`&42? This replaces the list and cannot be undone from the response.",
 		},
 	}
 }

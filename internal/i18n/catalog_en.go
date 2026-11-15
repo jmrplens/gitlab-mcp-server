@@ -139,7 +139,15 @@ var english = map[Key]string{
 	ConfirmQuickActionUnlink:           "removes the link between this item and another ({line})",
 	ConfirmQuickActionRemoveParent:     "takes the item out of its epic or its parent ({line})",
 	ConfirmQuickActionRemoveChild:      "takes a child out of the item ({line})",
+	ConfirmQuickActionUnassign:         "removes every assignee of the item ({line})",
+	ConfirmQuickActionRemoveContacts:   "removes CRM contacts from the item ({line})",
 	ConfirmQuickActionMore:             "runs {count} more quick actions of these kinds",
+	ConfirmIssueEpicRemove:             "Take issue {iid} in {target} out of its epic? The issue is no longer a child of the epic, as when it is removed from the epic.",
+	ConfirmWorkItemParentRemove:        "Take work item {path}#{iid} out of its parent? The work item is no longer a child of its parent, as when it is removed from the parent.",
+	ConfirmEpicParentRemove:            "Take epic {path}&{iid} out of its parent epic? The epic is no longer a child of its parent, as when it is removed from the parent.",
+	ConfirmIssueAssigneesClear:         "Remove {losses} from issue {iid} in {target}? This replaces the list and cannot be undone from the response.",
+	ConfirmMergeRequestAssigneesClear:  "Remove {losses} from merge request {iid} in {target}? This replaces the list and cannot be undone from the response.",
+	ConfirmEpicAssigneesClear:          "Remove {losses} from epic {path}&{iid}? This replaces the list and cannot be undone from the response.",
 
 	CommonListAnd: " and ",
 

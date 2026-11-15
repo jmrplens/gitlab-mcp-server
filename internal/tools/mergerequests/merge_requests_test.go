@@ -7824,8 +7824,10 @@ func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
 // it held something, so the one value that empties it never left, and the
 // update reported success with the merge request unchanged (issue 1300).
 // add_labels and remove_labels are changes rather than replacements, so an
-// empty one still sends nothing.
+// empty one still sends nothing. YOLO mode stands for the confirmation an
+// empty assignee list asks for, which TestUpdate_ClearingAssignees_Asks holds.
 func TestUpdate_EmptyLists_ReplaceWithNothing(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	tests := []struct {
 		name  string
 		input UpdateInput
@@ -7853,6 +7855,7 @@ func TestUpdate_EmptyLists_ReplaceWithNothing(t *testing.T) {
 // dynamic routes hand their arguments to, so a [] a model writes is held to
 // the request and not only one a Go caller builds.
 func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{
 		"assignee_ids": []any{}, "reviewer_ids": []any{}, "labels": []any{},
 	})
@@ -7867,8 +7870,10 @@ func TestUpdate_EmptyListsThroughTheMetaDecoder_ReachTheBody(t *testing.T) {
 // everybody, and the handler forwarded the field only when it was not 0, so
 // the one value that removes the assignees never left and the update reported
 // success with the merge request unchanged (issue 1306). The arguments go
-// through toolutil.UnmarshalParams, as every surface's do.
+// through toolutil.UnmarshalParams, as every surface's do, and YOLO mode
+// stands for the confirmation the call asks for.
 func TestUpdate_AssigneeIDZero_RemovesEveryAssignee(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	input, err := toolutil.UnmarshalParams[UpdateInput](map[string]any{"assignee_id": 0})
 	if err != nil {
 		t.Fatalf("UnmarshalParams() error: %v", err)

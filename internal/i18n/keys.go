@@ -355,9 +355,38 @@ const (
 	// ConfirmQuickActionRemoveChild names a /remove_child or
 	// /remove_child_epic line, which takes a child out of the item.
 	ConfirmQuickActionRemoveChild Key = "confirm.quick_action.remove_child"
+	// ConfirmQuickActionUnassign names an /unassign line that names nobody,
+	// which removes every assignee of the item.
+	ConfirmQuickActionUnassign Key = "confirm.quick_action.unassign"
+	// ConfirmQuickActionRemoveContacts names a /remove_contacts line, which
+	// removes CRM contacts from the item.
+	ConfirmQuickActionRemoveContacts Key = "confirm.quick_action.remove_contacts"
 	// ConfirmQuickActionMore counts the {count} lines of the same kinds that
 	// the question does not quote.
 	ConfirmQuickActionMore Key = "confirm.quick_action.more"
+)
+
+// The questions asked before an update takes an item out of its epic or its
+// parent, or removes every assignee of an issue, a merge request or an epic.
+const (
+	// ConfirmIssueEpicRemove asks before an issue update takes issue {iid}
+	// of {target} out of its epic.
+	ConfirmIssueEpicRemove Key = "confirm.parent.issue_epic_remove"
+	// ConfirmWorkItemParentRemove asks before a work item update takes work
+	// item {path}#{iid} out of its parent.
+	ConfirmWorkItemParentRemove Key = "confirm.parent.work_item_remove"
+	// ConfirmEpicParentRemove asks before an epic update takes epic
+	// {path}&{iid} out of its parent epic.
+	ConfirmEpicParentRemove Key = "confirm.parent.epic_remove"
+	// ConfirmIssueAssigneesClear asks before an issue update removes
+	// {losses} from issue {iid} of {target}.
+	ConfirmIssueAssigneesClear Key = "confirm.assignees.issue_clear"
+	// ConfirmMergeRequestAssigneesClear asks before a merge request update
+	// removes {losses} from merge request {iid} of {target}.
+	ConfirmMergeRequestAssigneesClear Key = "confirm.assignees.merge_request_clear"
+	// ConfirmEpicAssigneesClear asks before an epic update removes {losses}
+	// from epic {path}&{iid}.
+	ConfirmEpicAssigneesClear Key = "confirm.assignees.epic_clear"
 )
 
 // CommonListAnd is the conjunction [L] joins a list with.

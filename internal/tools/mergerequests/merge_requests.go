@@ -81,7 +81,7 @@ type CreateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // Output is the canonical merge-request output shape. The authoritative
@@ -502,7 +502,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing every current assignee when assignee_ids is [] or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // MergeInput defines parameters for merging a merge request.
@@ -1007,6 +1007,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	opts, nulls, err := buildUpdateOpts(input)
 	if err != nil {
 		return Output{}, err
+	}
+	if askErr := confirmAssigneesCleared(ctx, client, input); askErr != nil {
+		return Output{}, askErr
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),
