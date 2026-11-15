@@ -2007,15 +2007,23 @@ func valueMatchesDeclaredType(value, property any) bool {
 }
 
 // isWholeFloat reports whether a float carries a whole number, which is the
-// shape an integer takes once encoding/json has decoded it.
+// shape an integer takes once encoding/json has decoded it. It never converts
+// to an integer type, whose result for a float beyond int64 the platform
+// decides, and it counts no infinity or NaN as whole.
 func isWholeFloat(value any) bool {
 	switch typed := value.(type) {
 	case float32:
-		return float32(int64(typed)) == typed
+		return isWholeFloat64(float64(typed))
 	case float64:
-		return float64(int64(typed)) == typed
+		return isWholeFloat64(typed)
 	}
 	return false
+}
+
+// isWholeFloat64 reports whether v is finite and has no fractional part.
+// math.Trunc(NaN) is NaN, which equals nothing, so NaN needs no case of its own.
+func isWholeFloat64(v float64) bool {
+	return !math.IsInf(v, 0) && math.Trunc(v) == v
 }
 
 func schemaPropertyHasType(property any, expected string) bool {
