@@ -156,7 +156,6 @@ type workaround struct {
 
 // waitEntry is one entry of the two tables with what the run made of it.
 type waitEntry struct {
-	Row        int             `json:"row,omitempty"`
 	Category   string          `json:"category"`
 	Sites      []string        `json:"sites,omitempty"`
 	Unseen     []string        `json:"unseen,omitempty"`
@@ -182,8 +181,6 @@ type waitsInput struct {
 	sites   map[string]bool
 	strings map[string][]string
 	sdk     waits.SDK
-	// rows are the register's rows, each with the text that describes it.
-	rows map[int]string
 	// called holds the client-go methods ("Service.Method") a handler
 	// references.
 	called  map[string]bool
@@ -209,20 +206,15 @@ func analyzeUpstreamWaits(root string, pkgs []*packages.Package, clientGo *types
 			found[i].PassedTo = slices.Sorted(maps.Keys(reads.passedTo[found[i].Site]))
 		}
 	}
-	rows, rowsErr := waits.ReadRows(filepath.Join(root, filepath.FromSlash(waits.RegisterPath)))
 	routes, unresolved := sdkRoutes(structs.ClientGoDir(pkgs))
 	report, stale := buildUpstreamWaits(waitsInput{
 		found:   found,
 		sites:   sites,
 		strings: reads.strings,
 		sdk:     waits.SDK{Types: clientGo, Routes: routes, Unresolved: unresolved},
-		rows:    rows,
 		called:  calledMethods(usage),
 		entries: entries,
 	})
-	if rowsErr != nil {
-		stale = append(stale, "upstream register: "+rowsErr.Error())
-	}
 	return report, stale, nil
 }
 
@@ -989,7 +981,7 @@ func missing(list []string, set map[string]bool) []string {
 // something the SDK lacks does not hold; [staleWait] reports why.
 func judgeEntry(entry waits.Entry, sdk waits.SDK) waitEntry {
 	judged := waitEntry{
-		Row: entry.Row, Category: entry.Category, Sites: entry.Sites, Unseen: entry.Unseen,
+		Category: entry.Category, Sites: entry.Sites, Unseen: entry.Unseen,
 		Replaces: entry.Replaces, Status: waitDeclared, Reason: entry.Reason,
 	}
 	if entry.Category != waits.CategoryUpstream {
@@ -1020,8 +1012,7 @@ const siteClause = ": site "
 // staleWait lists what of one entry no longer describes the tree: a site
 // that no longer exists or that the walk finds no workaround at, an unseen
 // site the walk does see or whose strings name no key a field predicate of
-// the entry is about, a row the register does not carry or whose text names
-// nothing the entry is about, a method client-go does not declare or a
+// the entry is about, a method client-go does not declare or a
 // handler calls, a predicate that names something client-go lacks, a
 // predicate on a superset's root naming a key no superset at the entry's
 // sites carries, and a TakesNoOptions naming a method no site of the entry
@@ -1049,7 +1040,6 @@ func staleWait(entry waits.Entry, judged waitEntry, in waitsInput, bySite map[st
 		}
 		stale = append(stale, unnamedKeys(label, site, entry, in)...)
 	}
-	stale = append(stale, staleRow(label, entry, in.rows)...)
 	for _, key := range entry.Replaces {
 		if !strings.Contains(key, ".") {
 			continue
@@ -1083,24 +1073,6 @@ func unnamedKeys(label, site string, entry waits.Entry, in waitsInput) []string 
 		}
 	}
 	return stale
-}
-
-// staleRow lists what is wrong with the register row an upstream entry
-// waits on: a row the register does not carry, and one whose text names
-// nothing the entry is about, which is what a renumbering that left the
-// entry pointing at another row's problem looks like.
-func staleRow(label string, entry waits.Entry, rows map[int]string) []string {
-	if entry.Category != waits.CategoryUpstream || entry.Row <= 0 {
-		return nil
-	}
-	text, hasRow := rows[entry.Row]
-	if !hasRow {
-		return []string{label + ": " + waits.RegisterPath + " has no row " + strconv.Itoa(entry.Row)}
-	}
-	if !entry.NamedIn(text) {
-		return []string{label + ": row " + strconv.Itoa(entry.Row) + " of " + waits.RegisterPath + " names nothing the entry is about (" + strings.Join(entry.Names(), ", ") + ")"}
-	}
-	return nil
 }
 
 // unreadReasons lists each predicate of the entry that names a reason the

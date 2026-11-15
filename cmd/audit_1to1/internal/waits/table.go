@@ -68,25 +68,25 @@ const (
 	kindISOTimePointer = "*ISOTime"
 )
 
-// upstreamWaits are the workarounds that wait on client-go, grouped by the
-// register row each waits on.
+// upstreamWaits are the workarounds that wait on client-go, each with the
+// predicates that say it is still needed.
 var upstreamWaits = []Entry{
 	{
-		Row: 7, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"appstatistics.fetchStatistics"},
 		Replaces:   []string{"ApplicationStatistics"},
 		Predicates: fieldKinds("ApplicationStatistics", "int64", appStatisticsCounts...),
 		Reason:     "appstatistics.Get issues a raw GET application/statistics: client-go's ApplicationStatistics declares int64 fields and GitLab renders every count through number_with_delimiter, a string grouped in the caller's language (\"1,234\", \"1.234\", \"1 234\"), so the wrapper cannot decode a successful response",
 	},
 	{
-		Row: 25, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"projects.doProjectRequest"},
 		Replaces:   []string{"Projects.CreateProjectForkRelation"},
 		Predicates: []Predicate{DecodesInto{Method: "Projects.CreateProjectForkRelation", Type: "*ProjectForkRelation"}},
 		Reason:     "the fork relation create issues the same POST itself because the wrapper declares ProjectForkRelation, a five-field pair GitLab's response (a Project) fills none of",
 	},
 	{
-		Row: 26, Category: CategoryUpstream,
+		Category: CategoryUpstream,
 		Sites:    []string{"invites.postInvitation"},
 		Replaces: []string{"Invites.GroupInvites", "Invites.ProjectInvites"},
 		Predicates: []Predicate{
@@ -97,7 +97,7 @@ var upstreamWaits = []Entry{
 		Reason: "InvitesOptions models neither invite_source nor member_role_id, and InvitesResult models no queued_users, so both invitations post their own body and decode their own answer",
 	},
 	{
-		Row: 28, Category: CategoryUpstream,
+		Category: CategoryUpstream,
 		Sites:    []string{"epics.rawListEpics"},
 		Replaces: []string{"Epics"},
 		Predicates: slices.Concat(
@@ -108,15 +108,15 @@ var upstreamWaits = []Entry{
 		Reason: "epics.rawListEpics issues raw GETs for groups/:id/epics and .../:epic_iid/epics: the wrapper's Epic type omits twelve documented response fields, its EpicAuthor the locked and public_email the author carries, and it types labels []string, so the documented with_labels_details parameter makes the response undecodable. The other four epic actions take the Work Items GraphQL API, which the interface's own upstream doc comment directs to",
 	},
 	{
-		Row: 58, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"projects.doProjectRequest"},
 		Replaces:   []string{"Projects.AddProjectHook", "Projects.EditProjectHook", "Projects.GetProjectHook", "Projects.ListProjectHooks"},
 		Predicates: []Predicate{LacksKey{Type: "ProjectHook", Key: "duo_flow_callback_enabled"}},
 		Reason:     "ProjectHook has no duo_flow_callback_enabled, which GitLab 19.4 added to the hook entity, so the four project hook actions decode the hook into projects.projectHookAPI",
 	},
 	{
-		Row: 65, Category: CategoryUpstream,
-		Sites: []string{"grouprelationsexport.getRelationStatus"},
+		Category: CategoryUpstream,
+		Sites:    []string{"grouprelationsexport.getRelationStatus"},
 		Predicates: []Predicate{
 			LacksKey{Type: "GroupRelationStatus", Key: "total_objects_count"},
 			DecodesInto{Method: "GroupRelationsExport.ListExportStatus", Type: "[]*GroupRelationStatus"},
@@ -124,20 +124,20 @@ var upstreamWaits = []Entry{
 		Reason: "with relation set, the export status route answers one object, and ListExportStatus decodes every answer into a slice, which refuses it; the relation's status is read through a GET of its own, which also reads the total_objects_count GroupRelationStatus does not model",
 	},
 	{
-		Row: 82, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"fixture.createFineGrainedToken"},
 		Predicates: []Predicate{LacksKey{Type: "CreatePersonalAccessTokenForCurrentUserOptions", Key: "granular_scopes"}},
 		Reason:     "no client-go create option carries granular_scopes, so the e2e fixture builds the fine-grained token creation through NewRequest",
 	},
 	{
-		Row: 115, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"modelregistry.downloadFromPackageRoot"},
 		Predicates: []Predicate{NoMethodFor{Route: "GET /projects/:/packages/ml_models/:/files/:"}},
 		Reason:     "DownloadMachineLearningModelPackage always sends the file's path segment, so a file at the package root is fetched through a GET of the handler's own",
 	},
 	{
-		Row: 119, Category: CategoryUpstream,
-		Sites: []string{"toolutil.ApplyWorkItemWidgets"},
+		Category: CategoryUpstream,
+		Sites:    []string{"toolutil.ApplyWorkItemWidgets"},
 		Predicates: []Predicate{
 			FieldKind{Type: "UpdateWorkItemOptions", Field: "MilestoneID", Kind: kindInt64Pointer},
 			FieldKind{Type: "UpdateWorkItemOptions", Field: "ParentID", Kind: kindInt64Pointer},
@@ -149,20 +149,20 @@ var upstreamWaits = []Entry{
 		Reason: "UpdateWorkItemOptions wraps any reference, 0 included, into a global ID and omits an unset date or health status, so it cannot ask for a removal; the request option writes null into the mutation input for each one asked for",
 	},
 	{
-		Row: 120, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"auditevents.entityFilter"},
 		Predicates: lacksKeys("ListAuditEventsOptions", "entity_type", "entity_id"),
 		Reason:     "ListAuditEventsOptions models neither entity filter the instance list takes, so audit_event.list_instance adds entity_type and entity_id to the query through a request option",
 	},
 	{
-		Row: 121, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"releases.Update"},
 		Predicates: writesAlwaysJSON("UpdateReleaseOptions", "Name", "Description"),
 		Reason:     "UpdateReleaseOptions tags the title and the notes without omitempty, so a partial update sends both as null; release.update takes the two keys out of the body whenever the caller did not set them",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
-		Sites: []string{"members.Edit"},
+		Category: CategoryUpstream,
+		Sites:    []string{"members.Edit"},
 		Predicates: []Predicate{
 			NotNullable{Type: "EditProjectMemberOptions", Field: "MemberRoleID"},
 			NotNullable{Type: "EditProjectMemberOptions", Field: "ExpiresAt"},
@@ -170,8 +170,8 @@ var upstreamWaits = []Entry{
 		Reason: "EditProjectMemberOptions tags member_role_id and expires_at omitempty, so the project member edit writes the null that removes the custom role or the expiry into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
-		Sites: []string{"groupmembers.EditMember"},
+		Category: CategoryUpstream,
+		Sites:    []string{"groupmembers.EditMember"},
 		Predicates: []Predicate{
 			NotNullable{Type: "EditGroupMemberOptions", Field: "MemberRoleID"},
 			NotNullable{Type: "EditGroupMemberOptions", Field: "ExpiresAt"},
@@ -179,14 +179,14 @@ var upstreamWaits = []Entry{
 		Reason: "EditGroupMemberOptions tags member_role_id and expires_at omitempty, so the group member edit writes the null that removes the custom role or the expiry into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"compliancepolicy.Update"},
 		Predicates: []Predicate{NotNullable{Type: "UpdateAdminCompliancePolicySettingsOptions", Field: "CSPNamespaceID"}},
 		Reason:     "UpdateAdminCompliancePolicySettingsOptions tags csp_namespace_id omitempty, so the settings update writes the null that clears the namespace into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
-		Sites: []string{"projects.Update"},
+		Category: CategoryUpstream,
+		Sites:    []string{"projects.Update"},
 		Predicates: []Predicate{
 			NotNullable{Type: "EditProjectOptions", Field: "MaxArtifactsSize"},
 			NotNullable{Type: "EditProjectOptions", Field: "CIDeletePipelinesInSeconds"},
@@ -194,32 +194,32 @@ var upstreamWaits = []Entry{
 		Reason: "EditProjectOptions tags max_artifacts_size and ci_delete_pipelines_in_seconds omitempty, so the project update writes the null that returns each to the instance default into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"pages.UpdatePages"},
 		Predicates: []Predicate{NotNullable{Type: "UpdatePagesOptions", Field: "PagesPrimaryDomain"}},
 		Reason:     "UpdatePagesOptions tags pages_primary_domain omitempty, so the Pages update writes the null that clears the primary domain into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"broadcastmessages.Update"},
 		Predicates: []Predicate{NoEmptyList{Type: "UpdateBroadcastMessageOptions", Field: "TargetAccessLevels"}},
 		Reason:     "UpdateBroadcastMessageOptions tags target_access_levels omitempty on a slice, so the broadcast message update writes the empty list that targets every role into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"ffuserlists.UpdateUserList"},
 		Predicates: []Predicate{NoEmptyText{Type: "UpdateFeatureFlagUserListOptions", Field: "UserXIDs"}},
 		Reason:     "UpdateFeatureFlagUserListOptions tags user_xids omitempty on a string, so the feature flag user list update writes the empty string that takes every user off the list into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"mergerequests.Update"},
 		Predicates: []Predicate{NotNullable{Type: "UpdateMergeRequestOptions", Field: "MergeAfter"}},
 		Reason:     "UpdateMergeRequestOptions tags merge_after omitempty, so the merge request update writes the null that clears it into the body",
 	},
 	{
-		Row: 122, Category: CategoryUpstream,
-		Sites: []string{"releaselinks.Update"},
+		Category: CategoryUpstream,
+		Sites:    []string{"releaselinks.Update"},
 		Predicates: []Predicate{
 			NotNullable{Type: "UpdateReleaseLinkOptions", Field: "FilePath"},
 			NotNullable{Type: "UpdateReleaseLinkOptions", Field: "DirectAssetPath"},
@@ -227,8 +227,8 @@ var upstreamWaits = []Entry{
 		Reason: "UpdateReleaseLinkOptions tags filepath and direct_asset_path omitempty, so the release link update writes the null that clears each into the body",
 	},
 	{
-		Row: 125, Category: CategoryUpstream,
-		Sites: []string{"toolutil.Int64UserIDFilter"},
+		Category: CategoryUpstream,
+		Sites:    []string{"toolutil.Int64UserIDFilter"},
 		Predicates: []Predicate{
 			FieldKind{Type: "GetIssuesStatisticsOptions", Field: "AssigneeID", Kind: kindInt64Pointer},
 			FieldKind{Type: "GetGroupIssuesStatisticsOptions", Field: "AssigneeID", Kind: kindInt64Pointer},
@@ -237,8 +237,8 @@ var upstreamWaits = []Entry{
 		Reason: "the issue statistics options type assignee_id *int64, which cannot carry None or Any, so the three statistics actions write either literal into the query through a request option",
 	},
 	{
-		Row: 126, Category: CategoryUpstream,
-		Sites: []string{"toolutil.TimestampParam"},
+		Category: CategoryUpstream,
+		Sites:    []string{"toolutil.TimestampParam"},
 		Predicates: []Predicate{
 			FieldKind{Type: "AddSSHKeyOptions", Field: "ExpiresAt", Kind: kindISOTimePointer},
 			FieldKind{Type: "ListAllSnippetsOptions", Field: "CreatedAfter", Kind: kindISOTimePointer},
@@ -249,34 +249,34 @@ var upstreamWaits = []Entry{
 		Reason: "five option fields carry a parameter GitLab declares DateTime as a date, which GitLab reads as midnight UTC, so the SSH key adds, the snippet list and the two changelog actions leave the field unset and write the instant through a request option",
 	},
 	{
-		Row: 132, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"search.codeSearchParams"},
 		Predicates: lacksKeys("SearchOptions", "num_context_lines", "regex"),
 		Reason:     "SearchOptions models neither num_context_lines nor regex, so search.code adds both to the query through a request option, each only when set",
 	},
 	{
-		Row: 137, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"jobs.includeRetried"},
 		Predicates: []Predicate{LacksKey{Type: "ListPipelineTriggerJobsOptions", Key: "include_retried"}},
 		Reason:     "ListPipelineTriggerJobsOptions models no include_retried, which the trigger job routes read, so job.list_bridges adds it to the trigger_jobs query through a request option, only when the caller asked",
 	},
 	{
-		Row: 149, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"deployments.rawGetDeployment", "deployments.rawListDeployments"},
 		Replaces:   []string{"Deployments.GetProjectDeployment", "Deployments.ListProjectDeployments"},
 		Predicates: lacksKeys("Deployment", "approvals", "approval_summary", "deployable.project"),
 		Reason:     "Deployment models neither approvals nor approval_summary, and DeploymentDeployable no project, so the deployment get and list decode into deployments.deploymentAPI",
 	},
 	{
-		Row: 149, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"jobs.rawListJobs", "jobs.rawGetJob"},
 		Replaces:   []string{"Jobs.ListProjectJobs"},
 		Predicates: slices.Concat(lacksKeys("Job", jobKeysUnmodeled...), fieldKinds("Job", "float64", jobMeasures...)),
-		Reason:     "Job models neither archived nor runner_manager, its JobRunner none of ip_address, paused, runner_type, online and status, and it types the three measures float64, which read a null as 0 (row 116), so the job lists and reads decode into jobs.jobAPI",
+		Reason:     "Job models neither archived nor runner_manager, its JobRunner none of ip_address, paused, runner_type, online and status, and it types the three measures float64, which read a null as 0, so the job lists and reads decode into jobs.jobAPI",
 	},
 	{
-		Row: 149, Category: CategoryUpstream,
-		Sites: []string{"mrapprovals.rawListApprovalRules", "mrapprovals.rawApprovalState", "mrapprovals.rawMutateApprovalRule"},
+		Category: CategoryUpstream,
+		Sites:    []string{"mrapprovals.rawListApprovalRules", "mrapprovals.rawApprovalState", "mrapprovals.rawMutateApprovalRule"},
 		Replaces: []string{
 			"MergeRequestApprovals.GetApprovalRules", "MergeRequestApprovals.GetApprovalState",
 			"MergeRequestApprovals.CreateApprovalRule", "MergeRequestApprovals.UpdateApprovalRule",
@@ -288,34 +288,34 @@ var upstreamWaits = []Entry{
 		Reason: "MergeRequestApprovalRule has no overridden, so the approval rule list, create and update and the approval state decode into mrapprovals' own rule",
 	},
 	{
-		Row: 149, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"commits.rawGetGPGSignature"},
 		Replaces:   []string{"Commits.GetGPGSignature"},
 		Predicates: lacksKeys("GPGSignature", "signature_type", "commit_source", "key", "x509_certificate"),
 		Reason:     "GPGSignature models the PGP signature alone, so the commit signature decodes the SSH and X.509 variants and the signature's type and source into commits.gpgSignatureAPI",
 	},
 	{
-		Row: 149, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"groupepicboards.rawListBoards", "groupepicboards.rawGetBoard"},
 		Replaces:   []string{"GroupEpicBoards"},
 		Predicates: lacksKeys("GroupEpicBoard", epicBoardKeysUnmodeled...),
 		Reason:     "GroupEpicBoard models neither hide_backlog_list nor hide_closed_list, the LabelDetails of its labels none of title, group_id, project_id, template, created_at and updated_at, and the BoardList of its lists neither list_type nor collapsed, so groupepicboards issues raw GETs for groups/:id/epic_boards and .../:board_id and decodes the documented shape",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"orbit.callMCP"},
 		Predicates: []Predicate{NoMethodFor{Route: "POST /orbit/mcp"}},
-		Reason:     "client-go has no method for POST /orbit/mcp, the Orbit MCP endpoint orbit.tools, orbit.dsl and the llm schema read since GitLab.com removed the routes Orbit.GetTools, Orbit.GetDsl and Orbit.GetSchema send (rows 145 to 147), so the actions send the JSON-RPC request themselves",
+		Reason:     "client-go has no method for POST /orbit/mcp, the Orbit MCP endpoint orbit.tools, orbit.dsl and the llm schema read since GitLab.com removed the routes Orbit.GetTools, Orbit.GetDsl and Orbit.GetSchema send, so the actions send the JSON-RPC request themselves",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"fixture.listGroupHookEvents"},
 		Predicates: []Predicate{NoMethodFor{Route: "GET /groups/:/hooks/:/events"}},
 		Reason:     "client-go has no method that lists a group hook's events, so the e2e fixture reads them through NewRequest",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
-		Sites: []string{"common.uploadModelFile"},
+		Category: CategoryUpstream,
+		Sites:    []string{"common.uploadModelFile"},
 		Predicates: []Predicate{
 			NoMethodFor{Route: "PUT /projects/:/packages/ml_models/:/files/:"},
 			NoMethodFor{Route: "PUT /projects/:/packages/ml_models/:/files/:/:"},
@@ -323,31 +323,31 @@ var upstreamWaits = []Entry{
 		Reason: "client-go has no method that uploads a file into a model version's package, so the model registry scenario puts the file through NewRequest",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"toolutil.PaginationRequestOption"},
 		Predicates: takesNoOptions(pagedWithoutOptions...),
 		Reason:     "sixteen client-go methods of a paginated list take no options struct, so every action that lists through one writes page and per_page into the query through a request option, without which it could only ever ask for the first page",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"uploads.listQueryParameters"},
 		Predicates: []Predicate{TakesNoOptions{Method: "ProjectMarkdownUploads.ListProjectMarkdownUploads"}},
 		Reason:     "ListProjectMarkdownUploads takes no options, so the upload list writes its paging and ordering into the query through a request option",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"groupsshcerts.listQueryParameters"},
 		Predicates: []Predicate{TakesNoOptions{Method: "GroupSSHCertificates.ListGroupSSHCertificates"}},
 		Reason:     "ListGroupSSHCertificates takes no options, so the certificate list writes its paging into the query through a request option",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"terraformstates.lockInfoBody"},
 		Predicates: []Predicate{TakesNoOptions{Method: "TerraformStates.Lock"}},
 		Reason:     "TerraformStates.Lock takes no options and sends no body, and GitLab refuses a lock without the seven keys of terraform's lock info with 400, so admin.terraform_state_lock writes the lock info into the body through a request option",
 	},
 	{
-		Row: 150, Category: CategoryUpstream,
+		Category:   CategoryUpstream,
 		Sites:      []string{"terraformstates.lockIDQuery"},
 		Predicates: []Predicate{TakesNoOptions{Method: "TerraformStates.Unlock"}},
 		Reason:     "TerraformStates.Unlock takes no options, so admin.terraform_state_unlock writes the lock ID GitLab matches the lock against into the query through a request option, only when the caller gives one",

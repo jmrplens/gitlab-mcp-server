@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -29,7 +28,7 @@ import (
 
 // waitsSDK is a stand-in client-go for the upstream waits section, in its
 // "v3.30.0" state: a flag option struct whose scope fields lack omitempty
-// (row 6's shape), an update whose name is a pointer tagged omitempty, whose
+// (the shape SetFeatureFlagOptions had before v3.34.0), an update whose name is a pointer tagged omitempty, whose
 // title lacks it and whose tags are a slice tagged omitempty, a list whose
 // options model no entity filter, a widget that models no archived, a list
 // of gadgets that takes no options struct, a service whose one implemented
@@ -397,7 +396,7 @@ func Plain(c *gl.Client) int {
 }
 `
 
-// waitsFixtureFeature is the e2e fixture: a raw request of row 6's shape and
+// waitsFixtureFeature is the e2e fixture: a raw request of the flag's shape and
 // a probe that reaches every branch of the syntax walk. It is read for its
 // syntax alone, as the e2e build tag leaves it out of every load.
 const waitsFixtureFeature = `//go:build e2e
@@ -452,23 +451,6 @@ func uploadWidgetFile(e *Env) {
 }
 `
 
-// waitsRegister is the stand-in register, with the two rows the fixture's
-// entries wait on, each linking to the section that names what its entries
-// are about.
-const waitsRegister = "| # | Project | Title |\n" +
-	"| - | ------- | ----- |\n" +
-	"| 6 | client-go | [`SetWidgetFlagOptions` writes its scope every call](#setwidgetflagoptions-writes-its-scope-every-call) |\n" +
-	"| 121 | client-go | [`UpdateWidgetOptions` cannot clear a field](#updatewidgetoptions-cannot-clear-a-field) |\n" +
-	"\n" +
-	"### `SetWidgetFlagOptions` writes its scope every call\n" +
-	"\n" +
-	"`ListWidgetsOptions` has no entity filter, no method sends `POST /widgets/archive` or uploads a file (uploadWidgetFile), " +
-	"a `Widget` reads no archived and `Widgets.ListGadgets` takes no options.\n" +
-	"\n" +
-	"### `UpdateWidgetOptions` cannot clear a field\n" +
-	"\n" +
-	"Its title is written on every call.\n"
-
 // The "v3.38.0" states of the stand-in, each a set of changes client-go
 // makes.
 var (
@@ -502,7 +484,7 @@ var (
 func fixtureWaits() []waits.Entry {
 	return []waits.Entry{
 		{
-			Row: 6, Category: waits.CategoryUpstream,
+			Category: waits.CategoryUpstream,
 			Sites:    []string{"widgets.SetFlag", "fixture.setFeature"},
 			Replaces: []string{"Widgets.SetWidgetFlag", "Widgets"},
 			Predicates: []waits.Predicate{
@@ -512,20 +494,20 @@ func fixtureWaits() []waits.Entry {
 			Reason: "the scope fields lack omitempty",
 		},
 		{
-			Row: 6, Category: waits.CategoryUpstream,
+			Category:   waits.CategoryUpstream,
 			Sites:      []string{"widgets.entityFilter"},
 			Predicates: []waits.Predicate{waits.LacksKey{Type: "ListWidgetsOptions", Key: "entity_type"}},
 			Reason:     "the list models no entity filter",
 		},
 		{
-			Row: 6, Category: waits.CategoryUpstream,
+			Category:   waits.CategoryUpstream,
 			Sites:      []string{"widgets.Archive", "widgets.verbFirst", "widgets.importWidgets", "widgets.importThroughSeam", "widgets.lister.Fetch", "widgets.headers", "widgets.always", "widgets.twoFilters", "toolutil.TimestampParam", "common.uploadWidgetFile"},
 			Predicates: []waits.Predicate{waits.NoMethodFor{Route: "POST /widgets/archive"}},
 			Reason:     "no method sends the archive",
 		},
 		{
-			Row: 6, Category: waits.CategoryUpstream,
-			Sites: []string{"widgets.lister.Fetch", "widgets.doWidget", "widgets.sendWidget", "widgets.optsFirst", "widgets.Reshade"},
+			Category: waits.CategoryUpstream,
+			Sites:    []string{"widgets.lister.Fetch", "widgets.doWidget", "widgets.sendWidget", "widgets.optsFirst", "widgets.Reshade"},
 			Predicates: []waits.Predicate{
 				waits.LacksKey{Type: "Widget", Key: "archived"},
 				waits.LacksKey{Type: "UpdateWidgetOptions", Key: "shade"},
@@ -533,8 +515,8 @@ func fixtureWaits() []waits.Entry {
 			Reason: "the widget models no archived and the update no shade",
 		},
 		{
-			Row: 121, Category: waits.CategoryUpstream,
-			Sites: []string{"widgets.Update", "widgets.Rename", "widgets.Reset"},
+			Category: waits.CategoryUpstream,
+			Sites:    []string{"widgets.Update", "widgets.Rename", "widgets.Reset"},
 			Predicates: []waits.Predicate{
 				waits.NotNullable{Type: "UpdateWidgetOptions", Field: "Name"},
 				waits.WritesAlways{Type: "UpdateWidgetOptions", Field: "Title", Encoder: waits.EncoderJSON},
@@ -543,13 +525,13 @@ func fixtureWaits() []waits.Entry {
 			Reason: "the update cannot clear what the edit clears",
 		},
 		{
-			Row: 121, Category: waits.CategoryUpstream,
+			Category:   waits.CategoryUpstream,
 			Unseen:     []string{"widgets.Hint"},
 			Predicates: []waits.Predicate{waits.WritesAlways{Type: "UpdateWidgetOptions", Field: "Title", Encoder: waits.EncoderJSON}},
 			Reason:     "the hint tells the caller to send the title",
 		},
 		{
-			Row: 6, Category: waits.CategoryUpstream,
+			Category:   waits.CategoryUpstream,
 			Sites:      []string{"toolutil.Paginate"},
 			Predicates: []waits.Predicate{waits.TakesNoOptions{Method: "Widgets.ListGadgets"}},
 			Reason:     "the gadget list takes no options to page with",
@@ -595,7 +577,6 @@ func newWaitsFixtureWith(t *testing.T, sdk *strings.Replacer, extra map[string]s
 		scenarioDir + "/common/widgets_test.go":         waitsScenario,
 		scenarioDir + "/ee/deeper/quiet_test.go":        "//go:build e2e\n\npackage deeper\n\nfunc quiet() {}\n",
 		scenarioDir + "/README.md":                      "e.Client().GL().NewRequest is not Go here\n",
-		waits.RegisterPath:                              waitsRegister,
 	}
 	maps.Copy(files, extra)
 	writeFiles(t, root, files)
@@ -610,8 +591,8 @@ func newWaitsFixtureWith(t *testing.T, sdk *strings.Replacer, extra map[string]s
 	return waitsFixture{root: root, pkgs: pkgs, clientGo: clientGo, usage: shared.CollectServiceUsage(pkgs)}
 }
 
-// analyze builds the section over the fixture with entries, reading the
-// register and the e2e fixture under root.
+// analyze builds the section over the fixture with entries, reading the e2e
+// fixture under root.
 func (f waitsFixture) analyze(t *testing.T, root string, entries []waits.Entry) (upstreamWaitsReport, []string) {
 	t.Helper()
 	report, stale, err := analyzeUpstreamWaits(root, f.pkgs, f.clientGo, f.usage, entries)
@@ -625,7 +606,7 @@ func (f waitsFixture) analyze(t *testing.T, root string, entries []waits.Entry) 
 func entryStatuses(report upstreamWaitsReport) []string {
 	out := make([]string, 0, len(report.Entries))
 	for _, entry := range report.Entries {
-		out = append(out, (waits.Entry{Row: entry.Row, Category: entry.Category}).Label()+" "+entry.Status)
+		out = append(out, (waits.Entry{Category: entry.Category, Sites: entry.Sites, Unseen: entry.Unseen}).Label()+" "+entry.Status)
 	}
 	return out
 }
@@ -654,26 +635,30 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 	fixture := newWaitsFixture(t, nil)
 	report, stale := fixture.analyze(t, fixture.root, fixtureWaits())
 
-	row6, row121, probe := []string{"row 6"}, []string{"row 121"}, []string{"probe"}
+	// Each workaround is answered by the entries that list its site, each
+	// named by its first site; widgets.lister.Fetch is listed by two.
+	flag, filter, archive := []string{"upstream widgets.SetFlag"}, []string{"upstream widgets.entityFilter"}, []string{"upstream widgets.Archive"}
+	widget, update, paging := []string{"upstream widgets.lister.Fetch"}, []string{"upstream widgets.Update"}, []string{"upstream toolutil.Paginate"}
+	fetch, probe := []string{"upstream widgets.Archive", "upstream widgets.lister.Fetch"}, []string{"probe"}
 	listWidgets := []string{"Widgets.ListWidgets"}
 	widgetDecode := []waits.Superset{{Type: "widgets.widgetAPI", Root: "Widget", Keys: []string{"archived"}, Needs: []string{"LacksKey{Widget, archived}"}}}
 	widgetBody := []waits.Superset{{Type: "widgets.widgetBody", Root: "UpdateWidgetOptions", Keys: []string{"shade"}, Needs: []string{"LacksKey{UpdateWidgetOptions, shade}"}}}
 	fixtureNewRequest := workaround{Form: formFixtureRawRequest, Site: "fixture.probe", Constructor: "NewRequest", AnsweredBy: probe}
 	want := []workaround{
-		{Form: formScenarioRawRequest, Site: "common.uploadWidgetFile", Constructor: "NewRequest", Verb: "GET", AnsweredBy: row6},
+		{Form: formScenarioRawRequest, Site: "common.uploadWidgetFile", Constructor: "NewRequest", Verb: "GET", AnsweredBy: archive},
 		fixtureNewRequest, fixtureNewRequest, fixtureNewRequest, fixtureNewRequest, fixtureNewRequest,
 		{Form: formFixtureRawRequest, Site: "fixture.probe", Constructor: "UploadRequest", Verb: "PUT", Options: "query", AnsweredBy: probe},
-		{Form: formFixtureRawRequest, Site: "fixture.setFeature", Constructor: "NewRequest", Verb: "POST", Options: "map[string]any{…}", AnsweredBy: row6},
+		{Form: formFixtureRawRequest, Site: "fixture.setFeature", Constructor: "NewRequest", Verb: "POST", Options: "map[string]any{…}", AnsweredBy: flag},
 		{Form: formRequestOption, Site: "toolutil.Continue", PassedTo: listWidgets, AnsweredBy: []string{"pagination"}},
-		{Form: formRequestOption, Site: "toolutil.Paginate", PassedTo: []string{"Widgets.ListGadgets"}, AnsweredBy: row6},
-		{Form: formRequestOption, Site: "toolutil.TimestampParam", PassedTo: listWidgets, AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.Archive", Constructor: "NewRequest", Callers: []rawCaller{{Site: "widgets.ArchiveNow", Verb: "POST"}}, AnsweredBy: row6},
-		{Form: formBodyEdit, Site: "widgets.Rename", Keys: []string{"title"}, AnsweredBy: row121},
-		{Form: formBodyEdit, Site: "widgets.Reset", Keys: []string{"name", "title"}, AnsweredBy: row121},
-		{Form: formRawRequest, Site: "widgets.Reshade", Constructor: "NewRequest", Verb: "PUT", Options: "*widgets.widgetBody", Sends: widgetBody, AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.SetFlag", Constructor: "NewRequest", Verb: "POST", Options: "map[string]any", AnsweredBy: row6},
-		{Form: formBodyEdit, Site: "widgets.Update", Keys: []string{"name", "tags"}, AnsweredBy: row121},
-		{Form: formRequestOption, Site: "widgets.always", AnsweredBy: row6},
+		{Form: formRequestOption, Site: "toolutil.Paginate", PassedTo: []string{"Widgets.ListGadgets"}, AnsweredBy: paging},
+		{Form: formRequestOption, Site: "toolutil.TimestampParam", PassedTo: listWidgets, AnsweredBy: archive},
+		{Form: formRawRequest, Site: "widgets.Archive", Constructor: "NewRequest", Callers: []rawCaller{{Site: "widgets.ArchiveNow", Verb: "POST"}}, AnsweredBy: archive},
+		{Form: formBodyEdit, Site: "widgets.Rename", Keys: []string{"title"}, AnsweredBy: update},
+		{Form: formBodyEdit, Site: "widgets.Reset", Keys: []string{"name", "title"}, AnsweredBy: update},
+		{Form: formRawRequest, Site: "widgets.Reshade", Constructor: "NewRequest", Verb: "PUT", Options: "*widgets.widgetBody", Sends: widgetBody, AnsweredBy: widget},
+		{Form: formRawRequest, Site: "widgets.SetFlag", Constructor: "NewRequest", Verb: "POST", Options: "map[string]any", AnsweredBy: flag},
+		{Form: formBodyEdit, Site: "widgets.Update", Keys: []string{"name", "tags"}, AnsweredBy: update},
+		{Form: formRequestOption, Site: "widgets.always", AnsweredBy: archive},
 		{
 			Form: formRawRequest, Site: "widgets.doWidget", Constructor: "NewRequest", Options: "any",
 			Callers: []rawCaller{
@@ -684,27 +669,27 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 			},
 			Decodes:    widgetDecode,
 			Sends:      widgetBody,
-			AnsweredBy: row6,
+			AnsweredBy: widget,
 		},
-		{Form: formRequestOption, Site: "widgets.entityFilter", PassedTo: listWidgets, AnsweredBy: row6},
-		{Form: formRequestOption, Site: "widgets.headers", PassedTo: listWidgets, AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.importThroughSeam", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.importWidgets", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.lister.Fetch", Constructor: "NewRequest", Verb: "GET", Options: "*gitlab.ListWidgetsOptions", Decodes: widgetDecode, AnsweredBy: row6},
+		{Form: formRequestOption, Site: "widgets.entityFilter", PassedTo: listWidgets, AnsweredBy: filter},
+		{Form: formRequestOption, Site: "widgets.headers", PassedTo: listWidgets, AnsweredBy: archive},
+		{Form: formRawRequest, Site: "widgets.importThroughSeam", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: archive},
+		{Form: formRawRequest, Site: "widgets.importWidgets", Constructor: "UploadRequest", Verb: "POST", Options: "*gitlab.ListWidgetsOptions", UploadField: "file", AnsweredBy: archive},
+		{Form: formRawRequest, Site: "widgets.lister.Fetch", Constructor: "NewRequest", Verb: "GET", Options: "*gitlab.ListWidgetsOptions", Decodes: widgetDecode, AnsweredBy: fetch},
 		{
 			Form: formRawRequest, Site: "widgets.optsFirst", Constructor: "NewRequest", Verb: "PUT", Options: "any",
 			Callers:    []rawCaller{{Site: "widgets.OptsCaller", Verb: "PUT", Options: "*widgets.widgetBody"}},
 			Sends:      widgetBody,
-			AnsweredBy: row6,
+			AnsweredBy: widget,
 		},
 		{
 			Form: formRawRequest, Site: "widgets.sendWidget", Constructor: "NewRequest", Verb: "PATCH", Options: "any",
 			Callers:    []rawCaller{{Site: "widgets.PatchWidget", Verb: "PATCH", Options: "*widgets.widgetBody"}},
 			Sends:      widgetBody,
-			AnsweredBy: row6,
+			AnsweredBy: widget,
 		},
-		{Form: formRequestOption, Site: "widgets.twoFilters", AnsweredBy: row6},
-		{Form: formRawRequest, Site: "widgets.verbFirst", Constructor: "NewRequest", Callers: []rawCaller{{Site: "widgets.VerbCaller", Verb: "DELETE"}}, AnsweredBy: row6},
+		{Form: formRequestOption, Site: "widgets.twoFilters", AnsweredBy: archive},
+		{Form: formRawRequest, Site: "widgets.verbFirst", Constructor: "NewRequest", Callers: []rawCaller{{Site: "widgets.VerbCaller", Verb: "DELETE"}}, AnsweredBy: archive},
 	}
 	if !reflect.DeepEqual(report.Workarounds, want) {
 		t.Errorf("workarounds =\n%+v\nwant\n%+v", report.Workarounds, want)
@@ -712,7 +697,11 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 	if len(stale) != 0 {
 		t.Errorf("stale = %q, want none", stale)
 	}
-	wantStatuses := []string{"row 6 holds", "row 6 holds", "row 6 holds", "row 6 holds", "row 121 holds", "row 121 holds", "row 6 holds", "probe declared", "pagination declared"}
+	wantStatuses := []string{
+		"upstream widgets.SetFlag holds", "upstream widgets.entityFilter holds", "upstream widgets.Archive holds",
+		"upstream widgets.lister.Fetch holds", "upstream widgets.Update holds", "upstream widgets.Hint holds",
+		"upstream toolutil.Paginate holds", "probe declared", "pagination declared",
+	}
 	if got := entryStatuses(report); !reflect.DeepEqual(got, wantStatuses) {
 		t.Errorf("statuses = %q, want %q", got, wantStatuses)
 	}
@@ -728,7 +717,8 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 }
 
 // TestBuildUpstreamWaits_AClientGoThatFixesThings_RetiresOrEditsEachEntry is
-// row 6's case on the stand-in, with the other predicates' beside it. With
+// the SetFeatureFlagOptions case on the stand-in, with the other predicates'
+// beside it. With
 // one of the flag's two scope fields gaining omitempty the entry has a
 // predicate to edit, and with both it is a workaround to retire, naming its
 // sites. An option struct that models the filter, a method that sends the
@@ -742,8 +732,10 @@ func TestBuildUpstreamWaits_AClientGoThatFixesThings_RetiresOrEditsEachEntry(t *
 		fixture := newWaitsFixture(t, flagKeyGainsOmitempty)
 		report, stale := fixture.analyze(t, fixture.root, fixtureWaits())
 		want := []string{
-			"row 6 stale_predicate", "row 6 obsolete_workaround", "row 6 obsolete_workaround", "row 6 stale_predicate",
-			"row 121 stale_predicate", "row 121 holds", "row 6 obsolete_workaround", "probe declared", "pagination declared",
+			"upstream widgets.SetFlag stale_predicate", "upstream widgets.entityFilter obsolete_workaround",
+			"upstream widgets.Archive obsolete_workaround", "upstream widgets.lister.Fetch stale_predicate",
+			"upstream widgets.Update stale_predicate", "upstream widgets.Hint holds",
+			"upstream toolutil.Paginate obsolete_workaround", "probe declared", "pagination declared",
 		}
 		if got := entryStatuses(report); !reflect.DeepEqual(got, want) {
 			t.Errorf("statuses = %q, want %q", got, want)
@@ -774,7 +766,7 @@ func TestBuildUpstreamWaits_AClientGoThatFixesThings_RetiresOrEditsEachEntry(t *
 		report, _ := fixture.analyze(t, fixture.root, fixtureWaits())
 		first := report.Entries[0]
 		if first.Status != waitObsolete || !slices.Equal(first.Sites, []string{"widgets.SetFlag", "fixture.setFeature"}) {
-			t.Errorf("row 6 = %+v, want obsolete_workaround naming widgets.SetFlag and fixture.setFeature", first)
+			t.Errorf("the flag's entry = %+v, want obsolete_workaround naming widgets.SetFlag and fixture.setFeature", first)
 		}
 	})
 }
@@ -1049,7 +1041,7 @@ func Preset(c *gl.Client) error {
 func TestBuildUpstreamWaits_EntriesThatAnswerLess_LeaveTheirWorkaroundsFindings(t *testing.T) {
 	fixture := newWaitsFixtureWith(t, nil, map[string]string{"internal/tools/presets/presets.go": presetsTool})
 	entries := append(fixtureWaits(), waits.Entry{
-		Row: 121, Category: waits.CategoryUpstream, Sites: []string{"presets.Preset"},
+		Category: waits.CategoryUpstream, Sites: []string{"presets.Preset"},
 		Predicates: []waits.Predicate{waits.NotNullable{Type: "UpdateWidgetOptions", Field: "Name"}}, Reason: "a preset",
 	})
 	entries[0].Sites = []string{"fixture.setFeature"}
@@ -1069,12 +1061,12 @@ func TestBuildUpstreamWaits_EntriesThatAnswerLess_LeaveTheirWorkaroundsFindings(
 	}
 	want := map[string][]string{
 		"widgets.SetFlag":      nil,
-		"widgets.Rename":       {"title", "row 121"},
-		"widgets.Reset":        {"title", "row 121"},
-		"widgets.Update":       {"tags", "row 121"},
-		"presets.Preset":       {"keys unread", "row 121"},
-		"widgets.lister.Fetch": {"LacksKey{Widget, archived}", "row 6"},
-		"toolutil.Paginate":    {"Widgets.ListGadgets", "row 6"},
+		"widgets.Rename":       {"title", "upstream widgets.Update"},
+		"widgets.Reset":        {"title", "upstream widgets.Update"},
+		"widgets.Update":       {"tags", "upstream widgets.Update"},
+		"presets.Preset":       {"keys unread", "upstream presets.Preset"},
+		"widgets.lister.Fetch": {"LacksKey{Widget, archived}", "upstream widgets.Archive"},
+		"toolutil.Paginate":    {"Widgets.ListGadgets", "upstream toolutil.Paginate"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("gaps = %v, want %v", got, want)
@@ -1091,19 +1083,17 @@ func TestBuildUpstreamWaits_EntriesThatAnswerLess_LeaveTheirWorkaroundsFindings(
 // every way an entry stops describing the tree: a site that does not exist,
 // a site the walk finds nothing at, an unseen site that does not exist or
 // that the walk does see, an unseen site that holds no string naming a key
-// a field predicate of the entry names, a row the register lacks or whose
-// text names nothing the entry is about, a method client-go does not
+// a field predicate of the entry names, a method client-go does not
 // declare or a handler calls, a predicate naming what client-go lacks, a
 // LacksKey or FieldKind on a superset's root naming a key no superset at the
 // entry's sites carries, a TakesNoOptions naming a method no site of the
 // entry is handed to, and a shape Problems refuses. A whole service is the
-// service rule's to judge and is passed over here, and an upstream entry
-// with no row is Problems' to name.
+// service rule's to judge and is passed over here.
 func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testing.T) {
 	fixture := newWaitsFixture(t, nil)
 	entries := append(fixtureWaits(),
 		waits.Entry{
-			Row: 7, Category: waits.CategoryUpstream,
+			Category:   waits.CategoryUpstream,
 			Sites:      []string{"widgets.Gone", "widgets.Plain"},
 			Unseen:     []string{"widgets.Vanished", "widgets.SetFlag", "widgets.Stamp"},
 			Replaces:   []string{"Widgets.Gone", "Widgets.ListWidgets", "Gadgets"},
@@ -1112,15 +1102,7 @@ func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testi
 		},
 		waits.Entry{Category: "decided", Sites: []string{"widgets.Plain"}, Reason: "no such category"},
 		waits.Entry{
-			Category: waits.CategoryUpstream, Unseen: []string{"widgets.Plain"},
-			Predicates: []waits.Predicate{waits.LacksKey{Type: "ListWidgetsOptions", Key: "gone"}}, Reason: "no row",
-		},
-		waits.Entry{
-			Row: 121, Category: waits.CategoryUpstream, Sites: []string{"widgets.Update"},
-			Predicates: []waits.Predicate{waits.LacksKey{Type: "Widget", Key: "shade"}}, Reason: "a row about something else",
-		},
-		waits.Entry{
-			Row: 6, Category: waits.CategoryUpstream, Sites: []string{"widgets.lister.Fetch"},
+			Category: waits.CategoryUpstream, Sites: []string{"widgets.lister.Fetch"},
 			Predicates: []waits.Predicate{
 				waits.LacksKey{Type: "Widget", Key: "archived"},
 				waits.LacksKey{Type: "Widget", Key: "shade"},
@@ -1131,12 +1113,12 @@ func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testi
 			Reason: "keys the decode does not read",
 		},
 		waits.Entry{
-			Row: 6, Category: waits.CategoryUpstream, Sites: []string{"toolutil.Paginate"},
+			Category: waits.CategoryUpstream, Sites: []string{"toolutil.Paginate"},
 			Predicates: []waits.Predicate{waits.TakesNoOptions{Method: "Widgets.ListGadgets"}, waits.TakesNoOptions{Method: "Widgets.ArchiveWidget"}},
 			Reason:     "a method the option is not handed to",
 		},
 		waits.Entry{
-			Row: 121, Category: waits.CategoryUpstream, Unseen: []string{"widgets.Plain", "widgets.Hint"},
+			Category: waits.CategoryUpstream, Unseen: []string{"widgets.Plain", "widgets.Hint"},
 			Predicates: []waits.Predicate{
 				waits.NotNullable{Type: "UpdateWidgetOptions", Field: "Name"},
 				waits.WritesAlways{Type: "UpdateWidgetOptions", Field: "Title", Encoder: waits.EncoderJSON},
@@ -1147,36 +1129,31 @@ func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testi
 	)
 	_, stale := fixture.analyze(t, fixture.root, entries)
 	want := []string{
-		"upstream wait row 0 names no register row",
 		"wait decided: category \"decided\" is not one the table defines",
 		"wait decided: site widgets.Plain carries no workaround the walk finds",
-		"wait row 121: row 121 of docs/development/upstream-bugs.md names nothing the entry is about (Widget, widgets.Update)",
-		"wait row 121: unseen site widgets.Hint holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
-		"wait row 121: unseen site widgets.Plain holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
-		"wait row 121: unseen site widgets.Plain holds no string naming title, the key WritesAlways{UpdateWidgetOptions.Title, json} is about",
-		"wait row 6: FieldKind{Widget.ID, int64} names a key no superset at the entry's sites carries beside Widget",
-		"wait row 6: LacksKey{Widget, shade} names a key no superset at the entry's sites carries beside Widget",
-		"wait row 6: TakesNoOptions{Widgets.ArchiveWidget} names a method no site of the entry is handed to",
-		"wait row 7: LacksKey{Gone, x} names what client-go lacks: client-go declares no type Gone",
-		"wait row 7: docs/development/upstream-bugs.md has no row 7",
-		"wait row 7: replaces Widgets.Gone: client-go's Widgets has no method Gone",
-		"wait row 7: replaces Widgets.ListWidgets, which a handler calls",
-		"wait row 7: site widgets.Gone no longer exists",
-		"wait row 7: site widgets.Plain carries no workaround the walk finds",
-		"wait row 7: site widgets.Vanished no longer exists",
-		"wait row 7: the walk finds a workaround at widgets.SetFlag, so it belongs among the sites",
+		"wait upstream toolutil.Paginate: TakesNoOptions{Widgets.ArchiveWidget} names a method no site of the entry is handed to",
+		"wait upstream widgets.Gone: LacksKey{Gone, x} names what client-go lacks: client-go declares no type Gone",
+		"wait upstream widgets.Gone: replaces Widgets.Gone: client-go's Widgets has no method Gone",
+		"wait upstream widgets.Gone: replaces Widgets.ListWidgets, which a handler calls",
+		"wait upstream widgets.Gone: site widgets.Gone no longer exists",
+		"wait upstream widgets.Gone: site widgets.Plain carries no workaround the walk finds",
+		"wait upstream widgets.Gone: site widgets.Vanished no longer exists",
+		"wait upstream widgets.Gone: the walk finds a workaround at widgets.SetFlag, so it belongs among the sites",
+		"wait upstream widgets.Plain: unseen site widgets.Hint holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
+		"wait upstream widgets.Plain: unseen site widgets.Plain holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
+		"wait upstream widgets.Plain: unseen site widgets.Plain holds no string naming title, the key WritesAlways{UpdateWidgetOptions.Title, json} is about",
+		"wait upstream widgets.lister.Fetch: FieldKind{Widget.ID, int64} names a key no superset at the entry's sites carries beside Widget",
+		"wait upstream widgets.lister.Fetch: LacksKey{Widget, shade} names a key no superset at the entry's sites carries beside Widget",
 	}
 	if !reflect.DeepEqual(stale, want) {
 		t.Errorf("stale =\n%s\nwant\n%s", strings.Join(stale, "\n"), strings.Join(want, "\n"))
 	}
 
-	t.Run("a tree without the register or the e2e fixture", func(t *testing.T) {
+	t.Run("a tree without the e2e fixture", func(t *testing.T) {
 		bareReport, bareStale := fixture.analyze(t, t.TempDir(), fixtureWaits())
 		var missing []string
 		for _, want := range []string{
-			"upstream register: read the upstream register",
-			"wait row 6: docs/development/upstream-bugs.md has no row 6",
-			"wait row 6: site fixture.setFeature no longer exists",
+			"wait upstream widgets.SetFlag: site fixture.setFeature no longer exists",
 		} {
 			if !slices.ContainsFunc(bareStale, func(line string) bool { return strings.HasPrefix(line, want) }) {
 				missing = append(missing, want)
@@ -1238,13 +1215,13 @@ func TestWithCoveredRawServices_EntriesReplacingAService_DeclareItCoveredRaw(t *
 		"Twice": {supersededUpstream, "replaced upstream"},
 		"Hand":  {coveredRaw, "a raw request nothing holds"},
 	}
-	entries := []waits.Entry{{Row: 7, Category: waits.CategoryUpstream, Replaces: []string{"Stats", "Twice", "Stats.Get"}, Reason: "counts"}}
+	entries := []waits.Entry{{Category: waits.CategoryUpstream, Sites: []string{"stats.fetch"}, Replaces: []string{"Stats", "Twice", "Stats.Get"}, Reason: "counts"}}
 	got, twice := withCoveredRawServices(declaredBy, entries)
 	want := map[string]declaration{
 		"Kept":  {coveredGraphQL, "over GraphQL"},
 		"Twice": {supersededUpstream, "replaced upstream"},
 		"Hand":  {coveredRaw, "a raw request nothing holds"},
-		"Stats": {coveredRaw, "row 7: counts"},
+		"Stats": {coveredRaw, "upstream stats.fetch: counts"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("declarations = %v, want %v", got, want)
@@ -1402,7 +1379,9 @@ func TestWalkGuards_WhatTheTreeCannotProduce_FindNothing(t *testing.T) {
 type witnessReport struct {
 	UpstreamWaits *struct {
 		Entries []struct {
-			Row int
+			Predicates []struct {
+				Predicate string
+			}
 		}
 		Workarounds []struct {
 			Form string
@@ -1412,38 +1391,58 @@ type witnessReport struct {
 }
 
 // retiredByTheBump are the predicates of the entries the bump of client-go
-// retired, as the waits table spelled them: on the v3.38.1 step the eight scope
-// fields SetFeatureFlagOptions tagged without omitempty (row 6) and the pattern
-// and type of UpdatePackageProtectionRulesOptions (row 52); on the v3.40.3 step
-// what ImportStatus, PipelineVariable and ListTreeOptions left out (row 34), the
-// method cancel_auto_merge had none of (row 46), the spelling of
-// include_descendants (row 95), and the two list switches of a group board's
-// update (row 98).
-func retiredByTheBump() map[int][]waits.Predicate {
-	retired := map[int][]waits.Predicate{
-		34: {
+// retired, as the waits table spelled them, keyed by what each entry was
+// about: on the v3.38.1 step the eight scope fields SetFeatureFlagOptions
+// tagged without omitempty and the pattern and type of
+// UpdatePackageProtectionRulesOptions; on the v3.40.3 step what ImportStatus,
+// PipelineVariable and ListTreeOptions left out, the method cancel_auto_merge
+// had none of, the spelling of include_descendants, and the two list switches
+// of a group board's update.
+func retiredByTheBump() map[string][]waits.Predicate {
+	retired := map[string][]waits.Predicate{
+		"import status, schedule variables and tree": {
 			waits.LacksKey{Type: "ImportStatus", Key: "failed_relations"},
 			waits.LacksKey{Type: "ImportStatus", Key: "stats"},
 			waits.LacksKey{Type: "PipelineSchedule", Key: "variables.raw"},
 			waits.LacksKey{Type: "ListTreeOptions", Key: "with_last_commit"},
 		},
-		46: {waits.NoMethodFor{Route: "POST /projects/:/merge_requests/:/cancel_auto_merge"}},
-		95: {waits.TagName{Type: "ListGroupMilestonesOptions", Field: "IncludeDescendents", Encoder: waits.EncoderQuery, Want: "include_descendants"}},
-		98: {
+		"cancel_auto_merge":   {waits.NoMethodFor{Route: "POST /projects/:/merge_requests/:/cancel_auto_merge"}},
+		"include_descendants": {waits.TagName{Type: "ListGroupMilestonesOptions", Field: "IncludeDescendents", Encoder: waits.EncoderQuery, Want: "include_descendants"}},
+		"group board list switches": {
 			waits.LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_backlog_list"},
 			waits.LacksKey{Type: "UpdateGroupIssueBoardOptions", Key: "hide_closed_list"},
 		},
 	}
 	for _, field := range []string{"Key", "FeatureGroup", "User", "Group", "Namespace", "Project", "Repository", "Force"} {
-		retired[6] = append(retired[6], waits.WritesAlways{Type: "SetFeatureFlagOptions", Field: field, Encoder: waits.EncoderJSON})
+		retired["SetFeatureFlagOptions"] = append(retired["SetFeatureFlagOptions"], waits.WritesAlways{Type: "SetFeatureFlagOptions", Field: field, Encoder: waits.EncoderJSON})
 	}
 	for _, field := range []string{"PackageNamePattern", "PackageType"} {
-		retired[52] = append(retired[52], waits.WritesAlways{Type: "UpdatePackageProtectionRulesOptions", Field: field, Encoder: waits.EncoderJSON})
+		retired["UpdatePackageProtectionRulesOptions"] = append(retired["UpdatePackageProtectionRulesOptions"], waits.WritesAlways{Type: "UpdatePackageProtectionRulesOptions", Field: field, Encoder: waits.EncoderJSON})
 	}
 	return retired
 }
 
-// TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403 is the witness
+// retiredPredicatesWaitedOn lists each retired predicate, as a report spells
+// it, that an entry of the report still carries.
+func retiredPredicatesWaitedOn(rep witnessReport, retired map[string][]waits.Predicate) []string {
+	spellings := map[string]bool{}
+	for _, predicates := range retired {
+		for _, predicate := range predicates {
+			spellings[predicate.String()] = true
+		}
+	}
+	var out []string
+	for _, entry := range rep.UpstreamWaits.Entries {
+		for _, verdict := range entry.Predicates {
+			if spellings[verdict.Predicate] {
+				out = append(out, verdict.Predicate)
+			}
+		}
+	}
+	return out
+}
+
+// TestRun_Repository_RetiresTheEntriesTheBumpAnswersAtClientGoV3403 is the witness
 // on the real tree of the entries the two bump steps retire. client-go's
 // SetFeatureFlagOptions tags its scope fields omitempty from v3.34.0, which
 // internal/tools/features.Set and the e2e fixture's setFeature went on posting
@@ -1453,16 +1452,17 @@ func retiredByTheBump() map[int][]waits.Predicate {
 // import status sends, PipelineVariable its raw, ListTreeOptions with_last_commit,
 // UpdateGroupIssueBoardOptions the list switches and MergeRequests has
 // CancelAutoMerge, and from v3.40.1 ListGroupMilestonesOptions spells
-// include_descendants as GitLab does. On v3.30.0 every predicate of those rows
-// held. From the v3.40.3 pin none does, so the entries are gone with the
-// workarounds they held: no entry names any of the rows and no workaround stands
-// at any of their sites, since each now calls the SDK. One predicate of row 34
-// holds still and is not asked here: ImportStatus keeps CreateAt, deprecated and
-// tagged create_at, beside the CreatedAt the handler reads.
+// include_descendants as GitLab does. On v3.30.0 every predicate of those
+// entries held. From the v3.40.3 pin none does, so the entries are gone with the
+// workarounds they held: no entry carries any of their predicates and no
+// workaround stands at any of their sites, since each now calls the SDK. One
+// predicate of the import status entry holds still and is not asked here:
+// ImportStatus keeps CreateAt, deprecated and tagged create_at, beside the
+// CreatedAt the handler reads.
 //
 // It reads the report as plain JSON, so it says the same thing on a tree
 // that has no such section: there it fails, which is the point.
-func TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403(t *testing.T) {
+func TestRun_Repository_RetiresTheEntriesTheBumpAnswersAtClientGoV3403(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
@@ -1478,8 +1478,8 @@ func TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403(t *testing.T
 	routes, unresolved := sdkRoutes(structs.ClientGoDir(pkgs))
 	sdk := waits.SDK{Types: clientGo, Routes: routes, Unresolved: unresolved}
 	retired := retiredByTheBump()
-	for row, predicates := range retired {
-		t.Run("row "+strconv.Itoa(row)+" predicates", func(t *testing.T) {
+	for about, predicates := range retired {
+		t.Run(about+" predicates", func(t *testing.T) {
 			for _, predicate := range predicates {
 				if verdict := waits.Evaluate(predicate, sdk); verdict.Holds || verdict.Error != "" {
 					t.Errorf("%s = %+v on the pinned client-go, want it read and no longer holding", predicate, verdict)
@@ -1498,10 +1498,8 @@ func TestRun_Repository_RetiresTheRowsTheBumpAnswersAtClientGoV3403(t *testing.T
 	if rep.UpstreamWaits == nil {
 		t.Fatal("the sdk report has no upstream_waits section: nothing holds a workaround that waits on client-go to the SDK it is pinned to")
 	}
-	for _, entry := range rep.UpstreamWaits.Entries {
-		if _, gone := retired[entry.Row]; gone {
-			t.Errorf("the waits table still holds an entry for row %d", entry.Row)
-		}
+	for _, predicate := range retiredPredicatesWaitedOn(rep, retired) {
+		t.Errorf("the waits table still holds an entry waiting on %s", predicate)
 	}
 	retiredSites := []string{
 		"features.Set", "fixture.setFeature", "protectedpackages.Update",
@@ -1624,8 +1622,8 @@ func TestRun_Repository_HoldsEveryKeyARawRequestCarriesBesideClientGo(t *testing
 	})
 	t.Run("paging without options", func(t *testing.T) {
 		paging := bySite["request-option toolutil.PaginationRequestOption"]
-		if len(paging.PassedTo) != 16 || !slices.Equal(paging.AnsweredBy, []string{"row 150"}) {
-			t.Errorf("PaginationRequestOption is handed to %q and answered by %q, want sixteen methods and row 150", paging.PassedTo, paging.AnsweredBy)
+		if want := []string{"upstream toolutil.PaginationRequestOption"}; len(paging.PassedTo) != 16 || !slices.Equal(paging.AnsweredBy, want) {
+			t.Errorf("PaginationRequestOption is handed to %q and answered by %q, want sixteen methods and %q", paging.PassedTo, paging.AnsweredBy, want)
 		}
 	})
 	checkTerraformLockOptions(t, bySite)
@@ -1634,7 +1632,7 @@ func TestRun_Repository_HoldsEveryKeyARawRequestCarriesBesideClientGo(t *testing
 // checkTerraformLockOptions holds the Terraform state lock and unlock (issue
 // 1597) to what the witness reads of them: neither method takes options, so
 // the lock info and the lock ID go out through a request option each, handed
-// to its own method and answered by row 150.
+// to its own method and answered by the entry that lists it.
 func checkTerraformLockOptions(t *testing.T, bySite map[string]supersetWitness) {
 	t.Helper()
 	for site, method := range map[string]string{
@@ -1643,8 +1641,8 @@ func checkTerraformLockOptions(t *testing.T, bySite map[string]supersetWitness) 
 	} {
 		t.Run(site, func(t *testing.T) {
 			option := bySite["request-option "+site]
-			if !slices.Equal(option.PassedTo, []string{method}) || !slices.Equal(option.AnsweredBy, []string{"row 150"}) {
-				t.Errorf("%s is handed to %q and answered by %q, want %s alone and row 150", site, option.PassedTo, option.AnsweredBy, method)
+			if want := []string{"upstream " + site}; !slices.Equal(option.PassedTo, []string{method}) || !slices.Equal(option.AnsweredBy, want) {
+				t.Errorf("%s is handed to %q and answered by %q, want %s alone and %q", site, option.PassedTo, option.AnsweredBy, method, want)
 			}
 		})
 	}
@@ -1677,7 +1675,7 @@ func TestRun_Repository_EveryWorkaroundIsAnsweredAndEveryEntryHolds(t *testing.T
 	}
 	for _, entry := range rep.UpstreamWaits.Entries {
 		if entry.Category == waits.CategoryUpstream && entry.Status != waitHolds {
-			t.Errorf("row %d is %s: %+v", entry.Row, entry.Status, entry.Predicates)
+			t.Errorf("the wait at %q is %s: %+v", slices.Concat(entry.Sites, entry.Unseen), entry.Status, entry.Predicates)
 		}
 	}
 	if rep.Summary.UpstreamWaits != len(waits.Entries()) || rep.Summary.Workarounds != len(rep.UpstreamWaits.Workarounds) {

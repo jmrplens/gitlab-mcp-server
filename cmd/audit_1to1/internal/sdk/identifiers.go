@@ -130,11 +130,10 @@ type sdkNarrowing struct {
 	Placeholders []placeholder `json:"placeholders"`
 	// Called is set when a handler references the method.
 	Called bool `json:"called,omitempty"`
-	// Status is what the parameter comes to, and Action and UpstreamRow the
-	// declaration's, when one answers it.
-	Status      string `json:"status"`
-	Action      string `json:"action,omitempty"`
-	UpstreamRow int    `json:"upstream_row,omitempty"`
+	// Status is what the parameter comes to, and Action the declaration's,
+	// when one answers it.
+	Status string `json:"status"`
+	Action string `json:"action,omitempty"`
 	// Inputs are the input fields the integers handed to it are read from, and
 	// StoppedAt names the expressions the trace stopped at.
 	Inputs    []string `json:"inputs,omitempty"`
@@ -178,7 +177,7 @@ func analyzeIdentifiers(root string, pkgs []*packages.Package, usage map[string]
 	stale = append(stale, applyIdentifierDeclarations(arguments, declared)...)
 	narrowed := sdkNarrowings(reading, index, calledMethods(usage))
 	read := collectNarrowingOrigins(funcs, trace, values, narrowed)
-	stale = append(stale, applyNarrowingDeclarations(root, narrowed, read, narrowings, inputHoldsName(pkgs))...)
+	stale = append(stale, applyNarrowingDeclarations(narrowed, read, narrowings, inputHoldsName(pkgs))...)
 	return identifiersReport{Arguments: arguments, Unfollowed: values.unfollowed, SDKNarrowed: narrowed}, stale
 }
 

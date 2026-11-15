@@ -8,9 +8,9 @@
 // compares what was sent with what GitLab answers, so a param GitLab declares
 // on a route this server already calls and that client-go's option struct does
 // not model was seen by neither: client-go cannot send it, so no input offers
-// it, so no recorded request carries it. Row 133 of the upstream register is
-// the case: the params GitLab 19.5 added that client-go does not model came
-// from a review of the diff between two records, which no gate read.
+// it, so no recorded request carries it. The params GitLab 19.5 added that
+// client-go does not model are the case: they came from a review of the diff
+// between two records, which no gate read.
 //
 // # What it reads
 //

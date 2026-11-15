@@ -1147,8 +1147,8 @@ func TestAcceptedEnumGaps_NotificationLevels_ExcuseEachValueAndNotAConstantClien
 
 // TestAcceptedEnumGaps_Entries_AreWellFormedAndCiteTheirEvidence verifies
 // the exemption table itself: every key is a field or a field=value form
-// under a package, every reason names the GitLab doc or the upstream
-// register it rests on, and the generated feature access level family
+// under a package, every reason names the GitLab doc or the GitLab release
+// whose source it rests on, and the generated feature access level family
 // covers both project inputs.
 func TestAcceptedEnumGaps_Entries_AreWellFormedAndCiteTheirEvidence(t *testing.T) {
 	if len(acceptedEnumGaps) == 0 {
@@ -1160,8 +1160,8 @@ func TestAcceptedEnumGaps_Entries_AreWellFormedAndCiteTheirEvidence(t *testing.T
 			if parts := strings.Split(field, "."); len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 				t.Errorf("key %q is not <pkg>.<MCPType>.<tag>[=<value>]", key)
 			}
-			if !strings.Contains(reason, "doc/api/") && !strings.Contains(reason, "upstream-bugs.md") {
-				t.Errorf("reason for %q cites neither a doc/api page nor the upstream register: %q", key, reason)
+			if !strings.Contains(reason, "doc/api/") && !strings.Contains(reason, "-ee") {
+				t.Errorf("reason for %q cites neither a doc/api page nor GitLab's source at a release: %q", key, reason)
 			}
 		})
 	}

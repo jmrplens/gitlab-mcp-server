@@ -190,8 +190,8 @@ and return `NotFoundResult` with `nil` error. `IsHTTPStatus` and
 
 A hint that names a role, a license or an owner is keyed on
 `IsPermissionRefusal(err)`, not on a status: GitLab refuses a missing
-permission with 401 at many routes (entry 55 of
-`docs/development/upstream-bugs.md`), and a hint keyed on 401 alone would
+permission with 401 rather than 403 at many REST routes, and a hint keyed on
+401 alone would
 follow the verdict that the token itself was refused. It is true for a REST
 401 or 403 whose body carries no RFC 6750 error code and does not refuse the
 account itself (a blocked or deactivated account, for one); a route whose 403

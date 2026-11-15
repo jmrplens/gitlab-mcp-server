@@ -123,7 +123,7 @@ func TestUpstreamReferences_EachSpellingGitLabResolves_IsFound(t *testing.T) {
 		{name: "a redirect in a shell line", line: "go test ./... 2>&1 | tee log"},
 		{name: "an ampersand between words", line: "R&D and Q&A"},
 		{name: "a path with no number", line: "gitlab-org/gitlab is the project"},
-		{name: "a file anchor", line: "docs/development/upstream-bugs.md#a-permission-refusal"},
+		{name: "a file anchor", line: "docs/development/error-handling.md#why-a-405-can-name-the-projects-path"},
 		{name: "a line anchor", line: "cmd/server/main.go#L12"},
 		{name: "a URL to a pipeline", line: "https://gitlab.com/gitlab-org/gitlab/-/pipelines/12"},
 		{name: "a URL to a list of merge requests", line: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests"},
@@ -147,8 +147,8 @@ func TestUpstreamReferences_EachSpellingGitLabResolves_IsFound(t *testing.T) {
 
 // TestDescription_AnUpstreamReference_FailsAndIsNamed verifies the rule in
 // the gate: a reference in the title or in the body fails the run, its line
-// is listed, and the failure names each reference, the register row to name
-// instead, how to write an item of another forge so that it passes, and how a
+// is listed, and the failure names each reference, what to write instead (the
+// item in words or this repository's issue), how to write an item of another forge so that it passes, and how a
 // Dependabot pull request's description is cut and its run repeated.
 func TestDescription_AnUpstreamReference_FailsAndIsNamed(t *testing.T) {
 	t.Parallel()
@@ -159,7 +159,7 @@ func TestDescription_AnUpstreamReference_FailsAndIsNamed(t *testing.T) {
 		"body:3:See https://gitlab.com/gitlab-org/gitlab/-/issues/1 and `gitlab-org/gitlab#2`.\n",
 		"names an item of another project or group the way GitLab resolves",
 		"    gitlab-org/api/client-go!3063\n    https://gitlab.com/gitlab-org/gitlab/-/issues/1\n    gitlab-org/gitlab#2\n",
-		"docs/development/upstream-bugs.md",
+		"Describe the item in words instead, or name the\nissue of this repository that tracks it as #N.",
 		"such as a GitHub issue as\nowner/repo#N or repo#N, is refused too",
 		"write it as its github.com URL, which passes, or name it in words",
 		"A Dependabot pull request fails here when its description copies a\ndependency's release notes, changelog or commit list",
