@@ -361,7 +361,7 @@ func TestArgumentGuards_EachAsksUnderItsOwnKey(t *testing.T) {
 			if id != want[id] {
 				t.Errorf("the confirmation key is %q, want %q: it is the key elicitation hooks match", id, want[id])
 			}
-			if got := askedMessage(t, err, id); got == "" {
+			if askedMessage(t, err, id) == "" {
 				t.Errorf("the question under %q is empty", id)
 			}
 		})

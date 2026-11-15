@@ -82,13 +82,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_group_restore — restore a previously deleted group.
 		groupUpdateSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_group_restore"),
 		// gitlab_group_archive — archive a group (destructive, idempotent).
-		groupArchiveSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
+		groupConfirmedUpdateSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
 		// gitlab_group_unarchive: unarchive a group (idempotent).
 		groupUpdateSpec("unarchive", toolutil.RouteAction(client, UnarchiveOutput), "gitlab_group_unarchive"),
 		// gitlab_group_search — search for groups by name or path.
 		groupReadSpec(paramSearch, toolutil.RouteAction(client, Search), "gitlab_group_search"),
 		// gitlab_group_transfer_project: transfer a project into a group (destructive).
-		groupTransferSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
+		groupConfirmedUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
 		// gitlab_group_projects — list the projects that belong to a group.
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
 		// gitlab_group_members_list — list the members of a group.
@@ -132,7 +132,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_group_shared_project_delete: remove a project shared with a group, from the group's side (destructive).
 		groupDeleteSpec("shared_project_delete", toolutil.DestructiveVoidAction(client, DeleteSharedProject), toolGroupSharedProjectDelete),
 		// gitlab_group_transfer: move a group under a new parent group or to top level (destructive).
-		groupTransferSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
+		groupConfirmedUpdateSpec("transfer", toolutil.RouteActionWithRequest(client, TransferSubGroup), "gitlab_group_transfer"),
 		// gitlab_group_upload_avatar — upload or replace a group's avatar image.
 		groupUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadAvatar), "gitlab_group_upload_avatar"),
 		// gitlab_group_list_provisioned_users — list users provisioned via SAML/SCIM (Premium/Ultimate).
@@ -228,27 +228,22 @@ func groupUpdateSpec(name string, route toolutil.ActionRoute, individualTool str
 	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(individualTool))
 }
 
-// groupTransferSpec is an update that asks for confirmation. A transfer
-// changes the path and the URLs of the project or the group and of everything
-// under it, and who inherits access to it, and the members and tokens the old
-// namespace granted stop reaching it. project.transfer makes the same move
-// through PUT /projects/:id/transfer and is destructive, so the three actions
-// that move a namespace answer alike. Only the destructive bit changes: the
-// constructor, and with it the idempotency hint, stays the update's.
-func groupTransferSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupOptionsForAction(individualTool)
-	options.Destructive = true
-	return toolutil.NewUpdateActionSpec(name, route, options)
-}
-
-// groupArchiveSpec is an update that asks for confirmation. Archiving a
-// group does more than make it and its projects read-only: GitLab takes
-// every project of the group out of its fork network and closes the open
-// merge requests from and to their forks, and group.unarchive restores
-// neither. That is what project.archive does to one project and
-// project.delete_fork_relation is destructive for. Only the destructive bit
-// is added to the update.
-func groupArchiveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+// groupConfirmedUpdateSpec is an update that asks for confirmation. Only the
+// destructive bit changes: the constructor, and with it the idempotency hint,
+// stays the update's. Three actions take it:
+//
+//   - transfer and transfer_project: a transfer changes the path and the URLs
+//     of the project or the group and of everything under it, and who
+//     inherits access to it, and the members and tokens the old namespace
+//     granted stop reaching it. project.transfer makes the same move through
+//     PUT /projects/:id/transfer and is destructive, so the three actions
+//     that move a namespace answer alike.
+//   - archive: archiving a group does more than make it and its projects
+//     read-only. GitLab takes every project of the group out of its fork
+//     network and closes the open merge requests from and to their forks, and
+//     group.unarchive restores neither. That is what project.archive does to
+//     one project and project.delete_fork_relation is destructive for.
+func groupConfirmedUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := groupOptionsForAction(individualTool)
 	options.Destructive = true
 	return toolutil.NewUpdateActionSpec(name, route, options)
