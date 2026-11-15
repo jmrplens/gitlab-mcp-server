@@ -23,9 +23,13 @@ import (
 // a description ask before a quick action in it is run.
 const QuickActionConfirmID = "quick_action_effect"
 
-// Bounds of what the question shows of the text: the commands it lists, and
-// the length of each line it quotes. A text can carry any number of lines of
-// any length, and the question is read by a person in a dialog.
+// Bounds of what the question shows of the text: the lines it quotes, and
+// the length of each. A text can carry any number of lines of any length, and
+// the question is read by a person in a dialog. quickActionLinesShown is the
+// least the question quotes, not the most: every kind of effect is quoted at
+// least once whatever the count, so the question quotes up to the 16 guarded
+// commands, which the two pairs that share an effect bring to 13 kinds, and
+// counts only the lines whose kind it already quotes.
 const (
 	quickActionLinesShown = 6
 	quickActionLineRunes  = 120
@@ -171,6 +175,56 @@ func quickActionEffect(command, line string) i18n.Message {
 	return i18n.New(i18n.ConfirmQuickActionRemoveParent, i18n.S("line", line))
 }
 
+// quickActionEffectKey names the kind of effect a guarded command has: the
+// command itself, except for the two groups [quickActionEffect] says the same
+// of, the commands that take the item out of its epic or its parent and the
+// ones that take a child out of the item.
+func quickActionEffectKey(command string) string {
+	if command == quickActionRemoveParent || command == quickActionRemoveParentEpic {
+		return quickActionRemoveEpic
+	}
+	if command == quickActionRemoveChildEpic {
+		return quickActionRemoveChild
+	}
+	return command
+}
+
+// quotedQuickActionLines picks the lines the question quotes, in the order of
+// the text: the first line of every kind of effect, so that no effect is
+// left to a count, and then the lines that come first among the rest until
+// [quickActionLinesShown] are quoted. Every line it leaves out has an effect
+// of a kind a quoted line already has.
+func quotedQuickActionLines(lines []QuickActionLine) []QuickActionLine {
+	quoted := make([]bool, len(lines))
+	kinds := map[string]struct{}{}
+	count := 0
+	for i, line := range lines {
+		kind := quickActionEffectKey(line.Command)
+		if _, twice := kinds[kind]; twice {
+			continue
+		}
+		kinds[kind] = struct{}{}
+		quoted[i] = true
+		count++
+	}
+	for i := range lines {
+		if count >= quickActionLinesShown {
+			break
+		}
+		if !quoted[i] {
+			quoted[i] = true
+			count++
+		}
+	}
+	shown := make([]QuickActionLine, 0, count)
+	for i, line := range lines {
+		if quoted[i] {
+			shown = append(shown, line)
+		}
+	}
+	return shown
+}
+
 // QuickActionLine is one line of a text that begins with a quick action the
 // guard asks about: the command, in lower case and without its slash, and
 // the line as the text wrote it, without the space around it.
@@ -286,17 +340,18 @@ func namesUsers(args string) bool {
 // The arguments alone decide, so nothing is read: whether GitLab would run
 // the command depends on the type of the item, its state and the caller's
 // role, and a guard that asked only when it would has to know all three. The
-// question quotes each line, cut to a length a dialog shows and escaped so it
-// cannot pass for the server's own words, and no other part of the text.
+// question quotes the lines, each cut to a length a dialog shows and escaped
+// so it cannot pass for the server's own words, and no other part of the
+// text. It quotes every kind of effect the text carries and at least
+// [quickActionLinesShown] lines, and counts the rest, each of a kind already
+// quoted, so a long run of one command cannot keep another out of the
+// question.
 func ConfirmQuickActions(ctx context.Context, op string, texts ...string) error {
 	lines := GuardedQuickActionLines(texts...)
 	if len(lines) == 0 {
 		return nil
 	}
-	shown := lines
-	if len(shown) > quickActionLinesShown {
-		shown = shown[:quickActionLinesShown]
-	}
+	shown := quotedQuickActionLines(lines)
 	effects := make([]i18n.Message, 0, len(shown)+1)
 	for _, line := range shown {
 		effects = append(effects, quickActionEffect(line.Command, EscapeConsentValue(truncateRunes(line.Line, quickActionLineRunes))))

@@ -236,15 +236,50 @@ func TestConfirmQuickActions_AsksOnlyForATextThatCarriesOne(t *testing.T) {
 			want:  "moves the item to another project or group (`/move " + strings.Repeat("a", 114) + "…`).",
 		},
 		{
-			name:  "more lines than the question quotes, counted",
+			name:  "more lines than the question quotes, each kind quoted and the repeats counted",
 			texts: []string{"/move a/1\n/move a/2\n/move a/3\n/move a/4\n/move a/5\n/move a/6\n/move a/7\n/merge"},
 			want: "moves the item to another project or group (`/move a/1`)" +
 				" and moves the item to another project or group (`/move a/2`)" +
 				" and moves the item to another project or group (`/move a/3`)" +
 				" and moves the item to another project or group (`/move a/4`)" +
 				" and moves the item to another project or group (`/move a/5`)" +
-				" and moves the item to another project or group (`/move a/6`)" +
+				" and merges the merge request, at once or when its checks pass (`/merge`)" +
 				" and runs 2 more quick actions of these kinds.",
+		},
+		{
+			name:  "six lines that remove assignees before one that merges",
+			texts: []string{"/unassign @u1\n/unassign @u2\n/unassign @u3\n/unassign @u4\n/unassign @u5\n/unassign @u6\n/merge"},
+			want: "removes assignees from the item (`/unassign @u1`)" +
+				" and removes assignees from the item (`/unassign @u2`)" +
+				" and removes assignees from the item (`/unassign @u3`)" +
+				" and removes assignees from the item (`/unassign @u4`)" +
+				" and removes assignees from the item (`/unassign @u5`)" +
+				" and merges the merge request, at once or when its checks pass (`/merge`)" +
+				" and runs 1 more quick actions of these kinds.",
+		},
+		{
+			name:  "more kinds than the least the question quotes, every one quoted and nothing counted",
+			texts: []string{"/move a/b\n/merge\n/promote\n/convert_to_ticket c@example.com\n/add_email d@example.com\n/publish\n/unapprove\n/unlink #3"},
+			want: "moves the item to another project or group (`/move a/b`)" +
+				" and merges the merge request, at once or when its checks pass (`/merge`)" +
+				" and closes the issue and makes an epic of it (`/promote`)" +
+				" and converts the issue to a Service Desk ticket whose author is an outside email address (`/convert_to_ticket c@example.com`)" +
+				" and adds outside email addresses that receive the comments of the issue (`/add_email d@example.com`)" +
+				" and publishes the issue on the status page (`/publish`)" +
+				" and withdraws the caller's approval of the merge request (`/unapprove`)" +
+				" and removes the link between this item and another (`/unlink #3`).",
+		},
+		{
+			name: "commands that say the same, one kind",
+			texts: []string{"/move a/1\n/move a/2\n/move a/3\n/move a/4\n/move a/5\n/move a/6\n" +
+				"/remove_epic\n/remove_parent\n/remove_parent_epic\n/remove_child #4\n/remove_child_epic &5\n/merge"},
+			want: "moves the item to another project or group (`/move a/1`)" +
+				" and moves the item to another project or group (`/move a/2`)" +
+				" and moves the item to another project or group (`/move a/3`)" +
+				" and takes the item out of its epic or its parent (`/remove_epic`)" +
+				" and takes a child out of the item (`/remove_child #4`)" +
+				" and merges the merge request, at once or when its checks pass (`/merge`)" +
+				" and runs 6 more quick actions of these kinds.",
 		},
 	}
 	for _, tt := range tests {
