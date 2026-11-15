@@ -699,7 +699,7 @@ No parameters.
 
 ### `access.token_group_rotate`
 
-> Use for GitLab group access tokens: this action rotates a group-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate a group access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_group_list`](#accesstoken_group_list), [`access.token_group_revoke`](#accesstoken_group_revoke).
 
 - **Meta-tool**: `gitlab_access`, action `token_group_rotate`
 - **Individual tool**: `gitlab_group_access_token_rotate`
@@ -716,7 +716,7 @@ No parameters.
 
 ### `access.token_group_rotate_self`
 
-> Use for GitLab group access tokens: this action rotates the group-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate the group access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_group_rotate`](#accesstoken_group_rotate), [`access.token_personal_rotate_self`](#accesstoken_personal_rotate_self).
 
 - **Meta-tool**: `gitlab_access`, action `token_group_rotate_self`
 - **Individual tool**: `gitlab_group_access_token_rotate_self`
@@ -803,7 +803,7 @@ No parameters.
 
 ### `access.token_personal_rotate`
 
-> Use for GitLab personal access tokens: this action rotates a personal-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate a personal access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_personal_list`](#accesstoken_personal_list), [`access.token_personal_revoke`](#accesstoken_personal_revoke).
 
 - **Meta-tool**: `gitlab_access`, action `token_personal_rotate`
 - **Individual tool**: `gitlab_personal_access_token_rotate`
@@ -819,7 +819,7 @@ No parameters.
 
 ### `access.token_personal_rotate_self`
 
-> Use for GitLab personal access tokens: this action rotates the personal-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate the personal access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_personal_rotate`](#accesstoken_personal_rotate), [`access.token_project_rotate_self`](#accesstoken_project_rotate_self).
 
 - **Meta-tool**: `gitlab_access`, action `token_personal_rotate_self`
 - **Individual tool**: `gitlab_personal_access_token_rotate_self`
@@ -906,7 +906,7 @@ No parameters.
 
 ### `access.token_project_rotate`
 
-> Use for GitLab project access tokens: this action rotates a project-scoped API token. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate a project access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_project_list`](#accesstoken_project_list), [`access.token_project_revoke`](#accesstoken_project_revoke).
 
 - **Meta-tool**: `gitlab_access`, action `token_project_rotate`
 - **Individual tool**: `gitlab_project_access_token_rotate`
@@ -923,7 +923,7 @@ No parameters.
 
 ### `access.token_project_rotate_self`
 
-> Use for GitLab project access tokens: this action rotates the project-scoped token that authenticates this request itself, with no token_id parameter. Destructive: the current token stops working at once and only the new value returned here works from then on, so confirm with the user first.
+> Rotate the project access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: [`access.token_project_rotate`](#accesstoken_project_rotate), [`access.token_personal_rotate_self`](#accesstoken_personal_rotate_self).
 
 - **Meta-tool**: `gitlab_access`, action `token_project_rotate_self`
 - **Individual tool**: `gitlab_project_access_token_rotate_self`

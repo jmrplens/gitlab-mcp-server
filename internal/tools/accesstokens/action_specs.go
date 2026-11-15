@@ -116,6 +116,7 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	}
 	if operation == "rotate" || operation == "rotate_self" {
 		options.Usage += " " + accessTokenRotationWarning
+		options.IndividualTool.Description = accessTokenRotateDescription(scope, operation)
 	}
 	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {
@@ -150,6 +151,23 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 	}
 	return options
+}
+
+// accessTokenRotateDescription is the individual tool description of a
+// rotation. Every other action of the package takes the description the
+// individual surface has always served, but a rotation is destructive and
+// asks, and its description says so, as every action that replaces a
+// credential does. The self variant names the counterpart of another scope
+// it has always named.
+func accessTokenRotateDescription(scope, operation string) string {
+	if operation == "rotate_self" {
+		counterpart := "personal"
+		if scope == "personal" {
+			counterpart = "project"
+		}
+		return fmt.Sprintf("Rotate the %s access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_%s_access_token_rotate, gitlab_%s_access_token_rotate_self.", scope, scope, counterpart)
+	}
+	return fmt.Sprintf("Rotate a %s access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_%s_access_token_list, gitlab_%s_access_token_revoke.", scope, scope, scope)
 }
 
 func accessTokenAliases(scope, operation string) []string {

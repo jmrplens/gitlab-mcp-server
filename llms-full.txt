@@ -18069,7 +18069,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_access_token_rotate
 
-Rotate a group access token, generating a new token value. Optionally set a new expiry date.
+Rotate a group access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_group_access_token_list, gitlab_group_access_token_revoke.
 
 **Parameters:**
 
@@ -18082,7 +18082,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_group_access_token_rotate_self
 
-Rotate the group access token used for the current request. Returns the new token value.
+Rotate the group access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_group_access_token_rotate, gitlab_personal_access_token_rotate_self.
 
 **Parameters:**
 
@@ -24316,7 +24316,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_personal_access_token_rotate
 
-Rotate a personal access token, generating a new token value. Optionally set a new expiry date.
+Rotate a personal access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke.
 
 **Parameters:**
 
@@ -24328,7 +24328,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_personal_access_token_rotate_self
 
-Rotate the personal access token used for the current request. Returns the new token value.
+Rotate the personal access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_personal_access_token_rotate, gitlab_project_access_token_rotate_self.
 
 **Parameters:**
 
@@ -24828,7 +24828,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_access_token_rotate
 
-Rotate a project access token, generating a new token value. Optionally set a new expiry date.
+Rotate a project access token: GitLab revokes it and issues a new token value in one step, so the old token stops working at once. Optionally set a new expiry date. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_project_access_token_list, gitlab_project_access_token_revoke.
 
 **Parameters:**
 
@@ -24841,7 +24841,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_project_access_token_rotate_self
 
-Rotate the project access token used for the current request. Returns the new token value.
+Rotate the project access token used for the current request: GitLab revokes it and issues a new value in one step, so this token stops working at once. Requires confirmation. Returns: JSON with the rotated access token including the new token value, shown only once. See also: gitlab_project_access_token_rotate, gitlab_personal_access_token_rotate_self.
 
 **Parameters:**
 

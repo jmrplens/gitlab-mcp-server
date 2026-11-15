@@ -2586,6 +2586,9 @@ func TestDestructiveRoutes_ClassifiedByEffect_SayThatTheyAsk(t *testing.T) {
 		"user.add_ssh_key", "user.add_ssh_key_for_user", "group.ssh_cert_create",
 		"user.add_email", "user.add_email_for_user",
 		"runner.enable_project",
+		"access.token_project_rotate", "access.token_project_rotate_self",
+		"access.token_group_rotate", "access.token_group_rotate_self",
+		"access.token_personal_rotate", "access.token_personal_rotate_self",
 	}
 	for _, id := range ids {
 		t.Run(id, func(t *testing.T) {
