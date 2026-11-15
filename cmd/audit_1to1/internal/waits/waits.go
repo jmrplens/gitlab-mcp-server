@@ -79,17 +79,24 @@ type Entry struct {
 	Reason string
 }
 
-// Label names the entry in a report and in a finding: "upstream" and the
-// first function that carries it for an upstream entry, its category for any
-// other.
+// Label names the entry in a report and in a finding: "upstream", the first
+// function that carries it and, when it replaces any, the first client-go
+// method or service it replaces, for an upstream entry; its category for any
+// other. Two upstream entries can share their first function (one helper
+// sending the requests of two unrelated waits), so the replaced method is
+// what tells them apart, and [Problems] refuses two that still read alike.
 func (e Entry) Label() string {
 	if e.Category != CategoryUpstream {
 		return e.Category
 	}
+	label := CategoryUpstream
 	if sites := slices.Concat(e.Sites, e.Unseen); len(sites) > 0 {
-		return CategoryUpstream + " " + sites[0]
+		label += " " + sites[0]
 	}
-	return CategoryUpstream
+	if len(e.Replaces) > 0 {
+		label += " for " + e.Replaces[0]
+	}
+	return label
 }
 
 // Entries returns every entry, the upstream waits first, as a copy a caller
@@ -141,14 +148,23 @@ func replaced(entries []Entry, methods bool) map[string]string {
 
 // Problems lists what is wrong with the entries as written, whatever the tree
 // says: an upstream entry with no predicate, an entry of any other category
-// that carries one, a category nothing defines, an entry with no site, and a
-// method or service two entries both replace.
+// that carries one, a category nothing defines, an entry with no site, a
+// method or service two entries both replace, and two upstream entries a
+// report would name alike, since a finding or a COVERED_RAW reason naming
+// that label could not say which wait it means.
 func Problems(entries []Entry) []string {
 	var out []string
 	replacedBy := map[string]string{}
+	upstreamLabels := map[string]bool{}
 	for _, entry := range entries {
 		out = append(out, shapeProblems(entry)...)
 		label := entry.Label()
+		if entry.Category == CategoryUpstream {
+			if upstreamLabels[label] {
+				out = append(out, "two upstream waits are both labeled "+label)
+			}
+			upstreamLabels[label] = true
+		}
 		for _, key := range entry.Replaces {
 			if first, twice := replacedBy[key]; twice {
 				out = append(out, "wait "+label+" replaces "+key+", which "+first+" replaces too")

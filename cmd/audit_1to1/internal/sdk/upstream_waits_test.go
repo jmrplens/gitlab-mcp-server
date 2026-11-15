@@ -606,7 +606,7 @@ func (f waitsFixture) analyze(t *testing.T, root string, entries []waits.Entry) 
 func entryStatuses(report upstreamWaitsReport) []string {
 	out := make([]string, 0, len(report.Entries))
 	for _, entry := range report.Entries {
-		out = append(out, (waits.Entry{Category: entry.Category, Sites: entry.Sites, Unseen: entry.Unseen}).Label()+" "+entry.Status)
+		out = append(out, (waits.Entry{Category: entry.Category, Sites: entry.Sites, Unseen: entry.Unseen, Replaces: entry.Replaces}).Label()+" "+entry.Status)
 	}
 	return out
 }
@@ -637,7 +637,7 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 
 	// Each workaround is answered by the entries that list its site, each
 	// named by its first site; widgets.lister.Fetch is listed by two.
-	flag, filter, archive := []string{"upstream widgets.SetFlag"}, []string{"upstream widgets.entityFilter"}, []string{"upstream widgets.Archive"}
+	flag, filter, archive := []string{"upstream widgets.SetFlag for Widgets.SetWidgetFlag"}, []string{"upstream widgets.entityFilter"}, []string{"upstream widgets.Archive"}
 	widget, update, paging := []string{"upstream widgets.lister.Fetch"}, []string{"upstream widgets.Update"}, []string{"upstream toolutil.Paginate"}
 	fetch, probe := []string{"upstream widgets.Archive", "upstream widgets.lister.Fetch"}, []string{"probe"}
 	listWidgets := []string{"Widgets.ListWidgets"}
@@ -698,7 +698,7 @@ func TestBuildUpstreamWaits_AStandInTree_AnswersEveryWorkaroundAndHoldsEveryPred
 		t.Errorf("stale = %q, want none", stale)
 	}
 	wantStatuses := []string{
-		"upstream widgets.SetFlag holds", "upstream widgets.entityFilter holds", "upstream widgets.Archive holds",
+		"upstream widgets.SetFlag for Widgets.SetWidgetFlag holds", "upstream widgets.entityFilter holds", "upstream widgets.Archive holds",
 		"upstream widgets.lister.Fetch holds", "upstream widgets.Update holds", "upstream widgets.Hint holds",
 		"upstream toolutil.Paginate holds", "probe declared", "pagination declared",
 	}
@@ -732,7 +732,7 @@ func TestBuildUpstreamWaits_AClientGoThatFixesThings_RetiresOrEditsEachEntry(t *
 		fixture := newWaitsFixture(t, flagKeyGainsOmitempty)
 		report, stale := fixture.analyze(t, fixture.root, fixtureWaits())
 		want := []string{
-			"upstream widgets.SetFlag stale_predicate", "upstream widgets.entityFilter obsolete_workaround",
+			"upstream widgets.SetFlag for Widgets.SetWidgetFlag stale_predicate", "upstream widgets.entityFilter obsolete_workaround",
 			"upstream widgets.Archive obsolete_workaround", "upstream widgets.lister.Fetch stale_predicate",
 			"upstream widgets.Update stale_predicate", "upstream widgets.Hint holds",
 			"upstream toolutil.Paginate obsolete_workaround", "probe declared", "pagination declared",
@@ -1087,8 +1087,11 @@ func TestBuildUpstreamWaits_EntriesThatAnswerLess_LeaveTheirWorkaroundsFindings(
 // declare or a handler calls, a predicate naming what client-go lacks, a
 // LacksKey or FieldKind on a superset's root naming a key no superset at the
 // entry's sites carries, a TakesNoOptions naming a method no site of the
-// entry is handed to, and a shape Problems refuses. A whole service is the
-// service rule's to judge and is passed over here.
+// entry is handed to, and a shape Problems refuses, two upstream waits a
+// report would name alike among them (the widgets.lister.Fetch and
+// toolutil.Paginate entries share their first site with an entry of the
+// stand-in table, and neither replaces a method that would tell them apart).
+// A whole service is the service rule's to judge and is passed over here.
 func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testing.T) {
 	fixture := newWaitsFixture(t, nil)
 	entries := append(fixtureWaits(),
@@ -1129,16 +1132,18 @@ func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testi
 	)
 	_, stale := fixture.analyze(t, fixture.root, entries)
 	want := []string{
+		"two upstream waits are both labeled upstream toolutil.Paginate",
+		"two upstream waits are both labeled upstream widgets.lister.Fetch",
 		"wait decided: category \"decided\" is not one the table defines",
 		"wait decided: site widgets.Plain carries no workaround the walk finds",
 		"wait upstream toolutil.Paginate: TakesNoOptions{Widgets.ArchiveWidget} names a method no site of the entry is handed to",
-		"wait upstream widgets.Gone: LacksKey{Gone, x} names what client-go lacks: client-go declares no type Gone",
-		"wait upstream widgets.Gone: replaces Widgets.Gone: client-go's Widgets has no method Gone",
-		"wait upstream widgets.Gone: replaces Widgets.ListWidgets, which a handler calls",
-		"wait upstream widgets.Gone: site widgets.Gone no longer exists",
-		"wait upstream widgets.Gone: site widgets.Plain carries no workaround the walk finds",
-		"wait upstream widgets.Gone: site widgets.Vanished no longer exists",
-		"wait upstream widgets.Gone: the walk finds a workaround at widgets.SetFlag, so it belongs among the sites",
+		"wait upstream widgets.Gone for Widgets.Gone: LacksKey{Gone, x} names what client-go lacks: client-go declares no type Gone",
+		"wait upstream widgets.Gone for Widgets.Gone: replaces Widgets.Gone: client-go's Widgets has no method Gone",
+		"wait upstream widgets.Gone for Widgets.Gone: replaces Widgets.ListWidgets, which a handler calls",
+		"wait upstream widgets.Gone for Widgets.Gone: site widgets.Gone no longer exists",
+		"wait upstream widgets.Gone for Widgets.Gone: site widgets.Plain carries no workaround the walk finds",
+		"wait upstream widgets.Gone for Widgets.Gone: site widgets.Vanished no longer exists",
+		"wait upstream widgets.Gone for Widgets.Gone: the walk finds a workaround at widgets.SetFlag, so it belongs among the sites",
 		"wait upstream widgets.Plain: unseen site widgets.Hint holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
 		"wait upstream widgets.Plain: unseen site widgets.Plain holds no string naming name, the key NotNullable{UpdateWidgetOptions.Name} is about",
 		"wait upstream widgets.Plain: unseen site widgets.Plain holds no string naming title, the key WritesAlways{UpdateWidgetOptions.Title, json} is about",
@@ -1153,7 +1158,7 @@ func TestBuildUpstreamWaits_EntriesThatNoLongerDescribeTheTree_AreStale(t *testi
 		bareReport, bareStale := fixture.analyze(t, t.TempDir(), fixtureWaits())
 		var missing []string
 		for _, want := range []string{
-			"wait upstream widgets.SetFlag: site fixture.setFeature no longer exists",
+			"wait upstream widgets.SetFlag for Widgets.SetWidgetFlag: site fixture.setFeature no longer exists",
 		} {
 			if !slices.ContainsFunc(bareStale, func(line string) bool { return strings.HasPrefix(line, want) }) {
 				missing = append(missing, want)
@@ -1221,7 +1226,7 @@ func TestWithCoveredRawServices_EntriesReplacingAService_DeclareItCoveredRaw(t *
 		"Kept":  {coveredGraphQL, "over GraphQL"},
 		"Twice": {supersededUpstream, "replaced upstream"},
 		"Hand":  {coveredRaw, "a raw request nothing holds"},
-		"Stats": {coveredRaw, "upstream stats.fetch: counts"},
+		"Stats": {coveredRaw, "upstream stats.fetch for Stats: counts"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("declarations = %v, want %v", got, want)

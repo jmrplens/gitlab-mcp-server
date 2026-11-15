@@ -12,8 +12,9 @@ import (
 
 // TestEntryLabel_Categories_NameTheFirstSiteOrTheCategory verifies how a
 // report names an entry: an upstream wait by its first site, an unseen one
-// when it lists no site, and the category alone when it lists neither; any
-// other entry by its category.
+// when it lists no site, and the category alone when it lists neither, each
+// followed by the first method or service it replaces when it replaces any;
+// any other entry by its category.
 func TestEntryLabel_Categories_NameTheFirstSiteOrTheCategory(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -23,6 +24,8 @@ func TestEntryLabel_Categories_NameTheFirstSiteOrTheCategory(t *testing.T) {
 		{name: "upstream with sites", entry: Entry{Category: CategoryUpstream, Sites: []string{"features.Set", "fixture.setFeature"}, Unseen: []string{"a.Hint"}}, want: "upstream features.Set"},
 		{name: "upstream with unseen sites alone", entry: Entry{Category: CategoryUpstream, Unseen: []string{"a.Hint"}}, want: "upstream a.Hint"},
 		{name: "upstream with no site", entry: Entry{Category: CategoryUpstream}, want: "upstream"},
+		{name: "upstream replacing methods", entry: Entry{Category: CategoryUpstream, Sites: []string{"projects.doProjectRequest"}, Replaces: []string{"Projects.AddProjectHook", "Projects.GetProjectHook"}}, want: "upstream projects.doProjectRequest for Projects.AddProjectHook"},
+		{name: "upstream replacing a method with no site", entry: Entry{Category: CategoryUpstream, Replaces: []string{"Stats"}}, want: "upstream for Stats"},
 		{name: "raw reason", entry: Entry{Category: CategoryProbe, Sites: []string{"fixture.probeREST"}}, want: CategoryProbe},
 	}
 	for _, tc := range cases {
@@ -82,11 +85,11 @@ func TestCoveredRaw_Entries_SplitMethodsFromServicesAndKeepTheFirst(t *testing.T
 		{Category: CategoryUpstream, Sites: []string{"stats.fetch"}, Replaces: []string{"Stats", "Stats.Get"}, Reason: "counts"},
 		{Category: CategoryURLBuilt, Replaces: []string{"Stats.Get", "Archive.Fetch"}, Reason: "a URL"},
 	}
-	wantMethods := map[string]string{"Stats.Get": "upstream stats.fetch: counts", "Archive.Fetch": "url-built: a URL"}
+	wantMethods := map[string]string{"Stats.Get": "upstream stats.fetch for Stats: counts", "Archive.Fetch": "url-built: a URL"}
 	if got := CoveredRawMethods(entries); !reflect.DeepEqual(got, wantMethods) {
 		t.Errorf("CoveredRawMethods = %v, want %v", got, wantMethods)
 	}
-	wantServices := map[string]string{"Stats": "upstream stats.fetch: counts"}
+	wantServices := map[string]string{"Stats": "upstream stats.fetch for Stats: counts"}
 	if got := CoveredRawServices(entries); !reflect.DeepEqual(got, wantServices) {
 		t.Errorf("CoveredRawServices = %v, want %v", got, wantServices)
 	}
@@ -117,6 +120,18 @@ func TestProblems_EntriesWrittenWrong_AreEachNamed(t *testing.T) {
 			{Category: CategoryProbe, Sites: []string{"a.B"}, Replaces: []string{"S.M"}},
 			{Category: CategoryURLBuilt, Sites: []string{"a.C"}, Replaces: []string{"S.M"}},
 		}, want: []string{"wait url-built replaces S.M, which probe replaces too"}},
+		{name: "two upstream waits labeled alike", entries: []Entry{
+			{Category: CategoryUpstream, Sites: []string{"a.B"}, Predicates: predicate},
+			{Category: CategoryUpstream, Sites: []string{"a.B", "a.C"}, Predicates: predicate},
+		}, want: []string{"two upstream waits are both labeled upstream a.B"}},
+		{name: "one site, two replaced methods", entries: []Entry{
+			{Category: CategoryUpstream, Sites: []string{"a.B"}, Predicates: predicate, Replaces: []string{"S.M"}},
+			{Category: CategoryUpstream, Sites: []string{"a.B"}, Predicates: predicate, Replaces: []string{"S.N"}},
+		}},
+		{name: "raw reasons sharing a category", entries: []Entry{
+			{Category: CategoryProbe, Sites: []string{"a.B"}},
+			{Category: CategoryProbe, Sites: []string{"a.C"}},
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
