@@ -431,8 +431,8 @@ This repository squash merges, so the description becomes the commit message
 on main, and the GitLab mirror of this repository reads that message like any
 commit pushed to it: GitLab adds a "mentioned in commit" note to every item a
 message names that way, on somebody else's project, and main cannot be
-rewritten to take it back. Name the row of docs/development/upstream-bugs.md
-that records the item instead.
+rewritten to take it back. Describe the item in words instead, or name the
+issue of this repository that tracks it as #N.
 
 An item of another forge written the same way, such as a GitHub issue as
 owner/repo#N or repo#N, is refused too, since GitLab reads the path as its own:

@@ -14,7 +14,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdkoptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/waits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionrequests"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
@@ -88,10 +87,9 @@ type Finding struct {
 	// client-go structs their requests carry there.
 	Actions     []string `json:"actions"`
 	OptionTypes []string `json:"option_types,omitempty"`
-	// Category, Reason and Row are the declaration's, when one answers it.
+	// Category and Reason are the declaration's, when one answers it.
 	Category string `json:"category,omitempty"`
 	Reason   string `json:"reason,omitempty"`
-	Row      int    `json:"row,omitempty"`
 }
 
 // UnreadRequest is one request whose options the walk could not read.
@@ -156,11 +154,8 @@ var (
 	catalogs      = actionids.Catalogs
 	rawRequests   = sdk.RawRequests
 	readOptions   = sdkoptions.Read
-	readRows      = func(root string) (map[int]string, error) {
-		return waits.ReadRows(filepath.Join(root, filepath.FromSlash(waits.RegisterPath)))
-	}
-	declarations = paramDeclarations
-	aliases      = required.FieldAliases
+	declarations  = paramDeclarations
+	aliases       = required.FieldAliases
 )
 
 // Run builds the report for the repository at root and returns it as indented
@@ -199,10 +194,6 @@ func buildReport(root string, opts Options) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("walk the raw requests: %w", err)
 	}
-	rows, err := readRows(root)
-	if err != nil {
-		return Report{}, err
-	}
 	report := judgeAll(judgeInput{
 		record:       record,
 		live:         live,
@@ -211,7 +202,6 @@ func buildReport(root string, opts Options) (Report, error) {
 		aliases:      aliases(),
 		sources:      newSources(readOptions(clientGoDir), raw),
 		declarations: declarations(),
-		rows:         rows,
 	})
 	report.Requests = actionrequests.RecordPath
 	report.Record = filepath.ToSlash(apilive.Path(apilive.DefaultDir))
@@ -253,7 +243,6 @@ type judgeInput struct {
 	aliases      map[string]map[string]string
 	sources      sources
 	declarations []paramDeclaration
-	rows         map[int]string
 }
 
 // judgeAll judges every route the request record names and assembles the
@@ -292,10 +281,10 @@ func judgeAll(in judgeInput) Report {
 		}
 		used[index] = true
 		declaration := in.declarations[index]
-		finding.Category, finding.Reason, finding.Row = declaration.Category, declaration.Reason, declaration.Row
+		finding.Category, finding.Reason = declaration.Category, declaration.Reason
 		report.Declared = append(report.Declared, finding)
 	}
-	report.Stale = staleDeclarations(in.declarations, used, in.rows)
+	report.Stale = staleDeclarations(in.declarations, used)
 	report.Summary.Declared = len(report.Declared)
 	report.Summary.Stale = len(report.Stale)
 	return report

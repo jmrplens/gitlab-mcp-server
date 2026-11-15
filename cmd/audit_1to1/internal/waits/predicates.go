@@ -49,8 +49,8 @@ type Predicate interface {
 	String() string
 	// Subject names what the predicate is about: the struct a field or key
 	// predicate names, the method ("Service.Method") a method predicate
-	// names, the route a route predicate names. The register row an entry
-	// waits on is held to mentioning what its predicates are about.
+	// names, the route a route predicate names. The sdk scope reads it to
+	// find the superset a key predicate is about.
 	Subject() string
 }
 

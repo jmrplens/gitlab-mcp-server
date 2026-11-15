@@ -162,7 +162,8 @@ func runPredicateCases(t *testing.T, sdk SDK, cases []predicateCase) {
 }
 
 // TestWritesAlways_StandInFields_HoldOnlyWhileTheEncoderWritesThemEveryCall
-// verifies the predicate behind row 6: a field holds while its tag for the
+// verifies the predicate that would have caught SetFeatureFlagOptions
+// gaining omitempty in client-go v3.34.0: a field holds while its tag for the
 // encoder carries neither omitempty nor omitzero and is not "-", a field
 // with no tag is written under its Go name every call, and a type, a field
 // or an encoder that does not exist is an error rather than a verdict.
@@ -381,9 +382,9 @@ func TestPredicateString_EachKind_SpellsWhatItNames(t *testing.T) {
 }
 
 // TestPredicateSubject_EachKind_NamesWhatItIsAbout verifies what a
-// predicate is about, which is what the register row an entry waits on has
-// to mention: the struct a field or key predicate names, the method a
-// method predicate names and the route a route predicate names.
+// predicate is about, which is how the sdk scope finds the superset a key
+// predicate is about: the struct a field or key predicate names, the method
+// a method predicate names and the route a route predicate names.
 func TestPredicateSubject_EachKind_NamesWhatItIsAbout(t *testing.T) {
 	cases := []struct {
 		predicate Predicate

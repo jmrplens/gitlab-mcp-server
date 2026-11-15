@@ -65,8 +65,8 @@
 // repository reads the squash commit like any commit pushed to it, and GitLab
 // adds a "mentioned in commit" note to every item a message names that way,
 // on somebody else's project; main cannot be rewritten to take it back. A
-// description names the row of docs/development/upstream-bugs.md that records
-// the item instead. An item of another forge written the same way, such as a
+// description describes the item in words instead, or names the issue of this
+// repository that tracks it as #N. An item of another forge written the same way, such as a
 // GitHub issue as owner/repo#N or repo#N, is refused too, and its github.com
 // URL passes. A bare #N names this repository's own items and passes, and so
 // does a project of the mirror's own namespace named alone before !N. A

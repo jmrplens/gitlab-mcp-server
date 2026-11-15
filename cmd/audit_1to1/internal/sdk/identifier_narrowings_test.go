@@ -17,37 +17,22 @@ const (
 	ownerParam  = "wid"
 	ownerAction = "widget.owner"
 	ownerInput  = "widgets.OwnerInput"
-	ownerRow    = 7
 )
-
-// registerWithOwnerRow is a register whose Summary holds the row the fixtures
-// declare, a client-go row beside another project, and rows that are not
-// client-go's.
-const registerWithOwnerRow = `# Upstream bugs
-
-| # | Project | Issue |
-| - | ------- | ----- |
-| 6 | go-sdk | another |
-| 7 | client-go | the owner's parameter |
-| 8 | client-go and gitlab-org/gitlab | both |
-| 9 | client-gone | not this project |
-`
 
 // ownerDeclared is the table of the stand-in's one called narrowing.
 func ownerDeclared() narrowingTable {
 	return narrowingTable{
-		declared: []narrowingDeclaration{{Method: ownerMethod, Param: ownerParam, Action: ownerAction, UpstreamRow: ownerRow}},
+		declared: []narrowingDeclaration{{Method: ownerMethod, Param: ownerParam, Action: ownerAction}},
 		actions:  map[string]string{ownerAction: ownerInput},
 	}
 }
 
 // ownerNarrowing builds the section over the stand-in with the tool put through
-// the replacements, the register written, and table, and reads the narrowed
-// parameter back with what came stale.
+// the replacements and table, and reads the narrowed parameter back with what
+// came stale.
 func ownerNarrowing(t *testing.T, table narrowingTable, oldnew ...string) (sdkNarrowing, []string) {
 	t.Helper()
 	root, inputs := identifiersFixture(t, strings.NewReplacer(oldnew...), identifiersRecord())
-	writeFiles(t, root, map[string]string{upstreamRegister: registerWithOwnerRow})
 	report, stale := analyzeIdentifiers(root, inputs.pkgs, inputs.usage, nil, table)
 	for _, narrowing := range report.SDKNarrowed {
 		if narrowing.Method == ownerMethod {
@@ -124,7 +109,7 @@ func TestAnalyzeIdentifiers_ACalledNarrowingNoDeclarationAnswers_FailsTheGate(t 
 // TestAnalyzeIdentifiers_AHandlerThatReadsANameIntoTheInteger_IsResolved verifies
 // the correct case through the whole section: a declaration, a field that takes a
 // name and a trace that reaches it across a helper. The inputs are the fields read,
-// once each and sorted, and the declaration's action and row reach the report.
+// once each and sorted, and the declaration's action reaches the report.
 func TestAnalyzeIdentifiers_AHandlerThatReadsANameIntoTheInteger_IsResolved(t *testing.T) {
 	narrowing, stale := ownerNarrowing(t, ownerDeclared(), ownerHandler, ownerWidened)
 	if len(stale) != 0 {
@@ -132,7 +117,7 @@ func TestAnalyzeIdentifiers_AHandlerThatReadsANameIntoTheInteger_IsResolved(t *t
 	}
 	want := sdkNarrowing{
 		Method: ownerMethod, Param: ownerParam, Type: "int64", Called: true, Status: narrowingResolved,
-		Action: ownerAction, UpstreamRow: ownerRow, Inputs: []string{"widgets.AnotherInput.Name", "widgets.OwnerInput.WidgetID"},
+		Action: ownerAction, Inputs: []string{"widgets.AnotherInput.Name", "widgets.OwnerInput.WidgetID"},
 	}
 	narrowing.Placeholders = nil
 	if !reflect.DeepEqual(narrowing, want) {
@@ -186,8 +171,6 @@ func TestAnalyzeIdentifiers_AnIntegerFromAnAnswer_NarrowsNothingAModelSends(t *t
 // and that the parameter it answers still gets its status. A bump that widens a
 // method is the first of them, which is what tells the maintainer the lookup can go.
 func TestApplyNarrowingDeclarations_EachDeclaration_IsHeldToWhatItNames(t *testing.T) {
-	root := t.TempDir()
-	writeFiles(t, root, map[string]string{upstreamRegister: registerWithOwnerRow})
 	narrowed := func() []sdkNarrowing {
 		return []sdkNarrowing{
 			{Method: "A.Called", Param: "id", Called: true},
@@ -197,7 +180,7 @@ func TestApplyNarrowingDeclarations_EachDeclaration_IsHeldToWhatItNames(t *testi
 	read := map[string]*origins{narrowingKey("A.Called", "id"): {inputs: []string{"a.In.Field"}}}
 	holdsName := func(string) bool { return true }
 	actions := map[string]string{"a.good": "a.In", "a.other": "a.Other", "a.prefix": "a.I"}
-	good := narrowingDeclaration{Method: "A.Called", Param: "id", Action: "a.good", UpstreamRow: ownerRow}
+	good := narrowingDeclaration{Method: "A.Called", Param: "id", Action: "a.good"}
 
 	cases := []struct {
 		name     string
@@ -205,7 +188,7 @@ func TestApplyNarrowingDeclarations_EachDeclaration_IsHeldToWhatItNames(t *testi
 		want     []string
 	}{
 		{name: "it holds", declared: []narrowingDeclaration{good}},
-		{name: "a row beside another project is client-go's", declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.good", UpstreamRow: 8}}},
+		{name: "nothing declared", declared: nil},
 		{
 			name:     "written twice",
 			declared: []narrowingDeclaration{good, good},
@@ -213,84 +196,47 @@ func TestApplyNarrowingDeclarations_EachDeclaration_IsHeldToWhatItNames(t *testi
 		},
 		{
 			name:     "client-go no longer narrows it",
-			declared: []narrowingDeclaration{good, {Method: "A.Widened", Param: "id", Action: "a.good", UpstreamRow: ownerRow}},
-			want:     []string{"narrowing declaration A.Widened id: client-go no longer narrows it, so the lookup in front of it and this row can go"},
+			declared: []narrowingDeclaration{good, {Method: "A.Widened", Param: "id", Action: "a.good"}},
+			want:     []string{"narrowing declaration A.Widened id: client-go no longer narrows it, so the lookup in front of it and this declaration can go"},
 		},
 		{
 			name:     "another parameter of a narrowed method",
-			declared: []narrowingDeclaration{good, {Method: "A.Called", Param: "other", Action: "a.good", UpstreamRow: ownerRow}},
-			want:     []string{"narrowing declaration A.Called other: client-go no longer narrows it, so the lookup in front of it and this row can go"},
+			declared: []narrowingDeclaration{good, {Method: "A.Called", Param: "other", Action: "a.good"}},
+			want:     []string{"narrowing declaration A.Called other: client-go no longer narrows it, so the lookup in front of it and this declaration can go"},
 		},
 		{
 			name:     "no handler calls the method",
-			declared: []narrowingDeclaration{{Method: "A.Uncalled", Param: "id", Action: "a.good", UpstreamRow: ownerRow}},
+			declared: []narrowingDeclaration{{Method: "A.Uncalled", Param: "id", Action: "a.good"}},
 			want:     []string{"narrowing declaration A.Uncalled id: no handler calls the method"},
 		},
 		{
 			name:     "an action the catalog does not hold",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.gone", UpstreamRow: ownerRow}},
+			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.gone"}},
 			want:     []string{`narrowing declaration A.Called id: the catalog holds no action "a.gone"`},
 		},
 		{
 			name:     "no action",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", UpstreamRow: ownerRow}},
+			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id"}},
 			want:     []string{`narrowing declaration A.Called id: the catalog holds no action ""`},
 		},
 		{
 			name:     "an action whose input hands the method nothing",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.other", UpstreamRow: ownerRow}},
+			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.other"}},
 			want:     []string{"narrowing declaration A.Called id: the input of a.other hands the method nothing"},
 		},
 		{
 			name:     "an action whose input is only a prefix of the struct",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.prefix", UpstreamRow: ownerRow}},
+			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.prefix"}},
 			want:     []string{"narrowing declaration A.Called id: the input of a.prefix hands the method nothing"},
-		},
-		{
-			name:     "a row of another project",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.good", UpstreamRow: 6}},
-			want:     []string{"narrowing declaration A.Called id: row 6 of " + upstreamRegister + " is not one of client-go's"},
-		},
-		{
-			name:     "a project whose name only starts like client-go",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.good", UpstreamRow: 9}},
-			want:     []string{"narrowing declaration A.Called id: row 9 of " + upstreamRegister + " is not one of client-go's"},
-		},
-		{
-			name:     "no row",
-			declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.good"}},
-			want:     []string{"narrowing declaration A.Called id: row 0 of " + upstreamRegister + " is not one of client-go's"},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := applyNarrowingDeclarations(root, narrowed(), read, narrowingTable{declared: tc.declared, actions: actions}, holdsName)
+			got := applyNarrowingDeclarations(narrowed(), read, narrowingTable{declared: tc.declared, actions: actions}, holdsName)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("stale =\n%q\nwant\n%q", got, tc.want)
 			}
 		})
-	}
-}
-
-// TestApplyNarrowingDeclarations_ARegisterThatCannotBeRead_FailsEveryRowAndSaysSo
-// verifies an unreadable register fails the gate rather than excusing what it
-// would have checked, and is not read at all when nothing is declared, which is
-// what a stand-in tree with no declarations asks of it.
-func TestApplyNarrowingDeclarations_ARegisterThatCannotBeRead_FailsEveryRowAndSaysSo(t *testing.T) {
-	narrowed := []sdkNarrowing{{Method: "A.Called", Param: "id", Called: true}}
-	read := map[string]*origins{narrowingKey("A.Called", "id"): {inputs: []string{"a.In.Field"}}}
-	holdsName := func(string) bool { return true }
-
-	table := narrowingTable{
-		declared: []narrowingDeclaration{{Method: "A.Called", Param: "id", Action: "a.good", UpstreamRow: ownerRow}},
-		actions:  map[string]string{"a.good": "a.In"},
-	}
-	stale := applyNarrowingDeclarations(t.TempDir(), narrowed, read, table, holdsName)
-	if len(stale) != 2 || !strings.HasPrefix(stale[0], "identifiers: reading the upstream register") || !strings.Contains(stale[1], "row 7 of") {
-		t.Errorf("stale = %q, want the read's error and the row it could not find", stale)
-	}
-	if stale = applyNarrowingDeclarations(t.TempDir(), narrowed, read, narrowingTable{}, holdsName); len(stale) != 0 {
-		t.Errorf("stale = %q with nothing declared, want the register left unread", stale)
 	}
 }
 
@@ -398,16 +344,16 @@ func TestCatalogActionInputs_TheDeclaredActions_ReadTheStructsTheirHandlersTake(
 	}
 }
 
-// TestNarrowingDeclarations_EveryEntry_NamesAnActionAndARow verifies the committed
-// table on its own: every entry names both, and no parameter twice. That each holds
+// TestNarrowingDeclarations_EveryEntry_NamesAnAction verifies the committed table
+// on its own: every entry names an action, and no parameter twice. That each holds
 // is the repository gate's to say.
-func TestNarrowingDeclarations_EveryEntry_NamesAnActionAndARow(t *testing.T) {
+func TestNarrowingDeclarations_EveryEntry_NamesAnAction(t *testing.T) {
 	seen := map[string]bool{}
 	for _, declaration := range narrowingDeclarations {
 		key := narrowingKey(declaration.Method, declaration.Param)
 		t.Run(key, func(t *testing.T) {
-			if declaration.Action == "" || declaration.UpstreamRow == 0 {
-				t.Errorf("declaration = %+v, want an action and a row", declaration)
+			if declaration.Action == "" {
+				t.Errorf("declaration = %+v, want an action", declaration)
 			}
 			if seen[key] {
 				t.Errorf("%s is declared twice", key)

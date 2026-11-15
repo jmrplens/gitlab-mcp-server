@@ -244,7 +244,7 @@ func fixtureRaw() []sdk.RawRequest {
 // offers, which fail the gate unless a declaration answers them.
 func fixtureDeclarations() []paramDeclaration {
 	return []paramDeclaration{
-		{Route: "GET /projects/:id/widgets", Param: "merged_after", Category: categoryUpstream, Reason: "the stand-in's", Row: 7},
+		{Route: "GET /projects/:id/widgets", Param: "merged_after", Category: categoryUpstream, Reason: "the stand-in's"},
 		{Route: "PUT /projects/:id/integrations/*", Param: anyParam, Category: categoryMapInput, Reason: "the stand-in's"},
 		{Route: "POST /projects/:id/widgets", Param: "avatar", Category: categoryDeclaredNotApplied, Reason: "the stand-in's"},
 		{Route: "POST /projects/import", Param: "override[name]", Category: categoryDeclaredNotApplied, Reason: "the stand-in's"},
@@ -263,21 +263,19 @@ func useFixtures(t *testing.T, modelsMergedAfter bool) {
 		inputSchemas  func() (map[string]map[string]any, error)
 		rawRequests   func(string) ([]sdk.RawRequest, string, error)
 		readOptions   func(string) sdkoptions.SDK
-		readRows      func(string) (map[int]string, error)
 		declarations  func() []paramDeclaration
 		aliases       func() map[string]map[string]string
-	}{readRecord, readLive, readInventory, inputSchemas, rawRequests, readOptions, readRows, declarations, aliases}
+	}{readRecord, readLive, readInventory, inputSchemas, rawRequests, readOptions, declarations, aliases}
 	t.Cleanup(func() {
 		readRecord, readLive, readInventory = originals.readRecord, originals.readLive, originals.readInventory
 		inputSchemas, rawRequests, readOptions = originals.inputSchemas, originals.rawRequests, originals.readOptions
-		readRows, declarations, aliases = originals.readRows, originals.declarations, originals.aliases
+		declarations, aliases = originals.declarations, originals.aliases
 	})
 	readRecord = func(string) (actionrequests.Record, error) { return fixtureRecord(), nil }
 	readLive = func(string) (apilive.Document, error) { return fixtureLive(), nil }
 	readInventory = func(string) (requestinventory.Inventory, error) { return fixtureInventory(), nil }
 	inputSchemas = func() (map[string]map[string]any, error) { return fixtureSchemas(), nil }
 	rawRequests = func(string) ([]sdk.RawRequest, string, error) { return fixtureRaw(), dir, nil }
-	readRows = func(string) (map[int]string, error) { return map[int]string{7: "row seven"}, nil }
 	declarations = fixtureDeclarations
 	aliases = func() map[string]map[string]string {
 		return map[string]map[string]string{"widget.create": {"name": "title"}}
@@ -678,9 +676,6 @@ func TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt(t *testing.T) {
 		{name: "raw requests", arrange: func(*testing.T) {
 			rawRequests = func(string) ([]sdk.RawRequest, string, error) { return nil, "", boom }
 		}, wantErr: "walk the raw requests: boom"},
-		{name: "register", arrange: func(*testing.T) {
-			readRows = func(string) (map[int]string, error) { return nil, boom }
-		}, wantErr: "boom"},
 		{name: "marshal", arrange: func(t *testing.T) {
 			t.Helper()
 			original := marshalIndent
@@ -707,9 +702,6 @@ func TestRun_AnInputThatCannotBeRead_StopsTheRunNamingIt(t *testing.T) {
 func TestDefaultReaders_ReadWhereTheRepositoryKeepsThem(t *testing.T) {
 	if _, err := readLive(t.TempDir()); err == nil || !strings.Contains(err.Error(), apilive.FileName) {
 		t.Errorf("readLive of an empty root = %v, want an error naming %s", err, apilive.FileName)
-	}
-	if _, err := readRows(t.TempDir()); err == nil || !strings.Contains(err.Error(), "upstream register") {
-		t.Errorf("readRows of an empty root = %v, want an error naming the register", err)
 	}
 	schemas, err := catalogSchemas()
 	if err != nil {

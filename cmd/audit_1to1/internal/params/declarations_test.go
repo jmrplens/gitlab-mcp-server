@@ -83,22 +83,19 @@ func TestAnswers_ACategory_AnswersOnlyTheClassesItMay(t *testing.T) {
 
 // TestStaleDeclarations_EveryWayADeclarationFails_IsNamed verifies the gate:
 // a declaration that answers nothing, names a category the table does not
-// define, gives no reason, or, for an upstream one, names a row the register
-// does not hold, each named once and in order, while a used one of another
-// category needs no row.
+// define or gives no reason, each named once and in order, while a used one
+// of a known category with a reason holds.
 func TestStaleDeclarations_EveryWayADeclarationFails_IsNamed(t *testing.T) {
 	declared := []paramDeclaration{
-		{Route: "GET /a", Param: "used", Category: categoryUpstream, Reason: "r", Row: 7},
+		{Route: "GET /a", Param: "used", Category: categoryUpstream, Reason: "r"},
 		{Route: "GET /a", Param: "unused", Category: categoryWebhookPayload, Reason: "r"},
 		{Route: "GET /a", Param: "unknown", Category: "invented", Reason: "r"},
 		{Route: "GET /a", Param: "silent", Category: categoryDeclaredNotApplied, Reason: " "},
-		{Route: "GET /a", Param: "norow", Category: categoryUpstream, Reason: "r", Row: 8},
-		{Route: "GET /a", Param: "rowless", Category: categoryMapInput, Reason: "r"},
+		{Route: "GET /a", Param: "mapped", Category: categoryMapInput, Reason: "r"},
 	}
-	used := []bool{true, false, true, true, true, true}
-	stale := staleDeclarations(declared, used, map[int]string{7: "row seven"})
+	used := []bool{true, false, true, true, true}
+	stale := staleDeclarations(declared, used)
 	want := []string{
-		"GET /a norow (upstream): names row 8, which the upstream register does not hold",
 		"GET /a silent (declared-not-applied): gives no reason",
 		"GET /a unknown (invented): names no category this table defines",
 		"GET /a unused (webhook-payload): answers no finding",
@@ -109,8 +106,8 @@ func TestStaleDeclarations_EveryWayADeclarationFails_IsNamed(t *testing.T) {
 }
 
 // TestParamDeclarations_EveryEntryNamesACategoryAReasonAndOneParam verifies
-// the table's own shape: each entry a known category with a reason, an
-// upstream one a row, no two entries naming one param of one route, which
+// the table's own shape: each entry a known category with a reason, no two
+// entries naming one param of one route, which
 // would leave the second answering nothing, and every category the table
 // defines named by some entry, so the vocabulary holds no reason nothing
 // is declared for.
@@ -133,9 +130,6 @@ func TestParamDeclarations_EveryEntryNamesACategoryAReasonAndOneParam(t *testing
 		t.Run(key, func(t *testing.T) {
 			if !slices.Contains(knownCategories, d.Category) || strings.TrimSpace(d.Reason) == "" {
 				t.Errorf("declaration = %+v, want a known category and a reason", d)
-			}
-			if (d.Category == categoryUpstream) != (d.Row > 0) {
-				t.Errorf("declaration = %+v, want a row on an upstream declaration and on no other", d)
 			}
 			if seen[key] {
 				t.Errorf("%s is declared twice", key)

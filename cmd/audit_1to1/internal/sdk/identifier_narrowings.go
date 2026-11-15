@@ -4,13 +4,9 @@
 package sdk
 
 import (
-	"fmt"
 	"go/ast"
 	"go/types"
-	"os"
-	"path/filepath"
 	"reflect"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,14 +43,6 @@ const (
 	narrowingUncalled = "uncalled"
 )
 
-// upstreamRegister is the register of what this server found upstream, whose
-// Summary table a declaration's row is read from.
-const upstreamRegister = "docs/development/upstream-bugs.md"
-
-// narrowedByClientGoRow is the register's row that records the eighteen
-// parameters below.
-const narrowedByClientGoRow = 158
-
 // The four custom attribute actions, each the one whose handler reads a
 // name into the ID of a group, a project or a user, which three methods
 // take.
@@ -73,34 +61,32 @@ type narrowingDeclaration struct {
 	// Action is the canonical ID of the action whose handler reads a name into
 	// the integer the method takes.
 	Action string
-	// UpstreamRow is the row of the register's Summary that records what
-	// client-go types, the row an upstream change retires this declaration from.
-	UpstreamRow int
 }
 
 // narrowingDeclarations answers the parameters client-go narrows: each is an
 // int64 where GitLab takes the ID or the path of a group or a project or the ID
 // or the username of a user, the handler of the action named reads a name into
-// its ID first, and a bump that widens the method leaves its row stale.
+// its ID first, and a client-go release that widens the method leaves its
+// declaration stale, which is what retires it.
 var narrowingDeclarations = []narrowingDeclaration{
-	{Method: "CustomAttributes.DeleteCustomGroupAttribute", Param: "group", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.DeleteCustomProjectAttribute", Param: "project", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.DeleteCustomUserAttribute", Param: "user", Action: actionCustomAttrDelete, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomGroupAttribute", Param: "group", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomProjectAttribute", Param: "project", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.GetCustomUserAttribute", Param: "user", Action: actionCustomAttrGet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomGroupAttributes", Param: "group", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomProjectAttributes", Param: "project", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.ListCustomUserAttributes", Param: "user", Action: actionCustomAttrList, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomGroupAttribute", Param: "group", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomProjectAttribute", Param: "project", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "CustomAttributes.SetCustomUserAttribute", Param: "user", Action: actionCustomAttrSet, UpstreamRow: narrowedByClientGoRow},
-	{Method: "GroupRepositoryStorageMove.GetStorageMoveForGroup", Param: "group", Action: "storage_move.get_group_for_group", UpstreamRow: narrowedByClientGoRow},
-	{Method: "GroupRepositoryStorageMove.RetrieveAllStorageMovesForGroup", Param: "group", Action: "storage_move.retrieve_group", UpstreamRow: narrowedByClientGoRow},
-	{Method: "GroupRepositoryStorageMove.ScheduleStorageMoveForGroup", Param: "group", Action: "storage_move.schedule_group", UpstreamRow: narrowedByClientGoRow},
-	{Method: "ProjectRepositoryStorageMove.GetStorageMoveForProject", Param: "project", Action: "storage_move.get_project_for_project", UpstreamRow: narrowedByClientGoRow},
-	{Method: "ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject", Param: "project", Action: "storage_move.retrieve_project", UpstreamRow: narrowedByClientGoRow},
-	{Method: "ProjectRepositoryStorageMove.ScheduleStorageMoveForProject", Param: "project", Action: "storage_move.schedule_project", UpstreamRow: narrowedByClientGoRow},
+	{Method: "CustomAttributes.DeleteCustomGroupAttribute", Param: "group", Action: actionCustomAttrDelete},
+	{Method: "CustomAttributes.DeleteCustomProjectAttribute", Param: "project", Action: actionCustomAttrDelete},
+	{Method: "CustomAttributes.DeleteCustomUserAttribute", Param: "user", Action: actionCustomAttrDelete},
+	{Method: "CustomAttributes.GetCustomGroupAttribute", Param: "group", Action: actionCustomAttrGet},
+	{Method: "CustomAttributes.GetCustomProjectAttribute", Param: "project", Action: actionCustomAttrGet},
+	{Method: "CustomAttributes.GetCustomUserAttribute", Param: "user", Action: actionCustomAttrGet},
+	{Method: "CustomAttributes.ListCustomGroupAttributes", Param: "group", Action: actionCustomAttrList},
+	{Method: "CustomAttributes.ListCustomProjectAttributes", Param: "project", Action: actionCustomAttrList},
+	{Method: "CustomAttributes.ListCustomUserAttributes", Param: "user", Action: actionCustomAttrList},
+	{Method: "CustomAttributes.SetCustomGroupAttribute", Param: "group", Action: actionCustomAttrSet},
+	{Method: "CustomAttributes.SetCustomProjectAttribute", Param: "project", Action: actionCustomAttrSet},
+	{Method: "CustomAttributes.SetCustomUserAttribute", Param: "user", Action: actionCustomAttrSet},
+	{Method: "GroupRepositoryStorageMove.GetStorageMoveForGroup", Param: "group", Action: "storage_move.get_group_for_group"},
+	{Method: "GroupRepositoryStorageMove.RetrieveAllStorageMovesForGroup", Param: "group", Action: "storage_move.retrieve_group"},
+	{Method: "GroupRepositoryStorageMove.ScheduleStorageMoveForGroup", Param: "group", Action: "storage_move.schedule_group"},
+	{Method: "ProjectRepositoryStorageMove.GetStorageMoveForProject", Param: "project", Action: "storage_move.get_project_for_project"},
+	{Method: "ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject", Param: "project", Action: "storage_move.retrieve_project"},
+	{Method: "ProjectRepositoryStorageMove.ScheduleStorageMoveForProject", Param: "project", Action: "storage_move.schedule_project"},
 }
 
 // narrowingTable is the declarations with what they are held to.
@@ -237,32 +223,12 @@ func allHoldNames(inputs []string, holdsName func(string) bool) bool {
 	return true
 }
 
-// clientGoRowPattern reads a row of the register's Summary that belongs to
-// client-go, alone or beside another project.
-var clientGoRowPattern = regexp.MustCompile(`(?m)^\| (\d+) \| client-go\b`)
-
-// readClientGoRows lists the rows of the register's Summary that are client-go's,
-// as the table spells each.
-func readClientGoRows(root string) (map[string]bool, error) {
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(upstreamRegister)))
-	if err != nil {
-		return nil, fmt.Errorf("reading the upstream register: %w", err)
-	}
-	rows := map[string]bool{}
-	for _, match := range clientGoRowPattern.FindAllStringSubmatch(string(content), -1) {
-		rows[match[1]] = true
-	}
-	return rows, nil
-}
-
 // applyNarrowingDeclarations gives each parameter its status and the inputs and
 // stops the walk read for it, and returns the stale declarations: one written
 // twice, and one whose parameter client-go no longer narrows or no handler calls,
-// whose action the catalog does not hold or whose input hands the method nothing,
-// or whose row is not one of client-go's in the register. An empty action or row
-// is one of those last two. A register that cannot be read fails every row, and
-// says so.
-func applyNarrowingDeclarations(root string, narrowed []sdkNarrowing, read map[string]*origins, table narrowingTable, holdsName func(string) bool) []string {
+// or whose action the catalog does not hold or whose input hands the method
+// nothing. An empty action is one the catalog does not hold.
+func applyNarrowingDeclarations(narrowed []sdkNarrowing, read map[string]*origins, table narrowingTable, holdsName func(string) bool) []string {
 	var stale []string
 	byKey := map[string]narrowingDeclaration{}
 	var order []narrowingDeclaration
@@ -281,22 +247,15 @@ func applyNarrowingDeclarations(root string, narrowed []sdkNarrowing, read map[s
 		key := narrowingKey(narrowing.Method, narrowing.Param)
 		declaration, isDeclared := byKey[key]
 		narrowing.Status = narrowingStatus(*narrowing, read[key], isDeclared, holdsName)
-		narrowing.Action, narrowing.UpstreamRow = declaration.Action, declaration.UpstreamRow
+		narrowing.Action = declaration.Action
 		if found := read[key]; found != nil {
 			narrowing.Inputs = slices.Compact(slices.Sorted(slices.Values(found.inputs)))
 			narrowing.StoppedAt = strings.Join(slices.Compact(slices.Sorted(slices.Values(found.stopped))), "; ")
 		}
 		listed[key] = *narrowing
 	}
-	if len(order) == 0 {
-		return stale
-	}
-	rows, err := readClientGoRows(root)
-	if err != nil {
-		stale = append(stale, "identifiers: "+err.Error())
-	}
 	for _, declaration := range order {
-		if why := narrowingDeclarationStale(declaration, listed, table.actions, rows); why != "" {
+		if why := narrowingDeclarationStale(declaration, listed, table.actions); why != "" {
 			stale = append(stale, "narrowing declaration "+narrowingKey(declaration.Method, declaration.Param)+": "+why)
 		}
 	}
@@ -305,10 +264,10 @@ func applyNarrowingDeclarations(root string, narrowed []sdkNarrowing, read map[s
 
 // narrowingDeclarationStale says why one declaration answers nothing, empty when
 // it holds.
-func narrowingDeclarationStale(declaration narrowingDeclaration, listed map[string]sdkNarrowing, actions map[string]string, rows map[string]bool) string {
+func narrowingDeclarationStale(declaration narrowingDeclaration, listed map[string]sdkNarrowing, actions map[string]string) string {
 	narrowing, isNarrowed := listed[narrowingKey(declaration.Method, declaration.Param)]
 	if !isNarrowed {
-		return "client-go no longer narrows it, so the lookup in front of it and this row can go"
+		return "client-go no longer narrows it, so the lookup in front of it and this declaration can go"
 	}
 	if !narrowing.Called {
 		return "no handler calls the method"
@@ -319,9 +278,6 @@ func narrowingDeclarationStale(declaration narrowingDeclaration, listed map[stri
 	}
 	if !slices.ContainsFunc(narrowing.Inputs, func(field string) bool { return strings.HasPrefix(field, input+".") }) {
 		return "the input of " + declaration.Action + " hands the method nothing"
-	}
-	if row := strconv.Itoa(declaration.UpstreamRow); !rows[row] {
-		return "row " + row + " of " + upstreamRegister + " is not one of client-go's"
 	}
 	return ""
 }

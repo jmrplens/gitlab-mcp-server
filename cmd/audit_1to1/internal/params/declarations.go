@@ -12,10 +12,9 @@ import (
 // Declaration categories. Each says why a param a route declares is not one
 // this server sends, and so which findings the declaration may answer.
 const (
-	// categoryUpstream is a param client-go does not model, recorded in the
-	// upstream register on the row the declaration names. It answers an
+	// categoryUpstream is a param client-go does not model. It answers an
 	// unmodeled finding alone, so the declaration goes stale the day
-	// client-go models the param.
+	// client-go models the param, which is what retires it.
 	categoryUpstream = "upstream"
 	// categoryDeclaredNotApplied is a param GitLab declares on the route and
 	// drops before it acts, or cannot apply, so offering it would offer
@@ -50,8 +49,6 @@ type paramDeclaration struct {
 	Param    string
 	Category string
 	Reason   string
-	// Row is the upstream register row an upstream declaration waits on.
-	Row int
 }
 
 // answeredClasses names the classes a category may answer, where it may not
@@ -110,12 +107,11 @@ var knownCategories = []string{
 }
 
 // staleDeclarations names, sorted, every declaration that answers no
-// finding, names no known category or no reason, or, for an upstream one,
-// names a row the register does not hold.
-func staleDeclarations(declared []paramDeclaration, used []bool, rows map[int]string) []string {
+// finding, or names no known category or no reason.
+func staleDeclarations(declared []paramDeclaration, used []bool) []string {
 	stale := []string{}
 	for i, d := range declared {
-		if reason := staleReason(d, used[i], rows); reason != "" {
+		if reason := staleReason(d, used[i]); reason != "" {
 			stale = append(stale, fmt.Sprintf("%s %s (%s): %s", d.Route, d.Param, d.Category, reason))
 		}
 	}
@@ -126,15 +122,12 @@ func staleDeclarations(declared []paramDeclaration, used []bool, rows map[int]st
 // staleReason says why one declaration fails the gate, and is empty for one
 // that holds. Ifs rather than a tagless switch, so the mutation tool, which
 // cannot see a case expression, measures each condition.
-func staleReason(d paramDeclaration, used bool, rows map[int]string) string {
+func staleReason(d paramDeclaration, used bool) string {
 	if !slices.Contains(knownCategories, d.Category) {
 		return "names no category this table defines"
 	}
 	if strings.TrimSpace(d.Reason) == "" {
 		return "gives no reason"
-	}
-	if d.Category == categoryUpstream && rows[d.Row] == "" {
-		return fmt.Sprintf("names row %d, which the upstream register does not hold", d.Row)
 	}
 	if !used {
 		return "answers no finding"
@@ -177,9 +170,9 @@ func paramDeclarations() []paramDeclaration {
 			"the create and the edit alone), so either one raises, the restore fails and the import with it"
 		reasonMirrorWebhook = "ee/lib/api/project_mirror.rb declares action and the pull_request.* keys for the GitHub " +
 			"pull request event a webhook posts to the route (ProcessGithubEventService), which no caller of an action writes"
-		reasonRow133Groups = "UpdateGroupOptions and CreateGroupOptions lack the group params GitLab 19.5 added"
-		reasonRow133Duo    = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
-		reasonRow133Search = "SearchOptions lacks the merge request filters the group and project search routes take"
+		reasonUnmodeledGroups = "UpdateGroupOptions and CreateGroupOptions lack the group params GitLab 19.5 added"
+		reasonUnmodeledDuo    = "the project create, create-for-user and edit options lack duo_code_review_decisions_enabled"
+		reasonUnmodeledSearch = "SearchOptions lacks the merge request filters the group and project search routes take"
 	)
 	declared := []paramDeclaration{
 		{Route: "PUT /application/settings", Param: anyParam, Category: categoryMapInput, Reason: reasonSettingsMap},
@@ -236,19 +229,19 @@ func paramDeclarations() []paramDeclaration {
 	} {
 		declared = append(declared, paramDeclaration{Route: "POST /projects/:id/mirror/pull", Param: param, Category: categoryWebhookPayload, Reason: reasonMirrorWebhook})
 	}
-	upstream133 := func(route, reason string, params ...string) {
+	unmodeled := func(route, reason string, params ...string) {
 		for _, param := range params {
-			declared = append(declared, paramDeclaration{Route: route, Param: param, Category: categoryUpstream, Reason: reason, Row: 133})
+			declared = append(declared, paramDeclaration{Route: route, Param: param, Category: categoryUpstream, Reason: reason})
 		}
 	}
-	upstream133("PUT /groups/:id", reasonRow133Groups, "duo_auto_mode_availability", "duo_code_review_decisions_enabled", "lock_require_sha_for_merge", "require_sha_for_merge")
-	upstream133("POST /groups", reasonRow133Groups, "duo_auto_mode_availability")
+	unmodeled("PUT /groups/:id", reasonUnmodeledGroups, "duo_auto_mode_availability", "duo_code_review_decisions_enabled", "lock_require_sha_for_merge", "require_sha_for_merge")
+	unmodeled("POST /groups", reasonUnmodeledGroups, "duo_auto_mode_availability")
 	for _, route := range []string{"POST /projects", "POST /projects/user/:user_id", "PUT /projects/:id"} {
-		upstream133(route, reasonRow133Duo, "duo_code_review_decisions_enabled")
+		unmodeled(route, reasonUnmodeledDuo, "duo_code_review_decisions_enabled")
 	}
 	for _, route := range []string{"GET /groups/:id/(-/)search", "GET /projects/:id/(-/)search"} {
 		// The negations stand as the one container they sit under.
-		upstream133(route, reasonRow133Search, "author_username", "label_name", "not", "source_branch", "target_branch")
+		unmodeled(route, reasonUnmodeledSearch, "author_username", "label_name", "not", "source_branch", "target_branch")
 	}
 	return declared
 }

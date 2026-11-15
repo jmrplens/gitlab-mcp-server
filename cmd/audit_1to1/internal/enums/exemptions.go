@@ -12,31 +12,30 @@ import (
 // while GitLab documents what each endpoint accepts, so the same type-wide
 // constant is excused on many fields for the same documented reason.
 const (
-	// The membership reasons below cite the routes and models at v19.5.0-ee,
-	// which register row 110 of docs/development/upstream-bugs.md records,
+	// The membership reasons below cite the routes and models at v19.5.0-ee
 	// rather than the API pages, which listed levels the routes refuse until
-	// the documentation change that row names. The schemas offer what
+	// GitLab's documentation was corrected. The schemas offer what
 	// toolutil.AccessLevelSet holds (issue 1280).
 	//
 	// membershipNoAdmin: 60 (Admin) is a constant on AccessLevelValue because
 	// a protected ref can be restricted to administrators, not because a
 	// membership can carry it.
-	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: no member, invitation, access request, share or group link route accepts it at v19.5.0-ee, the group member update included (docs/development/upstream-bugs.md row 110)"
+	membershipNoAdmin = "60 (Admin) is not a level a membership can carry: no member, invitation, access request, share or group link route accepts it at v19.5.0-ee, the group member update included"
 	// membershipNoAccessGrant: 0 (No access) is a level a membership reads
 	// back with, not one any write grants.
-	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: no write route accepts it at v19.5.0-ee, and an access request approval answers it with 201 while the request stays pending, so the approvals refuse it before the request (docs/development/upstream-bugs.md row 110)"
+	membershipNoAccessGrant = "0 (No access) is read back on a membership but never granted: no write route accepts it at v19.5.0-ee, and an access request approval answers it with 201 while the request stays pending, so the approvals refuse it before the request"
 	// projectNoMinimalAccess: Minimal access is a group level.
-	projectNoMinimalAccess = "5 (Minimal access) is refused on a project in every edition at v19.5.0-ee: a project member, invitation, share and approval are held to Gitlab::Access.all_values, Guest (10) to Owner (50) (docs/development/upstream-bugs.md row 110)"
+	projectNoMinimalAccess = "5 (Minimal access) is refused on a project in every edition at v19.5.0-ee: a project member, invitation, share and approval are held to Gitlab::Access.all_values, Guest (10) to Owner (50)"
 	// groupLinkNoAccess: a SAML or LDAP group link grants a role.
-	groupLinkNoAccess = "the SAML and LDAP group link routes declare values_with_minimal_access at v19.5.0-ee, Minimal access (5) to Owner (50), so 0 (No access) is refused though doc/api/saml.md and group_ldap_links.md list it (docs/development/upstream-bugs.md row 110)"
+	groupLinkNoAccess = "the SAML and LDAP group link routes declare values_with_minimal_access at v19.5.0-ee, Minimal access (5) to Owner (50), so 0 (No access) is refused though doc/api/saml.md and group_ldap_links.md list it"
 	// memberRoleBaseLevels: a custom role is based on a role a member can
 	// hold, below Owner.
-	memberRoleBaseLevels = "the create route declares Gitlab::Access.all_values and MemberRole validates the level against options_for_custom_roles at v19.5.0-ee, so Guest (10) to Maintainer (40) is what both accept: 0, 5 (Minimal access), 50 (Owner) and 60 (Admin) are each refused by one of the two, though doc/api/member_roles.md lists 50 (docs/development/upstream-bugs.md row 110)"
+	memberRoleBaseLevels = "the create route declares Gitlab::Access.all_values and MemberRole validates the level against options_for_custom_roles at v19.5.0-ee, so Guest (10) to Maintainer (40) is what both accept: 0, 5 (Minimal access), 50 (Owner) and 60 (Admin) are each refused by one of the two, though doc/api/member_roles.md lists 50"
 	// broadcastTargetLevels: the roles a banner can target.
-	broadcastTargetLevels = "the routes declare target_access_levels with values: System::BroadcastMessage::ALLOWED_TARGET_ACCESS_LEVELS at v19.5.0-ee, Guest, Planner, Reporter, Developer, Maintainer and Owner; 0, 5 (Minimal access), 25 (Security Manager) and 60 (Admin) are AccessLevelValue constants outside it, though doc/api/broadcast_messages.md lists 25 (docs/development/upstream-bugs.md row 110)"
+	broadcastTargetLevels = "the routes declare target_access_levels with values: System::BroadcastMessage::ALLOWED_TARGET_ACCESS_LEVELS at v19.5.0-ee, Guest, Planner, Reporter, Developer, Maintainer and Owner; 0, 5 (Minimal access), 25 (Security Manager) and 60 (Admin) are AccessLevelValue constants outside it, though doc/api/broadcast_messages.md lists 25"
 	// minAccessLevelFilter: the list filters take the membership roles a
 	// caller can hold.
-	minAccessLevelFilter = "every min_access_level and shared_min_access_level route declares values: Gitlab::Access.all_values at v19.5.0-ee, Guest (10) to Owner (50) in every edition: 0 filters nothing, 5 (Minimal access) is refused and 60 (Admin) is not a membership level (docs/development/upstream-bugs.md row 110)"
+	minAccessLevelFilter = "every min_access_level and shared_min_access_level route declares values: Gitlab::Access.all_values at v19.5.0-ee, Guest (10) to Owner (50) in every edition: 0 filters nothing, 5 (Minimal access) is refused and 60 (Admin) is not a membership level"
 	// resourceTokenLevels: a project or group access token is created with
 	// a membership role, which leaves out both ends of AccessLevelValue and
 	// the minimal access level.
@@ -45,7 +44,7 @@ const (
 	// goes out is the name each one stands for.
 	notificationLevelNames = "NotificationLevelValue is an int whose String and MarshalJSON write the level's name (client-go types.go), so its constants read 0 through 5 while doc/api/notification_settings.md documents the names disabled, participating, watch, global, mention and custom, which the input offers and notifications.buildUpdateOpts maps onto the constants; global is the level a group or project falls back to and is not one the global settings take"
 	// shareAccessLevel covers the two share endpoints, which grant a role.
-	shareAccessLevel = "a group share declares values_with_minimal_access and a project share Gitlab::Access.all_values at v19.5.0-ee: 0 grants nothing, 60 (Admin) is not a membership level, and a project share refuses 5 (Minimal access) as well (docs/development/upstream-bugs.md row 110)"
+	shareAccessLevel = "a group share declares values_with_minimal_access and a project share Gitlab::Access.all_values at v19.5.0-ee: 0 grants nothing, 60 (Admin) is not a membership level, and a project share refuses 5 (Minimal access) as well"
 	// protectedBranchLevels is the four-value set every protection level
 	// parameter documents, against the membership-wide AccessLevelValue.
 	protectedBranchLevels      = "doc/api/protected_branches.md#valid-access-levels lists 0 (No access, push and merge only), 30, 40 and 60 (GitLab Self-Managed only); AccessLevelValue is the membership-wide set, and the other levels are not protection levels"
@@ -56,19 +55,19 @@ const (
 	groupWikiAccessLevelPublic = "doc/api/groups.md documents wiki_access_level as disabled, private or enabled; public is the AccessControlValue constant only project Pages uses" //nolint:gosec // a documentation citation, not a credential
 	// deploymentCreated: a deployment is read in that state, never put in it.
 	deploymentCreated = "doc/api/deployments.md documents the status a deployment is created with or updated to as running, success, failed or canceled; created is a state a deployment is read in (and the list filter offers it)"
-	// The SDK gaps below are recorded in docs/development/upstream-bugs.md.
-	eventActionApproved = "approved is a documented contribution event action (doc/api/events.md links the contributions calendar page that lists it); client-go's EventTypeValue has no constant for it, see docs/development/upstream-bugs.md"
+	// The SDK gaps below last until client-go declares the constant.
+	eventActionApproved = "approved is a documented contribution event action (doc/api/events.md links the contributions calendar page that lists it); client-go's EventTypeValue has no constant for it"
 	// eventFilterAccepted: the events routes filter on the model, not on
 	// doc/api/events.md, which lists epic (refused) and omits these three
 	// (filtered on). Grape validates target_type only: Event.actions is a
 	// Hash, which Grape 2.4 reads as an options hash with no value set.
-	eventFilterAccepted  = "the events routes filter action on Event.actions (EventsFinder#by_action) and validate target_type against Event.target_types (lib/api/helpers/events_helpers.rb, app/models/event.rb), which hold it although doc/api/events.md does not list it; client-go's EventTypeValue and EventTargetTypeValue have no constant for it, see docs/development/upstream-bugs.md"
-	todoActionUndeclared = "doc/api/todos.md#get-a-list-of-to-do-items lists it as a filter value; client-go's TodoAction has no constant for it, see docs/development/upstream-bugs.md"
+	eventFilterAccepted  = "the events routes filter action on Event.actions (EventsFinder#by_action) and validate target_type against Event.target_types (lib/api/helpers/events_helpers.rb, app/models/event.rb), which hold it although doc/api/events.md does not list it; client-go's EventTypeValue and EventTargetTypeValue have no constant for it"
+	todoActionUndeclared = "doc/api/todos.md#get-a-list-of-to-do-items lists it as a filter value; client-go's TodoAction has no constant for it"
 	// todoActionAccepted: the route validates action against the model's set,
 	// which is wider than the page's list; transfer_failed is the item a
 	// background transfer leaves when it fails, which the transfer hints send a
 	// model to find.
-	todoActionAccepted = "lib/api/todos.rb validates action against Todo.action_names (app/models/todo.rb and ee/app/models/ee/todo.rb), which holds it although doc/api/todos.md does not list it; client-go's TodoAction has no constant for it, see docs/development/upstream-bugs.md"
+	todoActionAccepted = "lib/api/todos.rb validates action against Todo.action_names (app/models/todo.rb and ee/app/models/ee/todo.rb), which holds it although doc/api/todos.md does not list it; client-go's TodoAction has no constant for it"
 	// projectCreationOwner: the constant exists upstream, the value is documented nowhere.
 	projectCreationOwner = "doc/api/groups.md lists administrator, noone, maintainer and developer for project_creation_level; owner is declared by client-go but documented for neither create nor update"
 	reviewerStrategyDAP  = "doc/api/projects.md documents reviewer_assignment_strategy as disabled or code_owners on input; dap_powered can only be read back from projects configured before GitLab 19.4"
@@ -210,7 +209,7 @@ func buildAcceptedEnumGaps() map[string]string {
 		"groups.UpdateInput.wiki_access_level=public": groupWikiAccessLevelPublic,
 		// client-go types this role field with the visibility enum, so the
 		// two value sets share nothing.
-		"projects.UpdateInput.ci_restrict_pipeline_cancellation_role": "doc/api/projects.md documents developer, maintainer and no_one; client-go types the field as AccessControlValue, whose constants are the feature-visibility set, see docs/development/upstream-bugs.md",
+		"projects.UpdateInput.ci_restrict_pipeline_cancellation_role": "doc/api/projects.md documents developer, maintainer and no_one; client-go types the field as AccessControlValue, whose constants are the feature-visibility set",
 
 		// --- Documented subsets of other value types ---
 		"commits.SetStatusInput.state":                                     "doc/api/commits.md#set-the-pipeline-status-of-a-commit lists pending, running, success, failed, canceled and skipped; BuildStateValue is the full job status set, which includes states a status cannot be set to",

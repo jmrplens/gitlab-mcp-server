@@ -43,7 +43,7 @@ func decisionInput() judgeInput {
 			"Cranks.ListCranks":      {"widget.graph"},
 		},
 		waits: []waits.Entry{
-			{Row: 6, Category: waits.CategoryUpstream, Replaces: []string{"Widgets.SetWidget", "Cogs"}, Reason: "the body by hand"},
+			{Category: waits.CategoryUpstream, Sites: []string{"widgets.Set"}, Replaces: []string{"Widgets.SetWidget", "Cogs"}, Reason: "the body by hand"},
 			{Category: waits.CategoryURLBuilt, Replaces: []string{"Widgets.WidgetArchive"}, Reason: "the URL"},
 			{Category: waits.CategoryProbe, Replaces: []string{"Widgets.SetWidget"}, Reason: "a second entry, which loses"},
 		},
@@ -68,11 +68,11 @@ func TestAdjudicate_EachTable_DecidesAMethodInItsOrder(t *testing.T) {
 		{Method: "Widgets.GetWidgetMixed", Category: adjudicationGraphQL, Reason: "One action of two missing", Actions: []string{"widget.graph", "widget.gone"}},
 		{Method: "Widgets.GetWidgetOther", Category: "COVERED_GENERIC", Reason: "Another route"},
 		{Method: "Widgets.GetWidgetBinary", Category: "INTENTIONAL_SKIP_BINARY"},
-		{Method: "Widgets.SetWidget", Category: adjudicationRaw, Reason: "row 6: the body by hand"},
+		{Method: "Widgets.SetWidget", Category: adjudicationRaw, Reason: "upstream widgets.Set for Widgets.SetWidget: the body by hand"},
 		{Method: "Widgets.WidgetArchive", Category: adjudicationURLBuilt, Reason: "url-built: the URL", Carries: true},
 		{Method: "Gadgets.ListGadgets", Category: adjudicationSuperseded, Reason: "GitLab replaced it", Carries: true},
 		{Method: "Cranks.ListCranks", Category: adjudicationGraphQL, Reason: "Cranks over GraphQL", Actions: []string{"widget.graph"}, Carries: true},
-		{Method: "Cogs.ListCogs", Category: adjudicationRaw, Reason: "row 6: the body by hand"},
+		{Method: "Cogs.ListCogs", Category: adjudicationRaw, Reason: "upstream widgets.Set for Widgets.SetWidget: the body by hand"},
 		{Method: "Sprockets.ListSprockets", Category: adjudicationNone},
 	}
 	for _, want := range cases {
