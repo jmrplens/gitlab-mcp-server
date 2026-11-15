@@ -3062,7 +3062,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "discussion_id": {
@@ -3482,7 +3482,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -16209,7 +16209,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "epic_iid": {
@@ -18100,7 +18100,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -21047,7 +21047,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "create_source": {
@@ -34995,7 +34995,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "create_source": {
@@ -37523,7 +37523,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "epic_iid": {
@@ -38335,7 +38335,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "epic_iid": {
@@ -38597,7 +38597,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms taking the epic out of its parent epic when parent_id is 0, and removing every current assignee when assignee_ids is []. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes something, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "description": {
@@ -86952,7 +86952,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -98579,7 +98579,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -100222,7 +100222,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "issue_iid": {
@@ -103590,7 +103590,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms taking the issue out of its epic when epic_id is 0, and removing every current assignee when assignee_ids is [] or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes something, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "description": {
@@ -137822,7 +137822,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "description": {
@@ -142225,7 +142225,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -143634,7 +143634,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -143982,7 +143982,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -144690,7 +144690,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "in_reply_to_discussion_id": {
@@ -145569,7 +145569,7 @@
       "additionalProperties": false,
       "properties": {
         "confirm": {
-          "description": "Confirms running the quick actions the summary note carries. Pass true only after the user approves that. Only required when a line of note begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the note. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the summary note carries. Pass true only after the user approves that. Only required when a line of note begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the note. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "internal": {
@@ -145648,7 +145648,7 @@
       "additionalProperties": false,
       "properties": {
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when the draft is published. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "merge_request_iid": {
@@ -153727,7 +153727,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -154965,7 +154965,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "merge_request_iid": {
@@ -160001,7 +160001,7 @@
           ]
         },
         "confirm": {
-          "description": "Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms removing every current assignee when assignee_ids is [] or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "description": {
@@ -236806,7 +236806,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "epic_iid": {
@@ -237486,7 +237486,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms running the quick actions the text carries. Pass true only after the user approves that. Only required when a line of the text begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "created_at": {
@@ -239353,7 +239353,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child or /remove_child_epic, which GitLab runs when it saves the text. Pass true only after the user approves",
+          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array, required only when entries would actually be deleted, and taking the work item out of its parent when parent_id is 0. Also confirms running the quick actions the description carries, required when a line of it begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Pass true only after the user approves",
           "type": "boolean"
         },
         "crm_contact_ids": {

@@ -599,7 +599,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `issue.time_estimate_set`                | Work Item: Update at project                                                                                                                                     |              |
 | `issue.time_stats_get`                   | Work Item: Read at project                                                                                                                                       |              |
 | `issue.unsubscribe`                      | Issue: Subscribe at project. Some calls also need: Work Item: Read at project                                                                                    |              |
-| `issue.update`                           | Work Item: Update at project                                                                                                                                     |              |
+| `issue.update`                           | Work Item: Update at project. Some calls also need: Work Item: Read at project                                                                                   |              |
 | `issue.work_item_create`                 | Not reachable at this release: GitLab declares no fine-grained permission for `WorkItemType` in the answer, so the write commits and its answer is lost          |              |
 | `issue.work_item_delete`                 | Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of                                           |              |
 | `issue.work_item_get`                    | Not reachable at this release: GitLab declares no fine-grained permission for `Namespace`, which the answer is made of                                           |              |
@@ -716,7 +716,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | `merge_request.time_stats`                       | Work Item: Read at project                                                                                        |              |
 | `merge_request.unapprove`                        | Merge Request: Approve at project                                                                                 |              |
 | `merge_request.unsubscribe`                      | Merge Request: Subscribe at project. Some calls also need: Merge Request: Read at project                         |              |
-| `merge_request.update`                           | Merge Request: Update at project                                                                                  |              |
+| `merge_request.update`                           | Merge Request: Update at project. Some calls also need: Merge Request: Read at project                            |              |
 
 ## `merge_train`
 

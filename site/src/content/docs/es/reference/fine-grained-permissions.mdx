@@ -599,7 +599,7 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 | `issue.time_estimate_set`                | Work Item: Update en proyecto                                                                                                                                                         |                |
 | `issue.time_stats_get`                   | Work Item: Read en proyecto                                                                                                                                                           |                |
 | `issue.unsubscribe`                      | Issue: Subscribe en proyecto. Algunas llamadas también necesitan: Work Item: Read en proyecto                                                                                         |                |
-| `issue.update`                           | Work Item: Update en proyecto                                                                                                                                                         |                |
+| `issue.update`                           | Work Item: Update en proyecto. Algunas llamadas también necesitan: Work Item: Read en proyecto                                                                                        |                |
 | `issue.work_item_create`                 | No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemType` en la respuesta, así que la escritura se confirma y su respuesta se pierde          |                |
 | `issue.work_item_delete`                 | No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta                                                       |                |
 | `issue.work_item_get`                    | No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta                                                       |                |
@@ -716,7 +716,7 @@ Esta tabla juzga solo los tokens de grano fino. El scope que necesita para cada 
 | `merge_request.time_stats`                       | Work Item: Read en proyecto                                                                                                        |                |
 | `merge_request.unapprove`                        | Merge Request: Approve en proyecto                                                                                                 |                |
 | `merge_request.unsubscribe`                      | Merge Request: Subscribe en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto                          |                |
-| `merge_request.update`                           | Merge Request: Update en proyecto                                                                                                  |                |
+| `merge_request.update`                           | Merge Request: Update en proyecto. Algunas llamadas también necesitan: Merge Request: Read en proyecto                             |                |
 
 ## `merge_train`
 
