@@ -457,7 +457,7 @@ destructive action with no such word is listed in
 and no action that is not
 (`TestDestructiveRoutes_KnownExceptions_NameOnlyDestructiveActions`).
 `TestDestructiveRoutes_EffectClasses_AgreeOnConfirmation` reads effects, in
-eleven classes (`effectClasses`): a project or a group moved to another
+thirteen classes (`effectClasses`): a project or a group moved to another
 namespace, a credential replaced or revoked, push rules weakened, an object
 consumed with no way back (an issue moved, a label promoted, a project or a
 group archived, a schedule's ownership taken, every to-do marked done), a
@@ -471,7 +471,12 @@ the call names, and a text GitLab runs as quick actions (the body of a note
 and the description of an issue, a merge request, an epic or a work item,
 guarded by `toolutil.ConfirmQuickActions` in
 `internal/toolutil/quick_action_guard.go` for the lines that begin with a
-command whose effect asks). An action belongs to a class by its name or
+command whose effect asks), an item taken out of its epic or parent (an
+epic or parent id of 0), and the assignees or CRM contacts of an item
+removed (an empty list), the last two guarded by
+`internal/toolutil/detach_guard.go` and the work item clear guard. The
+harness counts a GraphQL query as a read, so a guard that reads through
+GraphQL before it asks is held as a REST one is. An action belongs to a class by its name or
 by a request it sends, a REST route or the root field of a GraphQL
 mutation, which the test reads from
 `docs/development/action-requests.json`, so a rotation added as
