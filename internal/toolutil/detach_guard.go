@@ -84,7 +84,9 @@ func ConfirmParentRemoval(ctx context.Context, op string, removes bool, field st
 // and a model sends an empty list by accident as readily as on purpose. A
 // call nobody is going to be asked about reads nothing. Otherwise the item is
 // read, so clearing a list that is already empty proceeds unasked, and a read
-// that fails asks rather than assumes the harmless case.
+// that fails asks rather than assumes the harmless case. A read the caller
+// abandoned is answered with the context's error rather than with a question
+// nobody is there to answer.
 func ConfirmAssigneesCleared(ctx context.Context, op string, clears bool,
 	question func(losses i18n.Message) i18n.Message, count func(context.Context) (int, error),
 ) error {
@@ -92,6 +94,9 @@ func ConfirmAssigneesCleared(ctx context.Context, op string, clears bool,
 		return nil
 	}
 	assigned, err := count(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
 	if err == nil && assigned == 0 {
 		return nil
 	}

@@ -4,6 +4,8 @@
 package epics
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -112,5 +114,27 @@ func TestUpdate_ParentRemoval_Asks(t *testing.T) {
 				t.Errorf("the update was written %d time(s), want %d", got, tc.wantWrite)
 			}
 		})
+	}
+}
+
+// TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled verifies that an
+// update whose caller goes away while the guard reads the epic ends with the
+// cancellation, which the dispatcher logs as one, rather than with the
+// question nobody is there to answer. The guard's read is the only request
+// that reaches the mock, so no update is sent.
+func TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	var requests atomic.Int64
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, getResponseJSON)
+	})
+	_, err := Update(ctx, client, UpdateInput{FullPath: testFullPath, IID: 1, AssigneeIDs: []int64{}})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Update() error = %v, want context.Canceled", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("%d request(s) were answered, want the guard's read abandoned and nothing after it", got)
 	}
 }

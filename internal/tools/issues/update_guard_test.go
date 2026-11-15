@@ -4,6 +4,8 @@
 package issues
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -118,5 +120,28 @@ func TestUpdate_Removals_Ask(t *testing.T) {
 				t.Errorf("the update was written %d time(s), want %d", got, tc.wantPut)
 			}
 		})
+	}
+}
+
+// TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled verifies that an
+// update whose caller goes away while the guard reads the issue ends with the
+// cancellation, which the dispatcher logs as one, rather than with the
+// question nobody is there to answer, and sends no update.
+func TestUpdate_AssigneesCleared_CanceledRead_ReturnsCanceled(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	var writes atomic.Int64
+	ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes.Add(1)
+		}
+		testutil.RespondJSON(w, http.StatusOK, assignedIssueJSON)
+	})
+	_, err := Update(ctx, client, UpdateInput{ProjectID: testProjectID, IssueIID: 10, AssigneeIDs: []int64{}})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Update() error = %v, want context.Canceled", err)
+	}
+	if got := writes.Load(); got != 0 {
+		t.Errorf("the update was written %d time(s), want none", got)
 	}
 }

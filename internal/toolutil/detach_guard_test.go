@@ -6,7 +6,9 @@ package toolutil
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/i18n"
 )
@@ -176,6 +178,54 @@ func TestConfirmAssigneesCleared_AsksWhenSomebodyWouldBeRemoved(t *testing.T) {
 			}
 			if err == nil || err.Error() != tc.want {
 				t.Errorf("refusal =\n%v\nwant\n%q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestConfirmAssigneesCleared_AbandonedRead_ReturnsTheContextError pins that
+// a call whose caller went away while the guard read the item ends with the
+// context's error, which the dispatcher logs as a cancellation, and not with
+// a question nobody is there to answer. A read that ends with an error of its
+// own while the context ends is answered the same way.
+func TestConfirmAssigneesCleared_AbandonedRead_ReturnsTheContextError(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
+	t.Setenv("AUTOPILOT", "")
+	for _, tc := range []struct {
+		name string
+		ctx  func() (context.Context, context.CancelFunc)
+		read error
+		want error
+	}{
+		{
+			name: "canceled", read: context.Canceled, want: context.Canceled,
+			ctx: func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) },
+		},
+		{
+			name: "past its deadline", read: errors.New("transport closed"), want: context.DeadlineExceeded,
+			ctx: func() (context.Context, context.CancelFunc) {
+				return context.WithDeadline(context.Background(), time.Unix(0, 0))
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := tc.ctx()
+			defer cancel()
+			reads := 0
+			count := func(context.Context) (int, error) {
+				reads++
+				cancel()
+				return 0, tc.read
+			}
+			err := ConfirmAssigneesCleared(ctx, "issueUpdate", true, assigneesQuestion, count)
+			if reads != 1 {
+				t.Errorf("the guard read the item %d time(s), want 1", reads)
+			}
+			if !errors.Is(err, tc.want) {
+				t.Errorf("error = %v, want %v", err, tc.want)
+			}
+			if err != nil && strings.Contains(err.Error(), "Re-send the same call with confirm=true") {
+				t.Errorf("error %q asks a question nobody is there to answer", err)
 			}
 		})
 	}
