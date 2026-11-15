@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,036 |
-| Unit test functions                                   | 22,253 |
+| Total test functions                                  | 24,044 |
+| Unit test functions                                   | 22,261 |
 | E2E test functions                                    |  1,783 |
 | cmd test functions                                    |  6,018 |
 | Test files (internal/)                                |    779 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,807 | 57.4% |
+| `TestFunc_Scenario` (2-part)           | 13,809 | 57.4% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,330 | 38.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,336 | 38.8% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,353 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,356 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            457 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,425 |        489 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (181) |         11,430 |        489 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,783 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,018 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,036** |  **1,723** |                                                                                                 |
+| **Total**               |     **24,044** |  **1,723** |                                                                                                 |
 
 ### Core Packages
 
@@ -93,32 +93,32 @@
 | testutil/netfixture      |        12 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,441 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,353** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,444 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,356** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   538 |   100.0% |    57 |
-| mergerequests     |   352 |   100.0% |    30 |
+| mergerequests     |   353 |   100.0% |    30 |
 | groups            |   344 |   100.0% |    38 |
 | dynamic           |   328 |   100.0% |     2 |
-| issues            |   306 |   100.0% |    21 |
+| issues            |   307 |   100.0% |    21 |
 | users             |   283 |   100.0% |    38 |
 | jobs              |   185 |   100.0% |    17 |
 | packages          |   179 |   100.0% |    10 |
 | search            |   171 |   100.0% |    10 |
 | commits           |   154 |   100.0% |    13 |
 | pipelines         |   151 |   100.0% |    12 |
-| workitems         |   146 |   100.0% |     6 |
+| workitems         |   147 |   100.0% |     6 |
 | runners           |   144 |   100.0% |    21 |
 | resourceevents    |   131 |   100.0% |    17 |
 | awardemoji        |   130 |   100.0% |    24 |
 | containerregistry |   124 |   100.0% |    16 |
 | snippets          |   118 |   100.0% |    15 |
 | branches          |   114 |   100.0% |    10 |
-| accesstokens      |   111 |   100.0% |    18 |
+| accesstokens      |   112 |   100.0% |    18 |
 | groupmilestones   |   111 |   100.0% |     8 |
 | pipelineschedules |   111 |   100.0% |    11 |
 | mrapprovals       |   110 |   100.0% |     7 |
@@ -134,7 +134,7 @@
 | Sub-package             |      Tests | Test Files | Coverage |     Tools |
 | ----------------------- | ---------: | ---------: | -------: | --------: |
 | accessrequests          |         66 |          4 |   100.0% |         8 |
-| accesstokens            |        111 |          2 |   100.0% |        18 |
+| accesstokens            |        112 |          2 |   100.0% |        18 |
 | achievements            |         67 |          3 |   100.0% |        12 |
 | actioncatalog           |         82 |         10 |   100.0% |         0 |
 | actioncompat            |         61 |          3 |   100.0% |         1 |
@@ -183,7 +183,7 @@
 | epicdiscussions         |         36 |          2 |   100.0% |         6 |
 | epicissues              |         27 |          2 |   100.0% |         4 |
 | epicnotes               |         27 |          2 |   100.0% |         5 |
-| epics                   |         92 |          4 |   100.0% |         6 |
+| epics                   |         93 |          4 |   100.0% |         6 |
 | epicworkitems           |         14 |          1 |   100.0% |         0 |
 | errortracking           |         23 |          2 |   100.0% |         5 |
 | events                  |         67 |          2 |   100.0% |         2 |
@@ -227,7 +227,7 @@
 | issuediscussions        |         36 |          2 |   100.0% |         6 |
 | issuelinks              |         78 |          4 |   100.0% |         4 |
 | issuenotes              |         56 |          2 |   100.0% |         5 |
-| issues                  |        306 |          5 |   100.0% |        21 |
+| issues                  |        307 |          5 |   100.0% |        21 |
 | issuestatistics         |         55 |          2 |   100.0% |         3 |
 | iterationdata           |         12 |          1 |   100.0% |         0 |
 | jobs                    |        185 |          8 |   100.0% |        17 |
@@ -240,7 +240,7 @@
 | markdown                |         10 |          1 |   100.0% |         1 |
 | memberroles             |         58 |          4 |   100.0% |         6 |
 | members                 |         77 |          3 |   100.0% |         6 |
-| mergerequests           |        352 |          6 |   100.0% |        30 |
+| mergerequests           |        353 |          6 |   100.0% |        30 |
 | mergetrains             |         27 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |        100 |          2 |   100.0% |         9 |
@@ -312,9 +312,9 @@
 | vulnerabilities         |         97 |          3 |   100.0% |         8 |
 | waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
-| workitems               |        146 |          6 |   100.0% |         6 |
+| workitems               |        147 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,425** |    **489** |          | **1,198** |
+| **Total**               | **11,430** |    **489** |          | **1,198** |
 
 </details>
 
