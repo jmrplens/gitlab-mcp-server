@@ -20,8 +20,8 @@ import (
 )
 
 // confirmUpdateRemovals asks before an update sends epic_id 0, which takes
-// the issue out of its epic, and before it sends assignee_ids [] or
-// assignee_id 0, which removes every assignee. It returns nil when the update
+// the issue out of its epic, and before it sends assignee_ids [] or a list
+// that begins with 0, or assignee_id 0, which removes every assignee. It returns nil when the update
 // may proceed. The epic is decided by the arguments alone; the assignees are
 // read first, so emptying a list that is already empty asks nothing.
 func confirmUpdateRemovals(ctx context.Context, client *gitlabclient.Client, input UpdateInput) error {
@@ -30,7 +30,7 @@ func confirmUpdateRemovals(ctx context.Context, client *gitlabclient.Client, inp
 		i18n.New(i18n.ConfirmIssueEpicRemove, i18n.N("iid", input.IssueIID), i18n.M("target", target))); err != nil {
 		return err
 	}
-	clears := toolutil.ClearsList(input.AssigneeIDs) || toolutil.RemovesReference(input.AssigneeID)
+	clears := toolutil.ClearsAssigneeIDs(input.AssigneeIDs) || toolutil.RemovesReference(input.AssigneeID)
 	return toolutil.ConfirmAssigneesCleared(ctx, "issueUpdate", clears,
 		func(losses i18n.Message) i18n.Message {
 			return i18n.New(i18n.ConfirmIssueAssigneesClear,

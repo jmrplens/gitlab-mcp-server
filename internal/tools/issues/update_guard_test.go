@@ -77,7 +77,22 @@ func TestUpdate_Removals_Ask(t *testing.T) {
 			name: "assignee_ids [] on an issue nobody is assigned", input: UpdateInput{AssigneeIDs: []int64{}},
 			current: issueJSONMinimal, wantReads: 1, wantPut: 1,
 		},
+		{
+			// GitLab reads the lone id 0 as nobody.
+			name: "assignee_ids [0] on an issue somebody is assigned", input: UpdateInput{AssigneeIDs: []int64{0}},
+			current: assignedIssueJSON, wantReads: 1,
+			want: "issueUpdate: Remove all 2 assignees from issue 10 in project `42`?" +
+				" This replaces the list and cannot be undone from the response." + tail,
+		},
+		{
+			// An issue that takes a single assignee keeps the first id, 0.
+			name: "assignee_ids [0, 9] on an issue somebody is assigned", input: UpdateInput{AssigneeIDs: []int64{0, 9}},
+			current: assignedIssueJSON, wantReads: 1,
+			want: "issueUpdate: Remove all 2 assignees from issue 10 in project `42`?" +
+				" This replaces the list and cannot be undone from the response." + tail,
+		},
 		{name: "another assignee", input: UpdateInput{AssigneeIDs: []int64{4}}, wantPut: 1},
+		{name: "a user first and 0 after it", input: UpdateInput{AssigneeIDs: []int64{9, 0}}, wantPut: 1},
 		{
 			name: "both removals in YOLO mode", input: UpdateInput{EpicID: &zero, AssigneeIDs: []int64{}},
 			yolo: "true", current: assignedIssueJSON, wantPut: 1,

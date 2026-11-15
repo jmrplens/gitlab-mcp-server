@@ -54,6 +54,32 @@ func TestClearsList_IsTrueOnlyForAnEmptyArray(t *testing.T) {
 	}
 }
 
+// TestClearsAssigneeIDs_IsTrueForTheListsGitLabEmpties pins the reading of
+// the assignee_ids of a REST update: an empty array removes every assignee,
+// and so does a list whose first id is 0, which GitLab reads as nobody alone
+// and keeps alone on an item that takes a single assignee. A list left out,
+// or one whose first id is a user, does not.
+func TestClearsAssigneeIDs_IsTrueForTheListsGitLabEmpties(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ids  []int64
+		want bool
+	}{
+		{name: "left out"},
+		{name: "empty", ids: []int64{}, want: true},
+		{name: "zero alone", ids: []int64{0}, want: true},
+		{name: "zero first", ids: []int64{0, 9}, want: true},
+		{name: "a user", ids: []int64{3}},
+		{name: "a user first", ids: []int64{9, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClearsAssigneeIDs(tc.ids); got != tc.want {
+				t.Errorf("ClearsAssigneeIDs(%v) = %v, want %v", tc.ids, got, tc.want)
+			}
+		})
+	}
+}
+
 // parentQuestion is the question the parent removal tests ask, an epic's.
 func parentQuestion() i18n.Message {
 	return i18n.New(i18n.ConfirmEpicParentRemove, i18n.S("path", EscapeConsentValue("my-group")), i18n.N("iid", 7))

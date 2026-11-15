@@ -17,14 +17,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// confirmAssigneesCleared asks before an update sends assignee_ids [] or
-// assignee_id 0, which removes every assignee, and returns nil when the
+// confirmAssigneesCleared asks before an update sends assignee_ids [] or a
+// list that begins with 0, or assignee_id 0, which removes every assignee, and returns nil when the
 // update may proceed. The merge request is read first, so emptying a list
 // that is already empty asks nothing. An empty reviewer_ids is not asked
 // about, and neither is /unassign_reviewer in a text: no action asks before
 // it removes the reviewers of a merge request.
 func confirmAssigneesCleared(ctx context.Context, client *gitlabclient.Client, input UpdateInput) error {
-	clears := toolutil.ClearsList(input.AssigneeIDs) || toolutil.RemovesReference(input.AssigneeID)
+	clears := toolutil.ClearsAssigneeIDs(input.AssigneeIDs) || toolutil.RemovesReference(input.AssigneeID)
 	return toolutil.ConfirmAssigneesCleared(ctx, "mrUpdate", clears,
 		func(losses i18n.Message) i18n.Message {
 			return i18n.New(i18n.ConfirmMergeRequestAssigneesClear,

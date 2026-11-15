@@ -136,6 +136,24 @@ func ApplyWorkItemWidgets(opts *gl.UpdateWorkItemOptions, in WorkItemWidgetInput
 	return workItemNullOption(nulls), nil
 }
 
+// CheckWorkItemIDList refuses an id list of a work item update, such as
+// assignee_ids or crm_contact_ids, that holds an id of 0 or below, and
+// returns nil for a list that does not. field names the list in the refusal.
+//
+// No object has such an id, and GitLab replaces a work item's list with the
+// objects it resolves, so [0] removes every entry the list holds: it answers
+// as [] does, which asks before it removes anything, while the call reads as
+// one that names something. A list of real ids goes out as before, and []
+// stays the way to remove every entry.
+func CheckWorkItemIDList(field string, ids []int64) error {
+	for _, id := range ids {
+		if id <= 0 {
+			return fmt.Errorf("%s must hold the IDs of the objects to set, or be [] to remove every one, got %d", field, id)
+		}
+	}
+	return nil
+}
+
 // workItemNullOption returns the request option that writes null into each
 // named widget field of the workItemUpdate input client-go has encoded.
 //

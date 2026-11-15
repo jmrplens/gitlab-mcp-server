@@ -2065,15 +2065,19 @@ func listClearingActions() map[string]effectGuard {
 		assigned = `{"id":1,"iid":7,"assignees":[{"id":3,"username":"alice"}]}`
 		graphQL  = "the action writes through GraphQL, whose answers this fake GitLab does not give; the tests of its own package send a call that names an assignee"
 	)
+	// The two REST updates send the spellings of "nobody" other than [],
+	// which their own packages send along with [] and assignee_id 0: GitLab
+	// reads a lone 0 as nobody, and keeps only the first id, here 0, on an
+	// item that takes a single assignee. A user first is set, not removed.
 	return map[string]effectGuard{
 		"issue.update": {
 			current:  assigned,
-			call:     map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{}},
-			harmless: map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{5}},
+			call:     map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{0}},
+			harmless: map[string]any{"project_id": "42", "issue_iid": 7, "assignee_ids": []any{5, 0}},
 		},
 		"merge_request.update": {
 			current:  assigned,
-			call:     map[string]any{"project_id": "42", "merge_request_iid": 7, "assignee_id": 0},
+			call:     map[string]any{"project_id": "42", "merge_request_iid": 7, "assignee_ids": []any{0, 9}},
 			harmless: map[string]any{"project_id": "42", "merge_request_iid": 7, "assignee_ids": []any{5}},
 		},
 		// The CRM contacts are not on the read model, so the work item asks

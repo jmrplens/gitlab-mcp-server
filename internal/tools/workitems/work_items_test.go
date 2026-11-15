@@ -1842,7 +1842,8 @@ func TestUpdate_Error(t *testing.T) {
 }
 
 // TestUpdate_MalformedDate_RefusesBeforeAnyRequest verifies that update stops
-// on a start_date or due_date it cannot read, naming the one at fault, and
+// on a start_date or due_date it cannot read, a negative reference, or an
+// assignee or contact id of 0 or below, naming the one at fault, and
 // does so before issuing anything: the clearing guard's read would otherwise be
 // spent on a call already destined to be refused.
 func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
@@ -1855,6 +1856,10 @@ func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
 		{"milestone_id", UpdateInput{MilestoneID: new(int64(-1))}},
 		{"parent_id", UpdateInput{ParentID: new(int64(-1))}},
 		{"iteration_id", UpdateInput{IterationID: new(int64(-1))}},
+		// An id no user or contact has: GitLab would empty the list, as []
+		// does, without the question [] asks.
+		{"assignee_ids", UpdateInput{AssigneeIDs: []int64{0}}},
+		{"crm_contact_ids", UpdateInput{CRMContactIDs: []int64{7, -4}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

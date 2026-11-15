@@ -355,9 +355,13 @@ const (
 	// ConfirmQuickActionRemoveChild names a /remove_child or
 	// /remove_child_epic line, which takes a child out of the item.
 	ConfirmQuickActionRemoveChild Key = "confirm.quick_action.remove_child"
-	// ConfirmQuickActionUnassign names an /unassign line that names nobody,
-	// which removes every assignee of the item.
+	// ConfirmQuickActionUnassign names an /unassign line, which removes
+	// assignees from the item: every one of them when it names nobody or the
+	// item takes a single assignee.
 	ConfirmQuickActionUnassign Key = "confirm.quick_action.unassign"
+	// ConfirmQuickActionReassign names a /reassign line that names nobody,
+	// which removes every assignee of the item.
+	ConfirmQuickActionReassign Key = "confirm.quick_action.reassign"
 	// ConfirmQuickActionRemoveContacts names a /remove_contacts line, which
 	// removes CRM contacts from the item.
 	ConfirmQuickActionRemoveContacts Key = "confirm.quick_action.remove_contacts"

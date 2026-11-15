@@ -42,6 +42,19 @@ func ClearsList(ids []int64) bool {
 	return ids != nil && len(ids) == 0
 }
 
+// ClearsAssigneeIDs reports whether the assignee_ids of a REST update of an
+// issue or a merge request remove every assignee: an explicit empty array, or
+// a list whose first id is 0. GitLab reads the lone id 0 as "nobody"
+// (doc/api/issues.md and merge_requests.md), and on an item that takes a
+// single assignee, as every issue and merge request on a Free instance does,
+// it keeps only the first id before it looks, so [0, 9] removes them all
+// there too. A list whose first id is a user is not asked about: GitLab sets
+// the users it resolves, and leaves the assignees alone when it resolves
+// none, so such a list never empties them.
+func ClearsAssigneeIDs(ids []int64) bool {
+	return ClearsList(ids) || (len(ids) > 0 && ids[0] == 0)
+}
+
 // ConfirmParentRemoval asks before an update takes an item out of its epic or
 // its parent, and returns nil when the update may proceed. removes is whether
 // the call sends the field as 0, field is its name, and question names the

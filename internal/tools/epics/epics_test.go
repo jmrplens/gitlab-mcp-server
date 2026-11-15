@@ -2601,8 +2601,8 @@ func TestUpdate_WeightNullThroughTheMetaDecoder_ReachesTheWire(t *testing.T) {
 }
 
 // TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest verifies a negative
-// parent or milestone ID is refused, naming the field, rather than sent as a
-// global ID no object carries.
+// parent or milestone ID, and an assignee id of 0 or below, is refused,
+// naming the field, rather than sent as a global ID no object carries.
 func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 	negative := int64(-1)
 	cases := []struct {
@@ -2611,6 +2611,9 @@ func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 	}{
 		{"parent_id", UpdateInput{ParentID: &negative}},
 		{"milestone_id", UpdateInput{MilestoneID: &negative}},
+		// An id no user has: GitLab would empty the assignees, as [] does,
+		// without the question [] asks.
+		{"assignee_ids", UpdateInput{AssigneeIDs: []int64{0}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2618,7 +2621,7 @@ func TestUpdate_NegativeReference_IsRefusedBeforeAnyRequest(t *testing.T) {
 			input.FullPath, input.IID = testFullPath, 1
 			_, err := Update(t.Context(), testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), input)
 			if err == nil || !strings.Contains(err.Error(), tc.name) {
-				t.Errorf("Update(%s=-1) error = %v, want a refusal naming the field", tc.name, err)
+				t.Errorf("Update(%s) error = %v, want a refusal naming the field", tc.name, err)
 			}
 		})
 	}

@@ -68,7 +68,20 @@ func TestUpdate_ClearingAssignees_Asks(t *testing.T) {
 			name: "assignee_ids [] on a merge request nobody is assigned", input: UpdateInput{AssigneeIDs: []int64{}},
 			current: mrJSONCoverage, wantReads: 1, wantPut: 1,
 		},
+		{
+			// GitLab reads the lone id 0 as nobody.
+			name: "assignee_ids [0] on a merge request somebody is assigned", input: UpdateInput{AssigneeIDs: []int64{0}},
+			current: assigned, wantReads: 1,
+			want: "mrUpdate: Remove all 2 assignees from merge request 1 in project `42`?" + tail,
+		},
+		{
+			// A merge request that takes a single assignee keeps the first id, 0.
+			name: "assignee_ids [0, 9] on a merge request somebody is assigned", input: UpdateInput{AssigneeIDs: []int64{0, 9}},
+			current: assigned, wantReads: 1,
+			want: "mrUpdate: Remove all 2 assignees from merge request 1 in project `42`?" + tail,
+		},
 		{name: "another assignee", input: UpdateInput{AssigneeIDs: []int64{5}}, wantPut: 1},
+		{name: "a user first and 0 after it", input: UpdateInput{AssigneeIDs: []int64{9, 0}}, wantPut: 1},
 		{name: "reviewer_ids []", input: UpdateInput{ReviewerIDs: []int64{}}, wantPut: 1},
 		{name: "assignee_ids [] in YOLO mode", input: UpdateInput{AssigneeIDs: []int64{}}, yolo: "true", current: assigned, wantPut: 1},
 	} {

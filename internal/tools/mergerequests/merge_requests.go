@@ -81,7 +81,7 @@ type CreateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms running the quick actions the description carries. Pass true only after the user approves that. Only required when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // Output is the canonical merge-request output shape. The authoritative
@@ -485,7 +485,7 @@ type UpdateInput struct {
 	Description        *string              `json:"description,omitempty"         jsonschema:"New description. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	TargetBranch       string               `json:"target_branch,omitempty"       jsonschema:"New target branch"`
 	AssigneeID         *int64               `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple). Pass 0 to remove every assignee. Omit the field to leave them untouched"`
-	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] to remove every assignee. Omit the field to leave them untouched"`
+	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs that replace the merge request's assignees. Pass [] or [0] to remove every assignee. Omit the field to leave them untouched"`
 	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs that replace the merge request's reviewers. Pass [] to remove every reviewer. Omit the field to leave them untouched"`
 	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names that replace all labels on the merge request. Pass [] to remove every label. Omit the field to leave them untouched"`
 	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
@@ -502,7 +502,7 @@ type UpdateInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing every current assignee when assignee_ids is [] or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts or /unassign with nobody after it, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing every current assignee when assignee_ids is [] or begins with 0, or assignee_id is 0. Also confirms running the quick actions the description carries. Pass true only after the user approves that. Required when one of those fields removes assignees the merge request has, or when a line of the description begins with /move, /merge, /promote, /convert_to_ticket, /add_email, /publish, /unapprove, /unlink, /remove_epic, /remove_parent, /remove_parent_epic, /remove_child, /remove_child_epic, /remove_contacts, /unassign or a /reassign that names nobody, which GitLab runs when it saves the text. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // MergeInput defines parameters for merging a merge request.

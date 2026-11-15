@@ -261,15 +261,18 @@ func TestSpanishCatalog_RendersEachCompositionInSpanish(t *testing.T) {
 				" and runs 2 more quick actions of these kinds.",
 		},
 		{
-			name: "the two quick actions that empty a list",
+			name: "the three quick actions that empty a list",
 			msg: New(ConfirmQuickActions, L("effects",
 				New(ConfirmQuickActionUnassign, S("line", "`/unassign`")),
+				New(ConfirmQuickActionReassign, S("line", "`/reassign ,`")),
 				New(ConfirmQuickActionRemoveContacts, S("line", "`/remove_contacts [contact:a@example.com]`")))),
 			spanish: "¿Enviar este texto con las quick actions que lleva? GitLab las ejecuta al guardar el texto, así que esta llamada" +
-				" quita todos los asignados del elemento (`/unassign`)" +
+				" quita asignados del elemento (`/unassign`)" +
+				" y quita todos los asignados del elemento (`/reassign ,`)" +
 				" y quita contactos CRM del elemento (`/remove_contacts [contact:a@example.com]`).",
 			english: "Send this text with the quick actions it carries? GitLab runs them when it saves the text, so this call" +
-				" removes every assignee of the item (`/unassign`)" +
+				" removes assignees from the item (`/unassign`)" +
+				" and removes every assignee of the item (`/reassign ,`)" +
 				" and removes CRM contacts from the item (`/remove_contacts [contact:a@example.com]`).",
 		},
 		{

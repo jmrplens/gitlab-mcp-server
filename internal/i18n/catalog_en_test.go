@@ -453,6 +453,10 @@ func guardedCallQuestionRows() []frozenEnglish {
 		},
 		{
 			key: ConfirmQuickActionUnassign, dotted: "confirm.quick_action.unassign",
+			args: []Arg{S("line", quoted)}, want: "removes assignees from the item (" + quoted + ")",
+		},
+		{
+			key: ConfirmQuickActionReassign, dotted: "confirm.quick_action.reassign",
 			args: []Arg{S("line", quoted)}, want: "removes every assignee of the item (" + quoted + ")",
 		},
 		{

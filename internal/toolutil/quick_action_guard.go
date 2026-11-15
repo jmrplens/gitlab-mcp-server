@@ -59,10 +59,17 @@ const (
 //     take a child out of the item, which group.epic_issue_remove asks about,
 //     and so do issue.update with epic_id 0 and issue.work_item_update and
 //     group.epic_update with parent_id 0,
-//   - /unassign with no user after it removes every assignee of the item,
-//     which issue.update and merge_request.update with assignee_ids [] or
-//     assignee_id 0, and issue.work_item_update and group.epic_update with
-//     assignee_ids [], ask about,
+//   - /unassign removes every assignee of the item when it names nobody, and
+//     on an item that takes a single assignee, as every issue and merge
+//     request on a Free instance does, whatever it names; only on an item
+//     that takes several does it remove just the users it names. Every
+//     /unassign is guarded, because which kind the item is depends on the
+//     instance's license, which the guard does not read. Removing every
+//     assignee is what issue.update and merge_request.update with
+//     assignee_ids [] or [0] or assignee_id 0, and issue.work_item_update
+//     and group.epic_update with assignee_ids [], ask about,
+//   - /reassign naming nobody, such as "/reassign" or "/reassign , and",
+//     sets the assignees to none, the same removal,
 //   - /remove_contacts removes CRM contacts from the item, which
 //     issue.work_item_update with crm_contact_ids [] asks about.
 //
@@ -72,12 +79,12 @@ const (
 //
 // The rest of GitLab's commands are left alone. Most do what an action here
 // does unasked, and are undone the same way: /close and /reopen, /assign,
-// /reassign, /unassign followed by the users it removes, /label and
-// /unlabel, /milestone, /due, /lock, /confidential, /approve, /spend and
-// /remove_time_spent, /rebase, /add_contacts, and the conversions /type,
-// /promote_to and /promote_to_incident, which change the type issue.update
-// changes through issue_type. A few, such as /clone and /page, have no
-// action here to compare them with.
+// /reassign followed by the users it sets, /label and /unlabel, /milestone,
+// /due, /lock, /confidential, /approve, /spend and /remove_time_spent,
+// /rebase, /add_contacts, and the conversions /type, /promote_to and
+// /promote_to_incident, which change the type issue.update changes through
+// issue_type. A few, such as /clone and /page, have no action here to
+// compare them with.
 //
 // Of the 26 actions that send such a text, the guard is the only question
 // 22 ask; issue.update, merge_request.update, issue.work_item_update and
@@ -88,7 +95,7 @@ var guardedQuickActions = []string{
 	quickActionUnapprove, quickActionUnlink,
 	quickActionRemoveEpic, quickActionRemoveParent, quickActionRemoveParentEpic,
 	quickActionRemoveChild, quickActionRemoveChildEpic,
-	quickActionUnassign, quickActionRemoveContacts,
+	quickActionUnassign, quickActionReassign, quickActionRemoveContacts,
 }
 
 // Names of the guarded quick actions, as GitLab spells them after the slash.
@@ -107,6 +114,7 @@ const (
 	quickActionRemoveChild      = "remove_child"
 	quickActionRemoveChildEpic  = "remove_child_epic"
 	quickActionUnassign         = "unassign"
+	quickActionReassign         = "reassign"
 	quickActionRemoveContacts   = "remove_contacts"
 )
 
@@ -144,6 +152,9 @@ func quickActionEffect(command, line string) i18n.Message {
 	}
 	if command == quickActionUnassign {
 		return i18n.New(i18n.ConfirmQuickActionUnassign, i18n.S("line", line))
+	}
+	if command == quickActionReassign {
+		return i18n.New(i18n.ConfirmQuickActionReassign, i18n.S("line", line))
 	}
 	if command == quickActionRemoveContacts {
 		return i18n.New(i18n.ConfirmQuickActionRemoveContacts, i18n.S("line", line))
@@ -207,12 +218,9 @@ func GuardedQuickActionLines(texts ...string) []QuickActionLine {
 // guardedQuickAction reports the guarded command a trimmed line begins with:
 // a slash, the command's name in any case, and nothing or a space after it.
 //
-// /unassign is guarded only with nothing after it. GitLab removes every
-// assignee for it, and only the users it names for /unassign followed by
-// them, which is what issue.update does unasked with a shorter list. A user
-// it names that GitLab does not resolve, and any /unassign on an item that
-// holds one assignee, also removes every assignee; telling those apart takes
-// the item and the users, which the guard does not read.
+// /reassign is guarded only when it names nobody, which is when GitLab sets
+// the assignees to the empty list; followed by users it sets them, which is
+// what issue.update does unasked with another list.
 func guardedQuickAction(line string) (string, bool) {
 	rest, slash := strings.CutPrefix(line, "/")
 	if !slash {
@@ -220,18 +228,35 @@ func guardedQuickAction(line string) (string, bool) {
 	}
 	name, args := rest, ""
 	if end := strings.IndexFunc(rest, unicode.IsSpace); end >= 0 {
-		name, args = rest[:end], strings.TrimSpace(rest[end:])
+		name, args = rest[:end], rest[end:]
 	}
 	for _, command := range guardedQuickActions {
 		if !strings.EqualFold(name, command) {
 			continue
 		}
-		if command == quickActionUnassign && args != "" {
+		if command == quickActionReassign && namesUsers(args) {
 			return "", false
 		}
 		return command, true
 	}
 	return "", false
+}
+
+// namesUsers reports whether the arguments of a quick action that takes
+// users name any, read the way GitLab's users extractor reads them: split at
+// every space and comma, with the empty pieces and the word "and" dropped.
+// "/reassign , and" names nobody, and GitLab runs it as "/reassign" alone.
+// The split is at every Unicode space, which GitLab's is not, but GitLab
+// also drops a piece that is only such spaces, so no text names users here
+// that names none there. Whether a name GitLab would resolve is not read: a
+// name it does not resolve fails the command, which then changes nothing.
+func namesUsers(args string) bool {
+	for piece := range strings.FieldsFuncSeq(args, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
+		if piece != "and" {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfirmQuickActions asks the caller to confirm a call whose text carries a

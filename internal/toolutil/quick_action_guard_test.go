@@ -39,15 +39,30 @@ func TestGuardedQuickActionLines_ReadsATextAsGitLabDoesAndWider(t *testing.T) {
 		{name: "an ordinary note", texts: []string{"Looks good to me.\nSee /projects/42 and https://gitlab.example/a/b."}},
 		{
 			name:  "commands the guard leaves alone",
-			texts: []string{"/label ~bug\n/assign @dev\n/unassign @dev\n/unassign_reviewer\n/add_contacts [contact:a@example.com]\n/close\n/rebase\n/approve\n/remove_time_spent\n/remove_estimate\n/promote_to incident\n/type task"},
+			texts: []string{"/label ~bug\n/assign @dev\n/reassign @dev\n/reassign me\n/reassign @a, and @b\n/unassign_reviewer\n/add_contacts [contact:a@example.com]\n/close\n/rebase\n/approve\n/remove_time_spent\n/remove_estimate\n/promote_to incident\n/type task"},
 		},
-		{name: "a word that begins like a command", texts: []string{"/merged\n/mover a/b\n/merge_when_ready\n/publisher\n/unlinked\n/unapproved\n/remove_children\n/remove_parents\n/unassigned\n/remove_contact"}},
+		{name: "a word that begins like a command", texts: []string{"/merged\n/mover a/b\n/merge_when_ready\n/publisher\n/unlinked\n/unapproved\n/remove_children\n/remove_parents\n/unassigned\n/reassigned\n/remove_contact"}},
 		{
-			name: "an unassign that names nobody, and contacts removed", texts: []string{"/unassign\n/UNASSIGN \t\n/remove_contacts [contact:a@example.com]"},
+			name: "every unassign, and contacts removed", texts: []string{"/unassign\n/UNASSIGN \t\n/unassign @dev\n/unassign ,\n/unassign and\n/remove_contacts [contact:a@example.com]"},
 			want: []QuickActionLine{
 				{Command: "unassign", Line: "/unassign"},
 				{Command: "unassign", Line: "/UNASSIGN"},
+				{Command: "unassign", Line: "/unassign @dev"},
+				{Command: "unassign", Line: "/unassign ,"},
+				{Command: "unassign", Line: "/unassign and"},
 				{Command: "remove_contacts", Line: "/remove_contacts [contact:a@example.com]"},
+			},
+		},
+		{
+			// GitLab's users extractor splits at spaces and commas and drops
+			// the word "and", so these name nobody and set no assignee.
+			name: "a reassign that names nobody", texts: []string{"/reassign\n/Reassign ,\n/reassign and\n/reassign , and ,\n/reassign  ,"},
+			want: []QuickActionLine{
+				{Command: "reassign", Line: "/reassign"},
+				{Command: "reassign", Line: "/Reassign ,"},
+				{Command: "reassign", Line: "/reassign and"},
+				{Command: "reassign", Line: "/reassign , and ,"},
+				{Command: "reassign", Line: "/reassign  ,"},
 			},
 		},
 		{name: "a command that does not open its line", texts: []string{"please /merge\n- /move a/b\n> /promote\n`/publish`"}},
@@ -198,8 +213,10 @@ func TestConfirmQuickActions_AsksOnlyForATextThatCarriesOne(t *testing.T) {
 		},
 		{
 			name:  "a note that empties the assignees and removes contacts",
-			texts: []string{"/unassign\n/unassign @dev\n/remove_contacts [contact:a@example.com]"},
-			want: "removes every assignee of the item (`/unassign`)" +
+			texts: []string{"/unassign\n/unassign @dev\n/reassign and\n/reassign @dev\n/remove_contacts [contact:a@example.com]"},
+			want: "removes assignees from the item (`/unassign`)" +
+				" and removes assignees from the item (`/unassign @dev`)" +
+				" and removes every assignee of the item (`/reassign and`)" +
 				" and removes CRM contacts from the item (`/remove_contacts [contact:a@example.com]`).",
 		},
 		{
