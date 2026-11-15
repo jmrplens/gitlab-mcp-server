@@ -6,6 +6,7 @@ package actioncompat
 import (
 	"fmt"
 	"maps"
+	"math"
 	"reflect"
 	"testing"
 
@@ -1206,31 +1207,74 @@ func TestGitLabAccessLevelValue_ExtendedAliases(t *testing.T) {
 	}
 }
 
-// TestIntegerValue_TypeCoverage verifies integerValue accepts every
-// integer-bearing input type (int, int64, a whole float64, and numeric strings
-// with or without padding) and rejects a fractional float, a non-numeric
-// string, and a bool, one subtest per input type.
-func TestIntegerValue_TypeCoverage(t *testing.T) {
-	cases := []struct {
+// TestAccessLevelConverters_ValueOutsideIntRange_IsNoLevel verifies the three
+// access-level converters refuse a number that only a narrowing conversion
+// would turn into a level: a role plus 2^32, which int(int64) on a 32-bit
+// platform truncates to the role itself, as an int64 and as a float64; values
+// beyond the int64 range; and NaN and both infinities, whose int conversion is
+// implementation-defined. Each converter is also given the role itself in the
+// same types, so a refusal is the value's and not the type's.
+func TestAccessLevelConverters_ValueOutsideIntRange_IsNoLevel(t *testing.T) {
+	const above32Bits = int64(1) << 32
+	converters := []struct {
 		name    string
-		value   any
-		wantInt int
-		wantOK  bool
+		convert func(any) (int, bool)
+		role    int64
 	}{
-		{name: "int", value: int(7), wantInt: 7, wantOK: true},
-		{name: "int64", value: int64(42), wantInt: 42, wantOK: true},
-		{name: "whole_float", value: float64(10.0), wantInt: 10, wantOK: true},
-		{name: "fractional_float", value: float64(10.5), wantInt: 10, wantOK: false},
-		{name: "numeric_string", value: "5", wantInt: 5, wantOK: true},
-		{name: "padded_numeric_string", value: " 8 ", wantInt: 8, wantOK: true},
-		{name: "non_numeric_string", value: "abc", wantOK: false},
-		{name: "bool", value: true, wantOK: false},
+		{name: "member", convert: gitlabAccessLevelValue, role: 30},
+		{name: "environment", convert: environmentAccessLevelValue, role: 40},
+		{name: "branch_protection", convert: gitLabBranchProtectionAccessLevelValue, role: 40},
+	}
+	for _, converter := range converters {
+		cases := []struct {
+			name      string
+			value     any
+			wantLevel int
+			wantOK    bool
+		}{
+			{name: "int64_role", value: converter.role, wantLevel: int(converter.role), wantOK: true},
+			{name: "float64_role", value: float64(converter.role), wantLevel: int(converter.role), wantOK: true},
+			{name: "int64_role_plus_2_32", value: converter.role + above32Bits},
+			{name: "float64_role_plus_2_32", value: float64(converter.role + above32Bits)},
+			{name: "string_role_plus_2_64", value: "18446744073709551646"},
+			{name: "float64_above_int64", value: math.MaxInt64 * 4.0},
+			{name: "float64_nan", value: math.NaN()},
+			{name: "float64_positive_infinity", value: math.Inf(1)},
+			{name: "float64_negative_infinity", value: math.Inf(-1)},
+		}
+		for _, tc := range cases {
+			t.Run(converter.name+"/"+tc.name, func(t *testing.T) {
+				got, ok := converter.convert(tc.value)
+				if ok != tc.wantOK || got != tc.wantLevel {
+					t.Errorf("%s(%#v) = %d, %v; want %d, %v", converter.name, tc.value, got, ok, tc.wantLevel, tc.wantOK)
+				}
+			})
+		}
+	}
+}
+
+// TestEnvironmentAccessLevelValue_NumericString_MatchesItsTable verifies the
+// protected-environment converter reads a numeric string, padded or not, as the
+// number it spells and checks it against the environment table, so "0" is no
+// access, " 60 " is an administrator and "5", a member level the environment
+// table lacks, is refused.
+func TestEnvironmentAccessLevelValue_NumericString_MatchesItsTable(t *testing.T) {
+	cases := []struct {
+		name      string
+		value     string
+		wantLevel int
+		wantOK    bool
+	}{
+		{name: "no_access", value: "0", wantLevel: 0, wantOK: true},
+		{name: "padded_admin", value: " 60 ", wantLevel: 60, wantOK: true},
+		{name: "member_only_level", value: "5"},
+		{name: "unknown", value: "99"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := integerValue(tc.value)
-			if ok != tc.wantOK || got != tc.wantInt {
-				t.Fatalf("integerValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantInt, tc.wantOK)
+			got, ok := environmentAccessLevelValue(tc.value)
+			if ok != tc.wantOK || got != tc.wantLevel {
+				t.Errorf("environmentAccessLevelValue(%q) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
 			}
 		})
 	}

@@ -1559,22 +1559,26 @@ func validGitLabRoleAccessLevelInt64(value int64) (int, bool) {
 	return 0, false
 }
 
+// validGitLabRoleAccessLevelFloat64 matches a JSON-decoded float64 the same
+// way: each level is widened to float64 and the level itself is returned, so
+// no value read from a request is ever converted to int. A huge, fractional,
+// infinite or NaN value equals no level and is not a role.
 func validGitLabRoleAccessLevelFloat64(value float64) (int, bool) {
-	switch value {
-	case 0, 10, 20, 30, 40, 50, 60:
-		return int(value), true
-	default:
-		return 0, false
+	for _, level := range gitLabRoleAccessLevels {
+		if float64(level) == value {
+			return level, true
+		}
 	}
+	return 0, false
 }
 
 func validGitLabRoleAccessLevel(value int) (int, bool) {
-	switch value {
-	case 0, 10, 20, 30, 40, 50, 60:
-		return value, true
-	default:
-		return 0, false
+	for _, level := range gitLabRoleAccessLevels {
+		if level == value {
+			return level, true
+		}
 	}
+	return 0, false
 }
 
 func newParamValidationError(format string, args ...any) error {
@@ -2003,15 +2007,23 @@ func valueMatchesDeclaredType(value, property any) bool {
 }
 
 // isWholeFloat reports whether a float carries a whole number, which is the
-// shape an integer takes once encoding/json has decoded it.
+// shape an integer takes once encoding/json has decoded it. It never converts
+// to an integer type, whose result for a float beyond int64 the platform
+// decides, and it counts no infinity or NaN as whole.
 func isWholeFloat(value any) bool {
 	switch typed := value.(type) {
 	case float32:
-		return float32(int64(typed)) == typed
+		return isWholeFloat64(float64(typed))
 	case float64:
-		return float64(int64(typed)) == typed
+		return isWholeFloat64(typed)
 	}
 	return false
+}
+
+// isWholeFloat64 reports whether v is finite and has no fractional part.
+// math.Trunc(NaN) is NaN, which equals nothing, so NaN needs no case of its own.
+func isWholeFloat64(v float64) bool {
+	return !math.IsInf(v, 0) && math.Trunc(v) == v
 }
 
 func schemaPropertyHasType(property any, expected string) bool {

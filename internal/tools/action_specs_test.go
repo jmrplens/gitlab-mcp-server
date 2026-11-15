@@ -106,7 +106,7 @@ func TestCollectedActionSpecs_ContentKindDeclarations_OverrideTheDerivation(t *t
 					declarations++
 					undeclared := spec
 					undeclared.ContentKind = ""
-					if derived := toolutil.ResolveContentKind(undeclared); derived == strings.TrimSpace(spec.ContentKind) {
+					if toolutil.ResolveContentKind(undeclared) == strings.TrimSpace(spec.ContentKind) {
 						t.Errorf("%s %s declares content kind %q, which the catalog derives anyway; remove the declaration",
 							group.ToolName, spec.Name, spec.ContentKind)
 					}

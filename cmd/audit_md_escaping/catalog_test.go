@@ -415,7 +415,7 @@ func TestCatalogSink_ARenderWithNothingToJudge_IsNotASink(t *testing.T) {
 			continue
 		}
 		_, isSink := file.sinkOf(call)
-		if key := types.ExprString(call.Args[0]); key == "keyKind" {
+		if types.ExprString(call.Args[0]) == "keyKind" {
 			plain++
 			if isSink {
 				t.Errorf("New(keyKind), whose template is plain text, was read as a sink")

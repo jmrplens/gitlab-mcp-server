@@ -702,18 +702,41 @@ func actionSchemaProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
-func gitlabAccessLevelValue(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return validGitLabAccessLevel(typed)
-	case int64:
-		return validGitLabAccessLevel(int(typed))
-	case float64:
-		accessLevel := int(typed)
-		if typed == float64(accessLevel) {
-			return validGitLabAccessLevel(accessLevel)
+// The access levels each converter admits as a number. A numeric value is
+// matched against its table by accessLevelIn, never converted to int first.
+var (
+	gitLabMemberAccessLevels           = []int{5, 10, 15, 20, 25, 30, 40, 50, 60}
+	gitLabEnvironmentAccessLevels      = []int{0, 10, 20, 30, 40, 50, 60}
+	gitLabBranchProtectionAccessLevels = []int{0, 30, 40}
+)
+
+// accessLevelIn reports the level of levels a numeric value names. Each level
+// is widened to the value's own type and the level itself is returned, so an
+// int64 or float64 read from a request is never narrowed: on a 32-bit
+// platform int(int64(1<<32+30)) is 30, and a huge, fractional, infinite or NaN
+// float64 equals no level. A value of any other type names none.
+func accessLevelIn(levels []int, value any) (int, bool) {
+	for _, level := range levels {
+		var matches bool
+		switch typed := value.(type) {
+		case int:
+			matches = level == typed
+		case int64:
+			matches = int64(level) == typed
+		case float64:
+			matches = float64(level) == typed
 		}
-		return 0, false
+		if matches {
+			return level, true
+		}
+	}
+	return 0, false
+}
+
+func gitlabAccessLevelValue(value any) (int, bool) {
+	switch value.(type) {
+	case int, int64, float64:
+		return accessLevelIn(gitLabMemberAccessLevels, value)
 	}
 	text, ok := value.(string)
 	if !ok {
@@ -721,12 +744,7 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 	}
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	if accessLevel, err := strconv.Atoi(normalized); err == nil {
-		switch accessLevel {
-		case 5, 10, 15, 20, 25, 30, 40, 50, 60:
-			return accessLevel, true
-		default:
-			return 0, false
-		}
+		return accessLevelIn(gitLabMemberAccessLevels, accessLevel)
 	}
 	switch normalized {
 	case "minimal", "minimal access":
@@ -751,17 +769,16 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 }
 
 func environmentAccessLevelValue(value any) (int, bool) {
-	if accessLevel, ok := integerValue(value); ok {
-		switch accessLevel {
-		case 0, 10, 20, 30, 40, 50, 60:
-			return accessLevel, true
-		default:
-			return 0, false
-		}
+	switch value.(type) {
+	case int, int64, float64:
+		return accessLevelIn(gitLabEnvironmentAccessLevels, value)
 	}
 	text, ok := value.(string)
 	if !ok {
 		return 0, false
+	}
+	if accessLevel, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
+		return accessLevelIn(gitLabEnvironmentAccessLevels, accessLevel)
 	}
 	normalized := strings.ToLower(strings.TrimSpace(strings.NewReplacer("_", " ", "-", " ").Replace(text)))
 	switch normalized {
@@ -784,35 +801,10 @@ func environmentAccessLevelValue(value any) (int, bool) {
 	}
 }
 
-func integerValue(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), true
-	case float64:
-		integer := int(typed)
-		return integer, typed == float64(integer)
-	case string:
-		integer, err := strconv.Atoi(strings.TrimSpace(typed))
-		return integer, err == nil
-	default:
-		return 0, false
-	}
-}
-
 func gitLabBranchProtectionAccessLevelValue(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return validGitLabBranchProtectionAccessLevel(typed)
-	case int64:
-		return validGitLabBranchProtectionAccessLevel(int(typed))
-	case float64:
-		accessLevel := int(typed)
-		if typed == float64(accessLevel) {
-			return validGitLabBranchProtectionAccessLevel(accessLevel)
-		}
-		return 0, false
+	switch value.(type) {
+	case int, int64, float64:
+		return accessLevelIn(gitLabBranchProtectionAccessLevels, value)
 	}
 	text, ok := value.(string)
 	if !ok {
@@ -820,7 +812,7 @@ func gitLabBranchProtectionAccessLevelValue(value any) (int, bool) {
 	}
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	if accessLevel, err := strconv.Atoi(normalized); err == nil {
-		return validGitLabBranchProtectionAccessLevel(accessLevel)
+		return accessLevelIn(gitLabBranchProtectionAccessLevels, accessLevel)
 	}
 	normalized = strings.NewReplacer("_", " ", "-", " ").Replace(normalized)
 	switch normalized {
@@ -838,24 +830,6 @@ func gitLabBranchProtectionAccessLevelValue(value any) (int, bool) {
 // GitLabAccessLevelValue normalizes GitLab access level labels and numbers.
 func GitLabAccessLevelValue(value any) (int, bool) {
 	return gitlabAccessLevelValue(value)
-}
-
-func validGitLabAccessLevel(accessLevel int) (int, bool) {
-	switch accessLevel {
-	case 5, 10, 15, 20, 25, 30, 40, 50, 60:
-		return accessLevel, true
-	default:
-		return 0, false
-	}
-}
-
-func validGitLabBranchProtectionAccessLevel(accessLevel int) (int, bool) {
-	switch accessLevel {
-	case 0, 30, 40:
-		return accessLevel, true
-	default:
-		return 0, false
-	}
 }
 
 func boolStringValue(value any) (parsed, ok bool) {

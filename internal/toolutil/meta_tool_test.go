@@ -324,6 +324,13 @@ func TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers(t *testing.T) {
 		{"max_int64_string", "9223372036854775807"},
 		{"int64_two_pow_62", int64(1 << 62)},
 		{"float64_1e20", float64(1e20)},
+		// A role plus 2^32 truncates to the role itself when narrowed to a
+		// 32-bit int, so a conversion would admit it as Developer there.
+		{"developer_plus_two_pow_32_string", "4294967326"},
+		{"developer_plus_two_pow_32_int64", int64(1<<32 + 30)},
+		{"developer_plus_two_pow_32_float64", float64(1<<32 + 30)},
+		{"float64_positive_infinity", math.Inf(1)},
+		{"float64_nan", math.NaN()},
 	}
 	for _, tc := range oversized {
 		t.Run(tc.name, func(t *testing.T) {
@@ -4972,6 +4979,14 @@ func TestIsWholeFloat_Kinds_OnlyAWholeFloatCounts(t *testing.T) {
 		{name: "a whole float32", value: float32(7), want: true},
 		{name: "a float64 fraction", value: 4.5, want: false},
 		{name: "a float32 fraction", value: float32(0.25), want: false},
+		{name: "a float64 of 2^63, past int64", value: math.Ldexp(1, 63), want: true},
+		{name: "a float64 of -2^64, past int64", value: -math.Ldexp(1, 64), want: true},
+		{name: "a float64 of 1e300", value: 1e300, want: true},
+		{name: "a float32 of 2^100", value: float32(math.Ldexp(1, 100)), want: true},
+		{name: "positive infinity", value: math.Inf(1), want: false},
+		{name: "negative infinity", value: math.Inf(-1), want: false},
+		{name: "a float32 infinity", value: float32(math.Inf(1)), want: false},
+		{name: "NaN", value: math.NaN(), want: false},
 		{name: "an int", value: 42, want: false},
 		{name: "a string", value: "42", want: false},
 	}
@@ -5515,6 +5530,11 @@ func TestValidGitLabRoleAccessLevelFloat64Direct(t *testing.T) {
 		{"minimal_access_5", 5},
 		{"above_admin_70", 70},
 		{"negative", -10},
+		{"developer_plus_two_pow_32", 1<<32 + 30},
+		{"above_max_int64", 1e19},
+		{"almost_developer", 30.000001},
+		{"negative_infinity", math.Inf(-1)},
+		{"nan", math.NaN()},
 	}
 	for _, tc := range rejected {
 		t.Run(tc.name, func(t *testing.T) {
@@ -7323,7 +7343,7 @@ func TestMetaParamsGuard_HoldsNothingItCannotRead(t *testing.T) {
 		"get":    map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}},
 		"broken": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "pattern": "("}}},
 	}}
-	if guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaOpaque); guard != nil {
+	if metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaOpaque) != nil {
 		t.Error("opaque mode has a params check, want none")
 	}
 	guard := metaParamsGuard("gitlab_widget", envelope, MetaParamSchemaFull)

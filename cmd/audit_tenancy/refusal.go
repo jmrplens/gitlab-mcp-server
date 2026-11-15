@@ -9,6 +9,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"math"
 	"net/textproto"
 	"slices"
 	"strconv"
@@ -105,14 +106,20 @@ func (r refusalLit) intField(info *types.Info, field string) (int, bool) {
 }
 
 // foldInt is the integer an expression folds to, and false for one that folds
-// to nothing or to no integer.
+// to nothing, to no integer or to one outside int's range.
 func foldInt(info *types.Info, expr ast.Expr) (int, bool) {
 	value := info.Types[expr].Value
 	if value == nil {
 		return 0, false
 	}
-	v, exact := constant.Int64Val(constant.ToInt(value))
-	return int(v), exact
+	integer := constant.ToInt(value)
+	if integer.Kind() != constant.Int ||
+		constant.Compare(integer, token.LSS, constant.MakeInt64(math.MinInt)) ||
+		constant.Compare(integer, token.GTR, constant.MakeInt64(math.MaxInt)) {
+		return 0, false
+	}
+	v, _ := constant.Int64Val(integer)
+	return int(v), true //#nosec G115 -- bounded to int's range just above
 }
 
 // constString is the string an expression folds to.

@@ -700,7 +700,7 @@ func (tc settingCase) checkRow(t *testing.T) {
 		t.Errorf("%s: envs %v, malformed policy %d; want %s among them and policy %d",
 			tc.row, d.Envs, d.Malformed, env, tc.policy)
 	}
-	if hasFlag := slices.Contains(d.Flags, "--"+tc.flag); hasFlag != (tc.flag != "") {
+	if slices.Contains(d.Flags, "--"+tc.flag) != (tc.flag != "") {
 		t.Errorf("%s: flags %v, want --%s named exactly when the setting has a flag", tc.row, d.Flags, tc.flag)
 	}
 }

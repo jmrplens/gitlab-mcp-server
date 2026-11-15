@@ -53,6 +53,12 @@ type gqlServiceStatus struct {
 	} `json:"components"`
 }
 
+// gqlOrbitServiceStatus is the orbit object of an answer to
+// [queryServiceStatus], null when Orbit is not available to the user.
+type gqlOrbitServiceStatus struct {
+	ServiceStatus *gqlServiceStatus `json:"serviceStatus"`
+}
+
 // Status retrieves the health of the Orbit service on GitLab.com.
 //
 // Source: GitLab's GraphQL API, Query.orbit.serviceStatus, which replaced GET
@@ -69,9 +75,7 @@ func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput)
 	}
 	var resp struct {
 		Data struct {
-			Orbit *struct {
-				ServiceStatus *gqlServiceStatus `json:"serviceStatus"`
-			} `json:"orbit"`
+			Orbit *gqlOrbitServiceStatus `json:"orbit"`
 		} `json:"data"`
 		Errors []toolutil.GraphQLError `json:"errors"`
 	}
@@ -232,12 +236,16 @@ type gqlSchemaEdge struct {
 	} `json:"variants"`
 }
 
+// gqlOrbitSchema is the orbit object of an answer to [querySchema], null when
+// Orbit is not available to the user.
+type gqlOrbitSchema struct {
+	Schema *gqlSchema `json:"schema"`
+}
+
 // gqlSchemaPage is one answer to [querySchema].
 type gqlSchemaPage struct {
 	Data struct {
-		Orbit *struct {
-			Schema *gqlSchema `json:"schema"`
-		} `json:"orbit"`
+		Orbit *gqlOrbitSchema `json:"orbit"`
 	} `json:"data"`
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
