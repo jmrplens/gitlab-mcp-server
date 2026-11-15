@@ -35,7 +35,7 @@ const (
 )
 
 // The hints a refused caller is given. GitLab refuses each of these with 401
-// rather than 403 (entry 55 of docs/development/upstream-bugs.md), so they are
+// rather than 403, so they are
 // keyed on toolutil.IsPermissionRefusal and never on a status alone.
 const (
 	// hintProjectTokenRole names the role reading a project's access tokens

@@ -45,8 +45,8 @@ const objectSavedView = "saved view"
 
 // Hints for the 500 GitLab 19.4 answers a caller authenticated with a token
 // from the step that subscribes a user to a view: it locks the user row while
-// the sign-in tracking has left unsaved changes on it, which Rails refuses
-// (docs/development/upstream-bugs.md, entry 72). Nothing on the client side
+// the sign-in tracking has left unsaved changes on it, which Rails refuses.
+// Nothing on the client side
 // avoids it, so the answer has to say what state it left behind.
 const (
 	// createServerErrorHint answers a create's 500. The view is saved before

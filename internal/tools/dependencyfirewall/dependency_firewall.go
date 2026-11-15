@@ -56,9 +56,8 @@ var Ecosystems = []string{
 // The three coordinate fields map one-to-one onto client-go's
 // EvaluatePackageOptions, which carries exactly Ecosystem, Name and Version.
 // The documented optional `operation` attribute (download or upload) has no
-// field on that options struct, so it cannot be sent through the wrapper; the
-// gap is recorded in docs/development/upstream-bugs.md. GitLab defaults the
-// attribute to download.
+// field on that options struct, so it cannot be sent through the wrapper.
+// GitLab defaults the attribute to download.
 type EvaluatePackageInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Ecosystem string               `json:"ecosystem"  jsonschema:"Package ecosystem: cargo, composer, conan, gem, golang, maven, npm, nuget, pub, pypi, or swift,required"`

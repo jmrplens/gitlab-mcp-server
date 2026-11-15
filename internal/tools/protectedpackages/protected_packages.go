@@ -177,8 +177,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	opts.MinimumAccessLevelForPush = protectionLevelUpdate(in.MinimumAccessLevelForPush)
 	opts.MinimumAccessLevelForDelete = protectionLevelUpdate(in.MinimumAccessLevelForDelete)
 	// A field the caller did not name is left out of the request, which
-	// client-go's UpdatePackageProtectionRulesOptions does from v3.38.0
-	// (register row 52), so GitLab keeps the rule's pattern and type as they
+	// client-go's UpdatePackageProtectionRulesOptions does from v3.38.0, so
+	// GitLab keeps the rule's pattern and type as they
 	// are; both are optional on the route and required on the rule.
 	rule, _, err := client.GL().ProtectedPackages.UpdatePackageProtectionRules(string(in.ProjectID), in.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {

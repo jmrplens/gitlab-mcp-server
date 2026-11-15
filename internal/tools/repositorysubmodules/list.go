@@ -126,8 +126,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // ssh:// form, on the account, host and port of the instance's SSH clone
 // URLs ([parseSSHRemote]); a host in capitals, the default port written out
 // and the ssh:// spelling of an SCP clone URL name the same instance, which
-// GitLab's text comparison leaves unlinked (see "SubmoduleHelper compares
-// submodule URLs as text" in docs/development/upstream-bugs.md).
+// GitLab's text comparison leaves unlinked, since its SubmoduleHelper
+// compares submodule URLs as text.
 //
 // The host used to be discarded and the path kept, so a submodule on any
 // other server was read from whichever local project happened to share its

@@ -527,8 +527,7 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 	// No captured read here, unlike the other four site handlers: GitLab's
 	// repair route is annotated `success Entities::GeoSiteStatus` and presents
 	// the site's status, so a site's own fields are not in this answer to be
-	// read. client-go declaring *GeoSite for it is recorded in
-	// docs/development/upstream-bugs.md.
+	// read, although client-go declares *GeoSite for it.
 	return toOutput(site, siteExtra{}), nil
 }
 

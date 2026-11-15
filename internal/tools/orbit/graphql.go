@@ -57,8 +57,7 @@ type gqlServiceStatus struct {
 //
 // Source: GitLab's GraphQL API, Query.orbit.serviceStatus, which replaced GET
 // /api/v4/orbit/status when gitlab-org/gitlab!265633 removed the route on
-// 2026-10-27 (client-go's Orbit.GetStatus still sends that GET; register row
-// in docs/development/upstream-bugs.md). GitLab answers serviceStatus null
+// 2026-10-27 (client-go's Orbit.GetStatus still sends that GET). GitLab answers serviceStatus null
 // when Orbit is not available on the instance or for the user, which is
 // reported as an error naming what Orbit needs, not as an empty status.
 func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput) (StatusOutput, error) {

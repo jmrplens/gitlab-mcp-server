@@ -294,9 +294,8 @@ func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtr
 // An image position is refused. GitLab completes one only with its width,
 // height, x and y (ImageFormatter#complete?), and this action cannot send
 // them: the position client-go's CreateCommitDiscussionOptions carries is a
-// gl.NotePosition, which models no image field. The gap is recorded in
-// docs/development/upstream-bugs.md, and the refusal retires when the commit
-// discussion's position carries the four fields.
+// gl.NotePosition, which models no image field. The refusal retires when the
+// commit discussion's position carries the four fields.
 //
 // GitLab would otherwise refuse each of these with a 400 that names no field
 // (DiffNote#positions_complete).

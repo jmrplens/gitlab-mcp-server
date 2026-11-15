@@ -21,8 +21,7 @@
 // The Orbit MCP endpoint is used only for what GitLab offers nowhere else: the
 // tool list, the command catalog that describes the query language, and the
 // schema as compact text. client-go's Orbit service still sends the removed
-// routes for all but the query, which is why only Query calls it; each of its
-// methods that does is a row of docs/development/upstream-bugs.md.
+// routes for all but the query, which is why only Query calls it.
 //
 // Since Orbit's general availability on 2026-10-29, GitLab.com serves a
 // namespace's index and its queries only for a top-level group with the

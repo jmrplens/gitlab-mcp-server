@@ -500,7 +500,7 @@ func TestAddSSHKey_WithExpiresAtAndUsageType(t *testing.T) {
 // found dropped, which created a key that never expired. GitLab takes a
 // timestamp here, so the instant is sent as given, offset included, rather
 // than the date client-go's option struct would write, which GitLab reads as
-// midnight UTC (register row 126); a bare date is that midnight. A value that
+// midnight UTC; a bare date is that midnight. A value that
 // is no timestamp at all is refused, see
 // [TestAddSSHKey_UnparsableExpiresAt_IsRefused].
 func TestAddSSHKey_EachOptionReachesTheRequest(t *testing.T) {

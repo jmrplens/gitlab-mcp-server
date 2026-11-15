@@ -111,8 +111,7 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 // member_role_id and member_role_name on an entry that grants a custom role,
 // which needs an Ultimate license (ee/lib/ee/api/entities/protected_ref_access.rb).
 // client-go does not model the name, so it is read off the captured response
-// (toolutil.ProtectedRefAccessExtra); the gap is recorded in
-// docs/development/upstream-bugs.md.
+// (toolutil.ProtectedRefAccessExtra).
 type BranchAccessDescriptionOutput struct {
 	ID                     int64  `json:"id"`
 	AccessLevel            int    `json:"access_level"`

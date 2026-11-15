@@ -95,10 +95,7 @@ const listNotFoundHint = "verify project_path with project.get; uses GraphQL. Te
 // listStatesQuery is the list's own document rather than client-go's, which
 // asks for the connection with no first, no after, no count and no pageInfo:
 // GitLab caps a connection at 100 nodes, so a project holding more states
-// read as holding 100 and no more, with nothing to ask for the rest by
-// (upstream-bugs row 104 records it: the paged List client-go owes goes out
-// in a small merge request now that gitlab-org/api/client-go!3063, which it
-// was to join, is closed unmerged). The
+// read as holding 100 and no more, with nothing to ask for the rest by. The
 // nodes select exactly what client-go's list and get select, so a state reads
 // the same through the list as through the get, which is still client-go's.
 const listStatesQuery = `
@@ -265,7 +262,7 @@ const deleteOperation = "gitlab_delete_terraform_state"
 // Delete removes a Terraform state, after reading it to refuse a locked one.
 //
 // GitLab answers the REST delete of a locked state with 200 and deletes
-// nothing (upstream-bugs row 118), so sending it reported a delete that never
+// nothing, so sending it reported a delete that never
 // happened. Only the GraphQL state carries the lock, and its project field
 // takes a full path, so a numeric project_id is looked up first.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
@@ -406,7 +403,7 @@ const lockHeldHint = "the state is already locked under lock ID %q, held by %s s
 // Lock locks a Terraform state with the lock info the caller gives.
 //
 // TerraformStates.Lock takes no options and sends no body, and GitLab refuses
-// a lock without the lock info with 400 (upstream-bugs row 150), so the lock
+// a lock without the lock info with 400, so the lock
 // info is written into the body through a request option, and the lock GitLab
 // answers with, which the method does not decode, is read from the captured
 // response (ADR-0021).
@@ -500,8 +497,7 @@ const unlockConflictHint = "the lock is held under another ID: pass the lock_id 
 // caller's lock ID when it gives one and any lock when it does not.
 //
 // TerraformStates.Unlock takes no options, so the lock ID GitLab matches the
-// lock against is written into the query through a request option
-// (upstream-bugs row 150).
+// lock against is written into the query through a request option.
 func Unlock(ctx context.Context, client *gitlabclient.Client, input UnlockInput) (UnlockOutput, error) {
 	_, err := client.GL().TerraformStates.Unlock(string(input.ProjectID), input.Name, gl.WithContext(ctx), lockIDQuery(input.LockID))
 	if err != nil {

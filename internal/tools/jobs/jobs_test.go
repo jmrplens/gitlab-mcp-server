@@ -2475,8 +2475,7 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 //
 // The case without force is the one with a history. client-go's CancelJob
 // delegates to CancelJobWithOptions with a nil options pointer, which
-// NewRequestToURL marshals as the four bytes "null" (entry 51 of
-// docs/development/upstream-bugs.md). Cancel now calls the options variant
+// NewRequestToURL marshals as the four bytes "null". Cancel now calls the options variant
 // itself with a non-nil value, so a call without force sends the empty
 // object, and a body of "null" fails here before the comparison.
 func TestJobCancel_Body_CarriesForceOnlyWhenAsked(t *testing.T) {

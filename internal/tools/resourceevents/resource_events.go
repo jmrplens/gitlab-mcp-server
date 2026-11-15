@@ -812,8 +812,7 @@ func toIterationEventsOutput(events []*gl.IterationEvent, resp *gl.Response) Lis
 // capturedWeight is the weight a weight event carries, as GitLab sends it:
 // null for an event that took the issue's weight away, which client-go's
 // WeightEvent decodes as int64 and so reads as a weight of 0. Read from the
-// captured response (ADR-0021); recorded as register row 116 of
-// docs/development/upstream-bugs.md.
+// captured response (ADR-0021).
 type capturedWeight struct {
 	Weight *int64 `json:"weight"`
 }

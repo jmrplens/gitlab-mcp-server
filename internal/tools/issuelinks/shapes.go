@@ -180,8 +180,7 @@ type IterationOutput = toolutil.IterationOutput
 // health_status, moved_to_id, label_details, references, subscribed, _links,
 // issue_link_id, epic_issue_id, epic, iteration and service_desk_reply_to),
 // and `subscribed`, published without omitempty, said false on every link for
-// something no response measured. The gap is recorded in
-// docs/development/upstream-bugs.md.
+// something no response measured.
 //
 // The last three keys are what IssueBasic sends that client-go's Issue does not
 // model, read from the captured response beside the SDK's own decode

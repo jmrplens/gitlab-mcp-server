@@ -12,8 +12,7 @@ import (
 
 // infoExtra is what lib/api/entities/ci/pipeline.rb sends on a pipeline that
 // client-go's PipelineInfo does not carry, read from the captured response
-// beside the SDK's own decode (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// beside the SDK's own decode (ADR-0021).
 //
 // Three routes fill [Output] and they do not send the same thing. The two
 // pipeline lists present `API::Entities::Ci::PipelineBasic`, ten keys, which

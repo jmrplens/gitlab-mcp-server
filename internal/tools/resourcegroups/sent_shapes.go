@@ -17,8 +17,7 @@ import (
 // lib/api/entities/ci/job_basic.rb exposes the job's pipeline with
 // Entities::Ci::PipelineBasic, which sends ten keys with no condition, and
 // client-go's JobPipeline models five of them: the ID, project, ref, SHA and
-// status. The other five are below. The gap is recorded in
-// docs/development/upstream-bugs.md.
+// status. The other five are below.
 //
 // The pipeline is a value rather than a pointer because it is only read for a
 // job whose SDK decode carries a pipeline, and a pipeline the SDK decoded is

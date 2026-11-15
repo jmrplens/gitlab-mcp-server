@@ -39,8 +39,8 @@ type GroupInput struct {
 // Value is a pointer because GitLab answers a period with nothing to measure
 // with a null value (a median over no rows), and client-go's DORAMetric
 // decodes that null as 0, which for lead time and time to restore is the best
-// score there is. The value is read from the captured answer instead (register
-// row 116). Date is left out of the one bucket interval=all answers with,
+// score there is. The value is read from the captured answer instead. Date is
+// left out of the one bucket interval=all answers with,
 // which GitLab sends undated.
 type MetricOutput struct {
 	Date  string   `json:"date,omitempty"`

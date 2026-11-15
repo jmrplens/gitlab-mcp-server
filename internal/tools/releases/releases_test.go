@@ -1275,8 +1275,7 @@ func TestCreate_RefWanted_SaysTheTagDoesNotExist(t *testing.T) {
 
 // TestCreate_PermissionRefusal_NamesTheRole holds a refusal of a missing
 // permission to the hint naming the role a release needs, at 401 as well as
-// 403: GitLab answers a missing permission with 401 at some routes (entry 55
-// of docs/development/upstream-bugs.md), so a hint keyed on 403 alone was
+// 403: GitLab answers a missing permission with 401 at some routes, so a hint keyed on 403 alone was
 // never shown there. A refusal of the token itself names no role.
 func TestCreate_PermissionRefusal_NamesTheRole(t *testing.T) {
 	const roleHint = "Developer role or higher"
@@ -1914,8 +1913,8 @@ func TestReleaseUpdate_SendsTheTitleAndNotesItWasGiven(t *testing.T) {
 // client-go's UpdateReleaseOptions spells the title and the notes without
 // `omitempty`, so an update that left them out sent both as null, and GitLab
 // stores what it is sent: the notes were erased and the title fell back to
-// the tag on every update of the release date or the milestones (issue 1305,
-// upstream register row 121). The milestones key stays absent too, since
+// the tag on every update of the release date or the milestones (issue
+// 1305). The milestones key stays absent too, since
 // GitLab documents an empty milestones value as "remove every milestone".
 func TestReleaseUpdate_PartialUpdate_SendsOnlyWhatTheCallerSet(t *testing.T) {
 	tests := []struct {

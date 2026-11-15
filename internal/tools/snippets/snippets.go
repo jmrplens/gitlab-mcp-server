@@ -377,8 +377,8 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	// read only RFC 3339 and dropped anything else, a bare date included, so
 	// the list answered every snippet the range was meant to leave out (issue
 	// 1308). GitLab takes a timestamp for both bounds while client-go carries
-	// them as dates, which would move a bound of 18:00 back to midnight UTC
-	// (register row 126), so the option struct's fields are left unset and
+	// them as dates, which would move a bound of 18:00 back to midnight UTC,
+	// so the option struct's fields are left unset and
 	// each bound is written as the instant given.
 	var createdAfter, createdBefore *time.Time
 	if err := toolutil.ParseTimeInputs(

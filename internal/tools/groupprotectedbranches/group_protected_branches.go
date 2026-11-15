@@ -18,8 +18,7 @@ import (
 // grants a custom role, which needs an Ultimate license
 // (ee/lib/ee/api/entities/protected_ref_access.rb). client-go does not model
 // the name, so it is read off the captured response
-// (toolutil.GroupProtectedBranchExtra); the gap is recorded in
-// docs/development/upstream-bugs.md.
+// (toolutil.GroupProtectedBranchExtra).
 type AccessLevelOutput struct {
 	ID                     int64  `json:"id"`
 	AccessLevel            int    `json:"access_level"`

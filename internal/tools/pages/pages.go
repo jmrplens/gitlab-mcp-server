@@ -179,8 +179,7 @@ func GetPages(ctx context.Context, client *gitlabclient.Client, input GetPagesIn
 //
 // GitLab removes the primary domain only on null: it refuses "" as a domain
 // the project does not have. client-go's option cannot carry null, so an empty
-// value is written into the body through a request option (issue 1306,
-// upstream register row 122).
+// value is written into the body through a request option (issue 1306).
 func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdatePagesInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")

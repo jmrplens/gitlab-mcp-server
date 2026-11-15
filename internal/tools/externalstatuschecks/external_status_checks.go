@@ -109,7 +109,7 @@ type ListProjectStatusChecksInput struct {
 // the create and the delete authorize the ability their service checks
 // before the service runs, and answer a missing role with 403. Before 19.5
 // they lost the role refusal on the way out, answering it with 500 and with
-// 204 (entries 57 and 56 of docs/development/upstream-bugs.md). Theirs are
+// 204. Theirs are
 // therefore keyed on the status, like the merge request routes'.
 const (
 	// hintStatusCheckLicense is the license every route checks first.
@@ -129,8 +129,7 @@ func refusedForLicense(err error) bool {
 }
 
 // The hints the create and the delete give the 403 GitLab answers from 19.5
-// a caller without the Maintainer role on the project (entries 57 and 56 of
-// docs/development/upstream-bugs.md). The delete's says the check is still
+// a caller without the Maintainer role on the project. The delete's says the check is still
 // there, since a release before 19.5 answered the same caller as though it
 // had been deleted.
 const (
@@ -141,8 +140,7 @@ const (
 // hintStatusCheckCreateRole is what a create refused for the role on a
 // release before 19.5 needs. The role is not refused with 401 there, nor with
 // 403: the create service builds its refusal without a status, so GitLab
-// answers it with 500 and the body {"message":["Not allowed"]} (entry 57 of
-// docs/development/upstream-bugs.md), which reads as a fault of the instance
+// answers it with 500 and the body {"message":["Not allowed"]}, which reads as a fault of the instance
 // unless the hint says otherwise. From 19.5 the route answers 403 instead,
 // which hintStatusCheckCreateForbidden is for.
 const hintStatusCheckCreateRole = "creating an external status check needs the Maintainer role on the project, and GitLab answers a caller without it with a server error saying \"Not allowed\" rather than a refusal. Verify project_id with project.get"
@@ -339,8 +337,7 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 		// The license check answers 401, and from 19.5 a caller without the
 		// Maintainer role is answered 403 before the service runs. Before
 		// 19.5 the route discarded the refusal its service returned and
-		// answered that caller 204 with nothing deleted (entry 56 of
-		// docs/development/upstream-bugs.md), which nothing on the wire
+		// answered that caller 204 with nothing deleted, which nothing on the wire
 		// tells apart from a deletion, so the action's usage asks the caller
 		// to confirm one on those releases.
 		if refusedForLicense(err) {

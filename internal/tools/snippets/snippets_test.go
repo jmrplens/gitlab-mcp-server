@@ -1013,7 +1013,7 @@ func TestBuildUpdateFileOpts_WithoutContentOrPreviousPath(t *testing.T) {
 // bare date as its midnight UTC, and leaves out what the caller did not give.
 // GitLab takes a timestamp for both, and client-go's option struct carries
 // them as dates, which reached GitLab as midnight UTC and moved a bound of
-// 18:00 back to the start of its day (register row 126). A filter that does
+// 18:00 back to the start of its day. A filter that does
 // not parse is refused rather than dropped, see TestListAll_InvalidDateFilters:
 // dropping it widened the answer in silence (issue 1308).
 func TestListAll_CreatedFilters(t *testing.T) {

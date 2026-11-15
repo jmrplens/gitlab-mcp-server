@@ -57,8 +57,7 @@ type rawStatistics struct {
 // renders every count through Rails' number_with_delimiter, and the API sets
 // the locale to the caller's preferred_language first, so the digits are
 // grouped the way that language groups them: "1,234", "1.234" or "1 234"
-// among the languages GitLab offers (docs/development/upstream-bugs.md,
-// entry 7, names which language gives which). A count below a thousand
+// among the languages GitLab offers. A count below a thousand
 // carries no separator, and a JSON number is read as well.
 //
 // It mirrors the UnmarshalJSON that commit 1 of gitlab-org/api/client-go!3063
@@ -129,10 +128,8 @@ const statisticsPath = "application/statistics"
 // It builds its own request rather than calling client-go's
 // GetApplicationStatistics, whose ApplicationStatistics declares int64
 // fields and so cannot decode the strings GitLab sends for every count (see
-// [delimitedCount]). Reported in gitlab-org/api/client-go!3063, closed
-// unmerged on 2026-10-21 with its fix to go out again in a small merge
-// request, and tracked in docs/development/upstream-bugs.md, entry 7; once a
-// release carries the fix, this handler calls the SDK method directly.
+// [delimitedCount]). Once a client-go release decodes the strings, this
+// handler calls the SDK method directly.
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	raw, err := fetchStatistics(ctx, client, statisticsPath)
 	if err != nil {

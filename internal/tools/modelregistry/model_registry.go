@@ -139,9 +139,7 @@ func rejectUnresolvedDotSegment(dir string) error {
 // DownloadMachineLearningModelPackage writes the path segment whatever its
 // value: an empty path is sent as files//<name>, which GitLab serves only
 // because its router tolerates the empty segment, and "." as files/./<name>,
-// which it answers 404 because it looks up the file "./<name>" (see "The
-// model package file path segment cannot be omitted" in
-// docs/development/upstream-bugs.md). The values are escaped the way client-go
+// which it answers 404 because it looks up the file "./<name>". The values are escaped the way client-go
 // escapes them on its own route, the project with gl.PathEscape and the model
 // version and the file name with url.PathEscape, which leaves the colon of a
 // candidate version and the dot of a file name alone.
@@ -190,9 +188,8 @@ func downloadError(client *gitlabclient.Client, err error) error {
 // whose client sends Bearer, which is an oauth HTTP mode session. The route
 // resolves a personal access token or a CI job token sent as Bearer and
 // nothing else, so a GitLab OAuth access token is refused there on every
-// project with a 401 that says nothing about why (see "The ML model package
-// route accepts neither PRIVATE-TOKEN nor a GitLab OAuth access token" in
-// docs/development/upstream-bugs.md). A personal access token admitted in the
+// project with a 401 that says nothing about why: the route accepts neither
+// PRIVATE-TOKEN nor a GitLab OAuth access token. A personal access token admitted in the
 // same mode works, which is the way round it. It is one literal rather than a
 // concatenation, since an operator in a constant initializer carries no
 // statement a mutation run could credit a test with killing.

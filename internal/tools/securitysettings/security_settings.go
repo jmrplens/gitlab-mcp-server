@@ -122,8 +122,7 @@ type securitySettingsHints struct {
 	// license, and on an update an archived project or an instance-enforced
 	// setting.
 	forbiddenHint string
-	// refusedHint is for the role refusal, which GitLab answers with 401
-	// (entry 55 of docs/development/upstream-bugs.md).
+	// refusedHint is for the role refusal, which GitLab answers with 401.
 	refusedHint string
 	// notFoundHint is for a project or group GitLab cannot find.
 	notFoundHint string

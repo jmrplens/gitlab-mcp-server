@@ -402,8 +402,7 @@ type CancelInput struct {
 // That variant is the only binding that carries force: client-go marks it
 // deprecated only because it plans to fold the option into CancelJob in v4.
 // CancelJob itself delegates to it with a nil options pointer, which reaches
-// the body as the four bytes `null` recorded in entry 51 of
-// docs/development/upstream-bugs.md, so a call without force sends the empty
+// the body as the four bytes `null`, so a call without force sends the empty
 // object `{}` here instead.
 func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
@@ -422,7 +421,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 		opts.Force = new(true)
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	j, _, err := client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries force until client-go v4 folds it into CancelJob, and a non-nil value keeps a call without force from sending null (entry 51 of docs/development/upstream-bugs.md).
+	j, _, err := client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, opts, gl.WithContext(ctx)) //nolint:staticcheck // SA1019: the only binding that carries force until client-go v4 folds it into CancelJob, and a non-nil value keeps a call without force from sending null.
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("jobCancel", err,
@@ -780,7 +779,7 @@ func bridgeListError(err error) error {
 
 // bridgeListOutput converts a page of trigger jobs into the list the action
 // publishes, each with what it reads off the captured answer instead: the
-// measures client-go decodes a null of as 0 (upstream register row 116) and
+// measures client-go decodes a null of as 0 and
 // the project object neither of its structs models.
 func bridgeListOutput(captured *gitlabclient.ResponseCapture, resp *gl.Response, jobs []*gl.TriggerJob) (BridgeListOutput, error) {
 	extras, err := toolutil.CapturedBridges(captured, len(jobs))

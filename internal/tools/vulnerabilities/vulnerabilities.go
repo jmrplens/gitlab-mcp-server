@@ -452,8 +452,7 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 // database trigger updates the state and leaves the reason). A vulnerability
 // confirmed, resolved or redetected after a dismissal therefore kept
 // answering the reason it was dismissed with, which read as a false positive
-// on one that had just been confirmed. Register row 123 records the GitLab
-// half.
+// on one that had just been confirmed.
 func dismissalReasonWhileDismissed(state, reason string) string {
 	if state != "DISMISSED" {
 		return ""

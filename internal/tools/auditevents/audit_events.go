@@ -222,7 +222,7 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, input ListIn
 
 // entityFilter adds the entity_type and entity_id filters GET /audit_events
 // takes to the query client-go encoded, which its ListAuditEventsOptions does
-// not model (upstream register row 120). Without an entity_type it returns no
+// not model. Without an entity_type it returns no
 // option at all, so the query goes out exactly as client-go encoded it;
 // ListInstance refuses an entity_id without one before it gets here.
 func entityFilter(entityType string, entityID int64) gl.RequestOptionFunc {

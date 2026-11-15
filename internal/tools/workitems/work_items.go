@@ -774,7 +774,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // The milestone, parent, iteration, dates, health status and weight follow
 // the clearing convention of [toolutil.WorkItemWidgetInputs]: 0 removes a
 // reference, "" removes a date or the health status and null removes the
-// weight, which client-go cannot send by itself (register row 119). An empty description is sent as one,
+// weight, which client-go cannot send by itself. An empty description is sent as one,
 // since the description widget takes "" and client-go sends whatever pointer
 // it is handed.
 func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, gl.RequestOptionFunc, error) {

@@ -283,7 +283,7 @@ type statisticsDests struct {
 // parseStatisticsFilters reads the filters of a statistics read that have to
 // be parsed into dest, refusing the call on the first that does not parse:
 // the assignee, a user ID or None or Any, then the four dates. client-go types
-// the assignee *int64 on all three routes (upstream register row 125), so an
+// the assignee *int64 on all three routes, so an
 // ID goes into the option and None or Any come back as the request option
 // that writes them into the query (issue 1354).
 func parseStatisticsFilters(filters statisticsFilters, dest statisticsDests) (gl.RequestOptionFunc, error) {

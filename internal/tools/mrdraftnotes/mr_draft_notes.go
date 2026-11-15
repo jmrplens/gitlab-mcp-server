@@ -389,8 +389,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // The first release whose draft note update keeps a position the request
 // leaves out: gitlab-org/gitlab!258695 made the route set the position only
-// when one is sent, and it shipped in 19.5.0. docs/development/upstream-bugs.md
-// records what an older release does.
+// when one is sent, and it shipped in 19.5.0.
 const (
 	keepsPositionSinceMajor = 19
 	keepsPositionSinceMinor = 5
@@ -539,7 +538,7 @@ type storedDraft struct {
 // The position is decoded from the captured response ([capturedPosition])
 // into the PositionOptions the update sends, whose keys are the ones GitLab
 // answers with, because client-go's NotePosition carries no width, height, x
-// or y (docs/development/upstream-bugs.md) and an image draft would come back
+// or y, and an image draft would come back
 // without its point. A key GitLab answers as null is left out of the request.
 // GitLab answers a draft that has no position with an all-null text position,
 // and one with no start or head commit or no file is published as a general
@@ -642,8 +641,7 @@ func Publish(ctx context.Context, client *gitlabclient.Client, input PublishInpu
 // it meanwhile whenever the options are needed. The options are always a
 // non-nil value, so a call naming none of them sends the empty object `{}`,
 // the one empty body Grape parses to the parameter set it means; a nil
-// pointer would reach the body as the `null` recorded in
-// docs/development/upstream-bugs.md.
+// pointer would reach the body as `null`.
 //
 // The drafts themselves were asked about when they were written. The summary
 // note is text this call sends: GitLab creates it as a note on the merge

@@ -259,7 +259,7 @@ func TestDecorateExternalStatusCheckMeta_EntryNamesNothing_KeepsWhatTheCallerHad
 // keeps the advice to confirm the deletion for those releases only. From 19.5
 // GitLab refuses that caller with 403, which the handler hints, so a usage
 // telling every caller to confirm every deletion describes an answer GitLab
-// no longer sends (entry 56 of docs/development/upstream-bugs.md). The usage
+// no longer sends. The usage
 // is served prose, so it carries no semicolon either.
 func TestActionSpecs_DeleteUsage_ScopesTheSilentSuccessToOlderReleases(t *testing.T) {
 	usage := externalStatusCheckSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))["gitlab_delete_project_external_status_check"].Usage

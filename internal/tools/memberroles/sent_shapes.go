@@ -11,8 +11,7 @@ import (
 
 // roleExtra is what ee/lib/api/entities/member_role.rb sends on a member role
 // that client-go's MemberRole does not carry, read from the captured response
-// beside the SDK's own decode (ADR-0021). The gap is recorded in
-// docs/development/upstream-bugs.md.
+// beside the SDK's own decode (ADR-0021).
 //
 // These are not a subset anybody chose. The entity exposes its permissions by
 // looping over `::MemberRole.all_customizable_permissions`, so the names exist
