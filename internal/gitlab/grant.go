@@ -82,8 +82,10 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 	// An answer that is not JSON as a whole (client-go's decoder stops at the
 	// first value and ignores what trails it) is a reason the authority names,
 	// not a read that failed, so it is no error.
+	// A body of null decodes without an error on both reads and leaves client-go
+	// no token at all, which is a shape the authority names, as above.
 	decoded := capture.Decode(&extra) == nil
-	if !decoded {
+	if !decoded || token == nil {
 		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil
 	}
 	grant, reason := finegrained.GrantFromScopes(extra.Granular, grantScopes(token.GranularScopes), GrantMaxScopes)

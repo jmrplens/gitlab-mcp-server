@@ -95,6 +95,7 @@ func TestReadGrant_ReadsTheAnswerOrSaysWhyNot(t *testing.T) {
 		{name: "refused", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, reason: finegrained.FallbackGrantUnreadable, answered: true},
 		{name: "not fine-grained", status: http.StatusOK, body: `{"id":9,"granular":false}`, reason: finegrained.FallbackGrantShape, answered: true},
 		{name: "trailing bytes", status: http.StatusOK, body: grantBody + ` trailing`, reason: finegrained.FallbackGrantShape, answered: true},
+		{name: "a null body", status: http.StatusOK, body: `null`, reason: finegrained.FallbackGrantShape, answered: true},
 		{name: "no scopes", status: http.StatusOK, body: `{"id":9,"granular":true}`, reason: finegrained.FallbackGrantUnreadable, answered: true},
 		{name: "an empty list", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[]}`, reason: finegrained.FallbackNone, answered: true},
 		{name: "a null scope", status: http.StatusOK, body: `{"id":9,"granular":true,"granular_scopes":[null]}`, reason: finegrained.FallbackGrantShape, answered: true},
