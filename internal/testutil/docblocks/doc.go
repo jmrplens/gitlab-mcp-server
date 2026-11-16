@@ -22,6 +22,17 @@
 // page on its own, so a test reports a key the twin lost without waiting for
 // the site check to run.
 //
+// A fence also tells the documentation runner of test/e2e/docs which shell
+// blocks a reader runs, with the `run` option for a command that ends and
+// `run=background` for one that keeps running, a server:
+//
+//	```bash run=background
+//
+// The option marks a bash or sh block and nothing else, and [Page.RunBlocks]
+// hands the runner the English page's marked blocks in page order once the
+// Spanish twin marks the same ones the same way, the check [Page.Block] makes
+// of a key.
+//
 // Fences are found the way check-i18n-code.mjs finds them: three or more
 // backticks or tildes at any indentation, closed by a run of the same
 // character at least as long, each body line losing the indentation of the
