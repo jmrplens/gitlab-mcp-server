@@ -187,7 +187,8 @@ func isGrantShapeError(err error) bool {
 // grantScopesField is the JSON name of the granular scope list.
 const grantScopesField = "granular_scopes"
 
-// grantExtra is what GET /personal_access_tokens/:id sends on a token that
+// grantExtra is what the self or by-id answer about a token
+// (GET /personal_access_tokens/self or /personal_access_tokens/:id) sends that
 // client-go's PersonalAccessToken does not model: the granular flag, a
 // pointer so that an answer without it is told from one that says false.
 type grantExtra struct {
