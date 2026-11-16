@@ -178,11 +178,12 @@ func TestWrapCreateErr_TheGranular404_CarriesTheFeatureFlagHint(t *testing.T) {
 		{name: "a classic 404", err: refusal(http.StatusNotFound), notWant: NotFoundHint},
 		{name: "a granular refusal on the hinted status", err: refusal(http.StatusForbidden), granular: true, want: ownHint, notWant: NotFoundHint},
 		{name: "a classic refusal on the hinted status", err: refusal(http.StatusForbidden), want: ownHint},
+		{name: "a refusal on another status", err: refusal(http.StatusBadRequest), want: "refused", notWant: ownHint},
 		{name: "an error that is no HTTP refusal", err: errors.New("connection reset"), granular: true, want: "connection reset", notWant: NotFoundHint},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := WrapCreateErr("create_token", tc.err, tc.granular, http.StatusForbidden, ownHint).Error()
+			got := WrapCreateErr("create_token", tc.err, tc.granular, OnStatus(http.StatusForbidden), ownHint).Error()
 			if !strings.HasPrefix(got, "create_token") {
 				t.Errorf("error = %q, want it to name the operation first", got)
 			}

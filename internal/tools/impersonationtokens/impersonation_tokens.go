@@ -243,7 +243,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreateImpersonationToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, tokengrantdata.WrapCreateErr("create_impersonation_token", err, granular != nil, http.StatusForbidden,
+		return Output{}, tokengrantdata.WrapCreateErr("create_impersonation_token", err, granular != nil, toolutil.IsPermissionRefusal,
 			"creating impersonation tokens requires admin token; scopes must be from {api, read_user, read_api, read_repository, write_repository, read_registry, write_registry, sudo, admin_mode, create_runner, manage_runner, ai_features, k8s_proxy}; expires_at format YYYY-MM-DD")
 	}
 	return capturedOutput("create_impersonation_token", token, captured)

@@ -120,11 +120,22 @@ func SchemaOverrides() []toolutil.InputSchemaOverride {
 }
 
 // WrapCreateErr wraps the error of a token create call: the 404 of a
-// granular call with [NotFoundHint], and anything else as
-// [toolutil.WrapErrWithStatusHint] does with the action's own hint for status.
-func WrapCreateErr(op string, err error, granular bool, status int, hint string) error {
+// granular call with [NotFoundHint], an error hintApplies accepts with the
+// action's own hint, and anything else with GitLab's message. A hint that
+// names a role passes [toolutil.IsPermissionRefusal], since GitLab refuses a
+// missing permission with 401 at some routes; any other passes [OnStatus].
+func WrapCreateErr(op string, err error, granular bool, hintApplies func(error) bool, hint string) error {
 	if granular && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 		return toolutil.WrapErrWithHint(op, err, NotFoundHint)
 	}
-	return toolutil.WrapErrWithStatusHint(op, err, status, hint)
+	if hintApplies(err) {
+		return toolutil.WrapErrWithHint(op, err, hint)
+	}
+	return toolutil.WrapErrWithMessage(op, err)
+}
+
+// OnStatus is the hintApplies of [WrapCreateErr] for a hint that holds for
+// one HTTP status.
+func OnStatus(code int) func(error) bool {
+	return func(err error) bool { return toolutil.IsHTTPStatus(err, code) }
 }

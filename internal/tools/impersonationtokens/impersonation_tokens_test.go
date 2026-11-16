@@ -1409,6 +1409,16 @@ func TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith(t *testing.T) {
 			},
 		},
 		{
+			// GitLab refuses a missing permission with 401 at some routes, so
+			// the admin hint follows the permission refusal, not the status.
+			name: "create refused with 401", status: http.StatusUnauthorized,
+			hint: "creating impersonation tokens requires admin token",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{UserID: 42, Name: "tok", Scopes: []string{"api"}})
+				return err
+			},
+		},
+		{
 			// A granular call's 404 is the feature flag being off, not the
 			// admin requirement the classic hint names.
 			name: "create with a grant", status: http.StatusNotFound,

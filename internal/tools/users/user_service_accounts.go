@@ -227,7 +227,7 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CurrentUserPATOutput{}, tokengrantdata.WrapCreateErr("create_personal_access_token_for_current_user", err, granular != nil, http.StatusBadRequest,
+		return CurrentUserPATOutput{}, tokengrantdata.WrapCreateErr("create_personal_access_token_for_current_user", err, granular != nil, tokengrantdata.OnStatus(http.StatusBadRequest),
 			"name is required; scopes accepts only k8s_proxy and self_rotate on this route, so any other access is a granular_scopes grant; expires_at format YYYY-MM-DD")
 	}
 	extra, err := toolutil.CapturedToken(captured)
