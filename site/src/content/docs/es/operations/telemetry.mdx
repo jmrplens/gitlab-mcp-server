@@ -35,7 +35,7 @@ del issue, ni tu consulta de búsqueda, ni tu token.
 <Tabs>
 <TabItem label="Modo HTTP">
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --telemetry
 ```
 
@@ -847,7 +847,7 @@ lo hacen, y un valor vacío cuenta como no definido.
 
 Lo indica la ficha enumerante, en la ruta `.well-known`. La ficha SEP-2127 de `/server-card` solo declara identidad y datos de conexión, y no lleva bloques de capacidades.
 
-```bash
+```bash run
 curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
 ```
 

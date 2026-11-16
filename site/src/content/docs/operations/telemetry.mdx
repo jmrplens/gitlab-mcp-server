@@ -35,7 +35,7 @@ body, not your search query, not your token.
 <Tabs>
 <TabItem label="HTTP mode">
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --telemetry
 ```
 
@@ -819,7 +819,7 @@ value counts as unset.
 
 The enumerating server card reports it, at the `.well-known` path. The SEP-2127 card at `/server-card` states identity and connection details only, and carries no capability blocks.
 
-```bash
+```bash run
 curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
 ```
 

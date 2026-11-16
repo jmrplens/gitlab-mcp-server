@@ -114,7 +114,7 @@ by GitLab with and without `AF_NETLINK` in the list.
 user and group per start, so there is no group the proxy can be added to.
 Create a system user and share a real group:
 
-```bash
+```bash run
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin gitlab-mcp
 sudo usermod -aG gitlab-mcp www-data   # or nginx, or caddy
 ```
@@ -852,7 +852,7 @@ server {
 }
 ```
 
-```bash e2e=nginx-lan-server
+```bash e2e=nginx-lan-server run=background
 gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --gitlab-url=https://gitlab.example.com \
   --trusted-proxy-header=X-Real-IP --trusted-proxies=127.0.0.1
@@ -880,7 +880,7 @@ When the proxy shares the machine, remove the hop rather than encrypting it:
 `--http-addr=/run/gitlab-mcp/server.sock`. When the proxy is elsewhere, the
 binary terminates TLS itself and no sidecar is needed:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=:8443 \
   --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key \
   --gitlab-url=https://gitlab.example.com
