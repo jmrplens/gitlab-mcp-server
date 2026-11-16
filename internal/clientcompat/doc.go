@@ -8,16 +8,19 @@
 // bundled with ChatGPT.app (verified on codex-cli 0.148.0-alpha.9) fail any
 // result whose annotations carry a non-integer priority, and every affected
 // call surfaces as "Unexpected response type". rmcp types the field correctly,
-// at 3.2.0 and 3.3.0, which Codex's releases and main pin; the defect is
+// at 3.2.0 and 3.3.0, which Codex 0.162.1 and earlier pin; the defect is
 // Codex's build, where Cargo feature unification turns serde_json's
 // arbitrary_precision on for the whole binary, so a buffered decimal reaches
 // the float field as serde_json's private number map, the field refuses it and
 // the untagged result falls through to rmcp's CustomResult
 // (https://github.com/openai/codex/issues/38979). The fix is released in rmcp
-// 3.5.0, and no Codex release builds on it yet. This package detects Codex and writes
-// the priority as the nearest spec-legal integer (0 or 1) for that session;
-// audience, structuredContent, outputSchema, icons, and every other field are
-// preserved, and every other client keeps the exact float values.
+// 3.5.0, and Codex 0.163.0, released on 2026-10-15, is the first Codex built on
+// it (rmcp 3.5.1). The defect was seen in the Codex ChatGPT.app bundles, a
+// bundle that moves on its own schedule, so a Codex release alone does not end
+// it. This package detects Codex and writes the priority as the nearest
+// spec-legal integer (0 or 1) for that session; audience, structuredContent,
+// outputSchema, icons, and every other field are preserved, and every other
+// client keeps the exact float values.
 //
 // Codex is recognized by the clientInfo the session reports, matched to the
 // two spellings Codex has used since v0.20: a case-insensitive
@@ -47,9 +50,11 @@
 // note's second half and is met. The User-Agent fallback widens the same
 // deviation to a second self-reported label, read only where the clientInfo
 // is absent and for the same one number (issue 1043, recorded on the same
-// row). GITLAB_MCP_CLIENT_COMPAT=off removes both, and the profile retires
-// once a Codex built on an rmcp release carrying the fix is widely deployed,
-// not merely released.
+// row). GITLAB_MCP_CLIENT_COMPAT=off removes both. The profile does not read
+// the Codex version a session reports, and will not: it is retired outright,
+// the package, IDN-013 and the setting with it, once ChatGPT.app bundles Codex
+// 0.163.0 or later, which is all it waits on (decided on issue 1404 on
+// 2026-11-01).
 //
 // The rounding holds only because encoding/json writes an integral float64 as
 // 1 and never as 1.0, which Codex rejects as well; a test pins that wire form.
