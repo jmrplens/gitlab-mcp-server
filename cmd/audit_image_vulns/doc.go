@@ -8,8 +8,10 @@
 // # Why the image needs a gate of its own
 //
 // The runtime stage of the Dockerfile is alpine pinned by digest plus
-// ca-certificates and tzdata, and nothing runs apk upgrade, so the image
-// ships whatever Alpine packages that digest and those two installs carry.
+// ca-certificates and tzdata, and apk upgrade runs only for a base package
+// the Dockerfile names because its fix is published and no alpine image
+// carries it yet, so the image ships whatever Alpine packages that digest,
+// those two installs and that upgrade carry.
 // make check-binary-vulns holds the server binary to the Go vulnerability
 // database; nothing held the Alpine packages to anything until the image was
 // public, when a scanner reading the published tag (trivy image, Grype, a

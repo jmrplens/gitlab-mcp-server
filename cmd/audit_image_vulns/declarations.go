@@ -16,9 +16,10 @@ import (
 const (
 	// categoryFixNotYetAdoptable accepts an advisory against a package of the
 	// base image whose fixed version exists and cannot be taken yet: the base
-	// image is pinned by digest and nothing runs apk upgrade, so a fixed base
-	// package arrives with the Dependabot bump of alpine, which waits out a
-	// cooldown. The entry names the day that bump can land, and fails the run
+	// image is pinned by digest and apk upgrade runs only for a package the
+	// Dockerfile names, so any other fixed base package arrives with the
+	// Dependabot bump of alpine, which waits out a cooldown. The entry names
+	// the day that bump can land, and fails the run
 	// from the day after. ca-certificates and tzdata are not candidates: the
 	// Dockerfile installs them from Alpine's repository, so a build that does
 	// not reuse the cached layer takes their fix.
