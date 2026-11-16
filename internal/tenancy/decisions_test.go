@@ -37,7 +37,8 @@ var specRequirementIDs = []string{
 	"DST-001", "DST-002", "DST-003",
 	"END-001", "END-002", "END-003", "END-004", "END-005",
 	"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-	"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013",
+	"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013", "RQB-014",
+	"RQB-015",
 }
 
 // TestDecisions_EveryRequirementHasOneRow holds the register to the
@@ -111,7 +112,11 @@ func TestDecisions_AreGroupedByQuestion(t *testing.T) {
 // thirty-seventh ruled row. RQB-013 bounds advisory merge request diff searches
 // and is the thirteenth request bound. AUT-009, the actions GitLab refuses to
 // an OAuth access token on every way (issue 1238), is the thirty-ninth ruled
-// row.
+// row. RQB-014, the requests one orbit.schema or orbit.tools call sends while
+// it follows a cursor (maxSchemaPages, maxToolPages), is the fourteenth
+// request bound, and RQB-015, what one request writes into the operator's
+// telemetry (the caller's tracestate, an HTTP method the conventions do not
+// name and an exported log attribute), the fifteenth (issue 1717).
 func TestDecisions_DispositionCounts(t *testing.T) {
 	counts := map[Disposition]int{}
 	for _, d := range Decisions() {
@@ -126,11 +131,45 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 		{"ruled", Ruled, 39},
 		{"promoted", Promoted, 2},
 		{"mechanism", Mechanism, 6},
-		{"request-bound", RequestBound, 13},
+		{"request-bound", RequestBound, 15},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if counts[tc.disposition] != tc.want {
 				t.Errorf("%d rows, want %d", counts[tc.disposition], tc.want)
+			}
+		})
+	}
+}
+
+// TestDecisions_RequestBounds_DeclareTheBoundsCheckTenancyCouldNotSee pins
+// the row each bound issue 1717 found undeclared is an Enforce site of. None
+// of their packages held a site of a row that is not a request bound, so the
+// gate's rule on names that read as a limit never looked there and reported
+// nothing: what one action's output or one resource read carries is RQB-010,
+// the requests an Orbit read sends following a cursor RQB-014, and what one
+// request writes into the operator's telemetry RQB-015.
+func TestDecisions_RequestBounds_DeclareTheBoundsCheckTenancyCouldNotSee(t *testing.T) {
+	for _, tc := range []struct {
+		row, pkg, name string
+	}{
+		{"RQB-010", "internal/tools/mrchanges", "diffBudgetBytes"},
+		{"RQB-010", "internal/tools/jobs", "traceWindowBytes"},
+		{"RQB-010", "internal/tools/search", "maxContextLines"},
+		{"RQB-010", "internal/tools/waitpoll", "transferReasonMaxRunes"},
+		{"RQB-010", "internal/resources", "fileBlobMaxBytes"},
+		{"RQB-014", "internal/tools/orbit", "maxSchemaPages"},
+		{"RQB-014", "internal/tools/orbit", "maxToolPages"},
+		{"RQB-015", "internal/mcpotel", "maxTraceStateBytes"},
+		{"RQB-015", "internal/mcpotel", "maxOriginalMethod"},
+		{"RQB-015", "internal/telemetry", "maxExportedAttrValue"},
+	} {
+		t.Run(tc.pkg+"."+tc.name, func(t *testing.T) {
+			d, ok := Lookup(tc.row)
+			if !ok {
+				t.Fatalf("%s has no row", tc.row)
+			}
+			if !slices.Contains(d.Sites, enforce(tc.pkg, tc.name)) {
+				t.Errorf("%s does not declare %s.%s as an Enforce site", tc.row, tc.pkg, tc.name)
 			}
 		})
 	}
@@ -1900,7 +1939,8 @@ func rowPins() map[string]rowPin {
 	}
 	for _, id := range []string{
 		"RQB-001", "RQB-002", "RQB-003", "RQB-004", "RQB-005", "RQB-006", "RQB-007",
-		"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013",
+		"RQB-008", "RQB-009", "RQB-010", "RQB-011", "RQB-012", "RQB-013", "RQB-014",
+		"RQB-015",
 	} {
 		pins[id] = rowPin{Allow, Bound, ClassP, RequestBound, KeyRequest, KeyRequest, KeyNone, KeyNone, nil}
 	}
