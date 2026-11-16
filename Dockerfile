@@ -76,7 +76,12 @@ FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0
 # The licences' directory is made here, 0755, because a COPY --chmod that has
 # to create its destination's parent gives the directory the file's mode, and
 # a directory without its execute bit cannot be entered by appuser.
-RUN apk add --no-cache ca-certificates tzdata && \
+#
+# zlib is upgraded from Alpine's repository because alpine 3.24.4 carries
+# 1.3.2-r1 and CVE-2026-4738 is fixed in 1.4-r0, which no alpine image ships
+# yet. Drop the upgrade with the alpine bump that carries zlib 1.4.
+RUN apk upgrade --no-cache zlib && \
+	apk add --no-cache ca-certificates tzdata && \
 	addgroup -S -g 10001 appgroup && \
 	adduser -S -u 10001 -G appgroup -h /home/appuser appuser && \
 	install -d -m 0755 /usr/share/licenses/gitlab-mcp-server

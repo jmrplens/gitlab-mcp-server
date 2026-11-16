@@ -385,8 +385,9 @@ published since the last CI run cannot ship missing from the document.
 
 `make check-image-vulns` ([`cmd/audit_image_vulns`](cmd-utilities.md#audit_image_vulns))
 asks of the image what the gate above asks of the binaries. The runtime stage
-is `alpine` pinned by digest plus `ca-certificates` and `tzdata`, and nothing
-held those packages to an advisory database before the tag was public, when a
+is `alpine` pinned by digest plus `ca-certificates` and `tzdata`, with
+`apk upgrade` only for a base package the Dockerfile names because no `alpine`
+image carries its fix yet, and nothing held those packages to an advisory database before the tag was public, when a
 user's `trivy image` reported whatever applied to them. Trivy is the reference
 because that is what a user runs against the published tag.
 

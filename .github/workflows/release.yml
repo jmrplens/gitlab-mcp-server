@@ -460,7 +460,8 @@ jobs:
       # after the smoke test and before anything is pushed (issue 1129). The
       # binary-vulns job holds the server binary to the Go vulnerability
       # database; nothing held what the runtime stage carries (alpine pinned
-      # by digest, plus ca-certificates and tzdata, with no apk upgrade) until
+      # by digest, plus ca-certificates and tzdata, and an apk upgrade only of
+      # a base package the Dockerfile names) until
       # the tag was public and a user's scanner reported it. Trivy is the
       # reference because `trivy image` on the published tag is what a user
       # runs.
