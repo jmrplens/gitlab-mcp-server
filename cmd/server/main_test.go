@@ -12344,9 +12344,18 @@ const silentToolCallFix = "go-sdk now commits a streamed POST before its first e
 // as go-sdk does, without calling WriteHeader: its first Write commits the
 // stream, and its event a fifth of an interval later is the last byte before
 // the silence.
+//
+// The threshold sits between the two answers rather than above the right one.
+// With the event at a fifth of an interval, the fixed grid skips the tick at
+// one interval and writes at two, 1.8 intervals after the event, while the
+// heartbeat measured from the last write comes 1.0 interval after it. At 1.4
+// intervals the assertion still tells them apart, and with a 2 s interval it
+// leaves 800 ms for the timer, the write and the client's read to run late
+// on a loaded runner, where a 400 ms interval at 1.5 left 200 ms and a macOS
+// runner once took 839 ms (issue 1831).
 func TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite(t *testing.T) {
 	restore := sseKeepAliveInterval
-	sseKeepAliveInterval = 400 * time.Millisecond
+	sseKeepAliveInterval = 2 * time.Second
 	t.Cleanup(func() { sseKeepAliveInterval = restore })
 
 	release := make(chan struct{})
@@ -12390,7 +12399,7 @@ func TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite(t *testing.T) {
 			break
 		}
 	}
-	if silence := time.Since(lastEvent); silence > sseKeepAliveInterval*3/2 {
+	if silence := time.Since(lastEvent); silence > sseKeepAliveInterval*7/5 {
 		t.Errorf("the first keep-alive came %v after the last event, want one interval (%v): a proxy's idle timer sees the whole gap",
 			silence.Round(time.Millisecond), sseKeepAliveInterval)
 	}
