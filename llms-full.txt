@@ -11558,10 +11558,10 @@ Emails:
 Tokens:
 - list_impersonation_tokens: user_id*, state (active/inactive)
 - get_impersonation_token: user_id*, token_id*
-- create_impersonation_token: user_id*, name*, scopes*, expires_at
+- create_impersonation_token: user_id*, name*, scopes or granular_scopes (exactly one), description, expires_at
 - revoke_impersonation_token: user_id*, token_id*
 - create_personal_access_token: user_id*, name*, scopes*, description, expires_at
-- create_current_user_pat: name*, scopes*, description, expires_at
+- create_current_user_pat: name*, scopes or granular_scopes (exactly one), description, expires_at
 
 Activity and events:
 - activities: (admin) from (YYYY-MM-DD)

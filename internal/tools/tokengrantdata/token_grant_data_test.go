@@ -15,6 +15,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestOptions_AGrant_IsSpelledAsClientGoOptions holds the conversion both
+// token create handlers send: no grant is nil, which client-go leaves out of
+// the request, and each scope becomes one options entry carrying its access,
+// permissions and the projects and groups it names.
+func TestOptions_AGrant_IsSpelledAsClientGoOptions(t *testing.T) {
+	if got := Options(nil); got != nil {
+		t.Errorf("Options(nil) = %v, want nil", got)
+	}
+	got := Options([]GranularScopeInput{
+		{Access: "user", Permissions: []string{"read_user"}},
+		{Access: "selected_memberships", Permissions: []string{"read_project"}, ProjectIDs: []int64{7}, GroupIDs: []int64{9}},
+	})
+	want := []*gl.GranularScopeOptions{
+		{Access: new(gl.GranularScopeAccessUser), Permissions: []string{"read_user"}},
+		{Access: new(gl.GranularScopeAccessSelectedMemberships), Permissions: []string{"read_project"}, ProjectIDs: []int64{7}, GroupIDs: []int64{9}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Options() = %#v, want %#v", got, want)
+	}
+}
+
 // TestCheckScopesChoice_ExactlyOneKindOfGrant_IsAccepted holds the
 // rule both token create routes share: classic scopes or a grant, one of
 // them and never both, with an empty list counted as absent, since the

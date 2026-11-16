@@ -15945,7 +15945,7 @@
                 ]
               },
               "permissions": {
-                "description": "Assignable permissions the scope grants, by GitLab's name for each (read_project, create_issue, read_user)",
+                "description": "Assignable permissions the scope grants, by GitLab's assignable name for each (read_project, create_merge_request, read_user), not the raw permissions an assignable one bundles",
                 "items": {
                   "type": "string"
                 },
@@ -17531,7 +17531,7 @@
                 ]
               },
               "permissions": {
-                "description": "Assignable permissions the scope grants, by GitLab's name for each (read_project, create_issue, read_user)",
+                "description": "Assignable permissions the scope grants, by GitLab's assignable name for each (read_project, create_merge_request, read_user), not the raw permissions an assignable one bundles",
                 "items": {
                   "type": "string"
                 },

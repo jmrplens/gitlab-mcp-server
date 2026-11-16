@@ -31,7 +31,7 @@ Each revision of the [MCP specification](https://modelcontextprotocol.io/) is ad
 
 ### Close what a fine-grained token cannot reach
 
-A [fine-grained token](/gitlab-mcp-server/operations/fine-grained-tokens/) is judged action by action from its grant. GitLab still leaves part of its API outside every grant, and the project follows as it extends them: serving an action over REST where a fine-grained token cannot reach its GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)), reading the grant from the token's own answer where GitLab sends it there ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)), and letting the actions that create tokens send the fine-grained permissions GitLab accepts ([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+A [fine-grained token](/gitlab-mcp-server/operations/fine-grained-tokens/) is judged action by action from its grant. GitLab still leaves part of its API outside every grant, and the project follows as it extends them: serving an action over REST where a fine-grained token cannot reach its GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)) and reading the grant from the token's own answer where GitLab sends it there ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)).
 
 ### Hold every limit of a shared deployment to one rule
 

@@ -200,24 +200,6 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	}, nil
 }
 
-// granularScopeOptions spells a validated grant as client-go's options, one
-// entry per scope, and nil for no grant, which client-go leaves out.
-func granularScopeOptions(scopes []tokengrantdata.GranularScopeInput) []*gl.GranularScopeOptions {
-	if len(scopes) == 0 {
-		return nil
-	}
-	out := make([]*gl.GranularScopeOptions, 0, len(scopes))
-	for _, scope := range scopes {
-		out = append(out, &gl.GranularScopeOptions{
-			Access:      new(gl.GranularScopeAccessValue(scope.Access)),
-			Permissions: scope.Permissions,
-			ProjectIDs:  scope.ProjectIDs,
-			GroupIDs:    scope.GroupIDs,
-		})
-	}
-	return out
-}
-
 // CreateCurrentUserPAT creates a personal access token for the currently authenticated user.
 func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, input CreateCurrentUserPATInput) (CurrentUserPATOutput, error) {
 	if input.Name == "" {
@@ -230,7 +212,7 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 	if grantErr := tokengrantdata.CheckGrant(input.Scopes, input.GranularScopes); grantErr != nil {
 		return CurrentUserPATOutput{}, grantErr
 	}
-	granular := granularScopeOptions(input.GranularScopes)
+	granular := tokengrantdata.Options(input.GranularScopes)
 	opts := &gl.CreatePersonalAccessTokenForCurrentUserOptions{
 		Name:           new(input.Name),
 		GranularScopes: granular,

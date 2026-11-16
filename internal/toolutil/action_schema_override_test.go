@@ -446,7 +446,7 @@ func TestSchemaOneOfRequired_Names_OneUntypedBranchEach(t *testing.T) {
 		for _, name := range names {
 			oneOf = append(oneOf, map[string]any{
 				"required":             []string{name},
-				"properties":           map[string]any{name: map[string]any{"minLength": 1}},
+				"properties":           map[string]any{name: map[string]any{"minLength": 1, "minItems": 1, "not": map[string]any{"type": "null"}}},
 				"additionalProperties": true,
 			})
 		}
@@ -532,6 +532,51 @@ func TestSchemaOneOfRequired_LockedDownSchema_AcceptsExactlyOneName(t *testing.T
 		{name: "an empty common name alone", arguments: map[string]any{"group_id": "g", "cn": ""}},
 		{name: "both empty", arguments: map[string]any{"group_id": "g", "cn": "", "filter": ""}},
 		{name: "a property the schema does not name", arguments: map[string]any{"group_id": "g", "cn": "engineers", "extra": "x"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := resolved.Validate(tc.arguments)
+			if (err == nil) != tc.wantValid {
+				t.Errorf("Validate(%v) error = %v, want valid %t", tc.arguments, err, tc.wantValid)
+			}
+		})
+	}
+}
+
+// TestSchemaOneOfRequired_ArrayNames_CountOnlyANonEmptyArray verifies the
+// override over two array properties, the way the token create actions
+// publish scopes or granular_scopes: an empty array or a null counts as not
+// sent, as it does to the handler, which decodes either into an empty slice
+// and leaves it out of the request. minLength alone used to hold strings
+// only, so an empty array beside a filled one matched both branches and the
+// call was refused, and an empty array alone matched one and was accepted.
+func TestSchemaOneOfRequired_ArrayNames_CountOnlyANonEmptyArray(t *testing.T) {
+	array := map[string]any{"type": []any{"null", "array"}, "items": map[string]any{"type": "string"}}
+	schema := map[string]any{
+		"type":       "object",
+		"required":   []any{"name"},
+		"properties": map[string]any{"name": map[string]any{"type": "string"}, "scopes": array, "granular_scopes": array},
+	}
+	applyInputSchemaOverrides(schema, []InputSchemaOverride{SchemaOneOfRequired("scopes", "granular_scopes")})
+	locked, isMap := lockedDownSchema(schema).(map[string]any)
+	if !isMap {
+		t.Fatalf("lockedDownSchema() = %T, want a map", lockedDownSchema(schema))
+	}
+	resolved := resolveSchemaForTest(t, locked)
+
+	cases := []struct {
+		name      string
+		arguments map[string]any
+		wantValid bool
+	}{
+		{name: "scopes alone", arguments: map[string]any{"name": "t", "scopes": []any{"k8s_proxy"}}, wantValid: true},
+		{name: "the grant alone", arguments: map[string]any{"name": "t", "granular_scopes": []any{"x"}}, wantValid: true},
+		{name: "scopes beside an empty grant", arguments: map[string]any{"name": "t", "scopes": []any{"k8s_proxy"}, "granular_scopes": []any{}}, wantValid: true},
+		{name: "the grant beside null scopes", arguments: map[string]any{"name": "t", "scopes": nil, "granular_scopes": []any{"x"}}, wantValid: true},
+		{name: "both", arguments: map[string]any{"name": "t", "scopes": []any{"k8s_proxy"}, "granular_scopes": []any{"x"}}},
+		{name: "an empty array alone", arguments: map[string]any{"name": "t", "scopes": []any{}}},
+		{name: "a null alone", arguments: map[string]any{"name": "t", "granular_scopes": nil}},
+		{name: "both empty", arguments: map[string]any{"name": "t", "scopes": []any{}, "granular_scopes": nil}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

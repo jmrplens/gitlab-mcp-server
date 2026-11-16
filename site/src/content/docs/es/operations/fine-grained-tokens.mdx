@@ -147,9 +147,16 @@ acceso son:
 
 La ruta de administrador que crea un token de acceso personal para otro usuario no
 acepta concesión en GitLab 19.5, mientras que la ruta de tokens de suplantación y la de
-arriba sí. Las acciones de este servidor que crean tokens, entre ellas
-`user.create_current_user_pat`, envían solo scopes clásicos
-([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+arriba sí. Las acciones de este servidor para esas dos rutas,
+`user.create_current_user_pat` y `user.create_impersonation_token`, aceptan
+`granular_scopes` con la forma de arriba en lugar de `scopes`, exactamente uno de los
+dos, y cada permiso por su nombre asignable, el que lista la
+[referencia de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/). La
+ruta de arriba no acepta más scopes clásicos que `k8s_proxy` y `self_rotate`, así que un
+token para este servidor creado con ella es de grano fino. GitLab responde 404 a una
+concesión mientras el feature flag `granular_personal_access_tokens` esté desactivado
+para el usuario. Las demás acciones de este servidor que crean tokens, los de proyecto,
+grupo y cuenta de servicio, envían solo scopes clásicos.
 
 El token de un administrador alcanza las rutas de administración que concede su scope
 `instance`, y en una instancia que exige Admin Mode no necesita nada más: GitLab deja

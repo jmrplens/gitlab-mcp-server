@@ -21,7 +21,7 @@ import (
 // [gl.GranularScopeOptions].
 type GranularScopeInput struct {
 	Access      string   `json:"access" jsonschema:"Resources the scope reaches: personal_projects (the user's own projects), all_memberships (every project and group the user is a member of), selected_memberships (the projects and groups named in project_ids and group_ids), user (the user's own profile, tokens and namespaces) or instance,required"`
-	Permissions []string `json:"permissions" jsonschema:"Assignable permissions the scope grants, by GitLab's name for each (read_project, create_issue, read_user),required"`
+	Permissions []string `json:"permissions" jsonschema:"Assignable permissions the scope grants, by GitLab's assignable name for each (read_project, create_merge_request, read_user), not the raw permissions an assignable one bundles,required"`
 	ProjectIDs  []int64  `json:"project_ids,omitempty" jsonschema:"IDs of the projects the scope reaches, with access selected_memberships only"`
 	GroupIDs    []int64  `json:"group_ids,omitempty" jsonschema:"IDs of the groups the scope reaches, and everything below each, with access selected_memberships only"`
 }
@@ -63,9 +63,6 @@ func CheckScopesChoice(scopes []string, granular []GranularScopeInput) error {
 // project or group IDs beside an access other than selected_memberships,
 // which GitLab drops and so widens the grant to all of that access, and
 // selected_memberships with none, which GitLab turns into no scope at all.
-//
-// The conversion into client-go's options stays in each handler's package,
-// where the 1:1 audit pairs the literal with this input type.
 func ValidateScopes(scopes []GranularScopeInput) error {
 	for i, scope := range scopes {
 		if !slices.Contains(AccessValues, scope.Access) {
@@ -81,6 +78,24 @@ func ValidateScopes(scopes []GranularScopeInput) error {
 		}
 	}
 	return nil
+}
+
+// Options spells a validated grant as client-go's options, one entry per
+// scope, and nil for no grant, which client-go leaves out of the request.
+func Options(scopes []GranularScopeInput) []*gl.GranularScopeOptions {
+	if len(scopes) == 0 {
+		return nil
+	}
+	out := make([]*gl.GranularScopeOptions, 0, len(scopes))
+	for _, scope := range scopes {
+		out = append(out, &gl.GranularScopeOptions{
+			Access:      new(gl.GranularScopeAccessValue(scope.Access)),
+			Permissions: scope.Permissions,
+			ProjectIDs:  scope.ProjectIDs,
+			GroupIDs:    scope.GroupIDs,
+		})
+	}
+	return out
 }
 
 // CheckGrant refuses what a token create call asks for before it is sent:

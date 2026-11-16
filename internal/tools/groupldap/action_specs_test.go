@@ -136,9 +136,10 @@ func TestGroupLDAPOptions_UnknownIndividualTool_KeepsTheSharedMetadata(t *testin
 // it built (issue 1270).
 func TestLDAPLinkSelectors_Schema_StatesExactlyOneOfCNOrFilter(t *testing.T) {
 	byTool := groupLDAPSpecsByTool(t, ActionSpecs(okClient(t)))
+	valued := map[string]any{"minLength": 1, "minItems": 1, "not": map[string]any{"type": "null"}}
 	wantOneOf := []any{
-		map[string]any{"required": []string{"cn"}, "properties": map[string]any{"cn": map[string]any{"minLength": 1}}, "additionalProperties": true},
-		map[string]any{"required": []string{"filter"}, "properties": map[string]any{"filter": map[string]any{"minLength": 1}}, "additionalProperties": true},
+		map[string]any{"required": []string{"cn"}, "properties": map[string]any{"cn": valued}, "additionalProperties": true},
+		map[string]any{"required": []string{"filter"}, "properties": map[string]any{"filter": valued}, "additionalProperties": true},
 	}
 
 	for _, name := range []string{"gitlab_group_ldap_link_add", "gitlab_group_ldap_link_delete"} {
