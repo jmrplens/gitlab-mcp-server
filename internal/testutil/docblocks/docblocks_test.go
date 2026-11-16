@@ -400,3 +400,171 @@ func TestOpen_PageOrTwinUnreadable_IsRefused(t *testing.T) {
 		})
 	}
 }
+
+// TestParse_RunOption_MarksABlockForTheDocsRunner pins how a fence asks the
+// documentation runner of test/e2e/docs to run its block: `run` for a command
+// that ends, `run=background` for one that keeps running, on a shell fence,
+// beside any other option the fence carries.
+func TestParse_RunOption_MarksABlockForTheDocsRunner(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		src  string
+		want []Block
+	}{
+		{
+			name: "run on a bash fence",
+			src:  "```bash run\ncurl -s http://localhost:8080/health\n```\n",
+			want: []Block{{Lang: "bash", Info: "run", Run: RunForeground, Body: "curl -s http://localhost:8080/health\n", Line: 1}},
+		},
+		{
+			name: "run=background on a bash fence",
+			src:  "```bash run=background\ngitlab-mcp-server --http\n```\n",
+			want: []Block{{Lang: "bash", Info: "run=background", Run: RunBackground, Body: "gitlab-mcp-server --http\n", Line: 1}},
+		},
+		{
+			name: "run on an sh fence",
+			src:  "```sh run\nls\n```\n",
+			want: []Block{{Lang: "sh", Info: "run", Run: RunForeground, Body: "ls\n", Line: 1}},
+		},
+		{
+			name: "run beside a key and a title",
+			src:  "```bash title=\"a b\" e2e=server run=background\nserve\n```\n",
+			want: []Block{{Lang: "bash", Info: `title="a b" e2e=server run=background`, Key: "server", Run: RunBackground, Body: "serve\n", Line: 1}},
+		},
+		{
+			name: "run spelled inside a quoted title is not the option",
+			src:  "```bash title=\"run me\"\nls\n```\n",
+			want: []Block{{Lang: "bash", Info: `title="run me"`, Body: "ls\n", Line: 1}},
+		},
+		{
+			name: "an option that only starts with run is another option",
+			src:  "```bash runner=x\nls\n```\n",
+			want: []Block{{Lang: "bash", Info: "runner=x", Body: "ls\n", Line: 1}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Parse([]byte(tt.src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Parse:\n got %#v\nwant %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParse_RunOptionMalformed_IsRefused pins the run options the runner must
+// never be handed: a value it does not know, the option twice, and a fence a
+// shell cannot run.
+func TestParse_RunOptionMalformed_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		src  string
+		line string
+	}{
+		{name: "an unknown run value", src: "```bash run=foreground\nls\n```\n", line: `line 1 has run="foreground"`},
+		{name: "an empty run value", src: "```bash run=\nls\n```\n", line: `line 1 has run=""`},
+		{name: "run twice", src: "\n```bash run run\nls\n```\n", line: "line 2 asks to run twice"},
+		{name: "run and run=background", src: "```bash run run=background\nls\n```\n", line: "line 1 asks to run twice"},
+		{name: "run on a fence that is no shell", src: "```nginx run\nserver {}\n```\n", line: `line 1 is a nginx block`},
+		{name: "run on a fence with no language", src: "```run\nls\n```\n", line: `line 1 is a run block`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Parse([]byte(tt.src))
+			if !errors.Is(err, ErrBadRun) {
+				t.Fatalf("Parse = %#v, %v; want an error wrapping %q", got, err, ErrBadRun)
+			}
+			if !strings.Contains(err.Error(), tt.line) {
+				t.Errorf("the error does not name %s: %v", tt.line, err)
+			}
+		})
+	}
+}
+
+// TestPageRunBlocks_MarkedBlocks_AreReturnedInPageOrder pins what the runner
+// is handed: the English page's marked blocks, in the order a reader meets
+// them, and nothing a fence did not ask to run.
+func TestPageRunBlocks_MarkedBlocks_AreReturnedInPageOrder(t *testing.T) {
+	t.Parallel()
+
+	const rel = "operations/server.mdx"
+	english := "# Server\n\n```bash run=background\n# Start it.\nserve\n```\n\n```bash\nnot marked\n```\n\n```bash run\n# Ask it.\ncurl x\n```\n"
+	spanish := "# Servidor\n\n```bash run=background\n# Arráncalo.\nserve\n```\n\n```bash\nnot marked\n```\n\n```bash run\n# Pregúntale.\ncurl x\n```\n"
+	root := writePages(t, rel, &english, &spanish)
+	page, err := Open(root, rel)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	got, err := page.RunBlocks()
+	if err != nil {
+		t.Fatalf("RunBlocks: %v", err)
+	}
+	want := []Block{
+		{Lang: "bash", Info: "run=background", Run: RunBackground, Body: "# Start it.\nserve\n", Line: 3},
+		{Lang: "bash", Info: "run", Run: RunForeground, Body: "# Ask it.\ncurl x\n", Line: 12},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("RunBlocks:\n got %#v\nwant %#v", got, want)
+	}
+
+	plain := "```bash\nls\n```\n"
+	root = writePages(t, rel, &plain, &plain)
+	page, err = Open(root, rel)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if got, err := page.RunBlocks(); err != nil || got != nil {
+		t.Errorf("RunBlocks on a page that marks nothing = %#v, %v; want nil, nil", got, err)
+	}
+}
+
+// TestPageRunBlocks_TwinDisagrees_IsRefused pins that the Spanish twin marks
+// the same blocks in the same order, the way Page.Block holds a key to it: a
+// reader of either language follows the same steps, so a mark one of them
+// lost is a step the runner would check for one language alone.
+func TestPageRunBlocks_TwinDisagrees_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	const rel = "guide.mdx"
+	start := "```bash run=background\nserve\n```\n"
+	ask := "```bash run\ncurl x\n```\n"
+	unmarked := "```bash\ncurl x\n```\n"
+	tests := []struct {
+		name    string
+		english string
+		spanish string
+		names   []string
+	}{
+		{name: "the twin lost a mark", english: start + ask, spanish: start + unmarked, names: []string{filepath.Join("es", "guide.mdx"), "marks 1 block", "2"}},
+		{name: "the twin marks one more", english: start + unmarked, spanish: start + ask, names: []string{filepath.Join("es", "guide.mdx"), "marks 2 blocks", "1"}},
+		{name: "the twin runs a block another way", english: start + ask, spanish: ask + ask, names: []string{filepath.Join("es", "guide.mdx"), "line 1", "run=background", "run"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := writePages(t, rel, &tt.english, &tt.spanish)
+			page, err := Open(root, rel)
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			got, err := page.RunBlocks()
+			if !errors.Is(err, ErrRunNotInTwin) {
+				t.Fatalf("RunBlocks = %#v, %v; want an error wrapping %q", got, err, ErrRunNotInTwin)
+			}
+			for _, name := range tt.names {
+				if !strings.Contains(err.Error(), name) {
+					t.Errorf("the error does not name %q: %v", name, err)
+				}
+			}
+		})
+	}
+}
