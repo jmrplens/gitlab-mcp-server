@@ -216,7 +216,7 @@ func TestReader_Lifecycle_UsesNoBindMount(t *testing.T) {
 	if err != nil || image != readerImage {
 		t.Fatalf("buildReader = %q, %v", image, err)
 	}
-	rd, err := startReader(ctx, bin, image, "e2e_default", "reader-1", "/dist/gitlab-mcp-server", "gitlab-mcp-server-linux-amd64")
+	rd, err := startReader(ctx, bin, image, "e2e_default", "reader-1", "/dist/gitlab-mcp-server", readerAsset)
 	if err != nil {
 		t.Fatalf("startReader: %v", err)
 	}

@@ -30,6 +30,14 @@ const readerImage = "gitlab-mcp-docs-reader:local"
 // runs in.
 const readerHome = "/root"
 
+// readerAsset is the name the reader's downloaded copy of the binary takes in
+// its home directory: the Linux x86_64 release asset, the one the pages'
+// examples move into place. It keeps that name whatever the machine's
+// architecture, since the file is the tree's binary built for the machine the
+// reader runs on, so a run on an arm64 host checks the same steps instead of
+// failing on a name the pages do not print.
+const readerAsset = "gitlab-mcp-server-linux-amd64"
+
 // readerDockerfile builds the reader: a Debian with the tools the pages'
 // shell blocks call, and what the pages take as a prerequisite rather than
 // print as a step, a certificate and key for mcp.example.com where the TLS

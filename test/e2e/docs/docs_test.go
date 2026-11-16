@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -67,13 +66,12 @@ func TestDocs_MarkedBlocks_RunInAReaderAgainstTheE2EGitLab(t *testing.T) {
 		t.Fatalf("finding the e2e GitLab's network: %v", err)
 	}
 	subs := substitutions{version: version, gitlabURL: gitlabURL, token: token}
-	asset := "gitlab-mcp-server-linux-" + runtime.GOARCH
 
 	for i, page := range pages {
 		t.Run(page.rel, func(t *testing.T) {
 			name := fmt.Sprintf("gitlab-mcp-docse2e-%d-%d", os.Getpid(), i)
 			t.Logf("%d marked blocks in the reader %s; if this run is interrupted: docker rm -f %s", len(page.blocks), name, name)
-			rd, startErr := startReader(ctx, bin, image, network, name, binary, asset)
+			rd, startErr := startReader(ctx, bin, image, network, name, binary, readerAsset)
 			if rd != nil {
 				t.Cleanup(func() {
 					if removeErr := rd.remove(context.WithoutCancel(ctx)); removeErr != nil {
