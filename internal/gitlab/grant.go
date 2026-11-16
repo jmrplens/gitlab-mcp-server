@@ -130,14 +130,25 @@ type grantAnswer struct {
 }
 
 // selfGrant holds the grant a self answer carried until one reading takes it
-// ([Client.ReadFineGrained]), and says, for as long as the facts live, that
-// the self route is the one the grant is read from. The grant is handed out
-// once and let go: the facts an HTTP pool entry keeps for its life would
-// otherwise hold a grant of up to [GrantMaxBytes], whose size is its minter's
-// to choose, beside an authority sized by the table alone. A reading after
-// that, a revalidation's, asks the self route again.
+// or stops before it for want of a version ([Client.ReadFineGrained]), and
+// says, for as long as the facts live, that the self route is the one the
+// grant is read from. The grant is handed out once and let go: the facts an
+// HTTP pool entry keeps for its life would otherwise hold a grant of up to
+// [GrantMaxBytes], whose size is its minter's to choose, beside an authority
+// sized by the table alone. A reading after that, a revalidation's, asks the
+// self route again.
 type selfGrant struct {
 	answer atomic.Pointer[grantAnswer]
+}
+
+// release lets go of the carried grant when a reading stops before it: a
+// version that was not answered, or one this server cannot read, which for a
+// token refused Metadata: Read is every version for the token's whole life.
+// Nil, facts whose self answer carried no grant, has nothing to let go.
+func (s *selfGrant) release() {
+	if s != nil {
+		s.answer.Store(nil)
+	}
 }
 
 // carry records on the facts the grant their self answer carried, which
@@ -219,8 +230,9 @@ func grantScopes(scopes []*gl.GranularScope) []finegrained.GrantScope {
 // health client, and then reads the grant only when that left a version to
 // judge it at, since without one no grant is evaluated: from the self answer
 // [DetectToken] kept when it carried the grant, with no request, and from GET
-// /personal_access_tokens/:id when it did not. A carried grant is taken by the
-// first reading that gets that far, and a later one asks the self route again.
+// /personal_access_tokens/:id when it did not. A carried grant is let go by
+// the first reading, which takes it when it gets that far and drops it when
+// the version stops it, and a later one asks the self route again.
 // A version read the instance did not answer is
 // [finegrained.FallbackVersionUnanswered], and one it answered with no
 // version this server can read (a refusal of Metadata: Read, or a string that
@@ -235,6 +247,7 @@ func (c *Client) ReadFineGrained(ctx context.Context, facts TokenFacts) finegrai
 	}
 	version, answered := c.ReadVersion(ctx)
 	if !answered {
+		facts.selfGrant.release()
 		return finegrained.Reading{Fallback: finegrained.FallbackVersionUnanswered}
 	}
 	return c.ReadFineGrainedAt(ctx, facts, version)
@@ -244,13 +257,14 @@ func (c *Client) ReadFineGrained(ctx context.Context, facts TokenFacts) finegrai
 // read and answered, which is a stdio start's: [Client.Initialize] asked it
 // moments ago, and asking again would cost the instance a request and a token
 // without Metadata: Read a second refusal for nothing. An empty version is one
-// the instance answered with none this server can read, and the grant is not
-// asked for.
+// the instance answered with none this server can read: the grant is not
+// asked for, and one the self answer carried is let go.
 func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, version string) finegrained.Reading {
 	if !facts.GrantReadable {
 		return finegrained.Reading{Fallback: finegrained.FallbackGrantUnreadable}
 	}
 	if version == "" {
+		facts.selfGrant.release()
 		return finegrained.Reading{Fallback: finegrained.FallbackVersionUnreadable}
 	}
 	grant, reason, err := c.grant(ctx, facts)
