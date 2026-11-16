@@ -54,6 +54,14 @@ var (
 // command it ran.
 const timeoutStatus = 124
 
+// curlrc is the curl configuration the runner writes into the reader's home
+// before a page's first block. curl ends with status 0 on any answer it
+// receives, so a block that prints a request would pass on a renamed route,
+// a refused token or a draining server; fail-with-body makes it end with
+// status 22 on an answer of 400 or more, still printing the body, so the
+// page's text stays as printed and the report shows what was answered.
+const curlrc = "fail-with-body\n"
+
 // substitutions are the values a block's placeholders become: the release
 // the site renders %%VERSION%% as, the GitLab the reader reaches in place of
 // the instances the pages name, and the token in place of the token
@@ -121,6 +129,9 @@ type background struct {
 // failure, naming the page and the line. A background block still running
 // when the page ends is stopped whatever the verdict.
 func (r *runner) runPage(ctx context.Context, page string, blocks []docblocks.Block) error {
+	if err := r.shell.write(ctx, ".curlrc", []byte(curlrc)); err != nil {
+		return fmt.Errorf("%s: writing the reader's curl configuration: %w", page, err)
+	}
 	var bg *background
 	defer func() {
 		if bg != nil {

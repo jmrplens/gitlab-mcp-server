@@ -64,7 +64,9 @@ func (s *localShell) write(_ context.Context, name string, content []byte) error
 func (s *localShell) run(ctx context.Context, script string) (string, error) {
 	cmd := exec.CommandContext(ctx, "bash", "-c", script)
 	cmd.Dir = s.home
-	cmd.Env = append(os.Environ(), "HOME="+s.home)
+	// curl reads its configuration from CURL_HOME before HOME, so it names
+	// the home directory too, where the reader's curl finds it by HOME.
+	cmd.Env = append(os.Environ(), "HOME="+s.home, "CURL_HOME="+s.home)
 	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -389,33 +391,60 @@ func TestRunPage_ReaderUnusable_IsRed(t *testing.T) {
 	t.Parallel()
 
 	page := fence(docblocks.RunBackground, "sleep 30") + fence(docblocks.RunForeground, "true")
+	diskFull := errors.New("disk full")
 	tests := []struct {
 		name  string
 		shell shell
-		want  string
+		// says is what the report must contain: where, and the reason.
+		says []string
 	}{
-		{name: "nothing can be written", shell: brokenShell{writeErr: errors.New("disk full")}, want: "disk full"},
-		{name: "nothing can be run", shell: brokenShell{runErr: errors.New("no such container")}, want: "no such container"},
+		{
+			name:  "the curl configuration cannot be written",
+			shell: brokenShell{writeErr: diskFull, refused: ".curlrc"},
+			says:  []string{"guide.mdx: writing the reader's curl configuration", "disk full"},
+		},
+		{
+			name:  "a block cannot be written",
+			shell: brokenShell{writeErr: diskFull, refused: runnerDir + "/"},
+			says:  []string{"guide.mdx:1", "writing the block", "disk full"},
+		},
+		{
+			name:  "nothing can be run",
+			shell: brokenShell{runErr: errors.New("no such container")},
+			says:  []string{"guide.mdx:1", "no such container"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			r := &runner{shell: tt.shell, blockTimeout: time.Second, settle: time.Millisecond, readiness: time.Second, poll: time.Millisecond}
 			err := r.runPage(context.Background(), "guide.mdx", markedBlocks(t, page))
-			if err == nil || !strings.Contains(err.Error(), tt.want) || !strings.Contains(err.Error(), "guide.mdx:1") {
-				t.Errorf("runPage = %v; want a failure at guide.mdx:1 naming %q", err, tt.want)
+			if err == nil {
+				t.Fatal("runPage passed a page whose reader refused it")
+			}
+			for _, say := range tt.says {
+				if !strings.Contains(err.Error(), say) {
+					t.Errorf("the report does not say %q:\n%v", say, err)
+				}
 			}
 		})
 	}
 }
 
-// brokenShell is a reader that refuses what the runner asks of it.
+// brokenShell is a reader that refuses what the runner asks of it: a write
+// to a path under refused fails with writeErr, and every run with runErr.
 type brokenShell struct {
 	writeErr error
+	refused  string
 	runErr   error
 }
 
-func (s brokenShell) write(context.Context, string, []byte) error { return s.writeErr }
+func (s brokenShell) write(_ context.Context, name string, _ []byte) error {
+	if strings.HasPrefix(name, s.refused) {
+		return s.writeErr
+	}
+	return nil
+}
 
 func (s brokenShell) run(context.Context, string) (string, error) { return "", s.runErr }
 

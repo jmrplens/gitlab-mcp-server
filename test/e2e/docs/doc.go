@@ -36,6 +36,14 @@
 // and the token placeholders glpat-your-token and glpat-xxxx… become the e2e
 // user's token, which no failure report prints.
 //
+// Every curl a block runs fails on an HTTP answer of 400 or more: before a
+// page's first block the runner writes fail-with-body into the reader's
+// ~/.curlrc. curl ends with status 0 on any answer it receives, so without it
+// a block that prints a request, or only its status code, would pass on a
+// renamed route, a refused token or a draining server, and a readiness probe
+// would take a 503 for a server that is up. A page that shows an error answer
+// on purpose cannot mark that block.
+//
 // A background block keeps running until the page's next background block
 // starts or the page ends, and either must find it still running: a server
 // that exits on a flag it refuses fails its block. The first `run` block after
