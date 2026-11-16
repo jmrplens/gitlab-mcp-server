@@ -409,7 +409,8 @@ type selfAnswer struct {
 
 // selfGrantServer answers the self route with each of its answers in turn,
 // the last one from then on, the read by id with grantBody and the version
-// read with version, and counts the three.
+// read with version (an empty one with a 500, an instance that did not
+// answer), and counts the three.
 type selfGrantServer struct {
 	url      string
 	selves   atomic.Int64
@@ -436,6 +437,10 @@ func newSelfGrantServer(t *testing.T, version string, answers ...selfAnswer) *se
 	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		stand.versions.Add(1)
 		w.Header().Set("Content-Type", "application/json")
+		if version == "" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		_, _ = io.WriteString(w, `{"version":"`+version+`"}`)
 	})
 	srv := httptest.NewServer(mux)
@@ -566,15 +571,11 @@ func TestDetectToken_ASelfAnswerItCannotDescribe_IsNothingKnown(t *testing.T) {
 
 // TestClient_ReadFineGrainedAt_TheSelfAnswersGrant_IsReadAtTheVersionGiven
 // verifies a stdio start, whose version is already read, uses the grant the
-// self answer carried without another request, and that an empty version
-// leaves nothing to judge it at.
+// self answer carried without another request.
 func TestClient_ReadFineGrainedAt_TheSelfAnswersGrant_IsReadAtTheVersionGiven(t *testing.T) {
 	stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, selfWithGrant})
 	client := grantClient(t, stand.url)
 	facts := DetectToken(t.Context(), client.GL())
-	if got := client.ReadFineGrainedAt(t.Context(), facts, ""); got.Fallback != finegrained.FallbackVersionUnreadable {
-		t.Errorf("reading at no version = %+v, want the version unreadable", got)
-	}
 	got := client.ReadFineGrainedAt(t.Context(), facts, "19.4.0")
 	if got.Fallback != finegrained.FallbackNone || got.Version != "19.4.0" || len(got.Grant.Scopes) != 1 {
 		t.Errorf("reading at a version = %+v, want the grant the self answer carried", got)
@@ -602,6 +603,59 @@ func TestClient_ReadFineGrained_TheSelfAnswersGrant_IsUsedOnce(t *testing.T) {
 	}
 	if stand.selves.Load() != 2 || stand.grants.Load() != 0 {
 		t.Errorf("two readings made %s; want a second self read and none by id", stand.requests())
+	}
+}
+
+// TestClient_ReadFineGrained_AVersionThatLeavesNothingToJudgeAt_LetsTheCarriedGrantGo
+// verifies a reading that stops before the grant, because the instance did
+// not answer the version or answered none this server can read (a token
+// without Metadata: Read), still lets go of the grant the self answer
+// carried: the facts an entry keeps for its life would otherwise hold it for
+// as long as the version stays out of reach, which for a refusal of Metadata:
+// Read is the token's whole life. The next reading that has a version asks
+// the self route again.
+func TestClient_ReadFineGrained_AVersionThatLeavesNothingToJudgeAt_LetsTheCarriedGrantGo(t *testing.T) {
+	cases := []struct {
+		name    string
+		version string
+		read    func(*Client, context.Context, TokenFacts) finegrained.Reading
+		want    finegrained.FallbackReason
+	}{
+		{
+			name: "the version not answered",
+			read: func(c *Client, ctx context.Context, facts TokenFacts) finegrained.Reading {
+				return c.ReadFineGrained(ctx, facts)
+			},
+			want: finegrained.FallbackVersionUnanswered,
+		},
+		{
+			name:    "an empty version already read",
+			version: "19.4.1-ee",
+			read: func(c *Client, ctx context.Context, facts TokenFacts) finegrained.Reading {
+				return c.ReadFineGrainedAt(ctx, facts, "")
+			},
+			want: finegrained.FallbackVersionUnreadable,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newSelfGrantServer(t, tc.version, selfAnswer{http.StatusOK, selfWithGrant})
+			client := grantClient(t, stand.url)
+			facts := DetectToken(t.Context(), client.GL())
+			if got := tc.read(client, t.Context(), facts); got.Fallback != tc.want || len(got.Grant.Scopes) != 0 {
+				t.Errorf("reading = %+v, want %q and no grant", got, tc.want)
+			}
+			if facts.selfGrant == nil || facts.selfGrant.answer.Load() != nil {
+				t.Errorf("the facts still hold the grant the self answer carried after a reading with no version")
+			}
+			next := client.ReadFineGrainedAt(t.Context(), facts, "19.4.0")
+			if next.Fallback != finegrained.FallbackNone || len(next.Grant.Scopes) != 1 {
+				t.Errorf("next reading = %+v, want the grant", next)
+			}
+			if stand.selves.Load() != 2 || stand.grants.Load() != 0 {
+				t.Errorf("the readings made %s; want a second self read and none by id", stand.requests())
+			}
+		})
 	}
 }
 
