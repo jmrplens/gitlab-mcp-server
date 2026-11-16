@@ -297,6 +297,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		gl.WithBaseURL(cfg.GitLabURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
+	options = append(options, requestOptions()...)
 	options = append(options, retryOptions()...)
 	if cfg.DisableRetries {
 		options = append(options, gl.WithoutRetries())
@@ -359,6 +360,7 @@ func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, r
 		gl.WithBaseURL(baseURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
+	options = append(options, requestOptions()...)
 	options = append(options, retryOptionsWithCeiling(retryCeiling)...)
 	if disableRetries {
 		options = append(options, gl.WithoutRetries())
@@ -405,6 +407,7 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 		gl.WithBaseURL(baseURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
+	options = append(options, requestOptions()...)
 	options = append(options, retryOptions()...)
 
 	inner, err := gl.NewAuthSourceClient(

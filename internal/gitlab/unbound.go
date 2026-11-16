@@ -42,7 +42,11 @@ func NewUnboundClient(baseURL string) *Client {
 	c.maxResponse.Store(DefaultMaxResponseBytes)
 	httpClient := &http.Client{Transport: unboundTransport{}}
 	c.healthClient = httpClient
-	inner, err := gl.NewClient("", gl.WithBaseURL(baseURL), gl.WithHTTPClient(httpClient), gl.WithoutRetries())
+	// Built with the request options of every other client, so a handler run
+	// through the shared copy builds the request a bound one would before the
+	// transport refuses it.
+	options := append([]gl.ClientOptionFunc{gl.WithBaseURL(baseURL), gl.WithHTTPClient(httpClient), gl.WithoutRetries()}, requestOptions()...)
+	inner, err := gl.NewClient("", options...)
 	if err != nil {
 		panic(fmt.Sprintf("gitlab: unbound client for %q: %v", baseURL, err))
 	}

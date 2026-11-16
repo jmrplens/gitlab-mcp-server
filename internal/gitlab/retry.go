@@ -58,6 +58,20 @@ func retryOptions() []gl.ClientOptionFunc {
 	return retryOptionsWithCeiling(maxRetryBackoff)
 }
 
+// requestOptions is how every GitLab client in this package builds a request
+// body, applied beside [retryOptions] by each constructor.
+//
+// [gl.WithNilOptionsOmitted] makes a nil options pointer mean no options. A
+// client-go method that delegates to its WithOptions sibling with a nil
+// pointer, as Jobs.CancelJob and DraftNotes.PublishAllDraftNotes do, otherwise
+// sends a POST, PUT or PATCH whose body is the four bytes null (issue 1773).
+// The handlers here pass options of their own wherever GitLab reads them, so
+// nothing they send changes; the option keeps the next call that does not from
+// sending null, and client-go 4.0 makes it the default.
+func requestOptions() []gl.ClientOptionFunc {
+	return []gl.ClientOptionFunc{gl.WithNilOptionsOmitted()}
+}
+
 // retryOptionsWithCeiling is [retryOptions] with the wait ceiling given rather
 // than read from [maxRetryBackoff].
 //
