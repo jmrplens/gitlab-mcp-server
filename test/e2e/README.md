@@ -2,11 +2,12 @@
 
 E2E tests validate the full MCP server against a real GitLab instance by driving the real `cmd/server` binary. Build tag: `e2e`.
 
-There are five modules, answering different questions:
+There are six modules, answering different questions:
 
 | Module               | Build tag      | Needs GitLab | What it covers                                                                                                                                |
 | -------------------- | -------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test/e2e/gitlab`    | `e2e`          | yes          | Tool behaviour: the real binary over stdio, one package per runtime (`common`, `ce`, `ee`), coverage recorded from what the server dispatched |
+| `test/e2e/docs`      | `e2e`          | yes (Docker) | That the shell blocks the documentation marks with `run` work as a reader types them, in a container against the Docker GitLab                |
 | `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, and the documented proxies and balancers (Docker)              |
 | `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration                                                          |
 | `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                                                                          |
@@ -73,6 +74,26 @@ It also holds the worked example under `examples/telemetry/` to the server it do
 It exists because every other telemetry test in this repository is graded by code we wrote. The in-process receiver in `test/e2e/http` answers `200` to whatever it is handed and stores the bytes, which is right for the two questions it asks (was the collector credential sent, did anything private leak) and is no evidence that the export is well formed. A malformed protobuf, a resource missing an attribute a backend requires, or a metric whose unit contradicts its name all pass a stub and all ship telemetry an operator cannot use. So this module asserts acceptance and shape, and deliberately repeats none of the credential or privacy assertions.
 
 Unlike the two transport modules it is **not** in the push-triggered CI jobs, because it pulls a container image. It belongs with the Docker-mode targets.
+
+## Documentation runner (`test/e2e/docs`)
+
+```bash
+make test-e2e-docs      # ephemeral GitLab CE, then every page's marked blocks; Docker and Internet, never on CI
+```
+
+A page marks a shell block a reader runs with a fence option: `run` for a command that ends, held to a zero exit status, and `run=background` for one that keeps running, a server, left running while the page's later blocks run. Both go on a `bash` or `sh` fence and on its Spanish twin's, which `internal/testutil/docblocks` checks (`Page.RunBlocks`) as `site/scripts/check-i18n-code.mjs` does, and Expressive Code passes over them, so the rendered page does not change:
+
+````markdown
+```bash run=background
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 --gitlab-url=https://gitlab.example.com
+```
+````
+
+The target boots GitLab CE through `run-docker-e2e.sh` (not a complete run: no skip gate, no Bitbucket fixture, no calls recorded), builds a reader image, and gives every page that marks a block a reader container of its own on the GitLab's Docker network: Debian with bash, curl, jq, sudo and openssl, the tree's binary on the `PATH` and, in the home directory, the release asset a reader downloads (`gitlab-mcp-server-linux-<arch>`, not executable). What a page takes as given is there too: a certificate and key for `mcp.example.com` at `/etc/ssl/mcp.crt` and `/etc/ssl/mcp.key`, and `/run/gitlab-mcp` for a socket. The blocks run in page order, each with `bash -e` from a file of its own, and the first that fails ends its page. Three substitutions are the only edits: `%%VERSION%%` becomes the `VERSION` file's release, as the site renders it; `https://gitlab.com` and `https://gitlab.example.com` become the GitLab as the reader reaches it; `glpat-your-token` and `glpat-xxxx…` become the e2e user's token, which no report prints. A background block runs until the page's next background block or the page's end, and must still be running at either; the first `run` block after it is its readiness probe, retried for up to a minute. The reader is named in the log with the `docker rm -f` that removes it if the run is interrupted.
+
+`GITLAB_IMAGE` pins the release as it does for `make test-e2e-ce`. Running the package any other way (`go test -tags e2e ./test/e2e/docs/`) skips the live run and runs the negative controls: planted pages run in a local bash, where a command that fails, one that hangs, a server that exits on its flags or stops later, and a server that never answers must each fail with the page and the line, and nothing may be left running. CI's compile job runs them, with the check that every marked page reads with its twin.
+
+What a page cannot run in a container (a client's registration command, a prompt that reads a token from the terminal, `systemctl`, `launchctl`, a `docker run` of the image) stays unmarked, and so does a block that only makes sense after a step the page describes in prose rather than prints. An `--auth-mode=oauth` start stays unmarked too: the server refuses it against a plain-HTTP instance off loopback, and the e2e GitLab is one.
 
 ## Rebuilt suite (`test/e2e/gitlab`)
 
