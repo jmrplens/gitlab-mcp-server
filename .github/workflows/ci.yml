@@ -640,6 +640,12 @@ jobs:
         run: go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...
       - name: Run the E2E harness tests
         run: go test -tags e2e -count=1 ./test/e2e/internal/...
+      # The documentation runner's negative controls and the read of every
+      # page's run marks need neither GitLab nor Docker, so they run here. Its
+      # live run boots GitLab and stays the make target test-e2e-docs, never
+      # run on CI: without E2E_MODE=docker it skips.
+      - name: Run the docs runner's controls
+        run: go test -tags e2e -count=1 ./test/e2e/docs/
       # The push-time gate over the rebuilt suite: every typed action id names
       # a catalog action, sits in a package that can run it, and an Ultimate
       # id in ee declares its tier. With the ratchet on it also holds the

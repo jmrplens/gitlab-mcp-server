@@ -91,6 +91,7 @@ func TestMakeRunTargets_ToolUnderAPathWithASpace_RunAsOnePath(t *testing.T) {
 		{goal: "test-e2e-gitlab", want: gotestsum},
 		{goal: "test-e2e-ce", want: gotestsum},
 		{goal: "test-e2e-ee", want: gotestsum},
+		{goal: "test-e2e-docs", want: gotestsum},
 		{goal: "modeleval-ce", want: gotestsum},
 		{goal: "modeleval-ee", want: gotestsum},
 		{goal: "docs-local-go", want: pkgsite},

@@ -522,8 +522,8 @@ func TestPageRunBlocks_MarkedBlocks_AreReturnedInPageOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if got, err := page.RunBlocks(); err != nil || got != nil {
-		t.Errorf("RunBlocks on a page that marks nothing = %#v, %v; want nil, nil", got, err)
+	if none, noneErr := page.RunBlocks(); noneErr != nil || none != nil {
+		t.Errorf("RunBlocks on a page that marks nothing = %#v, %v; want nil, nil", none, noneErr)
 	}
 }
 

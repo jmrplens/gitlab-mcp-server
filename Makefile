@@ -3,7 +3,7 @@
 
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
 	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-conditions-tree coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-cloudflare-tunnel test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
-	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
+	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab test-e2e-docs e2e-clean-orphans \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token gen-orbit-record check-orbit-record \
 	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
@@ -622,6 +622,21 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	E2E_COVERPKG=$(E2E_SUPPORT_COVERPKG) \
 	GOTESTSUM="$(GOTESTSUM)" \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
+
+## test-e2e-docs: start ephemeral GitLab CE and run the shell blocks the documentation marks with run or run=background, each page in a reader container of its own, tear down (Docker and Internet; never on CI).
+# The runner and its negative controls are test/e2e/docs (issue 1111). It is
+# not a complete run: it names no action, records no call and measures no
+# coverage, so it asks for none of that (E2E_GATE_SKIPS=false) and leaves the
+# Bitbucket fixture out, a second JVM no page uses. The release the pages are
+# checked against is the image's: GITLAB_IMAGE pins one, as it does for
+# test-e2e-ce.
+test-e2e-docs: ensure-gotestsum e2e-server-binary
+	E2E_GATE_SKIPS=false E2E_BITBUCKET=false \
+	E2E_SERVER_BINARY="$(CURDIR)/$(E2E_SERVER_BINARY)" \
+	E2E_REPORT_DIR="$(CURDIR)/$(E2E_REPORT_DIR)" \
+	E2E_REPORT_NAME=e2e-docs \
+	GOTESTSUM="$(GOTESTSUM)" \
+	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 1800s ./test/e2e/docs/
 
 ## test-e2e-docker-enterprise: the licensed Docker run under its older name; an alias of test-e2e-ee.
 # The files it used to run, the Enterprise half of the retired suite behind a
