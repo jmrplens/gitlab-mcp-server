@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -263,6 +265,89 @@ func TestRunPage_ReaderSteps_Pass(t *testing.T) {
 			defer cancel()
 			if err := r.runPage(ctx, "guide.mdx", markedBlocks(t, tt.page)); err != nil {
 				t.Fatalf("runPage: %v", err)
+			}
+			assertNothingRunning(t, shell)
+		})
+	}
+}
+
+// TestRunPage_CurlAnswer_IsJudgedByItsStatus pins that a block's curl fails
+// on an HTTP error answer, as the reader's curl configuration makes it: curl
+// ends with status 0 on any answer it receives, so without it a renamed route,
+// a refused token or a draining server would pass a block whose page printed
+// only the request, and a probe would take a 503 for a server that is up.
+func TestRunPage_CurlAnswer_IsJudgedByItsStatus(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skipf("the control runs curl, as the reader's blocks do: %v", err)
+	}
+
+	answers := map[string]int{"/health": http.StatusOK, "/refused": http.StatusUnauthorized, "/draining": http.StatusServiceUnavailable}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		code, ok := answers[r.URL.Path]
+		if !ok {
+			code = http.StatusNotFound
+		}
+		w.WriteHeader(code)
+		_, _ = fmt.Fprintf(w, "answered %d\n", code)
+	}))
+	t.Cleanup(srv.Close)
+
+	bg := docblocks.RunBackground
+	fg := docblocks.RunForeground
+	tests := []struct {
+		name string
+		page string
+		// want is nil for a block that must pass.
+		want error
+		says []string
+	}{
+		{
+			name: "a route that answers 200 passes",
+			page: fence(fg, "curl -s "+srv.URL+"/health"),
+		},
+		{
+			name: "the status printed on its own passes on a 200",
+			page: fence(fg, `curl -s -o /dev/null -w "%{http_code}" `+srv.URL+"/health"),
+		},
+		{
+			name: "a renamed route, answered 404",
+			page: fence(fg, "curl -s "+srv.URL+"/renamed"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "answered 404", "exit status 22"},
+		},
+		{
+			name: "a refused token, its status printed on its own",
+			page: fence(fg, `curl -s -o /dev/null -w "%{http_code}" `+srv.URL+"/refused"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "401", "exit status 22"},
+		},
+		{
+			name: "a probe answered 503 until the window closes",
+			page: fence(bg, "sleep 30") + fence(fg, "curl -s "+srv.URL+"/draining"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:5", "answered 503", "readiness"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r, shell := controlRunner(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			err := r.runPage(ctx, "guide.mdx", markedBlocks(t, tt.page))
+			if tt.want == nil {
+				if err != nil {
+					t.Errorf("runPage: %v", err)
+				}
+			} else if !errors.Is(err, tt.want) {
+				t.Errorf("runPage = %v; want an error wrapping %q", err, tt.want)
+			} else {
+				for _, say := range tt.says {
+					if !strings.Contains(err.Error(), say) {
+						t.Errorf("the report does not say %q:\n%v", say, err)
+					}
+				}
 			}
 			assertNothingRunning(t, shell)
 		})
