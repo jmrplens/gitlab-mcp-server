@@ -8,6 +8,7 @@ package gitlab
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -387,5 +388,261 @@ func TestReadGrant_ACancelledRead_IsNoAnswer(t *testing.T) {
 	cancel()
 	if _, _, err := ReadGrant(ctx, grantClient(t, stand.url).GL(), 9); !errors.Is(err, context.Canceled) {
 		t.Errorf("ReadGrant error = %v, want the cancellation", err)
+	}
+}
+
+// selfWithoutGrant is a fine-grained token's answer to GET
+// /personal_access_tokens/self before GitLab 19.5, which did not present the
+// token's grant there.
+const selfWithoutGrant = `{"id":9,"scopes":["granular"],"active":true}`
+
+// selfWithGrant is the same answer from GitLab 19.5 on, carrying the grant
+// grantBody carries.
+const selfWithGrant = `{"id":9,"scopes":["granular"],"active":true,"granular":true,` +
+	`"granular_scopes":[{"access":"selected_memberships","permissions":["project_read"],"project_id":7}]}`
+
+// selfAnswer is one answer the stand-in gives the self route.
+type selfAnswer struct {
+	status int
+	body   string
+}
+
+// selfGrantServer answers the self route with each of its answers in turn,
+// the last one from then on, the read by id with grantBody and the version
+// read with version, and counts the three.
+type selfGrantServer struct {
+	url      string
+	selves   atomic.Int64
+	grants   atomic.Int64
+	versions atomic.Int64
+}
+
+// newSelfGrantServer starts the stand-in for one test.
+func newSelfGrantServer(t *testing.T, version string, answers ...selfAnswer) *selfGrantServer {
+	t.Helper()
+	stand := &selfGrantServer{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		answer := answers[min(int(stand.selves.Add(1)), len(answers))-1]
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(answer.status)
+		_, _ = io.WriteString(w, answer.body)
+	})
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/9", func(w http.ResponseWriter, _ *http.Request) {
+		stand.grants.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, grantBody)
+	})
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		stand.versions.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"version":"`+version+`"}`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	stand.url = srv.URL
+	return stand
+}
+
+// requests reports the three counts as one line for a failure message.
+func (s *selfGrantServer) requests() string {
+	return fmt.Sprintf("%d self, %d by id and %d version reads", s.selves.Load(), s.grants.Load(), s.versions.Load())
+}
+
+// TestClient_ReadFineGrained_TheSelfAnswersGrant_IsReadWithOneTokenRequest
+// verifies what a fine-grained session's start costs once GitLab presents the
+// grant on the self route (19.5 and later): the description and the grant
+// come from one request, and GET /personal_access_tokens/:id is never asked,
+// whatever version the instance reports, since the answer's own key says the
+// grant is there. Without the key, as before 19.5, the grant is read by id as
+// it always was, and a classic token's answer reads no grant at all, even one
+// carrying the key.
+func TestClient_ReadFineGrained_TheSelfAnswersGrant_IsReadWithOneTokenRequest(t *testing.T) {
+	classic := `{"id":7,"scopes":["api"],"active":true,"granular_scopes":[]}`
+	cases := []struct {
+		name, body string
+		fineGrained bool
+		want        finegrained.FallbackReason
+		scopes      int
+		byID        int64
+		versions    int64
+	}{
+		{name: "carrying the grant", body: selfWithGrant, fineGrained: true, scopes: 1, versions: 1},
+		{name: "without the grant", body: selfWithoutGrant, fineGrained: true, scopes: 1, byID: 1, versions: 1},
+		{name: "a classic token", body: classic, want: finegrained.FallbackGrantUnreadable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, tc.body})
+			client := grantClient(t, stand.url)
+			facts := DetectToken(t.Context(), client.GL())
+			if facts.FineGrained != tc.fineGrained || facts.GrantReadable != tc.fineGrained || facts.KindUnknown {
+				t.Fatalf("DetectToken() = %+v, want fine-grained %v with its grant readable as much", facts, tc.fineGrained)
+			}
+			reading := client.ReadFineGrained(t.Context(), facts)
+			if reading.Fallback != tc.want || len(reading.Grant.Scopes) != tc.scopes {
+				t.Errorf("reading = %+v, want %q with %d scopes", reading, tc.want, tc.scopes)
+			}
+			if stand.selves.Load() != 1 || stand.grants.Load() != tc.byID || stand.versions.Load() != tc.versions {
+				t.Errorf("the start made %s; want 1 self, %d by id and %d version reads", stand.requests(), tc.byID, tc.versions)
+			}
+		})
+	}
+}
+
+// TestClient_ReadFineGrained_ASelfAnswerItCannotEvaluate_SaysWhyAndKnowsTheKind
+// verifies the self answer is held to the bounds and the shapes the read by
+// id is held to (register row RQB-011), and that an answer whose grant cannot
+// be evaluated still describes a fine-grained token: one past GrantMaxBytes is
+// a grant too large, not a token of unknown kind, and a grant whose shape the
+// decoder or the evaluation does not know, or whose body does not decode
+// whole, is one of unknown shape. None of them is asked for by id, and each
+// still judges at the version the instance reports.
+func TestClient_ReadFineGrained_ASelfAnswerItCannotEvaluate_SaysWhyAndKnowsTheKind(t *testing.T) {
+	huge := `{"id":9,"scopes":["granular"],"granular":true,"granular_scopes":[{"access":"user","permissions":["` +
+		strings.Repeat("a", int(GrantMaxBytes)) + `"]}]}`
+	cases := []struct {
+		name, body string
+		id         int64
+		want       finegrained.FallbackReason
+	}{
+		{name: "past the bound", body: huge, want: finegrained.FallbackGrantTooLarge},
+		{name: "a numeric access", body: `{"id":9,"scopes":["granular"],"granular_scopes":[{"access":1}]}`, id: 9, want: finegrained.FallbackGrantShape},
+		{name: "the list as an object", body: `{"granular_scopes":{"access":"user"},"id":9,"scopes":["granular"]}`, id: 9, want: finegrained.FallbackGrantShape},
+		{name: "a null scope", body: `{"id":9,"scopes":["granular"],"granular":true,"granular_scopes":[null]}`, id: 9, want: finegrained.FallbackGrantShape},
+		{name: "a token saying it is not fine-grained", body: `{"id":9,"scopes":["granular"],"granular":false,"granular_scopes":[]}`, id: 9, want: finegrained.FallbackGrantShape},
+		{name: "trailing bytes", body: selfWithGrant + ` trailing`, id: 9, want: finegrained.FallbackGrantShape},
+		{name: "no id", body: `{"scopes":["granular"],"granular":true,"granular_scopes":[]}`, want: finegrained.FallbackNone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, tc.body})
+			client := grantClient(t, stand.url)
+			facts := DetectToken(t.Context(), client.GL())
+			want := TokenFacts{Scopes: []string{ScopeGranular}, ID: tc.id, FineGrained: true, GrantReadable: true}
+			if !sameFacts(facts, want) {
+				t.Errorf("DetectToken() = %+v, want %+v", facts, want)
+			}
+			reading := client.ReadFineGrained(t.Context(), facts)
+			if reading.Fallback != tc.want || reading.Version != "19.4.1-ee" {
+				t.Errorf("reading = %+v, want %q at the version read", reading, tc.want)
+			}
+			if stand.selves.Load() != 1 || stand.grants.Load() != 0 {
+				t.Errorf("the start made %s; want one self read and none by id", stand.requests())
+			}
+		})
+	}
+}
+
+// TestDetectToken_ASelfAnswerItCannotDescribe_IsNothingKnown verifies the self
+// answers that say nothing of the token are read as nothing known, never as a
+// token of either kind: a body of null, which client-go decodes into no token
+// at all, and a grant of the wrong type in an answer whose description does
+// not decode either. A classic token whose answer carries a grant of the wrong
+// type is still the classic token its scopes spell.
+func TestDetectToken_ASelfAnswerItCannotDescribe_IsNothingKnown(t *testing.T) {
+	cases := []struct {
+		name, body string
+		want       TokenFacts
+	}{
+		{name: "a null body", body: `null`, want: TokenFacts{KindUnknown: true}},
+		{name: "an id of the wrong type", body: `{"granular_scopes":{},"id":"9","scopes":["granular"]}`, want: TokenFacts{KindUnknown: true}},
+		{name: "a classic token", body: `{"granular_scopes":{},"id":7,"scopes":["api"]}`, want: TokenFacts{Scopes: []string{"api"}, ID: 7}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, tc.body})
+			client := grantClient(t, stand.url)
+			facts := DetectToken(t.Context(), client.GL())
+			if !sameFacts(facts, tc.want) {
+				t.Errorf("DetectToken() = %+v, want %+v", facts, tc.want)
+			}
+			if reading := client.ReadFineGrained(t.Context(), facts); reading.Fallback != finegrained.FallbackGrantUnreadable {
+				t.Errorf("reading = %+v, want the grant unreadable and nothing asked", reading)
+			}
+		})
+	}
+}
+
+// TestClient_ReadFineGrainedAt_TheSelfAnswersGrant_IsReadAtTheVersionGiven
+// verifies a stdio start, whose version is already read, uses the grant the
+// self answer carried without another request, and that an empty version
+// leaves nothing to judge it at.
+func TestClient_ReadFineGrainedAt_TheSelfAnswersGrant_IsReadAtTheVersionGiven(t *testing.T) {
+	stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, selfWithGrant})
+	client := grantClient(t, stand.url)
+	facts := DetectToken(t.Context(), client.GL())
+	if got := client.ReadFineGrainedAt(t.Context(), facts, ""); got.Fallback != finegrained.FallbackVersionUnreadable {
+		t.Errorf("reading at no version = %+v, want the version unreadable", got)
+	}
+	got := client.ReadFineGrainedAt(t.Context(), facts, "19.4.0")
+	if got.Fallback != finegrained.FallbackNone || got.Version != "19.4.0" || len(got.Grant.Scopes) != 1 {
+		t.Errorf("reading at a version = %+v, want the grant the self answer carried", got)
+	}
+	if stand.selves.Load() != 1 || stand.grants.Load()+stand.versions.Load() != 0 {
+		t.Errorf("the reads made %s; want the one self read", stand.requests())
+	}
+}
+
+// TestClient_ReadFineGrained_TheSelfAnswersGrant_IsUsedOnce verifies the grant
+// a self answer carried is handed to one reading and then let go, so the
+// facts an entry keeps for its life do not hold a grant whose size is its
+// minter's to choose: a second reading of the same facts asks the self route
+// again rather than reusing it.
+func TestClient_ReadFineGrained_TheSelfAnswersGrant_IsUsedOnce(t *testing.T) {
+	stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, selfWithGrant})
+	client := grantClient(t, stand.url)
+	facts := DetectToken(t.Context(), client.GL())
+	copied := facts
+	first := client.ReadFineGrained(t.Context(), facts)
+	second := client.ReadFineGrained(t.Context(), copied)
+	if first.Fallback != finegrained.FallbackNone || second.Fallback != finegrained.FallbackNone ||
+		len(first.Grant.Scopes) != 1 || len(second.Grant.Scopes) != 1 {
+		t.Errorf("readings = %+v and %+v, want the grant both times", first, second)
+	}
+	if stand.selves.Load() != 2 || stand.grants.Load() != 0 {
+		t.Errorf("two readings made %s; want a second self read and none by id", stand.requests())
+	}
+}
+
+// TestClient_RefreshAuthority_ReadsAgainTheRouteTheBuildRead verifies a
+// revalidation reads one route a round, the one the build read the grant
+// from: the self route when its answer carried the grant, so a session on an
+// instance that presents it there never asks by id, and each answer the
+// re-read can meet is read as the read by id reads it: refused, too large or
+// not answered keeps the authority with the reason.
+func TestClient_RefreshAuthority_ReadsAgainTheRouteTheBuildRead(t *testing.T) {
+	table := refreshTable()
+	huge := `{"id":9,"scopes":["granular"],"granular":true,"granular_scopes":[{"access":"user","permissions":["` +
+		strings.Repeat("a", int(GrantMaxBytes)) + `"]}]}`
+	cases := []struct {
+		name   string
+		reread selfAnswer
+		want     finegrained.FallbackReason
+		replaced bool
+	}{
+		{name: "answered", reread: selfAnswer{http.StatusOK, selfWithGrant}, replaced: true},
+		{name: "refused", reread: selfAnswer{http.StatusForbidden, `{"message":"403 Forbidden"}`}, want: finegrained.FallbackGrantUnreadable},
+		{name: "too large", reread: selfAnswer{http.StatusOK, huge}, want: finegrained.FallbackGrantTooLarge},
+		{name: "of unknown shape", reread: selfAnswer{http.StatusOK, `{"id":9,"granular_scopes":{}}`}, want: finegrained.FallbackGrantShape},
+		{name: "not answered", reread: selfAnswer{http.StatusServiceUnavailable, `{}`}, want: finegrained.FallbackGrantUnanswered},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newSelfGrantServer(t, "19.4.1-ee", selfAnswer{http.StatusOK, selfWithGrant}, tc.reread)
+			client := grantClient(t, stand.url)
+			facts := DetectToken(t.Context(), client.GL())
+			current := finegrained.Judge(table, client.ReadFineGrained(t.Context(), facts))
+			client.SetAuthority(current)
+			moved, reason := client.RefreshAuthority(t.Context(), facts, table)
+			replaced := client.Authority() != current
+			if moved != nil || reason != string(tc.want) || replaced != tc.replaced || !client.Authority().Decide("project.get").Listed {
+				t.Errorf("RefreshAuthority = %v, %q, replaced %v; want %q, replaced %v, and project.get listed either way",
+					moved, reason, replaced, tc.want, tc.replaced)
+			}
+			if stand.selves.Load() != 2 || stand.grants.Load() != 0 {
+				t.Errorf("the build and one round made %s; want two self reads and none by id", stand.requests())
+			}
+		})
 	}
 }
