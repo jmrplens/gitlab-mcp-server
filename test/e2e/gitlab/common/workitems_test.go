@@ -237,8 +237,14 @@ func workItemRemovals(e *harness.Env, surface harness.Surface, project fixture.P
 	}
 	item := withParams(params, map[string]any{"work_item_iid": child.WorkItem.IID})
 
+	// Taking a work item out of its parent is asked about, so the first call
+	// is refused with the question and the second carries the confirmation a
+	// caller sends once the user approves.
+	removal := map[string]any{"parent_id": 0, "milestone_id": 0, "due_date": ""}
+	unconfirmed := harness.ExpectToolError(s, actionWorkItemUpdate, withParams(item, removal), "confirm=true")
+	assertMentions(e, "the unconfirmed removal of the Task's parent", unconfirmed, "out of its parent")
 	cleared := harness.Do[workitems.GetOutput](s, actionWorkItemUpdate,
-		withParams(item, map[string]any{"parent_id": 0, "milestone_id": 0, "due_date": ""}))
+		withParams(item, map[string]any{"parent_id": 0, "milestone_id": 0, "due_date": "", "confirm": true}))
 	assertWorkItemCleared(e, "work_item_update", cleared.WorkItem)
 	assertWorkItemCleared(e, "work_item_get", harness.Do[workitems.GetOutput](s, actionWorkItemGet, item).WorkItem)
 }
