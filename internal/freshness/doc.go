@@ -33,6 +33,7 @@
 //   - cmd/gen_lhm_manifest
 //   - cmd/gen_llms
 //   - cmd/gen_model_corpus
+//   - cmd/gen_tool_reference
 //
 // The list is a claim about the tree rather than a note, so
 // TestDoc_NamesEveryPackageThatDefers holds it both ways: it named four while
