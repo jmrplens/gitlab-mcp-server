@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -39,7 +40,9 @@ const (
 // the given id, which must be the token the client authenticates with
 // ([DetectToken] read it from the self endpoint).
 //
-// The self endpoint does not present the grant, so it is read from GET
+// It is the read for an instance whose self endpoint does not present the
+// grant, which GitLab did before 19.5; from 19.5 on the self answer carries
+// it and [DetectToken] keeps it, so this is not asked. It reads GET
 // /personal_access_tokens/:id under [GrantMaxBytes]: the granular scopes from
 // what client-go decodes, and the granular flag, which client-go does not
 // model, from the captured response (ADR-0021), and evaluated with at most
@@ -56,8 +59,28 @@ const (
 //
 // Nothing of the grant is logged here, and the body is dropped once decoded.
 func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Grant, finegrained.FallbackReason, error) {
+	return readGrant(ctx, func(ctx context.Context) (*gl.PersonalAccessToken, error) {
+		token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessTokenByID(id, gl.WithContext(ctx))
+		return token, err
+	})
+}
+
+// readSelfGrant is [ReadGrant] through the self endpoint, for a token whose
+// self answer carried its grant: what a revalidation reads again, with the
+// same bounds and the same reading of each answer.
+func readSelfGrant(ctx context.Context, client *gl.Client) (finegrained.Grant, finegrained.FallbackReason, error) {
+	return readGrant(ctx, func(ctx context.Context) (*gl.PersonalAccessToken, error) {
+		token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
+		return token, err
+	})
+}
+
+// readGrant makes the one request read under [GrantMaxBytes] with its
+// response captured, and reads the grant out of the answer as [ReadGrant]
+// says.
+func readGrant(ctx context.Context, read func(context.Context) (*gl.PersonalAccessToken, error)) (finegrained.Grant, finegrained.FallbackReason, error) {
 	ctx, capture := WithResponseCapture(WithResponseLimit(ctx, GrantMaxBytes))
-	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessTokenByID(id, gl.WithContext(ctx))
+	token, err := read(ctx)
 	// Separate ifs rather than a tagless switch, whose case expressions carry
 	// no statement counter for the mutation tool to measure.
 	if errors.Is(err, ErrResponseTooLarge) {
@@ -78,6 +101,13 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 	if err != nil {
 		return finegrained.Grant{}, finegrained.FallbackNone, fmt.Errorf("read the token's grant: %w", err)
 	}
+	answer := grantFromAnswer(capture, token)
+	return answer.grant, answer.reason, nil
+}
+
+// grantFromAnswer reads the grant out of an answer client-go decoded into
+// token, taking the granular flag from the captured copy of the same body.
+func grantFromAnswer(capture *ResponseCapture, token *gl.PersonalAccessToken) grantAnswer {
 	var extra grantExtra
 	// An answer that is not JSON as a whole (client-go's decoder stops at the
 	// first value and ignores what trails it) is a reason the authority names,
@@ -86,10 +116,49 @@ func ReadGrant(ctx context.Context, client *gl.Client, id int64) (finegrained.Gr
 	// no token at all, which is a shape the authority names, as above.
 	decoded := capture.Decode(&extra) == nil
 	if !decoded || token == nil {
-		return finegrained.Grant{}, finegrained.FallbackGrantShape, nil
+		return grantAnswer{reason: finegrained.FallbackGrantShape}
 	}
 	grant, reason := finegrained.GrantFromScopes(extra.Granular, grantScopes(token.GranularScopes), GrantMaxScopes)
-	return grant, reason, nil
+	return grantAnswer{grant: grant, reason: reason}
+}
+
+// grantAnswer is what one answer said of a token's grant: the grant, or why
+// it cannot be evaluated.
+type grantAnswer struct {
+	grant  finegrained.Grant
+	reason finegrained.FallbackReason
+}
+
+// selfGrant holds the grant a self answer carried until one reading takes it
+// ([Client.ReadFineGrained]), and says, for as long as the facts live, that
+// the self route is the one the grant is read from. The grant is handed out
+// once and let go: the facts an HTTP pool entry keeps for its life would
+// otherwise hold a grant of up to [GrantMaxBytes], whose size is its minter's
+// to choose, beside an authority sized by the table alone. A reading after
+// that, a revalidation's, asks the self route again.
+type selfGrant struct {
+	answer atomic.Pointer[grantAnswer]
+}
+
+// carry records on the facts the grant their self answer carried, which
+// makes it readable whether or not the answer named the token's id.
+func (f *TokenFacts) carry(answer grantAnswer) {
+	f.selfGrant = &selfGrant{}
+	f.selfGrant.answer.Store(&answer)
+	f.GrantReadable = true
+}
+
+// grant returns the token's grant: the one its self answer carried when no
+// reading has taken it yet, the self route's answer again when one has, and
+// GET /personal_access_tokens/:id's when the self answer did not carry it.
+func (c *Client) grant(ctx context.Context, facts TokenFacts) (finegrained.Grant, finegrained.FallbackReason, error) {
+	if facts.selfGrant == nil {
+		return ReadGrant(ctx, c.GL(), facts.ID)
+	}
+	if answer := facts.selfGrant.answer.Swap(nil); answer != nil {
+		return answer.grant, answer.reason, nil
+	}
+	return readSelfGrant(ctx, c.GL())
 }
 
 // isGrantShapeError reports whether err is client-go's JSON decoder refusing
@@ -147,8 +216,11 @@ func grantScopes(scopes []*gl.GranularScope) []finegrained.GrantScope {
 // A token that may not read its own grant is not asked anything, since no
 // answer could lift that: its reading says why and nothing else, and its
 // authority is phase A. Otherwise it asks GET /api/v4/version through the
-// health client, and then GET /personal_access_tokens/:id only when that left
-// a version to judge the grant at, since without one no grant is evaluated.
+// health client, and then reads the grant only when that left a version to
+// judge it at, since without one no grant is evaluated: from the self answer
+// [DetectToken] kept when it carried the grant, with no request, and from GET
+// /personal_access_tokens/:id when it did not. A carried grant is taken by the
+// first reading that gets that far, and a later one asks the self route again.
 // A version read the instance did not answer is
 // [finegrained.FallbackVersionUnanswered], and one it answered with no
 // version this server can read (a refusal of Metadata: Read, or a string that
@@ -181,7 +253,7 @@ func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, versio
 	if version == "" {
 		return finegrained.Reading{Fallback: finegrained.FallbackVersionUnreadable}
 	}
-	grant, reason, err := ReadGrant(ctx, c.GL(), facts.ID)
+	grant, reason, err := c.grant(ctx, facts)
 	if err != nil {
 		reason = finegrained.FallbackGrantUnanswered
 	}
@@ -208,6 +280,14 @@ func (c *Client) ReadFineGrainedAt(ctx context.Context, facts TokenFacts, versio
 // stdio timer does for the process, so an instance upgraded under a running
 // session moves it to that release's verdict without its credential being
 // rebuilt.
+//
+// Each round reads the grant from the one route the build read it from: the
+// self route when the build's self answer carried it, whose grant the build
+// took, and GET /personal_access_tokens/:id when it did not. It does not ask
+// both, nor move from one to the other on an upgrade: the grant is the same on
+// either, since nothing edits it after the token is created, the by-id read
+// keeps answering after an upgrade to 19.5, and a second request a round would
+// cost every pooled fine-grained token for nothing it could learn.
 func (c *Client) RefreshAuthority(ctx context.Context, facts TokenFacts, table *finegrained.Table) (moved *finegrained.Authority, kept string) {
 	if !facts.GrantReadable {
 		return nil, ""

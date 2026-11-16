@@ -31,7 +31,8 @@ type TokenFacts struct {
 	FineGrained bool
 	// GrantReadable is set when the token may read its own description, which
 	// is the permission (Personal Access Token: Read) its grant is read with
-	// too, and its id is known.
+	// too, and the grant can be asked for: the self answer carried it, or its
+	// id is known.
 	GrantReadable bool
 	// KindUnknown is set when nothing has said whether the token is a
 	// fine-grained one: the self endpoint gave neither a description nor
@@ -50,6 +51,13 @@ type TokenFacts struct {
 	// GitLab refuses to an OAuth token on every way ([config.ServerConfig]
 	// OAuthCredential, issue 1238).
 	OAuth bool
+	// selfGrant is set when the self answer carried the token's grant, as
+	// GitLab 19.5 and later present it there: the grant is then read from that
+	// answer, and from the self route again on a revalidation, never from GET
+	// /personal_access_tokens/:id ([Client.ReadFineGrained]). Nil keeps the
+	// read by id: an answer without the grant (an instance before 19.5), and
+	// facts built from elsewhere ([FactsFromScopes]), which carry no answer.
+	selfGrant *selfGrant
 }
 
 // DetectToken asks the GitLab personal access token self endpoint what the
@@ -65,6 +73,20 @@ type TokenFacts struct {
 // failure is reported as nothing known, its kind included
 // ([TokenFacts.KindUnknown]), which serves every tool, as a failed scope
 // detection always has (ADR-0018), until the kind is asked again.
+//
+// GitLab 19.5 and later answer a fine-grained token's request with its grant
+// as well, so the request is read under the grant read's bounds
+// ([GrantMaxBytes], [GrantMaxScopes]), and a fine-grained token's answer that
+// carries the grant keeps it for [Client.ReadFineGrained], which then asks
+// nothing more of the token. Whether it does is read from the answer, its
+// granular_scopes key, and not from the version, which GitLab.com reports as a
+// prerelease and a token without Metadata: Read is refused. An answer past
+// [GrantMaxBytes] is a fine-grained token's whose grant is too large: nothing
+// else in a token's description grows with what its minter chose, and reading
+// it as a token of unknown kind would serve it every action rather than the
+// phase A a grant too large leaves it in. An answer whose grant has a shape
+// the decoder refuses still names the token's scopes and id, and is a
+// fine-grained token's whose grant is of unknown shape.
 //
 // The log line names the scopes and whether the token is fine-grained, never
 // its id.
@@ -107,7 +129,18 @@ func RedetectToken(ctx context.Context, client *gl.Client) TokenFacts {
 // the error that left the token's kind unknown returned for the caller to log
 // at its own level.
 func detectToken(ctx context.Context, client *gl.Client) (TokenFacts, error) {
-	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
+	readCtx, capture := WithResponseCapture(WithResponseLimit(ctx, GrantMaxBytes))
+	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(readCtx))
+	if errors.Is(err, ErrResponseTooLarge) {
+		facts := TokenFacts{Scopes: []string{ScopeGranular}, FineGrained: true}
+		facts.carry(grantAnswer{reason: finegrained.FallbackGrantTooLarge})
+		slog.InfoContext(ctx, "the token is a fine-grained personal access token whose grant is too large to read",
+			"scopes", facts.Scopes)
+		return facts, nil
+	}
+	if isGrantShapeError(err) {
+		return describeAroundTheGrant(ctx, capture, err)
+	}
 	if err != nil {
 		if refusedAGrant(err) {
 			slog.InfoContext(ctx, "the token is a fine-grained personal access token that may not read its own grant",
@@ -116,8 +149,39 @@ func detectToken(ctx context.Context, client *gl.Client) (TokenFacts, error) {
 		}
 		return TokenFacts{KindUnknown: true}, err
 	}
+	if token == nil {
+		return TokenFacts{KindUnknown: true}, errNoTokenDescribed
+	}
 	facts := FactsFromScopes(token.Scopes, token.ID)
+	if facts.FineGrained && token.GranularScopes != nil {
+		facts.carry(grantFromAnswer(capture, token))
+	}
 	slog.InfoContext(ctx, "detected PAT scopes", "scopes", token.Scopes, "fine_grained", facts.FineGrained)
+	return facts, nil
+}
+
+// errNoTokenDescribed is a self answer of null, which client-go decodes
+// without an error into no token at all.
+var errNoTokenDescribed = errors.New("the personal access token self endpoint answered with no token")
+
+// describeAroundTheGrant reads the token's scopes and id from a self answer
+// whose grant client-go's decoder refused for a value of the wrong type, so
+// the token's kind stays known and only its grant is of unknown shape. An
+// answer whose description does not decode either is nothing known, with
+// client-go's error.
+func describeAroundTheGrant(ctx context.Context, capture *ResponseCapture, decodeErr error) (TokenFacts, error) {
+	var described struct {
+		ID     int64    `json:"id"`
+		Scopes []string `json:"scopes"`
+	}
+	if capture.Decode(&described) != nil {
+		return TokenFacts{KindUnknown: true}, decodeErr
+	}
+	facts := FactsFromScopes(described.Scopes, described.ID)
+	if facts.FineGrained {
+		facts.carry(grantAnswer{reason: finegrained.FallbackGrantShape})
+	}
+	slog.InfoContext(ctx, "detected PAT scopes", "scopes", described.Scopes, "fine_grained", facts.FineGrained)
 	return facts, nil
 }
 

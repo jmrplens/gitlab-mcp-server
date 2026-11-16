@@ -460,7 +460,7 @@ func (s *selfGrantServer) requests() string {
 func TestClient_ReadFineGrained_TheSelfAnswersGrant_IsReadWithOneTokenRequest(t *testing.T) {
 	classic := `{"id":7,"scopes":["api"],"active":true,"granular_scopes":[]}`
 	cases := []struct {
-		name, body string
+		name, body  string
 		fineGrained bool
 		want        finegrained.FallbackReason
 		scopes      int
@@ -616,8 +616,8 @@ func TestClient_RefreshAuthority_ReadsAgainTheRouteTheBuildRead(t *testing.T) {
 	huge := `{"id":9,"scopes":["granular"],"granular":true,"granular_scopes":[{"access":"user","permissions":["` +
 		strings.Repeat("a", int(GrantMaxBytes)) + `"]}]}`
 	cases := []struct {
-		name   string
-		reread selfAnswer
+		name     string
+		reread   selfAnswer
 		want     finegrained.FallbackReason
 		replaced bool
 	}{

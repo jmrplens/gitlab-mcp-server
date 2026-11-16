@@ -122,9 +122,15 @@ func requestDecisions() []Decision {
 		// or group id becomes a scope of its own, each scope may name every
 		// assignable permission, so the body GitLab answers the grant read
 		// with is bounded where it is read, below the client's ceiling of
-		// RQB-009, and its scopes are counted as they are decoded. A grant
-		// past either bound is not evaluated, and the session stays in phase
-		// A with the reason (AUT-008).
+		// RQB-009, and its scopes are counted as they are decoded. The grant
+		// is read from one of two answers, held to the same bounds: the self
+		// route's, which carries it from GitLab 19.5 on and which every
+		// token's description is therefore read under, and GET
+		// /personal_access_tokens/:id's, asked only when the self answer did
+		// not carry it (issue 1400). A grant past either bound is not
+		// evaluated, and the session stays in phase A with the reason
+		// (AUT-008); a self answer past the byte bound is a fine-grained
+		// token's whose grant is too large, never a token of unknown kind.
 		bound("RQB-011", "a fine-grained token's grant, as read",
 			enforce(pkgGitLab, "GrantMaxBytes"),
 			enforce(pkgGitLab, "GrantMaxScopes"),

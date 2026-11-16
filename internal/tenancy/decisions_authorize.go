@@ -319,8 +319,11 @@ func authorizeDecisions() []Decision {
 			// the stdio process on a timer at the same setting's interval and
 			// off with it too, which ADM-009 declares on stdio: stdio used to
 			// re-read at the default whatever the setting said, and issue 1171
-			// gave it the setting. What the timer costs is the two reads, once
-			// per interval, of the one token the process serves. A token whose kind
+			// gave it the setting. What the timer costs is the version read and
+			// one grant read, once per interval, of the one token the process
+			// serves; the grant read is the route the start read it from, the
+			// self route on an instance whose self answer carries it (issue
+			// 1400) and the read by id otherwise. A token whose kind
 			// nothing has told yet (the self endpoint did not answer, or the
 			// OAuth verifier's scopes are its assumption) is asked its kind on
 			// those same rounds instead, and on stdio once a degraded start
@@ -331,8 +334,9 @@ func authorizeDecisions() []Decision {
 			// GitLab would serve on a public project or group, permission by
 			// permission, is passed to GitLab even when the listing leaves the
 			// action out. The bounds on the read itself are a request bound,
-			// RQB-011, and the build's two reads take POL-006's probe slots,
-			// which that row declares. The call middleware's refusal carries
+			// RQB-011, and the build's reads take POL-006's probe slots,
+			// which that row declares: the version, and the grant by id when
+			// the self answer the token was described with did not carry it. The call middleware's refusal carries
 			// the resultType its revision requires, as AUT-007 says, so the row
 			// carries no F-20.
 			ID: "AUT-008", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
