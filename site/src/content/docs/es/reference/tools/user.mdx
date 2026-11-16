@@ -400,7 +400,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 
 ### `user.create_current_user_pat`
 
-> Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: [`user.me`](#userme), [`user.create_runner`](#usercreate_runner).
+> Create a personal access token for the current user, classic or fine-grained. Returns: token ID, the secret token, scopes or granular scopes, and expiry. See also: [`user.me`](#userme), [`user.create_runner`](#usercreate_runner).
 
 - **Meta-herramienta**: `gitlab_user`, acción `create_current_user_pat`
 - **Herramienta individual**: `gitlab_create_current_user_pat`
@@ -409,16 +409,19 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Personal Access Token: Create en usuario ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro     | Tipo       | Requerido | Descripción                        |
-| ------------- | ---------- | --------- | ---------------------------------- |
-| `name`        | `string`   | sí        | Name of the personal access token  |
-| `scopes`      | `string[]` | sí        | Array of scopes                    |
-| `description` | `string`   | no        | Description for the token          |
-| `expires_at`  | `string`   | no        | Token expiration date (YYYY-MM-DD) |
+| Parámetro         | Tipo                                    | Requerido | Descripción                                                                                                                            |
+| ----------------- | --------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | `string`                                | sí        | Name of the personal access token                                                                                                      |
+| `description`     | `string`                                | no        | Description for the token                                                                                                              |
+| `expires_at`      | `string`                                | no        | Token expiration date (YYYY-MM-DD)                                                                                                     |
+| `granular_scopes` | `object[]`                              | no        | Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, exactly one                              |
+| `scopes`          | `string[]` (`k8s_proxy`, `self_rotate`) | no        | Classic scopes of the token, which GitLab limits to k8s_proxy and self_rotate on this route. Send this or granular_scopes, exactly one |
+
+Además necesita exactamente uno de estos: `scopes`; `granular_scopes`.
 
 ### `user.create_impersonation_token`
 
-> Create an impersonation token for a user with the given scopes and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: [`user.list_impersonation_tokens`](#userlist_impersonation_tokens), [`user.revoke_impersonation_token`](#userrevoke_impersonation_token), [`user.create_personal_access_token`](#usercreate_personal_access_token).
+> Create an impersonation token for a user with classic scopes or a fine-grained granular_scopes grant, an optional description and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, description, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: [`user.list_impersonation_tokens`](#userlist_impersonation_tokens), [`user.revoke_impersonation_token`](#userrevoke_impersonation_token), [`user.create_personal_access_token`](#usercreate_personal_access_token).
 
 - **Meta-herramienta**: `gitlab_user`, acción `create_impersonation_token`
 - **Herramienta individual**: `gitlab_create_impersonation_token`
@@ -427,12 +430,16 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Token de grano fino**: Impersonation Token: Create en instancia ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#user))
 - **Comportamiento**: escribe, no idempotente
 
-| Parámetro    | Tipo       | Requerido | Descripción                                                                                                                                                              |
-| ------------ | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`       | `string`   | sí        | Name of the impersonation token                                                                                                                                          |
-| `scopes`     | `string[]` | sí        | Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy) |
-| `user_id`    | `integer`  | sí        | GitLab user ID                                                                                                                                                           |
-| `expires_at` | `string`   | no        | Token expiration date (YYYY-MM-DD)                                                                                                                                       |
+| Parámetro         | Tipo       | Requerido | Descripción                                                                                                                                                                                                                  |
+| ----------------- | ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | `string`   | sí        | Name of the impersonation token                                                                                                                                                                                              |
+| `user_id`         | `integer`  | sí        | GitLab user ID                                                                                                                                                                                                               |
+| `description`     | `string`   | no        | Description of the token, up to 255 characters                                                                                                                                                                               |
+| `expires_at`      | `string`   | no        | Token expiration date (YYYY-MM-DD)                                                                                                                                                                                           |
+| `granular_scopes` | `object[]` | no        | Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, not both                                                                                                                       |
+| `scopes`          | `string[]` | no        | Classic scopes of the token (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy). Send this or granular_scopes, not both |
+
+Además necesita exactamente uno de estos: `scopes`; `granular_scopes`.
 
 ### `user.create_personal_access_token`
 

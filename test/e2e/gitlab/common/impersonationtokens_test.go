@@ -14,6 +14,7 @@ package common
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -81,6 +82,43 @@ func TestImpersonationTokens_Lifecycle_CreateGetListRevoke(t *testing.T) {
 		active := harness.Do[impersonationtokens.ListOutput](s, actionUserListImpersonationTokens, withParams(owner, map[string]any{"state": "active"}))
 		if containsID(impersonationTokenIDs(active.Tokens), created.ID) {
 			e.T.Errorf("token %d is still listed as active after its revocation", created.ID)
+		}
+	})
+}
+
+// TestImpersonationTokens_FineGrained_CarriesItsGrantAndDescription mints a
+// fine-grained impersonation token per surface for a fixture user, with a
+// description and a grant at the user boundary instead of classic scopes,
+// checks the answer is granular and carries both as they were sent, and
+// revokes it. Neither could be sent before client-go modeled them (issue
+// 1115). The run's token is a classic administrator's, which GitLab's
+// privilege escalation check passes whatever the grant asks for.
+func TestImpersonationTokens_FineGrained_CarriesItsGrantAndDescription(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.User {
+		return fixture.NewUser(e, "impfg")
+	}, func(e *harness.Env, surface harness.Surface, user fixture.User) {
+		s := e.On(surface)
+		name := e.Name("impfg")
+		const description = "support session"
+
+		created := harness.Do[impersonationtokens.Output](s, actionUserCreateImpersonationToken, map[string]any{
+			"user_id": user.ID, "name": name, "description": description,
+			"granular_scopes": []map[string]any{{"access": fixture.AccessUser, "permissions": []string{"read_user"}}},
+			"expires_at":      time.Now().Add(adminMintedTokenLifetime).Format(time.DateOnly),
+		})
+		if created.ID == 0 || created.Token == "" {
+			e.T.Fatalf("create_impersonation_token answered %+v, want a token with an ID and its secret", created)
+		}
+		e.Defer("token "+name, func(ctx context.Context) error {
+			_, err := e.Client().GL().Users.RevokeImpersonationToken(user.ID, created.ID, gl.WithContext(ctx))
+			return err
+		})
+		want := []toolutil.TokenGranularScopeOutput{{Access: fixture.AccessUser, Permissions: []string{"read_user"}}}
+		if !created.Granular || created.Description != description || !reflect.DeepEqual(created.GranularScopes, want) {
+			e.T.Errorf("create_impersonation_token answered granular %t description %q granular_scopes %+v, want true %q %+v",
+				created.Granular, created.Description, created.GranularScopes, description, want)
 		}
 	})
 }

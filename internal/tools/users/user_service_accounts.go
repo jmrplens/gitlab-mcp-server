@@ -14,6 +14,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -74,12 +75,16 @@ type ListServiceAccountsInput struct {
 // PAT tools. Canonical shape shared via toolutil.
 type CurrentUserPATOutput = toolutil.PersonalTokenOutput
 
-// CreateCurrentUserPATInput holds parameters for creating a PAT for the current user.
+// CreateCurrentUserPATInput holds parameters for creating a PAT for the
+// current user: a classic one with scopes, which this route limits to
+// k8s_proxy and self_rotate, or a fine-grained one with granular_scopes,
+// exactly one of the two.
 type CreateCurrentUserPATInput struct {
-	Name        string   `json:"name" jsonschema:"Name of the personal access token,required"`
-	Scopes      []string `json:"scopes" jsonschema:"Array of scopes,required"`
-	Description string   `json:"description,omitempty" jsonschema:"Description for the token"`
-	ExpiresAt   string   `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
+	Name           string                              `json:"name" jsonschema:"Name of the personal access token,required"`
+	Scopes         []string                            `json:"scopes,omitempty" jsonschema:"Classic scopes of the token, which GitLab limits to k8s_proxy and self_rotate on this route. Send this or granular_scopes, exactly one"`
+	GranularScopes []tokengrantdata.GranularScopeInput `json:"granular_scopes,omitempty" jsonschema:"Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, exactly one"`
+	Description    string                              `json:"description,omitempty" jsonschema:"Description for the token"`
+	ExpiresAt      string                              `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
 }
 
 // --- Handlers ---.
@@ -200,26 +205,30 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.Name == "" {
 		return CurrentUserPATOutput{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(input.Scopes) == 0 {
-		return CurrentUserPATOutput{}, errors.New("scopes is required and must not be empty")
-	}
-	opts := &gl.CreatePersonalAccessTokenForCurrentUserOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
 	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
 		return CurrentUserPATOutput{}, fmt.Errorf("create_personal_access_token_for_current_user: %w", err)
 	}
-	opts.ExpiresAt = expiresAt
+	if grantErr := tokengrantdata.CheckGrant(input.Scopes, input.GranularScopes); grantErr != nil {
+		return CurrentUserPATOutput{}, grantErr
+	}
+	granular := tokengrantdata.Options(input.GranularScopes)
+	opts := &gl.CreatePersonalAccessTokenForCurrentUserOptions{
+		Name:           new(input.Name),
+		GranularScopes: granular,
+		ExpiresAt:      expiresAt,
+	}
+	if len(input.Scopes) > 0 {
+		opts.Scopes = &input.Scopes
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CurrentUserPATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token_for_current_user", err, http.StatusBadRequest,
-			"name is required; scopes must include valid PAT scopes (e.g. api, read_user, read_repository, write_repository); expires_at format YYYY-MM-DD")
+		return CurrentUserPATOutput{}, tokengrantdata.WrapCreateErr("create_personal_access_token_for_current_user", err, granular != nil, tokengrantdata.OnStatus(http.StatusBadRequest),
+			"name is required; scopes accepts only k8s_proxy and self_rotate on this route, so any other access is a granular_scopes grant; expires_at format YYYY-MM-DD")
 	}
 	extra, err := toolutil.CapturedToken(captured)
 	if err != nil {

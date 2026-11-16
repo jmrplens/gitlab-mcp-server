@@ -12,9 +12,11 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -607,6 +609,109 @@ func TestCreateCurrentUserPAT_EachOptionReachesTheRequest(t *testing.T) {
 			want := map[string]any{"name": "my-pat", "scopes": []any{"api"}}
 			maps.Copy(want, tt.want)
 			assertSent(t, "create pat body", got.body, want)
+		})
+	}
+}
+
+// TestCreateCurrentUserPAT_AGrant_ReachesTheRequestWithoutScopes creates a
+// fine-grained token: the grant travels in granular_scopes and no scopes key
+// goes beside it, since GitLab declares exactly_one_of on the route, and the
+// granular scopes the answer carries reach the output.
+func TestCreateCurrentUserPAT_AGrant_ReachesTheRequestWithoutScopes(t *testing.T) {
+	const response = `{"id":12,"name":"ci-reader","active":true,"token":"glpat-fg","scopes":[],"revoked":false,"user_id":1,
+		"granular":true,"granular_scopes":[{"access":"selected_memberships","permissions":["read_job"],"project_id":7,"group_id":null}]}`
+	var got capturedRequest
+	client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/personal_access_tokens", &got, http.StatusCreated, response))
+
+	out, err := CreateCurrentUserPAT(t.Context(), client, CreateCurrentUserPATInput{
+		Name: "ci-reader",
+		GranularScopes: []tokengrantdata.GranularScopeInput{
+			{Access: "selected_memberships", Permissions: []string{"read_job"}, ProjectIDs: []int64{7}, GroupIDs: []int64{9}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCurrentUserPAT() unexpected error: %v", err)
+	}
+	assertSent(t, "create pat body", got.body, map[string]any{
+		"name": "ci-reader",
+		"granular_scopes": []any{
+			map[string]any{"access": "selected_memberships", "permissions": []any{"read_job"}, "project_ids": []any{float64(7)}, "group_ids": []any{float64(9)}},
+		},
+	})
+	want := []toolutil.TokenGranularScopeOutput{{Access: "selected_memberships", Permissions: []string{"read_job"}, ProjectID: 7}}
+	if !out.Granular || !reflect.DeepEqual(out.GranularScopes, want) {
+		t.Errorf("output granular = %t, granular_scopes = %+v, want true and %+v", out.Granular, out.GranularScopes, want)
+	}
+}
+
+// TestCreateCurrentUserPAT_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest
+// covers the refusals a grant adds: both kinds of grant at once, which
+// GitLab's exactly_one_of refuses, and a scope it would read otherwise than
+// written. No request may be sent for either.
+func TestCreateCurrentUserPAT_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateCurrentUserPATInput
+		want  string
+	}{
+		{
+			name: "scopes beside a grant",
+			input: CreateCurrentUserPATInput{Name: "tok", Scopes: []string{"k8s_proxy"}, GranularScopes: []tokengrantdata.GranularScopeInput{
+				{Access: "user", Permissions: []string{"read_user"}},
+			}},
+			want: "exactly one of scopes",
+		},
+		{
+			name: "an unknown access",
+			input: CreateCurrentUserPATInput{Name: "tok", GranularScopes: []tokengrantdata.GranularScopeInput{
+				{Access: "admin", Permissions: []string{"read_user"}},
+			}},
+			want: "granular_scopes[0].access must be one of",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":1}`)
+			}))
+			_, err := CreateCurrentUserPAT(t.Context(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("CreateCurrentUserPAT() error = %v, want one carrying %q", err, tc.want)
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("CreateCurrentUserPAT() sent %d requests, want none", n)
+			}
+		})
+	}
+}
+
+// TestCreateCurrentUserPAT_TheRefusalOfEachKindOfGrant_CarriesItsOwnHint
+// holds each hint to the refusal it explains: the 400 of a classic call
+// names the two scopes this route takes, and the 404 of a granular call the
+// feature flag GitLab answers it with when the flag is off.
+func TestCreateCurrentUserPAT_TheRefusalOfEachKindOfGrant_CarriesItsOwnHint(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		input  CreateCurrentUserPATInput
+		hint   string
+	}{
+		{name: "classic", status: http.StatusBadRequest, input: CreateCurrentUserPATInput{Name: "tok", Scopes: []string{"api"}}, hint: "scopes accepts only k8s_proxy and self_rotate"},
+		{name: "granular", status: http.StatusNotFound, input: CreateCurrentUserPATInput{Name: "tok", GranularScopes: []tokengrantdata.GranularScopeInput{
+			{Access: "user", Permissions: []string{"read_user"}},
+		}}, hint: tokengrantdata.NotFoundHint},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+			_, err := CreateCurrentUserPAT(t.Context(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("CreateCurrentUserPAT() error = %v, want it to carry %q", err, tc.hint)
+			}
 		})
 	}
 }

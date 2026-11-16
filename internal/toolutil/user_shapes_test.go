@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -132,17 +133,19 @@ func TestNewPersonalTokenOutput(t *testing.T) {
 		ID: 7, Name: "ci-token", Active: true, Token: "glpat-x",
 		Scopes: []string{"api"}, Revoked: false, Description: "ci", UserID: 42,
 		CreatedAt: &created, ExpiresAt: &expires,
+		GranularScopes: []*gl.GranularScope{{Access: gl.GranularScopeAccessPersonalProjects, Permissions: []string{"read_job"}, ProjectID: new(int64(3))}},
 	}, TokenExtra{
-		Granular:       true,
-		GranularScopes: []TokenGranularScopeOutput{{Access: "personal_projects", Permissions: []string{"read_job"}, ProjectID: 3}},
-		LastUsedIPs:    []string{"192.0.2.10"},
+		Granular:    true,
+		LastUsedIPs: []string{"192.0.2.10"},
 	})
 	if got.ID != 7 || got.Name != "ci-token" || !got.Active || got.Token != "glpat-x" ||
 		len(got.Scopes) != 1 || got.UserID != 42 {
 		t.Errorf("NewPersonalTokenOutput identity fields = %+v, want mirror", got)
 	}
-	if !got.Granular || len(got.GranularScopes) != 1 || got.GranularScopes[0].ProjectID != 3 ||
-		len(got.LastUsedIPs) != 1 || got.LastUsedIPs[0] != "192.0.2.10" {
+	if len(got.GranularScopes) != 1 || got.GranularScopes[0].ProjectID != 3 || got.GranularScopes[0].Access != "personal_projects" {
+		t.Errorf("NewPersonalTokenOutput granular scopes = %+v, want the SDK's one scope", got.GranularScopes)
+	}
+	if !got.Granular || len(got.LastUsedIPs) != 1 || got.LastUsedIPs[0] != "192.0.2.10" {
 		t.Errorf("NewPersonalTokenOutput captured fields = %+v, want the capture's half", got)
 	}
 	if got.CreatedAt != created.Format(time.RFC3339) {
@@ -157,5 +160,26 @@ func TestNewPersonalTokenOutput(t *testing.T) {
 	used := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
 	if withUse := NewPersonalTokenOutput(&gl.PersonalAccessToken{LastUsedAt: &used}, TokenExtra{}); withUse.LastUsedAt != used.Format(time.RFC3339) {
 		t.Errorf("LastUsedAt = %q, want RFC3339 for a token that has been used", withUse.LastUsedAt)
+	}
+}
+
+// TestNewTokenGranularScopes_ConvertsTheSDKScopes verifies the conversion of
+// the granular scopes client-go decodes: none is nil, a nil entry is skipped,
+// and each id is read when present and zero when absent.
+func TestNewTokenGranularScopes_ConvertsTheSDKScopes(t *testing.T) {
+	if got := NewTokenGranularScopes(nil); got != nil {
+		t.Errorf("NewTokenGranularScopes(nil) = %+v, want nil", got)
+	}
+	got := NewTokenGranularScopes([]*gl.GranularScope{
+		nil,
+		{Access: gl.GranularScopeAccessSelectedMemberships, Permissions: []string{"read_project"}, GroupID: new(int64(5))},
+		{Access: gl.GranularScopeAccessUser, Permissions: []string{"read_user"}},
+	})
+	want := []TokenGranularScopeOutput{
+		{Access: "selected_memberships", Permissions: []string{"read_project"}, GroupID: 5},
+		{Access: "user", Permissions: []string{"read_user"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("NewTokenGranularScopes() = %+v, want %+v", got, want)
 	}
 }

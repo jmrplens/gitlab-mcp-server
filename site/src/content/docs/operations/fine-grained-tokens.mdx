@@ -142,9 +142,15 @@ project or group id becomes a scope of its own. The access levels are:
 
 The administrator route that creates a personal access token for another user takes
 no grant at GitLab 19.5, while the impersonation token route and the route above do.
-This server's own token creation actions, `user.create_current_user_pat` among them,
-send classic scopes only
-([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+This server's actions for those two routes, `user.create_current_user_pat` and
+`user.create_impersonation_token`, take `granular_scopes` in the shape above in place
+of `scopes`, exactly one of the two, and each permission by its assignable name, the
+one the [permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
+lists. The route above takes no classic scope but `k8s_proxy` and `self_rotate`, so a
+token for this server created through it is a fine-grained one. GitLab answers a grant
+with 404 while the `granular_personal_access_tokens` feature flag is off for the user.
+The server's other token creation actions, for project, group and service account
+tokens, send classic scopes only.
 
 An administrator's token reaches the admin routes its `instance` scope grants, and on
 an instance that enforces Admin Mode it needs nothing more: GitLab lets every

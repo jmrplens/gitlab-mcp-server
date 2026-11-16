@@ -106,8 +106,9 @@ func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
 // supplied property names to carry a value: GitLab's exactly_one_of, which
 // refuses a call that sends two of them as it refuses one that sends none.
 //
-// A name counts only when its value is not an empty string. A handler decodes
-// such a field into a string and leaves an empty one out of the request, so
+// A name counts only when its value is not null, an empty string or an empty
+// array. A handler decodes such a field into a string or a slice and leaves an
+// empty one out of the request, so
 // GitLab is asked with the names that carry a value, and those are the ones
 // its exactly_one_of counts. A branch counting the name alone would refuse a
 // call with a common name beside an empty filter as naming both, and the
@@ -284,18 +285,28 @@ func presentBranch(propertyName string) map[string]any {
 }
 
 // valuedBranch is a oneOf branch: the name present with a value that is not
-// an empty string. minLength holds a string alone, so a name of another type
-// counts as soon as it is present. The branch declares no type and leaves the
-// call's other properties open, because the lockdown closes a schema that has
-// properties and no type as well, and closed it would refuse every property
-// but the one it names. The root stays closed, so a call still sends nothing
-// the schema does not name.
+// null, an empty string or an empty array. minLength holds a string alone and
+// minItems an array alone, so each keyword leaves the other type to the other,
+// and the not-null clause covers what neither reads: a slice field decodes a
+// null or an empty array into an empty slice, which a handler leaves out of
+// the request, so GitLab's exactly_one_of does not count it. A name of any
+// other type counts as soon as it carries a value. The branch declares no
+// type and leaves the call's other properties open, because the lockdown
+// closes a schema that has properties and no type as well, and closed it
+// would refuse every property but the one it names. The root stays closed, so
+// a call still sends nothing the schema does not name.
 func valuedBranch(propertyName string) map[string]any {
 	return map[string]any{
 		"required":             []string{propertyName},
-		"properties":           map[string]any{propertyName: map[string]any{"minLength": 1}},
+		"properties":           map[string]any{propertyName: valuedProperty()},
 		"additionalProperties": true,
 	}
+}
+
+// valuedProperty is the property schema of a [valuedBranch]: a value that is
+// not null, an empty string or an empty array.
+func valuedProperty() map[string]any {
+	return map[string]any{"minLength": 1, "minItems": 1, "not": map[string]any{"type": "null"}}
 }
 
 // applyInputSchemaOverrides patches schema in place with each override that

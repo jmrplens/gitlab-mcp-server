@@ -15905,7 +15905,7 @@
   },
   {
     "name": "gitlab_create_current_user_pat",
-    "description": "Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
+    "description": "Create a personal access token for the current user, classic or fine-grained. Returns: token ID, the secret token, scopes or granular scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15918,13 +15918,75 @@
           "format": "date",
           "type": "string"
         },
+        "granular_scopes": {
+          "description": "Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, exactly one",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "description": "Resources the scope reaches: personal_projects (the user's own projects), all_memberships (every project and group the user is a member of), selected_memberships (the projects and groups named in project_ids and group_ids), user (the user's own profile, tokens and namespaces) or instance",
+                "enum": [
+                  "personal_projects",
+                  "all_memberships",
+                  "selected_memberships",
+                  "user",
+                  "instance"
+                ],
+                "type": "string"
+              },
+              "group_ids": {
+                "description": "IDs of the groups the scope reaches, and everything below each, with access selected_memberships only",
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "permissions": {
+                "description": "Assignable permissions the scope grants, by GitLab's assignable name for each (read_project, create_merge_request, read_user), not the raw permissions an assignable one bundles",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_ids": {
+                "description": "IDs of the projects the scope reaches, with access selected_memberships only",
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "name": {
           "description": "Name of the personal access token",
           "type": "string"
         },
         "scopes": {
-          "description": "Array of scopes",
+          "description": "Classic scopes of the token, which GitLab limits to k8s_proxy and self_rotate on this route. Send this or granular_scopes, exactly one",
           "items": {
+            "enum": [
+              "k8s_proxy",
+              "self_rotate"
+            ],
             "type": "string"
           },
           "type": [
@@ -15934,8 +15996,7 @@
         }
       },
       "required": [
-        "name",
-        "scopes"
+        "name"
       ],
       "type": "object"
     },
@@ -17430,21 +17491,83 @@
   },
   {
     "name": "gitlab_create_impersonation_token",
-    "description": "Create an impersonation token for a user with the given scopes and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.",
+    "description": "Create an impersonation token for a user with classic scopes or a fine-grained granular_scopes grant, an optional description and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, description, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "description": "Description of the token, up to 255 characters",
+          "type": "string"
+        },
         "expires_at": {
           "description": "Token expiration date (YYYY-MM-DD)",
           "format": "date",
           "type": "string"
+        },
+        "granular_scopes": {
+          "description": "Grant of a fine-grained token, one entry per access and its permissions. Send this or scopes, not both",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "description": "Resources the scope reaches: personal_projects (the user's own projects), all_memberships (every project and group the user is a member of), selected_memberships (the projects and groups named in project_ids and group_ids), user (the user's own profile, tokens and namespaces) or instance",
+                "enum": [
+                  "personal_projects",
+                  "all_memberships",
+                  "selected_memberships",
+                  "user",
+                  "instance"
+                ],
+                "type": "string"
+              },
+              "group_ids": {
+                "description": "IDs of the groups the scope reaches, and everything below each, with access selected_memberships only",
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "permissions": {
+                "description": "Assignable permissions the scope grants, by GitLab's assignable name for each (read_project, create_merge_request, read_user), not the raw permissions an assignable one bundles",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_ids": {
+                "description": "IDs of the projects the scope reaches, with access selected_memberships only",
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "description": "Name of the impersonation token",
           "type": "string"
         },
         "scopes": {
-          "description": "Array of scopes (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy)",
+          "description": "Classic scopes of the token (api/read_user/read_api/read_repository/write_repository/read_registry/write_registry/sudo/admin_mode/create_runner/manage_runner/ai_features/k8s_proxy). Send this or granular_scopes, not both",
           "items": {
             "type": "string"
           },
@@ -17460,7 +17583,6 @@
       },
       "required": [
         "name",
-        "scopes",
         "user_id"
       ],
       "type": "object"

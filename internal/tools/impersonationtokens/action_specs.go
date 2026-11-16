@@ -5,6 +5,7 @@ package impersonationtokens
 
 import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tokengrantdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -62,10 +63,13 @@ func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 	if meta, ok := userTokenActionMeta[individualTool]; ok {
 		applyActionMeta(&options, meta)
 	}
-	if individualTool == "gitlab_list_impersonation_tokens" {
+	switch individualTool {
+	case "gitlab_list_impersonation_tokens":
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("state", "all", "active", "inactive"),
 		}
+	case "gitlab_create_impersonation_token":
+		options.InputSchemaOverrides = tokengrantdata.SchemaOverrides()
 	}
 	return options
 }
@@ -116,10 +120,10 @@ var userTokenActionMeta = map[string]userTokenActionMetaEntry{
 		description: "Get a single impersonation token for a user by token id. Returns: the token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and last_used_at. See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token.",
 	},
 	"gitlab_create_impersonation_token": {
-		usage:       "Create an impersonation token for a user (admin token required). Use to mint a token with explicit scopes and an optional expiry that can act on behalf of the target user.",
-		aliases:     []string{"create impersonation token", "mint impersonation token", "add impersonation token"},
+		usage:       "Create an impersonation token for a user (admin token required). Use to mint a token that can act on behalf of the target user: a classic one with scopes or a fine-grained one with granular_scopes (exactly one of the two), with an optional description and expiry.",
+		aliases:     []string{"create impersonation token", "mint impersonation token", "add impersonation token", "create fine-grained impersonation token"},
 		related:     []string{actionImpersonationTokenList, actionImpersonationTokenRevoke, actionUserPATCreate},
-		description: "Create an impersonation token for a user with the given scopes and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.",
+		description: "Create an impersonation token for a user with classic scopes or a fine-grained granular_scopes grant, an optional description and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, description, revoked flag, created_at, expires_at, and the secret token value (shown once). See also: gitlab_list_impersonation_tokens, gitlab_revoke_impersonation_token, gitlab_create_personal_access_token.",
 	},
 	"gitlab_revoke_impersonation_token": {
 		usage:       "Revoke (delete) an impersonation token for a user by token id (admin token required, destructive). Use to invalidate a token that should no longer be usable.",

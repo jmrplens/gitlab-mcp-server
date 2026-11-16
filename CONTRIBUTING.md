@@ -252,7 +252,7 @@ internal/tools/
 ├── register_meta.go         # RegisterMetaStandaloneTools(): the standalone utilities (gitlab_discover_project and the gitlab_interactive_* flows) on the meta and individual surfaces
 ├── meta_tool.go             # Route wrappers and the meta parameter-schema mode
 ├── markdown.go              # Delegates to the type-based Markdown registry in toolutil
-└── <domain>/                # 181 sub-packages
+└── <domain>/                # 182 sub-packages
     ├── doc.go               # Package comment
     ├── action_specs.go      # Canonical ActionSpecs for catalog-backed tool surfaces
     ├── <domain>.go          # Typed input/output structs + handlers

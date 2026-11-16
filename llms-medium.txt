@@ -538,7 +538,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_create_broadcast_message: Create a broadcast message.
 - gitlab_create_cluster_agent_token: Create a cluster agent token.
 - gitlab_create_commit_discussion: Create a new discussion thread on a commit, optionally as an inline diff comment.
-- gitlab_create_current_user_pat: Create a personal access token for the current user.
+- gitlab_create_current_user_pat: Create a personal access token for the current user, classic or fine-grained.
 - gitlab_create_custom_emoji: Create a custom emoji in a GitLab group via GraphQL API.
 - gitlab_create_dependency_list_export: Create a dependency list export (SBOM) for a pipeline.
 - gitlab_create_epic_discussion: Create a new discussion thread on a group epic with an initial note.
@@ -547,7 +547,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_create_geo_site: Create a new Geo site.
 - gitlab_create_group_member_role: Create a group-level custom member role.
 - gitlab_create_group_ssh_certificate: Register a new SSH CA certificate on a group from a CA public key and title.
-- gitlab_create_impersonation_token: Create an impersonation token for a user with the given scopes and optional expiry.
+- gitlab_create_impersonation_token: Create an impersonation token for a user with classic scopes or a fine-grained granular_scopes grant, an optional description and an optional expiry.
 - gitlab_create_instance_member_role: Create an instance-level custom member role.
 - gitlab_create_issue_discussion: Create a new discussion thread on an issue with an initial note.
 - gitlab_create_mr_context_commits: Attach existing repository commit SHAs to a merge request as context commits.

@@ -20,14 +20,14 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,041 |
-| Unit test functions                                   | 22,258 |
-| E2E test functions                                    |  1,783 |
+| Total test functions                                  | 24,057 |
+| Unit test functions                                   | 22,272 |
+| E2E test functions                                    |  1,785 |
 | cmd test functions                                    |  6,014 |
-| Test files (internal/)                                |    779 |
+| Test files (internal/)                                |    781 |
 | Test files (cmd/)                                     |    492 |
 | Test files (test/e2e/)                                |    452 |
-| Tool sub-packages tested                              |    181 |
+| Tool sub-packages tested                              |    182 |
 | Core packages tested                                  |     36 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
 | Overall coverage (`go test ./internal/...`)           | 100.0% |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,809 | 57.4% |
+| `TestFunc_Scenario` (2-part)           | 13,812 | 57.4% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,333 | 38.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,346 | 38.8% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,356 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,358 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            457 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (181) |         11,431 |        489 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,783 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (182) |         11,443 |        491 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,785 |        452 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,014 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,041** |  **1,723** |                                                                                                 |
+| **Total**               |     **24,057** |  **1,725** |                                                                                                 |
 
 ### Core Packages
 
@@ -93,8 +93,8 @@
 | testutil/netfixture      |        12 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,444 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,356** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,446 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,358** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -105,7 +105,7 @@
 | groups            |   344 |   100.0% |    38 |
 | dynamic           |   328 |   100.0% |     2 |
 | issues            |   307 |   100.0% |    21 |
-| users             |   283 |   100.0% |    38 |
+| users             |   286 |   100.0% |    38 |
 | jobs              |   185 |   100.0% |    17 |
 | packages          |   179 |   100.0% |    10 |
 | search            |   171 |   100.0% |    10 |
@@ -129,7 +129,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 181 tested sub-packages (click to expand)</summary>
+<summary>All 182 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |      Tests | Test Files | Coverage |     Tools |
 | ----------------------- | ---------: | ---------: | -------: | --------: |
@@ -219,7 +219,7 @@
 | groupvariables          |         63 |          4 |   100.0% |         5 |
 | groupwikis              |         44 |          3 |   100.0% |         5 |
 | health                  |         27 |          1 |   100.0% |         2 |
-| impersonationtokens     |         61 |          3 |   100.0% |         5 |
+| impersonationtokens     |         62 |          3 |   100.0% |         5 |
 | importservice           |         35 |          1 |   100.0% |         5 |
 | instancevariables       |         58 |          3 |   100.0% |         5 |
 | integrations            |         89 |          6 |   100.0% |        12 |
@@ -302,19 +302,20 @@
 | tags                    |         84 |          2 |   100.0% |         9 |
 | terraformstates         |         51 |          1 |   100.0% |         6 |
 | todos                   |         51 |          4 |   100.0% |         3 |
+| tokengrantdata          |          8 |          2 |   100.0% |         0 |
 | toolvisibility          |         31 |          4 |   100.0% |         0 |
 | topics                  |         30 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
 | usagedata               |         37 |          1 |   100.0% |         6 |
 | useremails              |         32 |          2 |   100.0% |         6 |
 | usergpgkeys             |         56 |          2 |   100.0% |         8 |
-| users                   |        283 |          8 |   100.0% |        38 |
+| users                   |        286 |          8 |   100.0% |        38 |
 | vulnerabilities         |         97 |          3 |   100.0% |         8 |
 | waitpoll                |         45 |          3 |   100.0% |         0 |
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        147 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,431** |    **489** |          | **1,198** |
+| **Total**               | **11,443** |    **491** |          | **1,198** |
 
 </details>
 
@@ -642,6 +643,7 @@
 | tags                    |   100.0% |
 | terraformstates         |   100.0% |
 | todos                   |   100.0% |
+| tokengrantdata          |   100.0% |
 | toolvisibility          |   100.0% |
 | topics                  |   100.0% |
 | uploads                 |   100.0% |

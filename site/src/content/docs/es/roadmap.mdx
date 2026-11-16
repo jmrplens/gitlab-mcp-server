@@ -31,7 +31,7 @@ Cada revisión de la [especificación MCP](https://modelcontextprotocol.io/) se 
 
 ### Cerrar lo que un token granular no alcanza
 
-Un [token granular](/gitlab-mcp-server/es/operations/fine-grained-tokens/) se juzga acción por acción a partir de sus permisos. GitLab todavía deja parte de su API fuera de cualquier permiso, y el proyecto lo sigue a medida que los amplía: servir una acción por REST cuando un token granular no alcanza su GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)), leer los permisos de la propia respuesta del token cuando GitLab los envía ahí ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)), y que las acciones que crean tokens puedan enviar los permisos granulares que GitLab acepta ([issue 1115](https://github.com/jmrplens/gitlab-mcp-server/issues/1115)).
+Un [token granular](/gitlab-mcp-server/es/operations/fine-grained-tokens/) se juzga acción por acción a partir de sus permisos. GitLab todavía deja parte de su API fuera de cualquier permiso, y el proyecto lo sigue a medida que los amplía: servir una acción por REST cuando un token granular no alcanza su GraphQL ([issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054)) y leer los permisos de la propia respuesta del token cuando GitLab los envía ahí ([issue 1400](https://github.com/jmrplens/gitlab-mcp-server/issues/1400)).
 
 ### Mantener cada límite de un despliegue compartido bajo una sola regla
 
