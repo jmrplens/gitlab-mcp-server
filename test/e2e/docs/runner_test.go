@@ -105,6 +105,9 @@ type runner struct {
 	readiness time.Duration
 	// poll is the wait between two tries of that block.
 	poll time.Duration
+	// logf, when set, is handed what each block that passed printed, so a
+	// run's log shows what the pages' commands answered.
+	logf func(format string, args ...any)
 }
 
 // background is a background block the runner started.
@@ -168,6 +171,9 @@ func (r *runner) foreground(ctx context.Context, where, file string, bg *backgro
 	for {
 		out, err := r.shell.run(ctx, fmt.Sprintf("timeout -k 5 %s bash -e %s", seconds(r.blockTimeout), file))
 		if err == nil {
+			if r.logf != nil {
+				r.logf("%s: passed:\n%s", where, r.subs.redact(out))
+			}
 			return nil
 		}
 		if status(err) == timeoutStatus {

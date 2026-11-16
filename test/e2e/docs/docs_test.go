@@ -91,6 +91,7 @@ func TestDocs_MarkedBlocks_RunInAReaderAgainstTheE2EGitLab(t *testing.T) {
 				settle:       liveSettle,
 				readiness:    liveReadiness,
 				poll:         livePoll,
+				logf:         t.Logf,
 			}
 			if runErr := r.runPage(ctx, page.rel, page.blocks); runErr != nil {
 				t.Error(runErr)
