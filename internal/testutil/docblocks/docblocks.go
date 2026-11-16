@@ -59,7 +59,7 @@ const (
 // runValue the prefix of the only value it takes.
 const (
 	runOption = string(RunForeground)
-	runValue  = runOption + "="
+	runValue  = "run="
 )
 
 // shellLangs are the fence languages a run option may mark: what the runner
