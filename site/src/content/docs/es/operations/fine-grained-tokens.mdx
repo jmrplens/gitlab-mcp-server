@@ -88,10 +88,12 @@ administra ningún namespace de pago recibe por tanto el catálogo Free; fija
 `GITLAB_MCP_TIER` (`--tier` en modo HTTP) al plan del grupo en el que trabajas.
 
 El servidor pregunta qué tipo de token tiene en
-`GET /api/v4/personal_access_tokens/self` y lee la concesión en
-`GET /api/v4/personal_access_tokens/:id`, que es la que la lleva. Las dos necesitan
-Personal Access Token: Read; sin él, el rechazo de GitLab a la primera sigue diciéndole
-al servidor que el token es de grano fino.
+`GET /api/v4/personal_access_tokens/self`, y desde GitLab 19.5 esa respuesta lleva
+también la concesión, así que es la única petición que el servidor hace sobre el token.
+Una instancia anterior no la pone ahí, y el servidor la lee entonces en
+`GET /api/v4/personal_access_tokens/:id`. Las dos necesitan Personal Access Token: Read;
+sin él, el rechazo de GitLab a la primera sigue diciéndole al servidor que el token es
+de grano fino.
 
 Los cuatro primeros son lo que una sesión necesita para que se le sirva exactamente lo
 que alcanza su concesión, y son la concesión con la que la suite end-to-end arranca sus
