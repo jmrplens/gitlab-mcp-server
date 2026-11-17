@@ -896,9 +896,11 @@ var orbitSettings = []orbitSetting{
 // a namespace of a contributor's own, the setup, the indexer wait, the live
 // suite and the recorder all went to the default namespace without a word
 // (issue 1535). The recipes are rendered with make -n rather than read as
-// text, so what is judged is the command make would run, and each runs in a
-// directory of its own, so the .env it sources is the one the case writes and
-// never the repository's. Every stand-in records what it was handed and does
+// text, so what is judged is the command make would run; each of its lines
+// runs in a shell of its own, as make runs it, so a line sees .env only if it
+// sources it itself; and each target runs in a directory of its own, so the
+// .env it sources is the one the case writes and never the repository's.
+// Every stand-in records what it was handed and does
 // nothing else: no GitLab is reached.
 func TestOrbitTargets_FixtureSettings_CommandLineThenEnvironmentThenDotEnv(t *testing.T) {
 	recipe := newOrbitRecipe(t)
@@ -1077,14 +1079,22 @@ func (r orbitRecipe) run(t *testing.T, recipe string, environ []string, dotEnv s
 		t.Fatalf("writing the setup stand-in: %v", err)
 	}
 	log := filepath.Join(work, "stand-ins.log")
-	//#nosec G204 -- the recipe is what make rendered from this repository's own Makefile
-	run := exec.CommandContext(t.Context(), r.shell, "-c", recipe)
-	run.Dir = work
-	// The last PATH wins, which puts the stand-ins first.
-	run.Env = append(slices.Clone(environ), "ORBIT_STUB_LOG="+log, "PATH="+r.stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
-	out, err := run.CombinedOutput()
-	if err != nil {
-		t.Fatalf("running the rendered recipe: %v\n%s", err, out)
+	// make starts a shell of its own for every recipe line, so a variable one
+	// line sets, those it sources from .env among them, never reaches the
+	// next: each line runs in a shell of its own here as well, and a target
+	// that stopped sourcing .env would be handed none of its values.
+	var out []byte
+	for _, line := range recipeLines(recipe) {
+		//#nosec G204 -- the line is what make rendered from this repository's own Makefile
+		run := exec.CommandContext(t.Context(), r.shell, "-c", line)
+		run.Dir = work
+		// The last PATH wins, which puts the stand-ins first.
+		run.Env = append(slices.Clone(environ), "ORBIT_STUB_LOG="+log, "PATH="+r.stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+		lineOut, err := run.CombinedOutput()
+		out = append(out, lineOut...)
+		if err != nil {
+			t.Fatalf("running the rendered recipe line %q: %v\n%s", line, err, out)
+		}
 	}
 	reported, err := os.ReadFile(log) //#nosec G304 -- a file of the test's own temporary directory
 	if err != nil {
@@ -1105,6 +1115,30 @@ func (r orbitRecipe) run(t *testing.T, recipe string, environ []string, dotEnv s
 		}
 	}
 	return seen
+}
+
+// recipeLines splits what make -n printed into the recipe lines make would
+// hand a shell one at a time: a line ending in a backslash goes on into the
+// next, as it does in the Makefile.
+func recipeLines(rendered string) []string {
+	var lines []string
+	var current strings.Builder
+	for line := range strings.Lines(rendered) {
+		line = strings.TrimSuffix(line, "\n")
+		current.WriteString(line)
+		if strings.HasSuffix(line, `\`) {
+			current.WriteString("\n")
+			continue
+		}
+		if strings.TrimSpace(current.String()) != "" {
+			lines = append(lines, current.String())
+		}
+		current.Reset()
+	}
+	if strings.TrimSpace(current.String()) != "" {
+		lines = append(lines, current.String())
+	}
+	return lines
 }
 
 // orbitRecipeEnviron is this process's environment with nothing in it that
