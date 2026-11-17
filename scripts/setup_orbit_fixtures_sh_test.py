@@ -834,6 +834,37 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("could not open the fixture MR", result.stderr)
         self.assertEqual(self.requests("PUT"), [])
 
+    # A run that pushed the fixture branch and then failed to open its merge
+    # request leaves the branch on GitLab with no merge request from it. A new
+    # commit pushed over it is not a fast-forward, so a rerun that pushed again
+    # would be refused on every run until someone deleted the branch by hand.
+
+    def test_a_branch_left_without_an_mr_is_opened_as_it_is(self):
+        git_log = self.use_stand_in_git()
+        routes = self.merge_routes(
+            [],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 2, "state": "opened"}),
+            ("GET " + MR + "/2", {"iid": 2, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/2/merge", {"iid": 2, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(git_log), "the branch is there, so nothing is cloned or pushed")
+        self.assertIn(BRANCH, [r["path"] for r in self.requests("GET")])
+        self.assertIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/2/merge"])
+        self.assertIn("MR !2 merged", result.stdout)
+
+    def test_an_unreadable_branch_without_an_mr_stops_the_run(self):
+        git_log = self.use_stand_in_git()
+        routes = self.merge_routes([], ("GET " + BRANCH, (500, {"message": "boom"})))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot tell whether branch feature/restock-helper exists", result.stderr)
+        self.assertFalse(os.path.exists(git_log), "nothing is pushed over a branch that could not be read")
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+
 
 if __name__ == "__main__":
     unittest.main()
