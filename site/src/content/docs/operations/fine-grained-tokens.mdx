@@ -85,10 +85,12 @@ fine-grained token and the tier stays what the namespace plans said. A fine-grai
 on GitLab.com that administers no paid namespace is therefore served the Free catalog;
 set `GITLAB_MCP_TIER` (`--tier` in HTTP mode) to the plan of the group you work in.
 
-The server asks what kind of token it holds at `GET /api/v4/personal_access_tokens/self`
-and reads the grant at `GET /api/v4/personal_access_tokens/:id`, the one that carries
-it. Both need Personal Access Token: Read; without it, GitLab's refusal of the first
-still tells the server the token is a fine-grained one.
+The server asks what kind of token it holds at `GET /api/v4/personal_access_tokens/self`,
+and from GitLab 19.5 on that answer carries the grant too, so it is the one request
+the server makes about the token. An older instance does not put the grant there, and
+the server then reads it at `GET /api/v4/personal_access_tokens/:id`. Both need
+Personal Access Token: Read; without it, GitLab's refusal of the first still tells the
+server the token is a fine-grained one.
 
 The first four are what a session needs to be served exactly what its grant reaches,
 and they are the grant the end-to-end suite starts its fine-grained sessions on.
