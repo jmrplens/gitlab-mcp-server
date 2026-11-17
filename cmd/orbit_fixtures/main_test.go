@@ -6,8 +6,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -181,5 +184,33 @@ func TestFirstNonEmpty_TakesTheFirstThatIsSet(t *testing.T) {
 func TestHTTPClient_EveryRequest_HasADeadline(t *testing.T) {
 	if got := httpClient().Timeout; got != 2*time.Minute {
 		t.Errorf("timeout = %s, want 2m0s", got)
+	}
+}
+
+// TestHTTPClient_ARedirect_IsAnsweredAsItIs checks a request GitLab answers
+// with a redirect reports that answer and is not sent again where the
+// redirect points, as the script's curl did not follow one: net/http would
+// send the PRIVATE-TOKEN header to any host the redirect named, and turn a
+// write redirected with a 301 or 302 into a GET.
+func TestHTTPClient_ARedirect_IsAnsweredAsItIs(t *testing.T) {
+	var followed atomic.Int32
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		followed.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(elsewhere.Close)
+	redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/api/v4/projects/1", http.StatusFound)
+	}))
+	t.Cleanup(redirecting.Close)
+	api := gitlabAPI{root: redirecting.URL + "/api/v4", token: "glpat-secret", client: httpClient()}
+
+	got := api.do(t.Context(), http.MethodPut, "/projects/1", map[string]string{"visibility": "public"})
+
+	if got.status != http.StatusFound || got.err != nil {
+		t.Errorf("answer = %d %v, want the 302 itself", got.status, got.err)
+	}
+	if n := followed.Load(); n != 0 {
+		t.Errorf("the redirect was followed %d times, with the token", n)
 	}
 }
