@@ -23,7 +23,9 @@
 // binary on its PATH and, in the home directory, the release asset a reader
 // downloads (not executable, as a download is not), named
 // gitlab-mcp-server-linux-amd64 as the pages' examples name it whatever the
-// machine's architecture, since it is the same binary. It also holds what a page
+// machine's architecture, since it is the same binary: the tree's, built by
+// make e2e-docs-server-binary for Linux on the architecture the Docker daemon
+// reports, whatever the host runs. It also holds what a page
 // names as a prerequisite rather than a step: a certificate and key for
 // mcp.example.com at /etc/ssl/mcp.crt and /etc/ssl/mcp.key, and the
 // directory /run/gitlab-mcp for a socket. The marked blocks of a page run in

@@ -33,9 +33,10 @@ const readerHome = "/root"
 // readerAsset is the name the reader's downloaded copy of the binary takes in
 // its home directory: the Linux x86_64 release asset, the one the pages'
 // examples move into place. It keeps that name whatever the machine's
-// architecture, since the file is the tree's binary built for the machine the
-// reader runs on, so a run on an arm64 host checks the same steps instead of
-// failing on a name the pages do not print.
+// architecture, since the file is the tree's binary built for Linux on the
+// architecture the Docker daemon reports (make e2e-docs-server-binary), so a
+// run on an arm64 host checks the same steps instead of failing on a name the
+// pages do not print.
 const readerAsset = "gitlab-mcp-server-linux-amd64"
 
 // readerDockerfile builds the reader: a Debian with the tools the pages'
