@@ -92,7 +92,7 @@ func requestDecisions() []Decision {
 			enforce(pkgServer, "applyLocalFilesystemPolicy")),
 		bound("RQB-009", "the size of one GitLab response body",
 			enforce(pkgGitLab, "DefaultMaxResponseBytes")),
-		bound("RQB-010", "what one action's output may carry",
+		bound("RQB-010", "what one action's output, or one resource read, may carry",
 			enforce(pkgDynamic, "maxLimit"),
 			enforce(pkgDynamic, "maxSegmentTerms"),
 			enforce("internal/tools/usagedata", "maxMetricDefinitionsBytes"),
@@ -105,11 +105,25 @@ func requestDecisions() []Decision {
 			enforce("internal/tools/search", "maxSnippetLines"),
 			enforce("internal/tools/search", "maxSnippetLineRunes"),
 			enforce("internal/tools/search", "maxCodeMarkdownBytes"),
+			// The context lines a code search asks GitLab for on each side of
+			// a match, GitLab's own ceiling, refused before the request as
+			// the coordinate length below is.
+			enforce("internal/tools/search", "maxContextLines"),
+			// The patch text the Markdown of one merge request changes read
+			// carries; a patch that does not fit is skipped and counted in a
+			// note rather than cut.
+			enforce("internal/tools/mrchanges", "diffBudgetBytes"),
 			enforce("internal/tools/projects", "maxAvatarBytes"),
 			enforce("internal/tools/jobs", "maxTraceBytes"),
+			// The end of a log one trace read takes in and strips of the
+			// runner's markup, ten times what it returns.
+			enforce("internal/tools/jobs", "traceWindowBytes"),
 			// The lines of a log one trace read counts back from its end.
 			enforce("internal/tools/jobs", "maxTraceTailLines"),
 			enforce("internal/tools/jobs", "maxArtifactBytes"),
+			// The file content one read of the file blob resource carries;
+			// a larger file is answered with its metadata and no content.
+			enforce("internal/resources", "fileBlobMaxBytes"),
 			enforce("internal/tools/modelregistry", "maxModelFileBytes"),
 			enforce("internal/tools/settings", "maxNamedUnmodeledKeys"),
 			// The one ceiling every download action reads its body under:
@@ -117,7 +131,10 @@ func requestDecisions() []Decision {
 			// export, each refused whole above it rather than cut short.
 			enforce(pkgToolutil, "MaxDownloadBytes"),
 			enforce("internal/tools/dependencyfirewall", "maxCoordinateLength"),
-			enforce(pkgToolutil, "maxGitLabMessageLen")),
+			enforce(pkgToolutil, "maxGitLabMessageLen"),
+			// GitLab's reason for a failed transfer as a project or group
+			// transfer quotes it, the length GitLab stores it at.
+			enforce("internal/tools/waitpoll", "transferReasonMaxRunes")),
 		// A fine-grained token's grant is the minter's to size: every project
 		// or group id becomes a scope of its own, each scope may name every
 		// assignable permission, so the body GitLab answers the grant read
@@ -152,5 +169,27 @@ func requestDecisions() []Decision {
 		// GitLab judges the write.
 		bound("RQB-013", "the diff pages one advisory merge request position check reads",
 			enforce(pkgToolutil, "mergeRequestDiffPositionMaxPages")),
+		// The Orbit graph schema and the Orbit tool list are read a page at a
+		// time, each page asked with the cursor the last one ended at, and
+		// only GitLab's answer says when the cursor runs out. An answer whose
+		// cursor never ends would hold one call for as long as GitLab kept
+		// answering, so the pages one call follows are bounded where it
+		// follows them, as RQB-012 and RQB-013 bound the pages their walks
+		// read (issue 1717).
+		bound("RQB-014", "the pages one Orbit schema or tool list read follows",
+			enforce("internal/tools/orbit", "maxSchemaPages"),
+			enforce("internal/tools/orbit", "maxToolPages")),
+		// What one request writes into the operator's telemetry, which the
+		// operator pays to export and keep: the tracestate a caller hands
+		// over, carried onto every span of the trace and chosen before the
+		// caller has authenticated on the HTTP edge; an HTTP method the
+		// semantic conventions do not name, kept on the span beside _OTHER;
+		// and one exported log attribute, which a refusal path fills with
+		// what it refused. The logs SDK applies no length of its own, so
+		// each is cut where it is written (issue 1717).
+		bound("RQB-015", "what one request writes into the operator's telemetry",
+			enforce("internal/mcpotel", "maxTraceStateBytes"),
+			enforce("internal/mcpotel", "maxOriginalMethod"),
+			enforce("internal/telemetry", "maxExportedAttrValue")),
 	}
 }
