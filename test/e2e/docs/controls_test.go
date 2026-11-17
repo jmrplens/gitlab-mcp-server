@@ -1,0 +1,538 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
+//go:build e2e
+
+// controls_test.go holds the runner to the verdicts it exists to give, on
+// pages planted here and run in a local bash rather than in the reader, so
+// they need neither GitLab nor Docker.
+//
+// The negative controls are the point: a runner that passes every page also
+// passes the documentation, so each way a reader's step can break (a command
+// that fails, one that hangs, a server that exits on its flags or stops
+// later, a server that never answers) is planted once and must come out red,
+// naming the page and the line. The positive ones pin what a reader's steps
+// rely on: the substitutions, a server left running for the later blocks, and
+// nothing left running after the page.
+package docse2e
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/docblocks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
+)
+
+// localShell is the reader of the controls: bash on this machine, in a home
+// directory of its own, so the runner's scripts run exactly as they do in the
+// container, process groups and pid files included.
+type localShell struct {
+	home string
+}
+
+// newLocalShell returns a local reader in a fresh home directory, skipping on
+// a machine whose bash cannot stand in for the reader's.
+func newLocalShell(t *testing.T) *localShell {
+	t.Helper()
+	for _, tool := range []string{"bash", "setsid", "timeout"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("the controls run the runner's scripts in a local bash and need %s: %v", tool, err)
+		}
+	}
+	return &localShell{home: t.TempDir()}
+}
+
+// write puts content at name under the home directory.
+func (s *localShell) write(_ context.Context, name string, content []byte) error {
+	path := filepath.Join(s.home, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(path, content, 0o600)
+}
+
+// run runs script with bash in the home directory.
+func (s *localShell) run(ctx context.Context, script string) (string, error) {
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	cmd.Dir = s.home
+	// curl reads its configuration from CURL_HOME before HOME, so it names
+	// the home directory too, where the reader's curl finds it by HOME.
+	cmd.Env = append(os.Environ(), "HOME="+s.home, "CURL_HOME="+s.home)
+	cmd.WaitDelay = 5 * time.Second
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// The values the controls' substitutions put in place of the page's.
+const (
+	controlVersion = "9.9.9"
+	controlURL     = "http://gitlab-stand-in"
+	controlToken   = "glpat-controlsecret"
+)
+
+// controlRunner returns a runner over a local reader with windows short
+// enough for a control to fail in seconds.
+func controlRunner(t *testing.T) (*runner, *localShell) {
+	t.Helper()
+	shell := newLocalShell(t)
+	return &runner{
+		shell:        shell,
+		subs:         substitutions{version: controlVersion, gitlabURL: controlURL, token: controlToken},
+		blockTimeout: 2 * time.Second,
+		settle:       300 * time.Millisecond,
+		readiness:    3 * time.Second,
+		poll:         100 * time.Millisecond,
+	}, shell
+}
+
+// markedBlocks parses a planted page and returns the blocks it marks.
+func markedBlocks(t *testing.T, src string) []docblocks.Block {
+	t.Helper()
+	blocks, err := docblocks.Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("parsing the planted page: %v", err)
+	}
+	var out []docblocks.Block
+	for _, block := range blocks {
+		if block.Run != docblocks.RunNone {
+			out = append(out, block)
+		}
+	}
+	return out
+}
+
+// fence spells a marked bash block of a planted page.
+func fence(mode docblocks.RunMode, body string) string {
+	return fmt.Sprintf("```bash %s\n%s\n```\n\n", mode, body)
+}
+
+// A planted server that stops when a later block tells it to, and the block
+// that tells it and waits until it has stopped. The handshake puts the stop
+// between two given blocks whatever the machine's load, where a server timed
+// to exit could end before the runner's settle check, or after the block
+// meant to find it stopped, and fail the control at another line. Each is
+// one line, so the planted page's line numbers stay those of one-line blocks.
+const (
+	stopsWhenTold = `echo $$ > server.pid; until [ -e stop ]; do sleep 0.05; done`
+	tellToStop    = `touch stop; until [ -s server.pid ]; do sleep 0.05; done; while kill -0 "$(cat server.pid)" 2>/dev/null; do sleep 0.05; done`
+)
+
+// TestRunPage_BrokenStep_IsRed is the negative controls: every planted page
+// carries one step a reader would see fail, and the runner must fail the page
+// at that step, naming the page, the line and what went wrong.
+func TestRunPage_BrokenStep_IsRed(t *testing.T) {
+	t.Parallel()
+
+	bg := docblocks.RunBackground
+	fg := docblocks.RunForeground
+	tests := []struct {
+		name string
+		page string
+		want error
+		// says is what the report must contain: the line, and the output
+		// or the reason a reader would be shown.
+		says []string
+	}{
+		{
+			name: "a command that fails",
+			page: fence(fg, "echo fine") + fence(fg, "echo about to fail\nfalse\necho never"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:5", "about to fail", "exit status 1"},
+		},
+		{
+			name: "a pipeline whose first command fails while the last succeeds",
+			page: fence(fg, "echo before\nfalse | cat"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "before", "exit status 1"},
+		},
+		{
+			name: "a command that is not there",
+			page: fence(fg, "no-such-command-anywhere --help"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "no-such-command-anywhere"},
+		},
+		{
+			name: "a command that hangs",
+			page: fence(fg, "sleep 30"),
+			want: errBlockTimedOut,
+			says: []string{"guide.mdx:1", "did not end within 2s"},
+		},
+		{
+			name: "a server that exits on its flags",
+			page: fence(bg, "echo 'unknown flag: --htpp' >&2\nexit 2") + fence(fg, "true"),
+			want: errBackgroundStopped,
+			says: []string{"guide.mdx:1", "unknown flag: --htpp", "stopped"},
+		},
+		{
+			name: "a server that stops before a later block",
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop) + fence(fg, "true"),
+			want: errBackgroundStopped,
+			says: []string{"guide.mdx:1", "stopped", "guide.mdx:9"},
+		},
+		{
+			name: "a server that stops before the page ends",
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop),
+			want: errBackgroundStopped,
+			says: []string{"guide.mdx:1", "stopped", "end of the page"},
+		},
+		{
+			name: "a server that stops before the next one starts",
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop) + fence(bg, "sleep 30"),
+			want: errBackgroundStopped,
+			says: []string{"guide.mdx:1", "stopped", "guide.mdx:9"},
+		},
+		{
+			name: "a server that never answers its probe",
+			page: fence(bg, "sleep 30") + fence(fg, "test -e ready"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:5", "readiness", "3s"},
+		},
+		{
+			name: "a server that dies while its probe waits",
+			page: fence(bg, "echo listening; "+stopsWhenTold+"; echo crashed; exit 3") + fence(fg, tellToStop+"; test -e ready"),
+			want: errBackgroundStopped,
+			says: []string{"guide.mdx:1", "crashed", "guide.mdx:5"},
+		},
+		{
+			name: "a probe that hangs past the window is not retried forever",
+			page: fence(bg, "sleep 30") + fence(fg, "sleep 30"),
+			want: errBlockTimedOut,
+			says: []string{"guide.mdx:5", "did not end within 2s"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r, shell := controlRunner(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			err := r.runPage(ctx, "guide.mdx", markedBlocks(t, tt.page))
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("runPage = %v; want an error wrapping %q", err, tt.want)
+			}
+			for _, say := range tt.says {
+				if !strings.Contains(err.Error(), say) {
+					t.Errorf("the report does not say %q:\n%v", say, err)
+				}
+			}
+			assertNothingRunning(t, shell)
+		})
+	}
+}
+
+// TestRunPage_ReaderSteps_Pass pins what a passing page relies on: a server
+// left running for the blocks after it, a probe retried until the server is
+// up, a second server replacing the first, and the substitutions.
+func TestRunPage_ReaderSteps_Pass(t *testing.T) {
+	t.Parallel()
+
+	bg := docblocks.RunBackground
+	fg := docblocks.RunForeground
+	tests := []struct {
+		name string
+		page string
+	}{
+		{
+			name: "commands that end",
+			page: fence(fg, "echo one > one.txt") + fence(fg, "grep -q one one.txt"),
+		},
+		{
+			name: "a server the later blocks reach, probed until it is up",
+			page: fence(bg, "sleep 1\necho up > ready\nsleep 30") + fence(fg, "test -e ready") + fence(fg, "test -e ready"),
+		},
+		{
+			name: "a second server replaces the first",
+			page: fence(bg, "echo $$ > first.pid\nsleep 30") + fence(bg, "sleep 30") +
+				fence(fg, `! kill -0 "$(cat first.pid)" 2>/dev/null`),
+		},
+		{
+			name: "a pipeline whose every command succeeds",
+			page: fence(fg, "echo one | tr o O | grep -qx One"),
+		},
+		{
+			name: "the version, the instance and the token are substituted",
+			page: fence(fg, strings.Join([]string{
+				`test "%%VERSION%%" = "` + controlVersion + `"`,
+				`test "https://gitlab.com" = "` + controlURL + `"`,
+				`test "--gitlab-url=https://gitlab.com,https://gitlab.example.com" = "--gitlab-url=` + controlURL + "," + controlURL + `"`,
+				`test "https://gitlab.company.com" = "https://gitlab.company.com"`,
+				`test "https://gitlab.internal.example.com" = "https://gitlab.internal.example.com"`,
+				`test "glpat-your-token" = "` + controlToken + `"`,
+				`test "glpat-xxxxxxxxxxxxxxxxxxxx" = "` + controlToken + `"`,
+				`test "glpat-xxx" = "glpat-xxx"`,
+			}, "\n")),
+		},
+		{
+			name: "a page that marks nothing",
+			page: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r, shell := controlRunner(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := r.runPage(ctx, "guide.mdx", markedBlocks(t, tt.page)); err != nil {
+				t.Fatalf("runPage: %v", err)
+			}
+			assertNothingRunning(t, shell)
+		})
+	}
+}
+
+// TestRunPage_CurlAnswer_IsJudgedByItsStatus pins that a block's curl fails
+// on an HTTP error answer, as the reader's curl configuration makes it: curl
+// ends with status 0 on any answer it receives, so without it a renamed route,
+// a refused token or a draining server would pass a block whose page printed
+// only the request, and a probe would take a 503 for a server that is up.
+// The same holds for a curl piped to a filter, which pipefail makes the
+// pipeline's status: a request that failed, or reached nothing, no longer
+// passes because jq or cat did.
+func TestRunPage_CurlAnswer_IsJudgedByItsStatus(t *testing.T) {
+	t.Parallel()
+	for _, tool := range []string{"curl", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("the control runs %s, as the reader's blocks do: %v", tool, err)
+		}
+	}
+	dead := netfixture.DeadEndpoint(t)
+
+	answers := map[string]int{"/health": http.StatusOK, "/refused": http.StatusUnauthorized, "/draining": http.StatusServiceUnavailable}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		code, ok := answers[r.URL.Path]
+		if !ok {
+			code = http.StatusNotFound
+		}
+		w.WriteHeader(code)
+		_, _ = fmt.Fprintf(w, "answered %d\n", code)
+	}))
+	t.Cleanup(srv.Close)
+
+	bg := docblocks.RunBackground
+	fg := docblocks.RunForeground
+	tests := []struct {
+		name string
+		page string
+		// want is nil for a block that must pass.
+		want error
+		says []string
+	}{
+		{
+			name: "a route that answers 200 passes",
+			page: fence(fg, "curl -s "+srv.URL+"/health"),
+		},
+		{
+			name: "the status printed on its own passes on a 200",
+			page: fence(fg, `curl -s -o /dev/null -w "%{http_code}" `+srv.URL+"/health"),
+		},
+		{
+			name: "a renamed route, answered 404",
+			page: fence(fg, "curl -s "+srv.URL+"/renamed"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "answered 404", "exit status 22"},
+		},
+		{
+			name: "a renamed route piped to a filter that succeeds",
+			page: fence(fg, "curl -s "+srv.URL+"/renamed | cat"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "answered 404", "exit status 22"},
+		},
+		{
+			// jq reads no input and ends with status 0, so only curl's own
+			// status, 52 or 56 by how the connection ended, can fail it.
+			name: "a request nothing answers, piped to jq",
+			page: fence(fg, "curl -s "+dead+"/.well-known/mcp/server-card.json | jq .telemetry"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "exit status 5"},
+		},
+		{
+			name: "a refused token, its status printed on its own",
+			page: fence(fg, `curl -s -o /dev/null -w "%{http_code}" `+srv.URL+"/refused"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "401", "exit status 22"},
+		},
+		{
+			name: "a probe answered 503 until the window closes",
+			page: fence(bg, "sleep 30") + fence(fg, "curl -s "+srv.URL+"/draining"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:5", "answered 503", "readiness"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r, shell := controlRunner(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			err := r.runPage(ctx, "guide.mdx", markedBlocks(t, tt.page))
+			if tt.want == nil {
+				if err != nil {
+					t.Errorf("runPage: %v", err)
+				}
+			} else if !errors.Is(err, tt.want) {
+				t.Errorf("runPage = %v; want an error wrapping %q", err, tt.want)
+			} else {
+				for _, say := range tt.says {
+					if !strings.Contains(err.Error(), say) {
+						t.Errorf("the report does not say %q:\n%v", say, err)
+					}
+				}
+			}
+			assertNothingRunning(t, shell)
+		})
+	}
+}
+
+// TestRunPage_FailureReport_NeverPrintsTheToken pins that the token a block
+// was handed is redacted from what a failure prints, since a report goes to
+// a terminal and to the saved output of the run.
+func TestRunPage_FailureReport_NeverPrintsTheToken(t *testing.T) {
+	t.Parallel()
+
+	r, shell := controlRunner(t)
+	page := fence(docblocks.RunBackground, "echo serving with glpat-your-token\nexit 1") +
+		fence(docblocks.RunForeground, "true")
+	err := r.runPage(context.Background(), "guide.mdx", markedBlocks(t, page))
+	if !errors.Is(err, errBackgroundStopped) {
+		t.Fatalf("runPage = %v; want an error wrapping %q", err, errBackgroundStopped)
+	}
+	if strings.Contains(err.Error(), controlToken) {
+		t.Errorf("the report prints the token:\n%v", err)
+	}
+	if !strings.Contains(err.Error(), "serving with [token]") {
+		t.Errorf("the report does not show the output with the token redacted:\n%v", err)
+	}
+
+	r, shell2 := controlRunner(t)
+	err = r.runPage(context.Background(), "guide.mdx", markedBlocks(t, fence(docblocks.RunForeground, "echo glpat-xxxxxxxx\nfalse")))
+	if !errors.Is(err, errBlockFailed) || strings.Contains(err.Error(), controlToken) || !strings.Contains(err.Error(), "[token]") {
+		t.Errorf("runPage = %v; want a failure that redacts the token", err)
+	}
+	assertNothingRunning(t, shell)
+	assertNothingRunning(t, shell2)
+}
+
+// TestRunPage_ReaderUnusable_IsRed pins that a reader the runner cannot
+// write to or run in fails the page rather than passing it with nothing run.
+func TestRunPage_ReaderUnusable_IsRed(t *testing.T) {
+	t.Parallel()
+
+	page := fence(docblocks.RunBackground, "sleep 30") + fence(docblocks.RunForeground, "true")
+	diskFull := errors.New("disk full")
+	tests := []struct {
+		name  string
+		shell shell
+		// says is what the report must contain: where, and the reason.
+		says []string
+	}{
+		{
+			name:  "the curl configuration cannot be written",
+			shell: brokenShell{writeErr: diskFull, refused: ".curlrc"},
+			says:  []string{"guide.mdx: writing the reader's curl configuration", "disk full"},
+		},
+		{
+			name:  "a block cannot be written",
+			shell: brokenShell{writeErr: diskFull, refused: runnerDir + "/"},
+			says:  []string{"guide.mdx:1", "writing the block", "disk full"},
+		},
+		{
+			name:  "nothing can be run",
+			shell: brokenShell{runErr: errors.New("no such container")},
+			says:  []string{"guide.mdx:1", "no such container"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := &runner{shell: tt.shell, blockTimeout: time.Second, settle: time.Millisecond, readiness: time.Second, poll: time.Millisecond}
+			err := r.runPage(context.Background(), "guide.mdx", markedBlocks(t, page))
+			if err == nil {
+				t.Fatal("runPage passed a page whose reader refused it")
+			}
+			for _, say := range tt.says {
+				if !strings.Contains(err.Error(), say) {
+					t.Errorf("the report does not say %q:\n%v", say, err)
+				}
+			}
+		})
+	}
+}
+
+// brokenShell is a reader that refuses what the runner asks of it: a write
+// to a path under refused fails with writeErr, and every run with runErr.
+type brokenShell struct {
+	writeErr error
+	refused  string
+	runErr   error
+}
+
+func (s brokenShell) write(_ context.Context, name string, _ []byte) error {
+	if strings.HasPrefix(name, s.refused) {
+		return s.writeErr
+	}
+	return nil
+}
+
+func (s brokenShell) run(context.Context, string) (string, error) { return "", s.runErr }
+
+// interruptedStart is a local reader whose start of a background block fails
+// after the block started and wrote its pid file, as a start does when its
+// context ends while the start script waits.
+type interruptedStart struct {
+	*localShell
+}
+
+func (s interruptedStart) run(ctx context.Context, script string) (string, error) {
+	out, err := s.localShell.run(ctx, script)
+	if err == nil && strings.HasPrefix(script, "setsid ") {
+		return out, context.DeadlineExceeded
+	}
+	return out, err
+}
+
+// TestRunPage_StartFailsAfterThePid_LeavesNothingRunning pins that a
+// background block whose start fails once the block is running is stopped
+// there: the page holds no handle on a block whose start failed, so its own
+// cleanup would leave the block's process group running.
+func TestRunPage_StartFailsAfterThePid_LeavesNothingRunning(t *testing.T) {
+	t.Parallel()
+	r, local := controlRunner(t)
+	r.shell = interruptedStart{local}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := r.runPage(ctx, "guide.mdx", markedBlocks(t, fence(docblocks.RunBackground, "sleep 30")+fence(docblocks.RunForeground, "true")))
+	if !errors.Is(err, errBlockFailed) || !strings.Contains(err.Error(), "guide.mdx:1: starting the block") {
+		t.Fatalf("runPage = %v; want the start of guide.mdx:1 failed, wrapping %q", err, errBlockFailed)
+	}
+	if _, statErr := os.Stat(filepath.Join(local.home, filepath.FromSlash(runnerDir), "block-1.pid")); statErr != nil {
+		t.Fatalf("the block wrote no pid file, so nothing shows it was running: %v", statErr)
+	}
+	assertNothingRunning(t, local)
+}
+
+// assertNothingRunning fails the test when a block the runner started is
+// still running after the page: every pid file it wrote names a process
+// group that is gone.
+func assertNothingRunning(t *testing.T, shell *localShell) {
+	t.Helper()
+	out, err := shell.run(context.Background(), `
+for f in `+runnerDir+`/*.pid; do
+  [ -e "$f" ] || continue
+  if kill -0 -- -"$(cat "$f")" 2>/dev/null; then echo "still running: $f"; fi
+done`)
+	if err != nil || out != "" {
+		t.Errorf("after the page: %v %s", err, out)
+	}
+}

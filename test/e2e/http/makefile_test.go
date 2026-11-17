@@ -91,6 +91,7 @@ func TestMakeRunTargets_ToolUnderAPathWithASpace_RunAsOnePath(t *testing.T) {
 		{goal: "test-e2e-gitlab", want: gotestsum},
 		{goal: "test-e2e-ce", want: gotestsum},
 		{goal: "test-e2e-ee", want: gotestsum},
+		{goal: "test-e2e-docs", want: gotestsum},
 		{goal: "modeleval-ce", want: gotestsum},
 		{goal: "modeleval-ee", want: gotestsum},
 		{goal: "docs-local-go", want: pkgsite},
@@ -106,7 +107,7 @@ func TestMakeRunTargets_ToolUnderAPathWithASpace_RunAsOnePath(t *testing.T) {
 				home = bare
 			}
 			args := append([]string{
-				"-o", "ensure-gotestsum", "-o", "e2e-server-binary", tt.goal,
+				"-o", "ensure-gotestsum", "-o", "e2e-server-binary", "-o", "e2e-docs-server-binary", tt.goal,
 				"GOTESTSUM=" + gotestsum, "PKGSITE=" + pkgsite,
 			}, tt.args...)
 			runMake(t, makeBin, checkout, []string{
@@ -255,6 +256,10 @@ func TestMakeTargets_PathWithASpace_ReachesTheToolWhole(t *testing.T) {
 			goal: "e2e-server-binary", args: []string{"E2E_SERVER_BINARY=dist/e2e server/gitlab-mcp-server"},
 			want: [][]string{{"-o", "dist/e2e server/gitlab-mcp-server", "./cmd/server"}},
 		},
+		{
+			goal: "e2e-docs-server-binary", args: []string{"E2E_DOCS_SERVER_BINARY=dist/e2e docs/gitlab-mcp-server"},
+			want: [][]string{{"version", "--format", "{{.Server.Arch}}"}, {"-o", "dist/e2e docs/gitlab-mcp-server", "./cmd/server"}},
+		},
 		{goal: "audit-e2e-gaps", want: [][]string{{"-calls", calls, "-report", ""}}},
 		{goal: "audit-e2e-coverage", want: [][]string{{"-calls", calls, "-report", "-o", reports + "/e2e-coverage.json", "-summary", "-"}}},
 		{
@@ -311,6 +316,56 @@ func TestMakeTargets_PathWithASpace_ReachesTheToolWhole(t *testing.T) {
 			assertCalled(t, "make "+tt.goal, recordedArgs(t, state), tt.want...)
 		})
 	}
+}
+
+// TestE2EDocsServerBinaryTarget_AnyHost_BuildsForTheReader runs make
+// e2e-docs-server-binary against stand-ins for go and docker, and holds it to
+// building the server for Linux on the architecture the Docker daemon
+// reports, and to building nothing when the daemon cannot be asked.
+//
+// test-e2e-docs copies the binary into Linux reader containers, and it used
+// to copy e2e-server-binary's, a build for the host, which a Linux reader
+// cannot start on macOS or Windows. The stand-in daemon reports s390x, an
+// architecture no host this runs on has, so a build for the host's is told
+// from one for the daemon's.
+func TestE2EDocsServerBinaryTarget_AnyHost_BuildsForTheReader(t *testing.T) {
+	t.Parallel()
+	makeBin := makeOnLinux(t)
+	checkout := checkoutAs(t, "checkout")
+	const goRecordsEnv = "#!/bin/sh\nprintf '%s\\n' \"CGO_ENABLED=$CGO_ENABLED\" \"GOOS=$GOOS\" \"GOARCH=$GOARCH\" \"$@\" '' >> \"$FAKE_STATE/args\"\n"
+
+	t.Run("the daemon answers", func(t *testing.T) {
+		t.Parallel()
+		tools, state := t.TempDir(), t.TempDir()
+		writeStandIn(t, filepath.Join(tools, "go"), goRecordsEnv)
+		writeStandIn(t, filepath.Join(tools, "docker"), "#!/bin/sh\n[ \"$*\" = 'version --format {{.Server.Arch}}' ] && echo s390x\n")
+		runMake(t, makeBin, checkout, []string{
+			"FAKE_STATE=" + state, "PATH=" + tools + string(os.PathListSeparator) + os.Getenv("PATH"),
+		}, "e2e-docs-server-binary")
+		assertCalled(t, "make e2e-docs-server-binary", recordedArgs(t, state),
+			[]string{"CGO_ENABLED=0", "GOOS=linux", "GOARCH=s390x", "build", "-o", "dist/e2e/docs/gitlab-mcp-server", "./cmd/server"})
+	})
+
+	t.Run("the daemon cannot be asked", func(t *testing.T) {
+		t.Parallel()
+		tools, state := t.TempDir(), t.TempDir()
+		writeStandIn(t, filepath.Join(tools, "go"), goRecordsEnv)
+		writeStandIn(t, filepath.Join(tools, "docker"), "#!/bin/sh\necho 'Cannot connect to the Docker daemon' >&2\nexit 1\n")
+		//#nosec G204 -- make from the PATH, with the test's own arguments
+		cmd := exec.CommandContext(t.Context(), makeBin, "-s", "--no-print-directory", "e2e-docs-server-binary")
+		cmd.Dir = checkout
+		cmd.Env = makeEnviron("FAKE_STATE="+state, "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if out, err := cmd.CombinedOutput(); err == nil {
+			t.Fatalf("make e2e-docs-server-binary ended with status 0 with no daemon to ask, want a failure:\n%s", out)
+		}
+		calls, err := os.ReadFile(filepath.Join(state, "args")) //#nosec G304 -- the record the stand-ins wrote in this test's own directory
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("reading what the stand-ins recorded: %v", err)
+		}
+		if strings.Contains(string(calls), "\nbuild\n") {
+			t.Errorf("go built the server for an architecture nobody reported:\n%s", calls)
+		}
+	})
 }
 
 // TestMakeTargets_PathMakeWouldRead_ReachesTheToolUnchanged runs the targets

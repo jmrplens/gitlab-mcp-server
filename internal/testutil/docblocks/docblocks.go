@@ -28,10 +28,44 @@ var (
 	// ErrBadKey is an e2e option whose value is not a key, or a fence that
 	// names two.
 	ErrBadKey = errors.New("the fence's e2e option is not one key")
+	// ErrBadRun is a run option the docs runner cannot follow: a value it
+	// does not know, the option twice, or a fence that is not a shell's.
+	ErrBadRun = errors.New("the fence's run option is not run or run=background on a shell block")
+	// ErrRunNotInTwin is a Spanish twin that does not mark the blocks its
+	// English page marks, in the same order and the same way.
+	ErrRunNotInTwin = errors.New("the Spanish twin does not mark the blocks the English page marks to run")
 )
 
 // keyOption is the fence option that names a block for a test.
 const keyOption = "e2e="
+
+// RunMode is how the documentation runner of test/e2e/docs treats a block,
+// spelled as the fence option that asks for it.
+type RunMode string
+
+// The run modes a fence can ask for.
+const (
+	// RunNone is a block the runner leaves alone: a fence with no run option.
+	RunNone RunMode = ""
+	// RunForeground is a command that ends, run to its end and held to a
+	// zero exit status: the fence option `run`.
+	RunForeground RunMode = "run"
+	// RunBackground is a command that keeps running, a server, started and
+	// left running while the page's later blocks run: `run=background`.
+	RunBackground RunMode = "run=background"
+)
+
+// runOption is the run option's name, as RunForeground spells it, and
+// runValue the prefix of the only value it takes.
+const (
+	runOption = string(RunForeground)
+	runValue  = "run="
+)
+
+// shellLangs are the fence languages a run option may mark: what the runner
+// hands to bash is a shell's text, and a block in any other language would be
+// read as one.
+var shellLangs = map[string]bool{"bash": true, "sh": true}
 
 // keyPattern is what a key may be: lowercase words joined by hyphens, the
 // shape a case name already has, so a key never needs quoting in a fence.
@@ -52,6 +86,9 @@ type Block struct {
 	Info string
 	// Key is the value of the fence's e2e option, empty when it has none.
 	Key string
+	// Run is how the docs runner treats the block, RunNone when the fence
+	// carries no run option.
+	Run RunMode
 	// Body is the content between the fences, each line ending in a newline
 	// and stripped of the opening fence's indentation.
 	Body string
@@ -156,7 +193,18 @@ func closes(line, fence string) bool {
 func fenceInfo(info string, line int) (Block, error) {
 	options := strings.TrimLeftFunc(info, func(r rune) bool { return r != ' ' && r != '\t' })
 	block := Block{Lang: info[:len(info)-len(options)], Info: strings.TrimLeft(options, " \t"), Line: line}
+	// The first word is the language, so a run option written first is read
+	// as one, and the block would render and run as nothing anyone asked for.
+	if block.Lang == runOption || strings.HasPrefix(block.Lang, runValue) {
+		return Block{}, fmt.Errorf("the fence at line %d is a %s block, and a run option goes after the block's language: %w", line, block.Lang, ErrBadRun)
+	}
 	for _, option := range splitOptions(block.Info) {
+		if option == runOption || strings.HasPrefix(option, runValue) {
+			if err := block.setRun(option); err != nil {
+				return Block{}, err
+			}
+			continue
+		}
 		value, ok := strings.CutPrefix(option, keyOption)
 		if !ok {
 			continue
@@ -170,6 +218,24 @@ func fenceInfo(info string, line int) (Block, error) {
 		block.Key = value
 	}
 	return block, nil
+}
+
+// setRun records a fence's run option on the block, refusing a value the
+// runner does not know, a second run option, and a fence no shell reads.
+func (b *Block) setRun(option string) error {
+	if b.Run != RunNone {
+		return fmt.Errorf("the fence at line %d asks to run twice, as %s and %s: %w", b.Line, b.Run, option, ErrBadRun)
+	}
+	mode := RunMode(option)
+	if mode != RunForeground && mode != RunBackground {
+		value := strings.TrimPrefix(option, runValue)
+		return fmt.Errorf("the fence at line %d has %s%q, and the runner takes %s or %s: %w", b.Line, runValue, value, RunForeground, RunBackground, ErrBadRun)
+	}
+	if !shellLangs[b.Lang] {
+		return fmt.Errorf("the fence at line %d is a %s block, and %s marks a bash or sh block: %w", b.Line, b.Lang, option, ErrBadRun)
+	}
+	b.Run = mode
+	return nil
 }
 
 // splitOptions splits a fence's options on the spaces outside quotes, so a
@@ -256,6 +322,52 @@ func (p *Page) Block(key string) (Block, error) {
 		return Block{}, fmt.Errorf("%s: e2e=%s is on line %d of the English page: %w", p.Twin, key, found[0].Line, ErrNotInTwin)
 	}
 	return found[0], nil
+}
+
+// RunBlocks returns the blocks of the English page whose fence carries a run
+// option, in page order, after checking that the Spanish twin marks the same
+// blocks, each the same way. A block is the same when it holds the same place
+// among the page's code blocks, the order check-i18n-code.mjs pairs the two
+// pages' blocks by, so a mark moved to another block of the twin is refused
+// even when the twin still marks as many blocks the same way. A page that
+// marks nothing returns none.
+func (p *Page) RunBlocks() ([]Block, error) {
+	english, twin := marked(p.blocks), marked(p.twin)
+	if len(english) != len(twin) {
+		return nil, fmt.Errorf("%s marks %s to run, and the English page marks %d: %w", p.Twin, blocksWord(len(twin)), len(english), ErrRunNotInTwin)
+	}
+	var out []Block
+	for i, at := range english {
+		block, other := p.blocks[at], p.twin[twin[i]]
+		if twin[i] != at {
+			return nil, fmt.Errorf("%s: the marked block at line %d is the page's code block %d, and the English page's marked block at line %d is its code block %d: %w", p.Twin, other.Line, twin[i]+1, block.Line, at+1, ErrRunNotInTwin)
+		}
+		if other.Run != block.Run {
+			return nil, fmt.Errorf("%s: the block at line %d is marked %s, and the English block at line %d is marked %s: %w", p.Twin, other.Line, other.Run, block.Line, block.Run, ErrRunNotInTwin)
+		}
+		out = append(out, block)
+	}
+	return out, nil
+}
+
+// marked returns the places, among blocks, of the blocks a run option marks,
+// in page order.
+func marked(blocks []Block) []int {
+	var out []int
+	for i, block := range blocks {
+		if block.Run != RunNone {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// blocksWord spells a count of blocks for a message.
+func blocksWord(n int) string {
+	if n == 1 {
+		return "1 block"
+	}
+	return fmt.Sprintf("%d blocks", n)
 }
 
 // only returns the blocks of one page that carry key, refusing more than one.
