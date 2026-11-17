@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -61,6 +62,59 @@ func TestNewClient_ValidConfig(t *testing.T) {
 	}
 	if client == nil {
 		t.Fatal("NewClient() returned nil client")
+	}
+}
+
+// TestClientConstructors_AWriteWithoutOptions_SendsNoBody verifies every
+// constructor that builds a client able to reach GitLab turns on client-go's
+// WithNilOptionsOmitted: a method that delegates to its WithOptions sibling
+// with a nil options pointer, as Jobs.CancelJob does, sends a POST with no
+// body at all rather than the four bytes null (issue 1773), which is what
+// client-go 4.0 will make the default.
+func TestClientConstructors_AWriteWithoutOptions_SendsNoBody(t *testing.T) {
+	constructors := []struct {
+		name  string
+		build func(url string) (*Client, error)
+	}{
+		{"NewClient", func(url string) (*Client, error) { return NewClient(newTestConfig(url, testValidToken)) }},
+		{"NewClientWithTokenRetries", func(url string) (*Client, error) {
+			return NewClientWithTokenRetries(url, testValidToken, false, true)
+		}},
+		{"NewOAuthClientWithToken", func(url string) (*Client, error) {
+			return NewOAuthClientWithToken(url, testValidToken, false)
+		}},
+	}
+	for _, tc := range constructors {
+		t.Run(tc.name, func(t *testing.T) {
+			var body atomic.Pointer[string]
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/1/jobs/2/cancel" {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				read, _ := io.ReadAll(r.Body)
+				sent := string(read)
+				body.Store(&sent)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"id":2,"status":"canceled"}`))
+			}))
+			defer srv.Close()
+			client, err := tc.build(srv.URL)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if _, _, err = client.GL().Jobs.CancelJob(1, 2, gl.WithContext(t.Context())); err != nil {
+				t.Fatalf("CancelJob: %v", err)
+			}
+			sent := body.Load()
+			if sent == nil {
+				t.Fatal("the cancel request never reached the stand-in")
+			}
+			if *sent != "" {
+				t.Errorf("the cancel request carried the body %q, want none", *sent)
+			}
+		})
 	}
 }
 
