@@ -115,6 +115,17 @@ func fence(mode docblocks.RunMode, body string) string {
 	return fmt.Sprintf("```bash %s\n%s\n```\n\n", mode, body)
 }
 
+// A planted server that stops when a later block tells it to, and the block
+// that tells it and waits until it has stopped. The handshake puts the stop
+// between two given blocks whatever the machine's load, where a server timed
+// to exit could end before the runner's settle check, or after the block
+// meant to find it stopped, and fail the control at another line. Each is
+// one line, so the planted page's line numbers stay those of one-line blocks.
+const (
+	stopsWhenTold = `echo $$ > server.pid; until [ -e stop ]; do sleep 0.05; done`
+	tellToStop    = `touch stop; until [ -s server.pid ]; do sleep 0.05; done; while kill -0 "$(cat server.pid)" 2>/dev/null; do sleep 0.05; done`
+)
+
 // TestRunPage_BrokenStep_IsRed is the negative controls: every planted page
 // carries one step a reader would see fail, and the runner must fail the page
 // at that step, naming the page, the line and what went wrong.
@@ -157,19 +168,19 @@ func TestRunPage_BrokenStep_IsRed(t *testing.T) {
 		},
 		{
 			name: "a server that stops before a later block",
-			page: fence(bg, "sleep 0.5") + fence(fg, "sleep 1") + fence(fg, "true"),
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop) + fence(fg, "true"),
 			want: errBackgroundStopped,
 			says: []string{"guide.mdx:1", "stopped", "guide.mdx:9"},
 		},
 		{
 			name: "a server that stops before the page ends",
-			page: fence(bg, "sleep 0.5") + fence(fg, "sleep 1"),
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop),
 			want: errBackgroundStopped,
 			says: []string{"guide.mdx:1", "stopped", "end of the page"},
 		},
 		{
 			name: "a server that stops before the next one starts",
-			page: fence(bg, "sleep 0.5") + fence(fg, "sleep 1") + fence(bg, "sleep 30"),
+			page: fence(bg, stopsWhenTold) + fence(fg, tellToStop) + fence(bg, "sleep 30"),
 			want: errBackgroundStopped,
 			says: []string{"guide.mdx:1", "stopped", "guide.mdx:9"},
 		},
@@ -181,7 +192,7 @@ func TestRunPage_BrokenStep_IsRed(t *testing.T) {
 		},
 		{
 			name: "a server that dies while its probe waits",
-			page: fence(bg, "echo listening; sleep 0.6; echo crashed; exit 3") + fence(fg, "test -e ready"),
+			page: fence(bg, "echo listening; "+stopsWhenTold+"; echo crashed; exit 3") + fence(fg, tellToStop+"; test -e ready"),
 			want: errBackgroundStopped,
 			says: []string{"guide.mdx:1", "crashed", "guide.mdx:5"},
 		},
