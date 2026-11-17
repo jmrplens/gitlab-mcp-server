@@ -1228,7 +1228,7 @@ curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | cut -c 1-200
 ```
 
 A successful response returns a JSON-RPC result with the list of available tools. To check the status code alone:
