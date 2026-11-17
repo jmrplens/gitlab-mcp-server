@@ -37,22 +37,30 @@ func runGit(ctx context.Context, dir string, args ...string) ([]byte, error) {
 // option or the value of -c, so a message never repeats a -c value, which is
 // where the token goes.
 func gitVerb(args []string) string {
-	for i := 0; i < len(args); i++ {
-		switch {
-		case args[i] == "-c" || args[i] == "-C":
-			i++
-		case !strings.HasPrefix(args[i], "-"):
-			return args[i]
+	optionValue := false
+	for _, arg := range args {
+		if optionValue {
+			optionValue = false
+			continue
+		}
+		if arg == "-c" || arg == "-C" {
+			optionValue = true
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return arg
 		}
 	}
 	return "(no subcommand)"
 }
 
-// trackedFiles lists the files git tracks under dir, relative to it, sorted
+// trackedFiles lists the files HEAD holds under dir, relative to it, sorted
 // with the LICENSE first: jmrp-oss requires an OSI license on every project,
-// and a commit that adds the fixture lists it first.
+// and a commit that adds the fixture lists it first. The list is HEAD's and
+// not the index's, so a file staged and not committed is left out, as its
+// content is by [committedBytes].
 func trackedFiles(ctx context.Context, git gitFunc, dir string) ([]string, error) {
-	listed, err := git(ctx, dir, "ls-files", "-z")
+	listed, err := git(ctx, dir, "ls-tree", "-r", "-z", "--name-only", "HEAD")
 	if err != nil {
 		return nil, err
 	}
