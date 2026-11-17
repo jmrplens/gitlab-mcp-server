@@ -20,7 +20,7 @@ import (
 )
 
 // fixtureProject is the project of the fixture namespace the query asks
-// about, provisioned by scripts/setup-orbit-fixtures.sh.
+// about, provisioned by cmd/orbit_fixtures.
 const fixtureProject = "kg-fixtures"
 
 // modulePath is this repository's module, trimmed from a Go type's package

@@ -23,7 +23,7 @@ const (
 	prefix = "gen_orbit_record:"
 	// regenerate is the command a stale or refused record is fixed with.
 	regenerate = "make gen-orbit-record"
-	// defaultNamespace is the fixture namespace scripts/setup-orbit-fixtures.sh
+	// defaultNamespace is the fixture namespace cmd/orbit_fixtures
 	// provisions when ORBIT_FIXTURES_NAMESPACE names none.
 	defaultNamespace = "jmrp-oss/orbit-fixtures"
 )
