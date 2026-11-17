@@ -860,6 +860,76 @@ func TestConfigurePullMirror_ArmingWithAuthUser_NamesTheLoginGitLabUses(t *testi
 	}
 }
 
+// TestConfigurePullMirror_ArmingWithAuthUserAlone_NamesTheLoginGitLabUses
+// verifies the question of a call that sends both flags and auth_user but no
+// URL. The flags decide the question without a read, but the source it names
+// is the mirror's, and on a home-relative SSH source auth_user is the login
+// whose home GitLab pulls from, the one part of the source the call changes.
+// So the call reads the mirror for its url and names it with auth_user as the
+// login, in the question of a mirror that runs and in the one of a mirror it
+// leaves off, as a call that sends auth_user alone is asked (issue 1764). A
+// source the login does not pick, and a read that fails, are asked about the
+// configured source, since the url then names no account or cannot be seen.
+func TestConfigurePullMirror_ArmingWithAuthUserAlone_NamesTheLoginGitLabUses(t *testing.T) {
+	tests := []struct {
+		name       string
+		readStatus int
+		readBody   string
+		enabled    bool
+		want       string
+	}{
+		{
+			name:       "a running home-relative SSH source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(false, maskedHomeRelativeMirrorSource),
+			enabled:    true,
+			want:       mirrorRefusal(opConfigurePullMirror, "ssh://alice@host.example/~/repo.git"),
+		},
+		{
+			name:       "a home-relative SSH source left off",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(false, maskedHomeRelativeMirrorSource),
+			want:       mirrorOffRefusal(opConfigurePullMirror, "ssh://alice@host.example/~/repo.git"),
+		},
+		{
+			name:       "an HTTPS source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(false, maskedMirrorSourceURL),
+			enabled:    true,
+			want:       mirrorRefusal(opConfigurePullMirror, configuredMirrorSource),
+		},
+		{
+			name:       "a configuration that cannot be read",
+			readStatus: http.StatusInternalServerError,
+			readBody:   `{"message":"500 Internal Server Error"}`,
+			enabled:    true,
+			want:       mirrorRefusal(opConfigurePullMirror, configuredMirrorSource),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, tt.readStatus, tt.readBody)
+
+			_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
+				ProjectID:                        "42",
+				Enabled:                          new(tt.enabled),
+				AuthUser:                         new("alice"),
+				MirrorOverwritesDivergedBranches: new(true),
+			})
+			if err == nil || err.Error() != tt.want {
+				t.Errorf("refusal =\n%v\nwant\n%q", err, tt.want)
+			}
+			if got := calls.reads.Load(); got != 1 {
+				t.Errorf("reads = %d, want the one read that names the source", got)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the configuration was applied %d time(s) despite being refused", got)
+			}
+		})
+	}
+}
+
 // TestConfigurePullMirror_AuthUserThatPicksNoRepository_Proceeds verifies that
 // auth_user is an ordinary credential wherever the login does not pick the
 // repository: over HTTPS, and over SSH with an absolute path, the URL names one
