@@ -257,8 +257,9 @@ const (
 
 // The two deadlines the MCP endpoint holds while the server verifies a
 // request's credential and builds its pool entry, and starts again at the
-// request's first read or write ([holdRequestDeadlines]). Vars, not consts,
-// only so tests can shorten them; nothing at runtime writes either.
+// request's first read or write, the read deadline only for a request with a
+// body ([holdRequestDeadlines]). Vars, not consts, only so tests can shorten
+// them; nothing at runtime writes either.
 var (
 	// baseHTTPReadTimeout bounds reading the full request, counted from when
 	// the request starts being read. Streamable HTTP request bodies (JSON-RPC)

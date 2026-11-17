@@ -512,6 +512,16 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 // ([sseAwareWriter]). What runs while they are off is the server's own work on
 // GitLab, each request of it bounded by its own clock.
 //
+// A request with no body to read, the GET that opens a stateful session's
+// event stream or a DELETE, is given its write deadline again and never its
+// read deadline. Over HTTP/1.1, net/http reads ahead on the connection before
+// the handler of such a request runs, to learn when the client goes away, and
+// clears the read deadline for that read; one set under it ends the request's
+// context when it fires, which would end an event stream one read deadline
+// after it opened. There is nothing of the request left to bound: what the
+// connection carries next is the next request, which the listener gives a
+// deadline of its own.
+//
 // A writer that cannot reach a connection, a test recorder, answers
 // [http.ErrNotSupported] when the deadlines are taken off, and the request
 // passes on as it came.
@@ -522,7 +532,9 @@ func holdRequestDeadlines(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		held := &deadlineHoldWriter{ResponseWriter: w, controller: controller}
+		// A server request's ContentLength is zero exactly when it has no
+		// body, whatever wraps the body further out; a chunked body is -1.
+		held := &deadlineHoldWriter{ResponseWriter: w, controller: controller, bodyToRead: r.ContentLength != 0}
 		defer held.restart()
 		r = r.WithContext(r.Context())
 		r.Body = &deadlineHoldBody{ReadCloser: r.Body, held: held}
@@ -536,13 +548,20 @@ type deadlineHoldWriter struct {
 	http.ResponseWriter
 	controller *http.ResponseController
 	once       sync.Once
+	// bodyToRead is whether the request has a body, and so a read deadline
+	// to start again.
+	bodyToRead bool
 }
 
-// restart starts both deadlines again from now, the first time it is called.
+// restart starts the deadlines again from now, the first time it is called:
+// the write deadline always, and the read deadline when the request has a
+// body to read.
 func (w *deadlineHoldWriter) restart() {
 	w.once.Do(func() {
 		now := time.Now()
-		_ = w.controller.SetReadDeadline(now.Add(baseHTTPReadTimeout))
+		if w.bodyToRead {
+			_ = w.controller.SetReadDeadline(now.Add(baseHTTPReadTimeout))
+		}
 		_ = w.controller.SetWriteDeadline(now.Add(baseHTTPWriteTimeout))
 	})
 }
