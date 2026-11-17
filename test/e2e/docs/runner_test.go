@@ -233,6 +233,9 @@ func (r *runner) start(ctx context.Context, page string, line int, file string) 
 for _ in $(seq 1 100); do [ -s %[1]s ] && exit 0; sleep 0.05; done
 echo "the block wrote no pid file" >&2; exit 1`, bg.pid, file, bg.log, blockShell)
 	if out, err := r.shell.run(ctx, script); err != nil {
+		// The block may be running, and have written its pid file, when the
+		// start fails or its context ends, and no caller holds it to stop.
+		r.stop(ctx, bg)
 		return nil, fmt.Errorf("%s:%d: starting the block: %w:\n%s%w", page, line, err, r.subs.redact(out), errBlockFailed)
 	}
 	select {

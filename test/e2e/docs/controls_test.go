@@ -486,6 +486,42 @@ func (s brokenShell) write(_ context.Context, name string, _ []byte) error {
 
 func (s brokenShell) run(context.Context, string) (string, error) { return "", s.runErr }
 
+// interruptedStart is a local reader whose start of a background block fails
+// after the block started and wrote its pid file, as a start does when its
+// context ends while the start script waits.
+type interruptedStart struct {
+	*localShell
+}
+
+func (s interruptedStart) run(ctx context.Context, script string) (string, error) {
+	out, err := s.localShell.run(ctx, script)
+	if err == nil && strings.HasPrefix(script, "setsid ") {
+		return out, context.DeadlineExceeded
+	}
+	return out, err
+}
+
+// TestRunPage_StartFailsAfterThePid_LeavesNothingRunning pins that a
+// background block whose start fails once the block is running is stopped
+// there: the page holds no handle on a block whose start failed, so its own
+// cleanup would leave the block's process group running.
+func TestRunPage_StartFailsAfterThePid_LeavesNothingRunning(t *testing.T) {
+	t.Parallel()
+	r, local := controlRunner(t)
+	r.shell = interruptedStart{local}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := r.runPage(ctx, "guide.mdx", markedBlocks(t, fence(docblocks.RunBackground, "sleep 30")+fence(docblocks.RunForeground, "true")))
+	if !errors.Is(err, errBlockFailed) || !strings.Contains(err.Error(), "guide.mdx:1: starting the block") {
+		t.Fatalf("runPage = %v; want the start of guide.mdx:1 failed, wrapping %q", err, errBlockFailed)
+	}
+	if _, statErr := os.Stat(filepath.Join(local.home, filepath.FromSlash(runnerDir), "block-1.pid")); statErr != nil {
+		t.Fatalf("the block wrote no pid file, so nothing shows it was running: %v", statErr)
+	}
+	assertNothingRunning(t, local)
+}
+
 // assertNothingRunning fails the test when a block the runner started is
 // still running after the page: every pid file it wrote names a process
 // group that is gone.
