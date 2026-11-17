@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -116,16 +117,30 @@ func (f *fakeGitLab) requests() []goldenRequest {
 	return slices.Clone(f.seen)
 }
 
+// standInToken is the GitLab.com token of the runs a test makes.
+const standInToken = "stand-in-token"
+
 // fakeGit stands in for git where a run reaches GitLab through it, logging
 // each clone and push as the script's stand-in did: a clone copies the
 // kg-fixtures fixture into the directory it names, and a push is logged with
 // its arguments but the flags. The steps between them do nothing, and what a
 // run reads of the fixture (ls-tree and show) goes to the real git.
+//
+// A clone from the instance and every push is refused, as GitLab.com refuses
+// one that carries no token, unless it carries the token as an
+// http.extraHeader: given to that command with -c, or configured in the
+// directory it runs in with config --local. A -c value given to a clone is
+// not kept in the clone, as git keeps none, so a push from the clone carries
+// the token only if the clone was configured with it. The token is
+// [standInToken] unless token names another.
 type fakeGit struct {
 	base, fixture string
+	token         string
 	mu            sync.Mutex
 	log           []string
 	fail          string
+	// headers is the http.extraHeader configured in each directory.
+	headers map[string]string
 }
 
 func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, error) {
@@ -136,6 +151,15 @@ func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, 
 	switch verb {
 	case "ls-tree", "show":
 		return runGit(ctx, dir, args...)
+	case "config":
+		if i := slices.Index(args, "http.extraHeader"); i >= 0 && i+1 < len(args) {
+			g.mu.Lock()
+			defer g.mu.Unlock()
+			if g.headers == nil {
+				g.headers = map[string]string{}
+			}
+			g.headers[dir] = args[i+1]
+		}
 	case "clone":
 		target := args[len(args)-1]
 		var source string
@@ -143,6 +167,9 @@ func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, 
 			if strings.HasPrefix(arg, "http") {
 				source = strings.ReplaceAll(arg, g.base, "{base}")
 			}
+		}
+		if strings.HasPrefix(source, "{base}") && !g.carriesToken("", args) {
+			return nil, g.refuse("clone " + source)
 		}
 		if slices.Contains(args, "--mirror") {
 			g.record("clone --mirror " + source)
@@ -157,9 +184,37 @@ func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, 
 				kept = append(kept, strings.ReplaceAll(arg, g.base, "{base}"))
 			}
 		}
-		g.record("push " + strings.Join(kept, " "))
+		line := "push " + strings.Join(kept, " ")
+		if !g.carriesToken(dir, args) {
+			return nil, g.refuse(line)
+		}
+		g.record(line)
 	}
 	return nil, nil
+}
+
+// carriesToken reports whether a command run in dir with args sends the
+// token: as a -c value of its own, or as the header dir was configured with.
+// An empty dir stands for a command nothing was configured for.
+func (g *fakeGit) carriesToken(dir string, args []string) bool {
+	token := cmp.Or(g.token, standInToken)
+	want := "PRIVATE-TOKEN: " + token
+	for i, arg := range args[:len(args)-1] {
+		if arg == "-c" && args[i+1] == "http.extraHeader="+want {
+			return true
+		}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return dir != "" && g.headers[dir] == want
+}
+
+// refuse logs line, a clone or a push, as refused and answers as git does
+// when GitLab.com refuses a request that carries no token.
+func (g *fakeGit) refuse(line string) error {
+	g.record(line + " (refused: no token)")
+	verb, _, _ := strings.Cut(line, " ")
+	return fmt.Errorf("git %s: exit status 128: remote: HTTP Basic: Access denied", verb)
 }
 
 func (g *fakeGit) record(line string) {
@@ -195,7 +250,7 @@ func readGoldens(t *testing.T) []goldenSetup {
 func setupAgainst(t *testing.T, golden goldenSetup, server *httptest.Server, git gitFunc) (int, string, string) {
 	t.Helper()
 	env := map[string]string{
-		"GITLAB_COM_TOKEN":          "stand-in-token",
+		"GITLAB_COM_TOKEN":          standInToken,
 		"ORBIT_FIXTURES_NAMESPACE":  "plens1",
 		"ORBIT_FIXTURES_GITLAB_URL": server.URL,
 	}
@@ -686,6 +741,60 @@ func TestPushMirror_APushGitRefuses_StopsTheMirror(t *testing.T) {
 	git := &fakeGit{base: "https://gitlab.example.test", fixture: kgFixture, fail: "push"}
 	if err := pushRun(git.run).pushMirror(t.Context(), "u", "r"); err == nil || !strings.Contains(err.Error(), "git push") {
 		t.Errorf("pushMirror = %v", err)
+	}
+}
+
+// TestPushes_ToGitLab_CarryTheToken checks the clone from GitLab.com and the
+// push to it of the fixture, mirror and branch pushes each carry the run's
+// token, the push included: a -c value given to the clone is not kept in it,
+// so a push that relied on it would be refused by GitLab.com, as the stand-in
+// git refuses it. A git expecting another token refuses the first request of
+// each, so what is sent is the run's token and not a constant.
+func TestPushes_ToGitLab_CarryTheToken(t *testing.T) {
+	const base = "https://gitlab.example.test"
+	cases := []struct {
+		name string
+		push func(*provisioner) error
+		want []string
+	}{
+		{
+			name: "fixture",
+			push: func(run *provisioner) error {
+				return run.pushFixture(t.Context(), kgFixture, base+"/acme/kg-fixtures.git")
+			},
+			want: []string{"clone {base}/acme/kg-fixtures.git", "push origin main"},
+		},
+		{
+			name: "mirror",
+			push: func(run *provisioner) error { return run.pushMirror(t.Context(), mirrorUpstream, base+"/acme/cli.git") },
+			want: []string{"clone --mirror " + mirrorUpstream, "push {base}/acme/cli.git refs/heads/*:refs/heads/* refs/tags/*:refs/tags/*"},
+		},
+		{
+			name: "branch",
+			push: func(run *provisioner) error { return run.pushMergeRequestBranch(t.Context()) },
+			want: []string{"clone {base}/acme/kg-fixtures.git", "push origin " + mrBranch},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			git := &fakeGit{base: base, fixture: kgFixture}
+			run := pushRun(git.run)
+			run.token = standInToken
+			if err := tc.push(run); err != nil {
+				t.Fatalf("the %s push = %v, git was asked for %q", tc.name, err, git.log)
+			}
+			if !slices.Equal(git.log, tc.want) {
+				t.Errorf("git was asked for %q, want %q", git.log, tc.want)
+			}
+		})
+		t.Run(tc.name+" with another token", func(t *testing.T) {
+			git := &fakeGit{base: base, fixture: kgFixture, token: "another-token"}
+			run := pushRun(git.run)
+			run.token = standInToken
+			if err := tc.push(run); err == nil || !strings.Contains(err.Error(), "Access denied") {
+				t.Errorf("the %s push = %v, want it refused; git was asked for %q", tc.name, err, git.log)
+			}
+		})
 	}
 }
 

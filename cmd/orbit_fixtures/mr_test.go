@@ -51,7 +51,7 @@ func setupCase(t *testing.T, routes map[string]goldenRoute, failGit string, chan
 	t.Cleanup(server.Close)
 	git := &fakeGit{base: server.URL, fixture: kgFixture, fail: failGit}
 	golden := goldenSetup{Flag: "--skip-mirror"}
-	env := map[string]string{"GITLAB_COM_TOKEN": "stand-in-token", "ORBIT_FIXTURES_NAMESPACE": "plens1", "ORBIT_FIXTURES_GITLAB_URL": server.URL}
+	env := map[string]string{"GITLAB_COM_TOKEN": standInToken, "ORBIT_FIXTURES_NAMESPACE": "plens1", "ORBIT_FIXTURES_GITLAB_URL": server.URL}
 	var stderr strings.Builder
 	cfg, _, _ := setupFromArgs([]string{golden.Flag, "-root", filepath.Join("..", "..")}, func(key string) string { return env[key] }, &stderr)
 	cfg.api.client = server.Client()
