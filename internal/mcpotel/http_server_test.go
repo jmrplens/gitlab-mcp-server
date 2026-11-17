@@ -6,11 +6,13 @@ package mcpotel
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -199,6 +201,41 @@ func TestStatusRecorder_ForwardsFlush(t *testing.T) {
 func TestStatusRecorder_FlushIsSafeWithoutAFlusher(t *testing.T) {
 	recorder := &statusRecorder{ResponseWriter: nonFlushingWriter{}, status: http.StatusOK}
 	recorder.Flush()
+}
+
+// TestServerMiddleware_ResponseController_ReachesTheConnection pins that a
+// handler behind the middleware can still set its connection's deadlines.
+//
+// [http.NewResponseController] finds the connection by unwrapping the writer
+// it is handed, and a wrapper that does not unwrap answers
+// [http.ErrNotSupported] for every deadline. The MCP gate sits behind this
+// middleware and starts the read and write deadlines again once it has built a
+// credential's pool entry (issue 1821), so a recorder that stopped the unwrap
+// would leave a first request's body read and its JSON response to the
+// deadlines the build had already spent, with nothing failing but the request.
+func TestServerMiddleware_ResponseController_ReachesTheConnection(t *testing.T) {
+	results := make(chan error, 1)
+	srv := httptest.NewServer(ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		controller := http.NewResponseController(w)
+		later := time.Now().Add(time.Minute)
+		results <- errors.Join(controller.SetReadDeadline(later), controller.SetWriteDeadline(later))
+	})))
+	defer srv.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		t.Fatalf("closing the body: %v", closeErr)
+	}
+	if deadlineErr := <-results; deadlineErr != nil {
+		t.Errorf("setting the deadlines behind the middleware: %v; want them to reach the connection", deadlineErr)
+	}
 }
 
 // TestStatusRecorder_WriteMarksTheResponseWritten pins the flag the middleware
