@@ -99,14 +99,29 @@ exit 0
 
 
 # A stand-in git for the cases that push the fixture branch: a clone copies
-# the kg-fixtures fixture into the directory named last, a push is logged with
-# the branch it pushes, the steps between them do nothing, and every other
-# command (the ls-files and show the reconciliation reads) goes to the real git.
+# the kg-fixtures fixture into the directory named last, and a push is logged
+# with the branch it pushes. GitLab.com refuses a push that carries no token
+# with "HTTP Basic: Access denied", so the stand-in does too, logging it as
+# refused, unless the push carries the token as a -c value or the work tree
+# was configured with it: a -c value given to the clone is not kept in the
+# clone's configuration, so it does not reach the push. The steps between
+# them do nothing, and every other command (the ls-files and show the
+# reconciliation reads) goes to the real git.
 GIT = r"""#!/bin/sh
 for last; do :; done
+header=
+for a; do case "$a" in http.extraHeader=*) header=${a#http.extraHeader=} ;; esac; done
 case " $* " in
   *" clone "*) mkdir -p "$last" && cp -R "$GIT_FIXTURE/." "$last/" && printf 'clone\n' >> "$GIT_LOG"; exit 0 ;;
-  *" push "*) printf 'push %s\n' "$last" >> "$GIT_LOG"; exit 0 ;;
+  *" config "*" http.extraHeader "*) printf '%s' "$last" > .stand-in-header; exit 0 ;;
+  *" push "*)
+    if [ -z "$header" ] && [ -f .stand-in-header ]; then header=$(cat .stand-in-header); fi
+    if [ "$header" != "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" ]; then
+      printf 'push %s refused\n' "$last" >> "$GIT_LOG"
+      echo "remote: HTTP Basic: Access denied" >&2
+      exit 128
+    fi
+    printf 'push %s\n' "$last" >> "$GIT_LOG"; exit 0 ;;
   *" checkout "*|*" add "*|*" commit "*|*" config "*) exit 0 ;;
 esac
 exec "$REAL_GIT" "$@"
@@ -810,6 +825,8 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         )
         result = self.run_script(routes)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # The push carries the token: GitLab.com refuses the branch otherwise,
+        # and the merge request then has nothing to be opened from.
         with open(git_log) as f:
             self.assertEqual(f.read().splitlines(), ["clone", "push feature/restock-helper"])
         self.assertIn(MR, [r["path"] for r in self.requests("POST")])
