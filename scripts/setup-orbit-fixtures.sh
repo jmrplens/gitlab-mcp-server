@@ -629,7 +629,9 @@ merge_fixture_mr() {
 }
 
 # push_fixture_mr_branch  ->  pushes the fixture branch from main, with the
-#   seed_stock helper added to the fulfillment module.
+#   seed_stock helper added to the fulfillment module. The token given to the
+#   clone with -c is not kept in the clone's configuration, so it is set there
+#   for the push to origin, as for a new project's first push above.
 push_fixture_mr_branch() {
   local work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
   rm -rf "$work"
@@ -637,6 +639,7 @@ push_fixture_mr_branch() {
     clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2 >&2
   (
     cd "$work"
+    git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN"
     git config user.email "orbit-fixtures@local"
     git config user.name  "Orbit Fixtures Bot"
     git checkout -q -b feature/restock-helper
