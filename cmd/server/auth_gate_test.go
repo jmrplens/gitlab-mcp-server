@@ -4186,3 +4186,104 @@ func TestHoldRequestDeadlines_BodyThatNeverEnds_IsEndedByTheReadDeadline(t *test
 		}
 	}
 }
+
+// TestHoldRequestDeadlines_StatefulGETStream_OutlivesTheReadDeadline holds
+// that a request with no body to read is never given a read deadline again.
+// Over HTTP/1.1, net/http reads ahead on the connection before the handler of
+// such a request runs, to learn when the client goes away, and a read
+// deadline set under that read ends the request's context when it fires. A
+// --stateless=false deployment answers the GET that opens a session's event
+// stream with a response that stays open, so a read deadline started again
+// when the response is first written would end the stream one deadline after
+// it opened. Over HTTP/2 a stream's read deadline only ends its body; the case
+// runs there too.
+//
+// Not parallel: it shortens the listener's deadlines.
+func TestHoldRequestDeadlines_StatefulGETStream_OutlivesTheReadDeadline(t *testing.T) {
+	const readDeadline = 500 * time.Millisecond
+	shortenHTTPDeadlines(t, readDeadline, baseHTTPWriteTimeout)
+	gitlab := newMockGitLabServerWithUser(t)
+
+	for _, transport := range deadlineTransports() {
+		t.Run(transport.name, func(t *testing.T) {
+			cfg := statelessTestConfig(gitlab.URL, false)
+			cfg.Stateless = false
+			baseURL, client, shutdown := transport.start(t, cfg)
+			defer shutdown()
+			sessionID, closeSession := openStatefulSession(t, client, baseURL)
+			defer closeSession()
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			stream := sessionRequest(t, ctx, client, baseURL, http.MethodGet, sessionID, "")
+			defer func() { _ = stream.Body.Close() }()
+			if contentType := stream.Header.Get(hdrContentType); stream.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "text/event-stream") {
+				t.Fatalf("GET status = %d, content type %q; want 200 text/event-stream", stream.StatusCode, contentType)
+			}
+
+			ended := make(chan error, 1)
+			go func() {
+				_, err := io.Copy(io.Discard, stream.Body)
+				ended <- err
+			}()
+			const outlive = 4 * readDeadline
+			select {
+			case err := <-ended:
+				t.Errorf("the event stream ended (%v) inside %s, with a %s read deadline; want it open until the client leaves", err, outlive, readDeadline)
+			case <-time.After(outlive):
+			}
+		})
+	}
+}
+
+// openStatefulSession initializes a session of a --stateless=false
+// deployment at baseURL through client and announces it initialized. It
+// returns the session's ID and a func that ends the session, to be called
+// while the server still runs.
+func openStatefulSession(t *testing.T, client *http.Client, baseURL string) (sessionID string, closeSession func()) {
+	t.Helper()
+	initResp := sessionRequest(t, t.Context(), client, baseURL, http.MethodPost, "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`)
+	_ = readAndCloseBody(t, initResp)
+	sessionID = initResp.Header.Get(hdrMCPSessionID)
+	if initResp.StatusCode != http.StatusOK || sessionID == "" {
+		t.Fatalf("initialize status = %d, session = %q, want 200 and a session ID", initResp.StatusCode, sessionID)
+	}
+	initialized := sessionRequest(t, t.Context(), client, baseURL, http.MethodPost, sessionID, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	_, _ = io.Copy(io.Discard, initialized.Body)
+	_ = initialized.Body.Close()
+	return sessionID, func() {
+		ended := sessionRequest(t, context.Background(), client, baseURL, http.MethodDelete, sessionID, "")
+		_, _ = io.Copy(io.Discard, ended.Body)
+		_ = ended.Body.Close()
+	}
+}
+
+// sessionRequest sends method to baseURL through client with the test's
+// credential, in the session sessionID when it is not empty and with body as
+// its JSON-RPC message when that is not empty. The caller closes the
+// response's body.
+func sessionRequest(t *testing.T, ctx context.Context, client *http.Client, baseURL, method, sessionID, body string) *http.Response {
+	t.Helper()
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, baseURL+"/", reader)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	if body != "" {
+		req.Header.Set(hdrContentType, mimeJSON)
+	}
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	if sessionID != "" {
+		req.Header.Set(hdrMCPSessionID, sessionID)
+		req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("%s: %v", method, err)
+	}
+	return resp
+}
