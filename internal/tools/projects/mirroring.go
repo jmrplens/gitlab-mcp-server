@@ -88,7 +88,7 @@ type ConfigurePullMirrorInput struct {
 	// that removes one reaches GitLab: the route keeps an empty user or
 	// password as the credential (extract_credentials! compacts nil only,
 	// ee/lib/api/project_mirror.rb) and stores an empty regex (issue 1306).
-	AuthUser                         *string `json:"auth_user,omitempty" jsonschema:"Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched"`
+	AuthUser                         *string `json:"auth_user,omitempty" jsonschema:"Authentication username for the mirror URL. GitLab logs in with it in place of a user written in the URL. Over SSH with a path starting with ~ it is the account whose home the path is resolved in, so it picks the repository: sending it, also empty, to such a mirror that overwrites diverged branches needs the user's approval, as pointing the mirror at another url does. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	AuthPassword                     *string `json:"auth_password,omitempty" jsonschema:"Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors. Pass an empty string to remove it. Omit the field to leave it untouched"`
 	MirrorBranchRegex                *string `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched"`
 	MirrorTriggerBuilds              *bool   `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger CI builds when mirror updates"`
@@ -98,7 +98,7 @@ type ConfigurePullMirrorInput struct {
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
 	// the caller's confirmation from the raw request instead.
-	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. Sending auth_user to such a mirror whose SSH path starts with ~ re-aims it. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked"`
 }
 
 // ConfigurePullMirror sets up or updates pull mirroring for a project.

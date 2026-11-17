@@ -205,7 +205,7 @@ func TestPullMirrorQuestion_HostileValues_AreRenderedInert(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := pullMirrorQuestion(input, tc.ask, branchFilter{regex: "^main" + hostile}).English()
+			got := pullMirrorQuestion(input, tc.ask, branchFilter{regex: "^main" + hostile}, "").English()
 			if !strings.HasPrefix(got, tc.want) {
 				t.Errorf("question =\n%q\nwant it to open with\n%q", got, tc.want)
 			}
