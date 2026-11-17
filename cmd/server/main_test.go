@@ -49,6 +49,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 	"unicode"
 
@@ -12344,56 +12345,67 @@ const silentToolCallFix = "go-sdk now commits a streamed POST before its first e
 // as go-sdk does, without calling WriteHeader: its first Write commits the
 // stream, and its event a fifth of an interval later is the last byte before
 // the silence.
+//
+// The stream runs in a synctest bubble over a recorder, so the clock is the
+// bubble's and every instant is exact at the production interval, with no
+// wait: the event comes a fifth of an interval after the commit, and the
+// heartbeat measured from the last write puts its frame exactly one interval
+// after the event. The fixed grid would skip the tick at one interval and
+// write at two, 1.8 intervals after the event, and the handler returns at 1.5,
+// so that answer writes no frame at all. A real clock had to tell the two
+// apart with a threshold and a margin for a loaded runner's scheduling, which
+// a 400 ms interval left too thin (issue 1831) and a 2 s one paid for with a
+// test of 2.4 s. That the frame reaches the wire through net/http is
+// TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire's to hold.
 func TestSSEKeepAlive_ComesOneIntervalAfterTheLastWrite(t *testing.T) {
-	restore := sseKeepAliveInterval
-	sseKeepAliveInterval = 400 * time.Millisecond
-	t.Cleanup(func() { sseKeepAliveInterval = restore })
+	t.Parallel()
 
-	release := make(chan struct{})
-	ts := httptest.NewServer(sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set(hdrContentType, "text/event-stream")
-		_, _ = w.Write([]byte(": ok\n\n"))
-		_ = http.NewResponseController(w).Flush()
-		time.Sleep(sseKeepAliveInterval / 5)
-		_, _ = w.Write([]byte("event: message\ndata: {}\n\n"))
-		_ = http.NewResponseController(w).Flush()
-		<-release
-	})))
-	t.Cleanup(ts.Close)
-	// Before the cleanup that waits for the handler, so a failed assertion
-	// reports itself instead of deadlocking Close.
-	defer close(release)
+	synctest.Test(t, func(t *testing.T) {
+		interval := sseKeepAliveInterval
+		rec := &timedFrames{ResponseRecorder: httptest.NewRecorder()}
+		var event time.Time
+		handler := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set(hdrContentType, "text/event-stream")
+			_, _ = w.Write([]byte(": ok\n\n"))
+			_ = http.NewResponseController(w).Flush()
+			time.Sleep(interval / 5)
+			event = time.Now()
+			_, _ = w.Write([]byte("event: message\ndata: {}\n\n"))
+			_ = http.NewResponseController(w).Flush()
+			time.Sleep(interval * 3 / 2)
+		}))
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/mcp", http.NoBody))
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL, http.NoBody)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	client := ts.Client()
-	client.Timeout = 10 * time.Second
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+		// The handler has returned and the middleware has joined the
+		// heartbeat, so nothing writes the frames any more.
+		frames := rec.frames
+		if len(frames) != 1 || !frames[0].Equal(event.Add(interval)) {
+			gaps := make([]time.Duration, 0, len(frames))
+			for _, frame := range frames {
+				gaps = append(gaps, frame.Sub(event))
+			}
+			t.Errorf("keep-alive frames came %v after the last event, want one, one interval (%v) after it: "+
+				"a proxy's idle timer sees the whole gap", gaps, interval)
+		}
+	})
+}
 
-	reader := bufio.NewReader(resp.Body)
-	var lastEvent time.Time
-	for {
-		line, readErr := reader.ReadString('\n')
-		if readErr != nil {
-			t.Fatalf("reading the stream: %v", readErr)
-		}
-		if strings.HasPrefix(line, "data: ") {
-			lastEvent = time.Now()
-		}
-		if line == ": keep-alive\n" && !lastEvent.IsZero() {
-			break
-		}
+// timedFrames is a recorder that notes the instant of each keep-alive frame
+// written to it, which the heartbeat writes from a goroutine of its own.
+type timedFrames struct {
+	*httptest.ResponseRecorder
+	mu     sync.Mutex
+	frames []time.Time
+}
+
+// Write records the instant of a keep-alive frame and passes every write on.
+func (w *timedFrames) Write(b []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if bytes.Equal(b, sseKeepAliveFrame) {
+		w.frames = append(w.frames, time.Now())
 	}
-	if silence := time.Since(lastEvent); silence > sseKeepAliveInterval*3/2 {
-		t.Errorf("the first keep-alive came %v after the last event, want one interval (%v): a proxy's idle timer sees the whole gap",
-			silence.Round(time.Millisecond), sseKeepAliveInterval)
-	}
+	return w.ResponseRecorder.Write(b)
 }
 
 // TestSSEKeepAlive_LeavesNonStreamingResponsesAlone verifies the heartbeat is
