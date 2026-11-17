@@ -259,9 +259,6 @@ dispatch. `internal/tools/markdown.go` is a thin delegator to
   meta-tools; remind them to set `GITLAB_MCP_TOOL_SURFACE=meta` (stdio) or
   `--tool-surface=meta` (HTTP) when they want the 34/40/51/52-tool catalog
   (Free/CE, Premium, self-managed Ultimate, GitLab.com Ultimate).
-- **`.tmp-*/` directories** at the repository root are git-ignored working
-  dirs (`scripts/setup-orbit-fixtures.sh` clones into `.tmp-orbit-*` and
-  removes each when it is done). Safe to ignore.
 - **Release asset names are looked up verbatim** — see the release section above.
 - **Coverage minimum 90%** (total) is enforced in CI; locally
   `go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...`

@@ -1012,7 +1012,7 @@ GITLAB_COM_TOKEN=glpat-... \
   go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./test/e2e/orbit/
 ```
 
-See [Orbit Live Test Fixtures](../orbit-fixtures.md) for fixture contents, the `scripts/setup-orbit-fixtures.sh` script, and the indexer caveat.
+See [Orbit Live Test Fixtures](../orbit-fixtures.md) for fixture contents, the `cmd/orbit_fixtures` setup and indexer wait, and the indexer caveat.
 
 ## Test Infrastructure
 

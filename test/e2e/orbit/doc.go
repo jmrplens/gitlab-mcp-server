@@ -3,7 +3,7 @@
 
 // Package orbit holds the live tests of the six read-only gitlab_orbit_*
 // tools against GitLab.com's experimental Knowledge Graph API, on the
-// fixtures scripts/setup-orbit-fixtures.sh provisions under
+// fixtures cmd/orbit_fixtures provisions under
 // test/fixtures/orbit.
 //
 // The tests are an external test package behind the orbitlive build tag and

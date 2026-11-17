@@ -429,7 +429,7 @@ GITLAB_COM_TOKEN=glpat-... \
   go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
 ```
 
-`make test-e2e-gitlab-com` chains four sub-targets: `orbit-ensure-token` (validates `GITLAB_COM_TOKEN` is exported), `orbit-setup-fixtures` (runs `scripts/setup-orbit-fixtures.sh`), `orbit-wait-indexer` (polls the `indexing` field of GraphQL `Group.orbit` until it is `READY` with no project left out; `/api/v4/orbit/graph_status`, which it polled before, was removed on 2026-10-28), and `orbit-run-live-tests` (runs `go test -tags orbitlive ...`). Each sub-target is independently runnable.
+`make test-e2e-gitlab-com` chains four sub-targets: `orbit-ensure-token` (validates `GITLAB_COM_TOKEN` is exported), `orbit-setup-fixtures` (runs `go run ./cmd/orbit_fixtures/ setup`), `orbit-wait-indexer` (runs its `wait-indexer`, which polls the `indexing` field of GraphQL `Group.orbit` until it is `READY` with no project left out; `/api/v4/orbit/graph_status`, which it polled before, was removed on 2026-10-28), and `orbit-run-live-tests` (runs `go test -tags orbitlive ...`). Each sub-target is independently runnable.
 
 ### Example: Adding a tools sub-package
 

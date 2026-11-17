@@ -2547,6 +2547,30 @@ Writes `orbit-responses.json` into `-dir` and reports the call count, the Orbit 
 - `make gen-orbit-record`: also run by `make test-e2e-gitlab-com`, after the live tests.
 - `make check-orbit-record`: CI gate in the generated-artifacts job.
 
+### orbit_fixtures
+
+Provisions the Orbit live-test fixtures on a GitLab group and waits for the Orbit indexer to reach them, the two steps before [gen_orbit_record](#gen_orbit_record) and the live suite can mean anything. It is the Go port of `scripts/setup-orbit-fixtures.sh` and of the shell and Python loop `make orbit-wait-indexer` ran (issue 1114, item 7), and it reads only the standard library and `git`.
+
+`setup` resolves the fixture namespace to its group, refuses a visibility other than public under `jmrp-oss` on the namespace as written and again on the full path GitLab resolves it to, and then creates or reconciles `kg-fixtures` and `security-fixtures` from `test/fixtures/orbit`: an existing project is given every file git tracks in its fixture that it lacks, in one commit of the bytes `HEAD` holds, and then its visibility; a new one is cloned, given those same files, and pushed. It creates the labels, milestone, issues and environments of `kg-fixtures` that are missing, and makes sure the merge request from `feature/restock-helper` is merged (issue 1428): one merged is left alone, one open is merged once `detailed_merge_status` says GitLab has checked it, a closed one is reopened and merged while its branch is there and replaced when it is gone, and a merge GitLab refuses or answers unmerged stops the run with GitLab's answer. `-mirror-cli` adds `glab-mirror`, a mirror of `gitlab-org/cli`. The work directories of clones and pushes are temporary ones removed when each is done, so the token git is configured with goes with them.
+
+`wait-indexer` reads the `indexing` field of the group's `orbit` through GraphQL every 15 seconds until it is `READY` with no project left out and at least the two fixture projects indexed, saying so of a null index, and proceeds with a warning once `ORBIT_FIXTURES_INDEXER_TIMEOUT` allows no further read.
+
+Both are held to goldens recorded from the script and the recipe before they were removed: `testdata/setup` holds 21 scenarios of the script against a stand-in GitLab and git (every request in order with its body, the clones and pushes, and the exit status), and `testdata/wait` seven of the recipe (each request and every line written). Two departures are deliberate and tested: a new project is pushed with the files git tracks at `HEAD`, where the script copied the working tree with `rsync`, untracked files included; and a git step that fails stops the run, where the script went on.
+
+#### Usage
+
+```bash
+make orbit-setup-fixtures                               # GITLAB_COM_TOKEN from .env
+make orbit-setup-fixtures ORBIT_FIXTURES_MIRROR=true    # also mirror gitlab-org/cli
+make orbit-wait-indexer
+go run ./cmd/orbit_fixtures/ setup [-mirror-cli]        # settings from the environment
+go run ./cmd/orbit_fixtures/ wait-indexer
+```
+
+#### Make targets
+
+- `make orbit-setup-fixtures` and `make orbit-wait-indexer`, both run by `make test-e2e-gitlab-com`. Each reads its settings from the make command line, then the environment, then `.env`, then the default.
+
 ### gen_action_grants
 
 Derives what every catalog action sends from the handlers that serve it, joins each request to what the live GitLab record ([gen_api_live](#gen_api_live), schema 5) declares a fine-grained personal access token needs for it, and writes three artifacts: `docs/development/action-requests.json`, per action the REST routes in the record's spelling and the GraphQL operations with their root fields and the path of every object position, each classified mandatory, alternative or optional, with where it comes from named by symbol and never by line; `internal/tools/actiongrants/table_gen.go`, the table the server compiles in and reads each action's requirement from (`Action.FineGrained`, the `fine_grained` block of `gitlab://tools/{id}`), written as keyed composite literals of constants so the binary runs no code to build it and a field added to a `finegrained` type leaves an older table compiling; and the reference page, what each action needs in GitLab's own words, written into the documentation site in English and Spanish (`site/src/content/docs/reference/fine-grained-permissions.mdx` and `site/src/content/docs/es/reference/fine-grained-permissions.mdx`). Issue #952.
