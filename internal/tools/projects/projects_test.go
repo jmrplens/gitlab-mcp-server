@@ -2775,6 +2775,97 @@ func TestListUserContributedProjects_Success(t *testing.T) {
 	}
 }
 
+// TestListUserContributedProjects_SendsOnlyWhatTheRouteReads holds the
+// contributed list to the params GitLab's route reads (issue 1838). GET
+// /users/:user_id/contributed_projects declares order_by, sort, simple and
+// the pagination alone, and builds ContributedProjectsFinder without params,
+// so the finder filters by none of the project filters the action used to
+// offer. The route still reads four more, undeclared, from the request:
+// present_projects in lib/api/projects.rb (at v19.5.0-ee) reads statistics,
+// imported and with_programming_language through apply_filters, and
+// with_custom_attributes through API::Helpers::CustomAttributes, which a probe
+// of GitLab.com confirmed for the first three on 17 November 2026.
+//
+// The schema offers user_id, those seven and per_page; a filter the route
+// ignores, such as search or visibility, is refused as a field the input does
+// not have before any request; and a call naming them sends exactly them.
+// Grape hands an undeclared param on as the string it was sent, so false
+// reads as true there (the probe answered statistics=false with statistics,
+// and imported=false with the imported list): the three switches are sent
+// only when true, and a caller's false leaves them out.
+func TestListUserContributedProjects_SendsOnlyWhatTheRouteReads(t *testing.T) {
+	route := toolutil.RouteAction(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), ListUserContributedProjects)
+	t.Run("schema", func(t *testing.T) {
+		props, _ := route.InputSchema["properties"].(map[string]any)
+		got := slices.Sorted(maps.Keys(props))
+		want := []string{
+			"imported", "order_by", "page", "per_page", "simple", "sort", "statistics", "user_id",
+			"with_custom_attributes", "with_programming_language",
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("schema properties = %v, want %v", got, want)
+		}
+	})
+	recorded := func(t *testing.T, args map[string]any) url.Values {
+		t.Helper()
+		var query url.Values
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			query = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		}))
+		if _, err := toolutil.RouteAction(client, ListUserContributedProjects).Handler(t.Context(), args); err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		return query
+	}
+	t.Run("the undeclared params the route reads", func(t *testing.T) {
+		query := recorded(t, map[string]any{
+			"user_id": "7", "statistics": true, "imported": true,
+			"with_programming_language": "Go", "with_custom_attributes": true,
+		})
+		want := url.Values{
+			"statistics": {"true"}, "imported": {"true"},
+			"with_programming_language": {"Go"}, "with_custom_attributes": {"true"},
+		}
+		if !reflect.DeepEqual(query, want) {
+			t.Errorf("query = %v, want %v", query, want)
+		}
+	})
+	t.Run("a false switch is not sent", func(t *testing.T) {
+		query := recorded(t, map[string]any{
+			"user_id": "7", "statistics": false, "imported": false, "with_custom_attributes": false,
+		})
+		if len(query) != 0 {
+			t.Errorf("query = %v, want nothing sent, since GitLab reads an undeclared false as true", query)
+		}
+	})
+	for _, param := range []string{"search", "visibility", "archived", "topic_id", "updated_after", "membership"} {
+		t.Run("refused/"+param, func(t *testing.T) {
+			_, err := route.Handler(t.Context(), map[string]any{"user_id": "7", param: "x"})
+			if err == nil || !strings.Contains(err.Error(), `unknown field "`+param+`"`) {
+				t.Errorf("Handler() error = %v, want %s refused as an unknown field", err, param)
+			}
+		})
+	}
+	t.Run("query", func(t *testing.T) {
+		var query url.Values
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			query = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		}))
+		if _, err := ListUserContributedProjects(t.Context(), client, ListUserContributedProjectsInput{
+			UserID: "7", OrderBy: "name", Sort: "asc", Simple: true,
+			PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50},
+		}); err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		want := url.Values{"order_by": {"name"}, "sort": {"asc"}, "simple": {"true"}, "page": {"2"}, "per_page": {"50"}}
+		if !reflect.DeepEqual(query, want) {
+			t.Errorf("query = %v, want %v", query, want)
+		}
+	})
+}
+
 // TestListUserContributedProjects_EmptyUserID verifies ListUserContributedProjects when empty user ID.
 func TestListUserContributedProjects_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
