@@ -845,10 +845,10 @@ lo hacen, y un valor vacío cuenta como no definido.
 
 ## Cómo saber si está activo
 
-Lo indica la ficha enumerante, en la ruta `.well-known`. La ficha SEP-2127 de `/server-card` solo declara identidad y datos de conexión, y no lleva bloques de capacidades.
+Lo indica la ficha enumerante, en la ruta `.well-known`. La ficha SEP-2127 de `/server-card` solo declara identidad y datos de conexión, y no lleva bloques de capacidades. Con `-e`, `jq` termina con estado 1 cuando el miembro no aparece, así que la orden sirve también de comprobación en un script.
 
 ```bash run
-curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
+curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq -e .telemetry
 ```
 
 ```json

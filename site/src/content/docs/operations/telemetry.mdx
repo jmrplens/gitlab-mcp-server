@@ -817,10 +817,10 @@ value counts as unset.
 
 ## Seeing whether it is on
 
-The enumerating server card reports it, at the `.well-known` path. The SEP-2127 card at `/server-card` states identity and connection details only, and carries no capability blocks.
+The enumerating server card reports it, at the `.well-known` path. The SEP-2127 card at `/server-card` states identity and connection details only, and carries no capability blocks. With `-e`, `jq` ends with status 1 when the member is absent, so the command doubles as a check in a script.
 
 ```bash run
-curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
+curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq -e .telemetry
 ```
 
 ```json
