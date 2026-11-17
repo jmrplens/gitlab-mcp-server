@@ -628,10 +628,9 @@ merge_fixture_mr() {
   echo "    ✓ MR !$iid merged"
 }
 
-# open_fixture_mr  ->  pushes the fixture branch from main and opens its merge
-#   request, then echoes the new merge request's iid, or fails with GitLab's
-#   answer when it carries none.
-open_fixture_mr() {
+# push_fixture_mr_branch  ->  pushes the fixture branch from main, with the
+#   seed_stock helper added to the fulfillment module.
+push_fixture_mr_branch() {
   local work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
   rm -rf "$work"
   git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
@@ -663,6 +662,14 @@ PY
     git push --quiet -u origin feature/restock-helper 2>&1 | tail -2
   ) >&2
   rm -rf "$work"
+}
+
+# open_fixture_mr [--from-existing-branch]  ->  pushes the fixture branch from
+#   main, unless it is already there, and opens its merge request, then echoes
+#   the new merge request's iid, or fails with GitLab's answer when it carries
+#   none.
+open_fixture_mr() {
+  [ "${1:-}" = "--from-existing-branch" ] || push_fixture_mr_branch
   api_request POST "/projects/$KG_ID/merge_requests" "$(cat <<'JSON'
 {
   "source_branch": "feature/restock-helper",
@@ -747,7 +754,24 @@ case "$mr_state" in
     esac
     ;;
   *)
-    new_mr=$(open_fixture_mr) || exit 1
+    # A run that pushed the branch and then failed to open its merge request
+    # leaves the branch behind. A new commit pushed over it is not a
+    # fast-forward and GitLab refuses it, so the merge request is opened from
+    # the branch as it is.
+    api_request GET "/projects/$KG_ID/repository/branches/feature%2Frestock-helper"
+    case "$API_STATUS" in
+      200)
+        echo "    → branch feature/restock-helper is there without a merge request: opening one from it"
+        new_mr=$(open_fixture_mr --from-existing-branch) || exit 1
+        ;;
+      404)
+        new_mr=$(open_fixture_mr) || exit 1
+        ;;
+      *)
+        echo "    ✗ cannot tell whether branch feature/restock-helper exists (HTTP $API_STATUS): $API_BODY" >&2
+        exit 1
+        ;;
+    esac
     merge_fixture_mr "$new_mr" || exit 1
     ;;
 esac

@@ -139,7 +139,10 @@ that finds everything in line changes nothing.
 The squash-merged merge request of `kg-fixtures` is checked the same way
 (issue 1428): one from `feature/restock-helper` already merged is left
 alone, an open one is merged, a closed one is reopened and merged while its
-branch is there and replaced by a new one when the branch is gone. The merge
+branch is there and replaced by a new one when the branch is gone. With no
+merge request at all, a branch left by a run that pushed it and then failed
+to open the merge request is opened as it is, since a new commit pushed over
+it is not a fast-forward and GitLab refuses it. The merge
 is asked for once GitLab has finished checking the merge request
 (`detailed_merge_status`), read every two seconds for at most 60 reads, and
 a run whose merge GitLab refuses or answers with the merge request still
