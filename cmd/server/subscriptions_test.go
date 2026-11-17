@@ -2570,6 +2570,43 @@ func TestListenLimit_RefusalCarriesTheTooManyRequestsCode(t *testing.T) {
 	}
 }
 
+// TestListenLimit_ACallerPastItsOwnCeiling_IsNamedByItsHandle covers the line a
+// per-credential refusal writes: it is about one pooled credential, so it names
+// that credential by the handle every pool line about its entry carries, read
+// from the state the entry's credential is served with, and the export drops
+// the handle (issue 1780).
+func TestListenLimit_ACallerPastItsOwnCeiling_IsNamedByItsHandle(t *testing.T) {
+	stderr, recorder := captureBothLogLegs(t)
+	gitlab := gateStubGitLab(t, false)
+	const token = "glpat-listen-ceiling"
+	entry := gateTestEntry(t, newGateTestPool(t, okFactory, gitlab), token, gitlab)
+	shell, err := newServerShell(t.Context(), newMockGitLabClient(t), &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	}, withSubscriptionOptions(fastOptions()), withSharedCredentials(&credentialStates{}, newSessionOwners(false)))
+	if err != nil {
+		t.Fatalf("newServerShell: %v", err)
+	}
+	state := shell.newCredentialState(entry)
+	t.Cleanup(func() { state.close(nil, endOfCredentialEviction) })
+
+	limits := listenLimits{perCredential: 1, perProcess: 2, processOpen: &listenCounter{}}
+	held := make(chan struct{})
+	defer close(held)
+	handler := limits.middleware(staticCounter(state.listen))(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		<-held
+		return &mcp.CallToolResult{}, nil
+	})
+	go func() { _, _ = handler(t.Context(), methodSubscriptionsListen, nil) }()
+	waitFor(t, func() bool { return state.listen.count() == 1 })
+
+	if _, refused := handler(t.Context(), methodSubscriptionsListen, nil); refused == nil {
+		t.Fatal("a stream past the caller's own ceiling was accepted")
+	}
+	assertTheHandleStaysOnStderr(t, stderr, recorder,
+		"subscriptions/listen refused: too many open streams", serverpool.CredentialHash(token))
+}
+
 // TestListenLimit_RefusalNamesTheCeilingThatWasReached verifies the refusal
 // tells an operator which of the two ceilings to raise, with its own number,
 // and tells the caller what it is: a caller past its own ceiling holds too many

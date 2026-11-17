@@ -955,6 +955,38 @@ func TestAdoptPooledEntry_AShapeAlreadyForgotten_RefusesTheEntry(t *testing.T) {
 	}
 }
 
+// TestAdoptPooledEntry_AShapeAlreadyForgotten_NamesTheCredentialByItsHandle
+// covers the line that refusal writes: it pairs with the pool's own line about
+// dropping the entry, so it names the credential by the handle every pool line
+// about the entry carries, and the export drops the handle (issue 1780).
+func TestAdoptPooledEntry_AShapeAlreadyForgotten_NamesTheCredentialByItsHandle(t *testing.T) {
+	stderr, recorder := captureBothLogLegs(t)
+	gitlab := shapedPoolGitLab(t)
+	_, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	t.Cleanup(pool.Close)
+	const token = "glpat-orphaned-named"
+	entry, err := pool.GetOrCreateEntry(token, gitlab, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	forgotten := newShapeServers(func(*config.ServerConfig, bool) (*serverShape, error) {
+		return nil, errors.New("this registry builds nothing")
+	}, nil)
+
+	if adoptPooledEntry(t.Context(), forgotten, &credentialStates{}, entry) {
+		t.Fatal("an entry whose configuration shape is gone was admitted to the pool")
+	}
+	assertTheHandleStaysOnStderr(t, stderr, recorder,
+		"dropping a pooled credential whose configuration shape failed to register", serverpool.CredentialHash(token))
+}
+
 // TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned drives the
 // pool and the shape registry wired to each other, which is the only place the
 // teardown of a pooled credential exists.

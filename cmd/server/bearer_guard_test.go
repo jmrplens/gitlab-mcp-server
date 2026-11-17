@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
@@ -2489,6 +2492,111 @@ func assertNamesTheTokenByItsHandle(t *testing.T, logged *bytes.Buffer, msg, tok
 		return
 	}
 	t.Errorf("no line %q was logged:\n%s", msg, text)
+}
+
+// exportRecorder is an OpenTelemetry log exporter that keeps every record it
+// is handed, rendered as its body followed by key=value attributes.
+type exportRecorder struct {
+	mu      sync.Mutex
+	records []string
+}
+
+func (e *exportRecorder) Export(_ context.Context, records []sdklog.Record) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, record := range records {
+		parts := []string{record.Body().AsString()}
+		record.WalkAttributes(func(kv attribute.KeyValue) bool {
+			parts = append(parts, string(kv.Key)+"="+kv.Value.String())
+			return true
+		})
+		e.records = append(e.records, strings.Join(parts, " "))
+	}
+	return nil
+}
+
+func (e *exportRecorder) Shutdown(context.Context) error   { return nil }
+func (e *exportRecorder) ForceFlush(context.Context) error { return nil }
+
+// exported returns every record the exporter was handed, one per line.
+func (e *exportRecorder) exported() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return strings.Join(e.records, "\n")
+}
+
+// captureBothLogLegs routes the default logger through the fan-out the server
+// installs when telemetry is on ([telemetry.NewSlogHandler]): stderr as JSON
+// into the returned buffer, and the exported copy into the returned recorder,
+// so a test can hold a line to what each leg carries.
+func captureBothLogLegs(t *testing.T) (*bytes.Buffer, *exportRecorder) {
+	t.Helper()
+	recorder := &exportRecorder{}
+	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(recorder)))
+	previousProvider, previousLogger := otel.GetLoggerProvider(), slog.Default()
+	otel.SetLoggerProvider(provider)
+	var stderr bytes.Buffer
+	terminal := slog.NewJSONHandler(&stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(telemetry.NewSlogHandler(terminal, slog.LevelDebug, nil)))
+	forgetRefusalLines()
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+		otel.SetLoggerProvider(previousProvider)
+		_ = provider.Shutdown(context.Background())
+	})
+	return &stderr, recorder
+}
+
+// assertTheHandleStaysOnStderr fails unless the stderr line logged with msg
+// names its credential by handle under [telemetry.LogFieldCredentialHash], and
+// unless the exported copy of that line was sent without the field or the
+// handle: the operator's terminal is where a refusal is correlated, and the
+// collector records nobody (issue 1780).
+func assertTheHandleStaysOnStderr(t *testing.T, stderr *bytes.Buffer, recorder *exportRecorder, msg, handle string) {
+	t.Helper()
+	named := false
+	for raw := range strings.Lines(stderr.String()) {
+		var line map[string]any
+		if err := json.Unmarshal([]byte(raw), &line); err != nil {
+			t.Fatalf("a log line is not JSON: %q: %v", raw, err)
+		}
+		if line["msg"] != msg {
+			continue
+		}
+		named = true
+		if got := line[telemetry.LogFieldCredentialHash]; got != handle {
+			t.Errorf("%q names the credential as %s=%v, want its handle %q", msg, telemetry.LogFieldCredentialHash, got, handle)
+		}
+	}
+	if !named {
+		t.Fatalf("no line %q reached stderr:\n%s", msg, stderr)
+	}
+	exported := recorder.exported()
+	if !strings.Contains(exported, msg) {
+		t.Fatalf("the line %q was not exported, so the export proves nothing:\n%s", msg, exported)
+	}
+	if strings.Contains(exported, telemetry.LogFieldCredentialHash) || strings.Contains(exported, handle) {
+		t.Errorf("the exported copy carries the credential's handle:\n%s", exported)
+	}
+}
+
+// TestBearerGuard_VerificationUnavailable_NamesTheTokenByItsHandle covers the
+// line the bearer guard writes when GitLab could not be asked about a token:
+// the token was never judged, and the line names it by its handle, so an
+// operator can tie it to the refusals and pool lines about the same
+// credential, while the export drops the handle (issue 1780).
+func TestBearerGuard_VerificationUnavailable_NamesTheTokenByItsHandle(t *testing.T) {
+	stderr, recorder := captureBothLogLegs(t)
+	const token = "glpat-verification-unavailable"
+	guard := &bearerGuard{}
+
+	upstream := &oauth.UpstreamError{Status: http.StatusBadGateway, Err: errors.New("bad gateway")}
+	failure := guard.classify(t.Context(), upstream, "192.0.2.10", "192.0.2.10", "https://gitlab.example.com", token)
+
+	if failure == nil || failure.status != http.StatusServiceUnavailable {
+		t.Fatalf("failure = %+v, want the 503 of a verification GitLab could not answer", failure)
+	}
+	assertTheHandleStaysOnStderr(t, stderr, recorder, "token verification unavailable", serverpool.CredentialHash(token))
 }
 
 // TestBearerGuard_ALineAboutAToken_NamesItByItsHandleAndNoneOfIt covers every
