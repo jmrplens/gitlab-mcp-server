@@ -83,7 +83,8 @@ func runWait(ctx context.Context, cfg waitConfig, stdout, stderr io.Writer) int 
 	}
 	fmt.Fprintf(stdout, "\n=== Waiting for Orbit indexer to catch up (timeout: %ds) ===\n", cfg.timeoutSeconds)
 	attempts := cfg.timeoutSeconds / 15
-	for attempt := 1; attempt <= attempts; attempt++ {
+	for index := range attempts {
+		attempt := index + 1
 		progress := readIndexing(ctx, cfg)
 		fmt.Fprintf(stdout, "  [%d/%d] state=%s indexed=%d not_indexed=%d\n", attempt, attempts, progress.state, progress.indexed, progress.notIndexed)
 		if progress.state == "READY" && progress.notIndexed == 0 && progress.indexed >= 2 {

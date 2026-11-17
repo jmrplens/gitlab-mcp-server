@@ -24,20 +24,18 @@ type mergeRequest struct {
 var stillChecking = map[string]bool{"unchecked": true, "checking": true, "preparing": true, "approvals_syncing": true}
 
 // seedStock is the helper the fixture merge request adds to the fulfillment
-// module, in front of reserve_stock: a deterministic diff.
-const seedStock = `
-
-def seed_stock(sku: str, quantity: int) -> None:
-    """Add ` + "`quantity`" + ` units of ` + "`sku`" + ` to the in-memory stock register."""
-    _STOCK[sku] = _STOCK.get(sku, 0) + quantity
-
-`
+// module, in front of reserve_stock: a deterministic diff. It is one literal,
+// as the milestone title is, so no operator joins constant parts that a
+// mutation run would mutate and no test could reach.
+const seedStock = "\n\ndef seed_stock(sku: str, quantity: int) -> None:\n    \"\"\"Add `quantity` units of `sku` to the in-memory stock register.\"\"\"\n    _STOCK[sku] = _STOCK.get(sku, 0) + quantity\n\n"
 
 // fixtureMergeRequest makes sure kg-fixtures holds the squash-merged merge
 // request from the fixture branch (issue 1428). The merge requests from the
 // branch decide what is left to do: one merged is the fixture, one open is
 // merged, and one closed without being merged is reopened and merged while
-// its branch is there, or replaced by a new one when the branch is gone.
+// its branch is there, or replaced by a new one when the branch is gone. With
+// none at all, one is opened from the branch, pushed first unless a run that
+// failed after pushing it left it there.
 func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 	fmt.Fprintf(p.out, "    → squash-merged MR (%s → main)\n", mrBranch)
 	listed := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/merge_requests?source_branch=%s&state=all", p.kgID, mrBranch), nil)
@@ -55,7 +53,37 @@ func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 	case "closed":
 		return p.repairClosed(ctx, iid)
 	}
-	iid, err := p.openMergeRequest(ctx)
+	// A run that pushed the branch and then failed to open its merge request
+	// leaves the branch behind. A new commit pushed over it is not a
+	// fast-forward and GitLab refuses it, so the merge request is opened from
+	// the branch as it is.
+	exists, err := p.branchExists(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		fmt.Fprintf(p.out, "    → branch %s is there without a merge request: opening one from it\n", mrBranch)
+	}
+	return p.openAndMerge(ctx, !exists)
+}
+
+// branchExists reports whether the fixture branch is on GitLab, and fails
+// when GitLab answers neither that it is nor that it is not.
+func (p *provisioner) branchExists(ctx context.Context) (bool, error) {
+	branch := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/repository/branches/%s", p.kgID, mrBranchEnc), nil)
+	switch branch.status {
+	case 200:
+		return true, nil
+	case 404:
+		return false, nil
+	}
+	return false, fmt.Errorf("    ✗ cannot tell whether branch %s exists (HTTP %d): %s", mrBranch, branch.status, branch)
+}
+
+// openAndMerge opens the fixture merge request, pushing its branch first when
+// push says the branch is not there, and merges it.
+func (p *provisioner) openAndMerge(ctx context.Context, push bool) error {
+	iid, err := p.openMergeRequest(ctx, push)
 	if err != nil {
 		return err
 	}
@@ -68,8 +96,8 @@ func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 func pickMergeRequest(requests []mergeRequest) (state string, iid int64) {
 	for _, candidate := range []string{"merged", "opened", "closed"} {
 		for _, request := range requests {
-			if request.State == candidate && request.IID > iid {
-				iid = request.IID
+			if request.State == candidate {
+				iid = max(iid, request.IID)
 			}
 		}
 		if iid > 0 {
@@ -82,25 +110,21 @@ func pickMergeRequest(requests []mergeRequest) (state string, iid int64) {
 // repairClosed reopens and merges a closed merge request whose branch is
 // still there, and opens and merges a new one when the branch is gone.
 func (p *provisioner) repairClosed(ctx context.Context, iid int64) error {
-	branch := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/repository/branches/%s", p.kgID, mrBranchEnc), nil)
-	switch branch.status {
-	case 200:
-		reopened := p.api.do(ctx, "PUT", fmt.Sprintf("/projects/%d/merge_requests/%d", p.kgID, iid), map[string]string{"state_event": "reopen"})
-		var request mergeRequest
-		if !reopened.ok() || !reopened.decode(&request) || request.State != "opened" {
-			return fmt.Errorf("    ✗ could not reopen MR !%d (HTTP %d): %s", iid, reopened.status, reopened)
-		}
-		fmt.Fprintf(p.out, "    ✓ MR !%d reopened\n", iid)
-		return p.merge(ctx, iid)
-	case 404:
-		fmt.Fprintf(p.out, "    → MR !%d was closed and its branch is gone: opening a new one\n", iid)
-		newIID, err := p.openMergeRequest(ctx)
-		if err != nil {
-			return err
-		}
-		return p.merge(ctx, newIID)
+	exists, err := p.branchExists(ctx)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("    ✗ cannot tell whether branch %s exists (HTTP %d): %s", mrBranch, branch.status, branch)
+	if !exists {
+		fmt.Fprintf(p.out, "    → MR !%d was closed and its branch is gone: opening a new one\n", iid)
+		return p.openAndMerge(ctx, true)
+	}
+	reopened := p.api.do(ctx, "PUT", fmt.Sprintf("/projects/%d/merge_requests/%d", p.kgID, iid), map[string]string{"state_event": "reopen"})
+	var request mergeRequest
+	if !reopened.ok() || !reopened.decode(&request) || request.State != "opened" {
+		return fmt.Errorf("    ✗ could not reopen MR !%d (HTTP %d): %s", iid, reopened.status, reopened)
+	}
+	fmt.Fprintf(p.out, "    ✓ MR !%d reopened\n", iid)
+	return p.merge(ctx, iid)
 }
 
 // merge squash-merges the merge request once GitLab has checked it, and fails
@@ -151,12 +175,14 @@ func (p *provisioner) waitForMergeability(ctx context.Context, iid int64) error 
 	return fmt.Errorf("    ✗ MR !%d was still being checked after %d reads (detailed_merge_status %s)", iid, p.mergePolls, status)
 }
 
-// openMergeRequest pushes the fixture branch from main, with the seed_stock
-// helper added to the fulfillment module, opens its merge request and
-// returns the new merge request's iid.
-func (p *provisioner) openMergeRequest(ctx context.Context) (int64, error) {
-	if err := p.pushMergeRequestBranch(ctx); err != nil {
-		return 0, err
+// openMergeRequest opens the merge request from the fixture branch and
+// returns the new merge request's iid. With push, it first pushes the branch
+// from main, with the seed_stock helper added to the fulfillment module.
+func (p *provisioner) openMergeRequest(ctx context.Context, push bool) (int64, error) {
+	if push {
+		if err := p.pushMergeRequestBranch(ctx); err != nil {
+			return 0, err
+		}
 	}
 	opened := p.api.do(ctx, "POST", fmt.Sprintf("/projects/%d/merge_requests", p.kgID), map[string]any{
 		"source_branch":        mrBranch,

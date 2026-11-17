@@ -17,8 +17,9 @@
 // are missing, and makes sure the fixture merge request from
 // feature/restock-helper is merged: an open one is merged once GitLab has
 // checked it, a closed one is reopened while its branch is there and opened
-// again when it is gone, and a merge GitLab refuses or answers unmerged stops
-// the run (issue 1428). A non-public visibility is refused under jmrp-oss,
+// again when it is gone, with none at all one is opened from the branch, a
+// branch a failed run left being opened as it is, and a merge GitLab refuses
+// or answers unmerged stops the run (issue 1428). A non-public visibility is refused under jmrp-oss,
 // whose projects must all be public, before anything is sent and again on the
 // group GitLab resolves the namespace to.
 //
@@ -37,6 +38,9 @@
 //
 // Usage:
 //
-//	go run ./cmd/orbit_fixtures/ setup [-mirror-cli]
+//	go run ./cmd/orbit_fixtures/ setup [-mirror-cli] [-skip-mirror] [-root dir]
 //	go run ./cmd/orbit_fixtures/ wait-indexer
+//
+// -root names the repository root that holds test/fixtures/orbit, the
+// working directory by default.
 package main

@@ -16,8 +16,10 @@ import (
 const toolName = "orbit_fixtures"
 
 // usage is the command line of both subcommands.
-const usage = `usage: orbit_fixtures setup [-mirror-cli] [-skip-mirror]
+const usage = `usage: orbit_fixtures setup [-mirror-cli] [-skip-mirror] [-root dir]
        orbit_fixtures wait-indexer
+
+-root is the repository root that holds test/fixtures/orbit (default ".").
 
 Settings come from the environment: GITLAB_COM_TOKEN (required),
 ORBIT_FIXTURES_NAMESPACE (default jmrp-oss/orbit-fixtures),

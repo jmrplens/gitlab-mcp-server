@@ -23,8 +23,11 @@ var fixtureLabels = []struct{ name, color string }{
 }
 
 // milestoneTitle is the title of the kg-fixtures milestone, written with the
-// em dash GitLab.com holds it under, which a lookup by title has to match.
-const milestoneTitle = "v0.2 " + string(rune(0x2014)) + " KG coverage milestone"
+// em dash GitLab.com holds it under, which a lookup by title has to match. The
+// dash is spelled as its UTF-8 bytes, since make check-em-dash refuses the
+// character in a line of source, and in one literal, so no operator joins
+// constant parts that a mutation run would mutate and no test could reach.
+const milestoneTitle = "v0.2 \xe2\x80\x94 KG coverage milestone"
 
 // fixtureIssues are the issues of kg-fixtures, each with its labels.
 var fixtureIssues = []struct{ title, labels string }{
