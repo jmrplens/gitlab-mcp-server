@@ -3249,21 +3249,64 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 // ---------------------------------------------------------------------------.
 
 // ListUserContributedProjectsInput defines parameters for listing contributed
-// projects. It offers no pagination or page_token: GitLab serves the route a
-// keyset page and writes an id_before or id_after into its next link, but the
-// route builds ContributedProjectsFinder with no params, so the finder never
-// reads either and the link answers the first page again. The list is read on with page and per_page.
+// projects: the params GET /users/:user_id/contributed_projects reads (issue
+// 1838). The route declares order_by, sort, simple and the pagination alone
+// (lib/api/projects.rb, at v19.5.0-ee), and builds ContributedProjectsFinder
+// without params, so the finder filters by none of the user-scoped filters
+// the owned and starred lists take ([userProjectFilterInput]); sent, they
+// came back as an unfiltered list with no error.
+//
+// Four more are read although the route does not declare them: the
+// present_projects it answers with reads statistics, imported and
+// with_programming_language in apply_filters, and with_custom_attributes in
+// API::Helpers::CustomAttributes, from Grape's params, which hold every param
+// the request carries. A probe of GitLab.com on 17 November 2026 answered the
+// first three as the code reads them. Grape hands an undeclared param on as
+// the string it was sent, so "false" reads as true there (that probe answered
+// statistics=false with statistics, and imported=false with the imported
+// list): the three switches are plain bools, sent only when true.
+//
+// It offers no pagination or page_token: GitLab serves the route a keyset
+// page and writes an id_before or id_after into its next link, but the finder
+// never reads either, so the link answers the first page again. The list is
+// read on with page and per_page.
 type ListUserContributedProjectsInput struct {
-	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	userProjectFilterInput
+	UserID                  toolutil.StringOrInt `json:"user_id"                             jsonschema:"User ID or username,required"`
+	OrderBy                 string               `json:"order_by,omitempty"                  jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
+	Sort                    string               `json:"sort,omitempty"                      jsonschema:"Sort direction (asc, desc)"`
+	Simple                  bool                 `json:"simple,omitempty"                    jsonschema:"Return only limited fields (faster)"`
+	Statistics              bool                 `json:"statistics,omitempty"                jsonschema:"Include project statistics in response"`
+	Imported                bool                 `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
+	WithProgrammingLanguage string               `json:"with_programming_language,omitempty" jsonschema:"Filter by programming language name"`
+	WithCustomAttributes    bool                 `json:"with_custom_attributes,omitempty"    jsonschema:"Include custom attributes in the response (admin only)"`
+	toolutil.PaginationInput
 }
 
 // ListUserContributedProjects lists projects a specific user has contributed
-// to, by offset pages.
+// to, by offset pages, in the order the call names, sending each switch only
+// when it is true, since GitLab reads an undeclared false as true there.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
+	filter := userProjectFilter{
+		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple, PaginationInput: input.PaginationInput,
+		WithProgrammingLanguage: input.WithProgrammingLanguage,
+		Statistics:              trueOrNil(input.Statistics),
+		Imported:                trueOrNil(input.Imported),
+		WithCustomAttributes:    trueOrNil(input.WithCustomAttributes),
+	}
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use user.get to find the user ID",
-		"user not found - use user.get to verify user_id", userProjectFilter{userProjectFilterInput: input.userProjectFilterInput},
+		"user not found - use user.get to verify user_id", filter,
 		client.GL().Projects.ListUserContributedProjects)
+}
+
+// trueOrNil is a pointer to true for a switch that is on, and nil for one
+// that is off, which leaves the param out of the request: a route that reads
+// a param it does not declare takes it as the string sent, and "false" is
+// true to Ruby.
+func trueOrNil(on bool) *bool {
+	if !on {
+		return nil
+	}
+	return new(true)
 }
 
 // ---------------------------------------------------------------------------
@@ -3284,20 +3327,19 @@ func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, i
 }
 
 // userProjectFilterInput is the embeddable, JSON-schema-bearing filter set
-// shared by the user-scoped project list tools (owned, contributed, starred).
-// The owned and starred routes take the full ListProjectsOptions filter set,
-// which it surfaces for 1:1 SDK parity, but for the repository and wiki
-// checksum filters: Enterprise Edition declares both and no finder reads
-// either (EE::API::Helpers#project_finder_params_ee, at v19.5.0-ee), so they
-// are offered by no project list (issue 1240). The contributed route takes
-// only order_by, sort and simple of them: it declares those, user_id and the
-// pagination alone (lib/api/projects.rb, at v19.5.0-ee), and Grape drops
-// the rest there.
+// of the user-scoped project lists that read filters (owned, starred).
+// Their routes take the full ListProjectsOptions filter set, which it
+// surfaces for 1:1 SDK parity, but for the repository and wiki checksum
+// filters: Enterprise Edition declares both and no finder reads either
+// (EE::API::Helpers#project_finder_params_ee, at v19.5.0-ee), so they are
+// offered by no project list (issue 1240). The contributed route's finder
+// reads none of them, and its input offers the params the route reads
+// instead (see [ListUserContributedProjectsInput]), handing them to the
+// shared builder through this struct.
 //
 // It carries offset pagination alone. The owned and starred lists, which
 // GitLab pages by keyset in id order, embed it through [userProjectFilter],
-// which adds pagination and page_token; the contributed list cannot be
-// followed by keyset (see [ListUserContributedProjectsInput]).
+// which adds pagination and page_token.
 type userProjectFilterInput struct {
 	Search                   string            `json:"search,omitempty"             jsonschema:"Search query for project name"`
 	Visibility               string            `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
@@ -3338,8 +3380,9 @@ type userProjectFilterInput struct {
 // mirroring the ListProjectsOptions filter set but for the two checksum
 // filters no GitLab finder reads. It is what buildUserProjectOpts reads, and
 // what the owned and starred lists embed, since GitLab pages both by keyset in
-// id order; the contributed list hands it its filters with the keyset half
-// left empty.
+// id order; the contributed list hands it the params its route reads, the
+// order, simple, the offset page and four switches and filters it reads
+// undeclared, with the keyset half left empty.
 //
 // Both halves are embedded (not named) so their json tags are promoted,
 // matching the filters and the embedded ListOptions of gl.ListProjectsOptions

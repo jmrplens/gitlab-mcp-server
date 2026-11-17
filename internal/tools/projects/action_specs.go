@@ -523,7 +523,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "List groups invited to a project. Returns: invited groups with id, full_path, and full_name, plus pagination metadata. See also: gitlab_project_share_with_group, gitlab_project_list_groups.",
 	},
 	"gitlab_project_list_user_contributed": {
-		usage:       "List projects a specific user has contributed to. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by. Page with page and per_page: GitLab does not page this list by keyset, so pagination keyset and page_token are refused.",
+		usage:       "List projects a specific user has contributed to. Send user_id (numeric ID or username), and optionally order_by, sort, simple, statistics, imported, with_programming_language and with_custom_attributes: GitLab's route reads no other filter, so this action offers none. To filter by anything else, list them here and filter the result, or use project.list_user_projects or project.list_user_starred, which take the project filters. Page with page and per_page: GitLab does not page this list by keyset, so pagination keyset and page_token are refused.",
 		aliases:     []string{"list user contributed projects", "projects a user contributed to", "user contribution repositories"},
 		related:     []string{actionProjectListUserProjects, actionProjectListUserStarred, actionProjectList},
 		description: "List projects a user contributed to, by offset pages only, since GitLab does not page this list by keyset. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_user_starred.",

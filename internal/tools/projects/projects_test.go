@@ -2854,8 +2854,7 @@ func TestListUserContributedProjects_SendsOnlyWhatTheRouteReads(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 		}))
 		if _, err := ListUserContributedProjects(t.Context(), client, ListUserContributedProjectsInput{
-			UserID: "7", OrderBy: "name", Sort: "asc", Simple: true,
-			PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50},
+			UserID: "7", OrderBy: "name", Sort: "asc", Simple: true, Page: 2, PerPage: 50,
 		}); err != nil {
 			t.Fatalf(fmtUnexpErr, err)
 		}
