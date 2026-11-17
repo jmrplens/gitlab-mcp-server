@@ -1,0 +1,29 @@
+{
+  "answers": [
+    "<html>busy</html>",
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"READY\", \"projects\": {\"indexed\": 3, \"notIndexed\": 0}}}}}}"
+  ],
+  "requests": [
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    },
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    }
+  ],
+  "scenario": "unreadable-then-ready",
+  "status": 0,
+  "stderr": "",
+  "stdout": "\n=== Waiting for Orbit indexer to catch up (timeout: 600s) ===\n  [1/40] state=? indexed=0 not_indexed=0\n  [2/40] state=READY indexed=3 not_indexed=0\n  \u2713 indexer caught up (3 projects indexed)\n",
+  "timeout": "600"
+}

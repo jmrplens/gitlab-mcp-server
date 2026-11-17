@@ -1,0 +1,38 @@
+{
+  "answers": [
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"INDEXING\", \"projects\": {\"indexed\": 1, \"notIndexed\": 1}}}}}}",
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"INDEXING\", \"projects\": {\"indexed\": 1, \"notIndexed\": 1}}}}}}",
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"INDEXING\", \"projects\": {\"indexed\": 1, \"notIndexed\": 1}}}}}}"
+  ],
+  "requests": [
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    },
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    },
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    }
+  ],
+  "scenario": "never-ready",
+  "status": 0,
+  "stderr": "  \u26a0 indexer did not catch up within 45s\n    Proceeding anyway \u2014 live test assertions are tolerant of\n    partial indexing (row_count > 0 rather than strict equality)\n",
+  "stdout": "\n=== Waiting for Orbit indexer to catch up (timeout: 45s) ===\n  [1/3] state=INDEXING indexed=1 not_indexed=1\n  [2/3] state=INDEXING indexed=1 not_indexed=1\n  [3/3] state=INDEXING indexed=1 not_indexed=1\n",
+  "timeout": "45"
+}

@@ -1,0 +1,213 @@
+{
+  "env": {
+    "ORBIT_FIXTURES_NAMESPACE": "134059988",
+    "ORBIT_FIXTURES_VISIBILITY": "private"
+  },
+  "flag": "--skip-mirror",
+  "git": [],
+  "requests": [
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/groups/134059988",
+      "query": ""
+    }
+  ],
+  "routes": {
+    "GET /api/v4/groups/134059988": {
+      "body": {
+        "full_path": "jmrp-oss/orbit-fixtures",
+        "id": 134059988
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/10": {
+      "body": {
+        "id": 10,
+        "visibility": "public"
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/10/environments": {
+      "body": [
+        {
+          "id": 700
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/issues": {
+      "body": [
+        {
+          "id": 600
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/labels": {
+      "body": [
+        {
+          "id": 1,
+          "name": "bug"
+        },
+        {
+          "id": 2,
+          "name": "enhancement"
+        },
+        {
+          "id": 3,
+          "name": "documentation"
+        },
+        {
+          "id": 4,
+          "name": "good first issue"
+        },
+        {
+          "id": 5,
+          "name": "ci"
+        },
+        {
+          "id": 6,
+          "name": "security"
+        },
+        {
+          "id": 7,
+          "name": "fixture"
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/merge_requests": {
+      "body": [
+        {
+          "iid": 1,
+          "state": "merged"
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/milestones": {
+      "body": [
+        {
+          "id": 500
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/repository/tree": {
+      "body": [
+        {
+          "path": ".gitlab-ci.yml"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "pyproject.toml"
+        },
+        {
+          "path": "src/acme/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__main__.py"
+        },
+        {
+          "path": "src/acme/orders/cli.py"
+        },
+        {
+          "path": "src/acme/orders/fulfillment.py"
+        },
+        {
+          "path": "src/acme/orders/models.py"
+        },
+        {
+          "path": "src/acme/orders/pricing.py"
+        },
+        {
+          "path": "tests/test_fulfillment.py"
+        },
+        {
+          "path": "tests/test_pricing.py"
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/134059988%2Fkg-fixtures": {
+      "body": {
+        "id": 10
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/134059988%2Fsecurity-fixtures": {
+      "body": {
+        "id": 20
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/20": {
+      "body": {
+        "id": 20,
+        "visibility": "public"
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/20/repository/tree": {
+      "body": [
+        {
+          "path": ".gitlab-ci.yml"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "pyproject.toml"
+        },
+        {
+          "path": "src/acme/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/auth.py"
+        },
+        {
+          "path": "src/acme/orders/legacy_db.py"
+        },
+        {
+          "path": "tests/test_smoke.py"
+        }
+      ],
+      "status": 200
+    },
+    "POST /api/v4/projects/10/environments": {
+      "body": {
+        "id": 701
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects/10/issues": {
+      "body": {
+        "id": 601
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects/10/milestones": {
+      "body": {
+        "id": 501
+      },
+      "status": 200
+    }
+  },
+  "scenario": "refuses-private-for-a-group-id-under-jmrp-oss",
+  "status": 2
+}
