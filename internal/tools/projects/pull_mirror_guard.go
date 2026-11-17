@@ -388,7 +388,13 @@ func isTrue(flag *bool) bool {
 //
 // The url the read reports is returned with every answer the read decides,
 // and "" with the rest, so the question can name the source of a call that
-// re-aims the mirror through auth_user alone.
+// re-aims the mirror through auth_user alone. A call that sends both flags
+// and auth_user but no URL is decided without the read too, yet reads the
+// mirror for that url alone ([reportedMirrorURL]): its question would
+// otherwise name the configured source and leave out the login GitLab pulls
+// a home-relative SSH path with, the one part of the source the call changes
+// (issue 1764). Where that read fails the question names the configured
+// source, since the guard cannot see whether the login picks the repository.
 //
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off, and GitLab answers the read of a mirror that is off the same way, 400
@@ -417,10 +423,11 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 		return askNothing, branchFilter{}, ""
 	}
 	if overwriteSent && enabledSent {
+		reported := reportedMirrorURL(ctx, client, input)
 		if enabled {
-			return askOverwrite, branchFilter{}, ""
+			return askOverwrite, branchFilter{}, reported
 		}
-		return askOverwriteWhileOff, branchFilter{}, ""
+		return askOverwriteWhileOff, branchFilter{}, reported
 	}
 	if enabledSent && !enabled {
 		return askNothing, branchFilter{}, ""
@@ -448,6 +455,22 @@ func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input
 		return askWidening, next, current.URL
 	}
 	return askNothing, branchFilter{}, current.URL
+}
+
+// reportedMirrorURL is the url GitLab reports for the pull mirror of a call
+// that sends auth_user and no URL, read for the question alone. It is "" for
+// any other call, which names its source or changes no login, and where the
+// read fails for any reason, which leaves the question naming the configured
+// source.
+func reportedMirrorURL(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) string {
+	if input.AuthUser == nil || input.URL != "" {
+		return ""
+	}
+	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
+	if err != nil {
+		return ""
+	}
+	return current.URL
 }
 
 // flagValue reports an optional flag's value and whether the caller sent it.
