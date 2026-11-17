@@ -2253,3 +2253,155 @@ func TestOAuth_SkipTLSVerifyScope(t *testing.T) {
 		})
 	}
 }
+
+// slowGitLabStep is how long the stand-in of [startSlowFakeGitLab] takes to
+// answer the nth request (counted from 1) to one path.
+type slowGitLabStep func(path string, nth int) time.Duration
+
+// startSlowFakeGitLab is a GitLab that accepts the personal access token
+// token with the api scope, answering each request after what step says, and
+// records every request it answered with when, relative to its start.
+func startSlowFakeGitLab(t *testing.T, token string, step slowGitLabStep) (gitlabURL string, requests func() []string) {
+	t.Helper()
+	var (
+		mu      sync.Mutex
+		counts  = map[string]int{}
+		log     []string
+		started = time.Now()
+	)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		counts[r.URL.Path]++
+		nth := counts[r.URL.Path]
+		mu.Unlock()
+		select {
+		case <-time.After(step(r.URL.Path, nth)):
+		case <-r.Context().Done():
+			return
+		}
+		mu.Lock()
+		log = append(log, fmt.Sprintf("%5.1fs %s %s", time.Since(started).Seconds(), r.Method, r.URL.Path))
+		mu.Unlock()
+		bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v4/version":
+			_, _ = w.Write([]byte(`{"version":"19.5.0","revision":"abcdef"}`))
+		case bearer != token:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		case r.URL.Path == "/api/v4/user":
+			_, _ = w.Write([]byte(`{"id":1,"username":"slow"}`))
+		case r.URL.Path == "/api/v4/personal_access_tokens/self":
+			_, _ = w.Write([]byte(`{"id":3,"scopes":["api"],"active":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(log)
+	}
+}
+
+// TestOAuth_FirstPOSTPastTheReadDeadline_IsReadOnceTheEntryIsBuilt holds
+// issue 1821 against the real binary. The listener's read deadline, 30
+// seconds, is counted from when the request starts being read; in oauth mode
+// the token is verified and its pool entry built before the SDK reads the
+// body, and together they can take longer than that. The server starts the
+// deadline again once the entry is built, so a first POST whose body is still
+// arriving after 30 seconds is read whole.
+//
+// The stand-in GitLab takes about 35 seconds over the verification and the
+// build, each request inside its own clock (ten seconds for a verification
+// request, five for the credential probe and the user behind the credential,
+// ten for what the build asks after the probe), and the client sends the
+// second half of its body only once 31 seconds have passed, after the
+// deadline the listener set and before the one the gate starts.
+//
+// Parallel, because it spends its 35 seconds waiting on its own server and
+// stand-in, and would otherwise add them to the module's run.
+func TestOAuth_FirstPOSTPastTheReadDeadline_IsReadOnceTheEntryIsBuilt(t *testing.T) {
+	t.Parallel()
+	const token = "glpat-slow-build"
+	gitlabURL, requests := startSlowFakeGitLab(t, token, func(path string, nth int) time.Duration {
+		switch {
+		// The verification before the gate: GET /user, then the token's own
+		// description, ten seconds each.
+		case path == "/api/v4/user" && nth == 1, path == "/api/v4/personal_access_tokens/self":
+			return 9 * time.Second
+		// The build: the credential probe and the user behind the credential,
+		// five seconds each, and the tier's namespace read, inside the ten
+		// seconds of what the build asks after the probe.
+		case path == "/api/v4/user":
+			return 4 * time.Second
+		case path == "/api/v4/namespaces":
+			return 8 * time.Second
+		default:
+			return 0
+		}
+	})
+	srv := oauthServer(t, gitlabURL)
+
+	head := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{` +
+		`"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},"padding":"`
+	tail := strings.Repeat("a", 16<<10) + `"}}}`
+	body, writer := io.Pipe()
+	go func() {
+		if _, err := io.WriteString(writer, head); err != nil {
+			writer.CloseWithError(err)
+			return
+		}
+		select {
+		case <-time.After(31 * time.Second):
+		case <-t.Context().Done():
+			writer.CloseWithError(t.Context().Err())
+			return
+		}
+		_, err := io.WriteString(writer, tail)
+		writer.CloseWithError(err)
+	}()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.baseURL+"/mcp", body)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	req.ContentLength = int64(len(head) + len(tail))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", "tools/list")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	started := time.Now()
+	resp, err := srv.httpClient().Do(req)
+	if err != nil {
+		t.Fatalf("POST: %v\nGitLab answered:\n%s", err, strings.Join(requests(), "\n"))
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if closeErr := resp.Body.Close(); err == nil {
+		err = closeErr
+	}
+	elapsed := time.Since(started)
+	t.Logf("answered after %s; GitLab answered:\n%s", elapsed.Round(100*time.Millisecond), strings.Join(requests(), "\n"))
+	if err != nil {
+		t.Fatalf("reading the answer: %v", err)
+	}
+	if elapsed < 31*time.Second {
+		t.Fatalf("the exchange took %s, inside the 30-second read deadline: the stand-in did not hold the build past it, so the test proves nothing", elapsed)
+	}
+	var answer struct {
+		Result struct {
+			Tools []json.RawMessage `json:"tools"`
+		} `json:"result"`
+	}
+	if resp.StatusCode != http.StatusOK ||
+		json.Unmarshal([]byte(jsonRPCPayload(t, string(raw))), &answer) != nil ||
+		len(answer.Result.Tools) == 0 {
+		t.Errorf("status %d, body %s; want 200 with the tool list, the body read after the entry was built", resp.StatusCode, truncate(string(raw)))
+	}
+}
