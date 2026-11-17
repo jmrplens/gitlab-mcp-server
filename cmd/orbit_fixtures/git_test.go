@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -51,7 +52,46 @@ func TestTrackedFiles_LicenseOrder_ComparesEitherSide(t *testing.T) {
 	}
 	failing := func(context.Context, string, ...string) ([]byte, error) { return nil, errors.New("no repository") }
 	if _, err = trackedFiles(t.Context(), failing, "."); err == nil {
-		t.Error("a failed ls-files listed files")
+		t.Error("a failed ls-tree listed files")
+	}
+}
+
+// TestTrackedFiles_AStagedFile_IsListedOnlyOnceCommitted checks the list is
+// what HEAD holds and not what the index does: a file staged and not
+// committed has no content at HEAD to read, so listing it stopped the run
+// with "cannot compare" instead of leaving it out.
+func TestTrackedFiles_AStagedFile_IsListedOnlyOnceCommitted(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"-c", "user.email=t@example.test", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "root"},
+	} {
+		if _, err := runGit(t.Context(), dir, args...); err != nil {
+			t.Skipf("git cannot make a repository here: %v", err)
+		}
+	}
+	// sequential: each file is written and staged, the first committed.
+	for _, name := range []string{"committed.txt", "staged.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runGit(t.Context(), dir, "add", name); err != nil {
+			t.Fatalf("git add %s: %v", name, err)
+		}
+		if name == "committed.txt" {
+			if _, err := runGit(t.Context(), dir, "-c", "user.email=t@example.test", "-c", "user.name=t", "commit", "-q", "-m", "one"); err != nil {
+				t.Fatalf("git commit: %v", err)
+			}
+		}
+	}
+	files, err := trackedFiles(t.Context(), runGit, dir)
+	if err != nil || !slices.Equal(files, []string{"committed.txt"}) {
+		t.Errorf("files = %q, %v; want only the committed file", files, err)
+	}
+	for _, file := range files {
+		if _, showErr := committedBytes(t.Context(), runGit, dir, file); showErr != nil {
+			t.Errorf("%s is listed and HEAD does not hold it: %v", file, showErr)
+		}
 	}
 }
 
@@ -82,6 +122,7 @@ func TestGitVerb_Args_SkipOptionsAndTheirValues(t *testing.T) {
 		{args: []string{"-c", "user.name=x", "-C", "dir", "commit", "-m", "y"}, want: "commit"},
 		{args: []string{"--quiet", "push"}, want: "push"},
 		{args: []string{"-c", "a=b"}, want: "(no subcommand)"},
+		{args: []string{"-C", "push"}, want: "(no subcommand)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.want, func(t *testing.T) {

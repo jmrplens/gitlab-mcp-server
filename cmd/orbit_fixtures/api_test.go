@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -97,5 +98,27 @@ func TestGitLabAPI_Do_AnAnswerCutShort_KeepsItsStatus(t *testing.T) {
 	}
 	if !errors.Is(got.err, io.ErrUnexpectedEOF) {
 		t.Errorf("err = %v, want an unexpected end of the body", got.err)
+	}
+}
+
+// TestAnswer_OK_IsThe2xxRangeAlone checks the statuses at either edge of the
+// 2xx range: GitLab answers a redirect, 300 among them, for a request it did
+// not carry out.
+func TestAnswer_OK_IsThe2xxRangeAlone(t *testing.T) {
+	cases := []struct {
+		status int
+		want   bool
+	}{
+		{status: 199},
+		{status: 200, want: true},
+		{status: 299, want: true},
+		{status: 300},
+	}
+	for _, tc := range cases {
+		t.Run(http.StatusText(tc.status)+" "+strconv.Itoa(tc.status), func(t *testing.T) {
+			if got := (answer{status: tc.status}).ok(); got != tc.want {
+				t.Errorf("ok() of %d = %t, want %t", tc.status, got, tc.want)
+			}
+		})
 	}
 }

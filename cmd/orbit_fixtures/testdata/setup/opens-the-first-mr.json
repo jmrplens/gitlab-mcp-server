@@ -127,6 +127,12 @@
       "query": "source_branch=feature/restock-helper&state=all"
     },
     {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/repository/branches/feature%2Frestock-helper",
+      "query": ""
+    },
+    {
       "body": "{\n  \"source_branch\": \"feature/restock-helper\",\n  \"target_branch\": \"main\",\n  \"title\": \"Add seed_stock helper for fixture test runs\",\n  \"description\": \"Adds a `seed_stock(sku, quantity)` helper to the fulfillment module so test runs can populate the in-memory stock register without mocking.\",\n  \"remove_source_branch\": true,\n  \"squash\": true\n}",
       "method": "POST",
       "path": "/api/v4/projects/10/merge_requests",

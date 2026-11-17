@@ -68,14 +68,20 @@ func setupCase(t *testing.T, routes map[string]goldenRoute, failGit string, chan
 
 // TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun checks each answer
 // that leaves the fixture merge request unmerged stops the run with GitLab's
-// answer: an unreadable list, merge request or branch, a refused reopen, a
-// merge answered with the merge request still open, a new merge request
-// answered without an iid, a git that cannot push the branch, and a wait the
-// run is cancelled during.
+// answer: an unreadable list, merge request or branch, a list answered null,
+// a refused reopen or one answered with the merge request still closed or with
+// no JSON, a merge answered with the merge request still open, a new merge
+// request answered without an iid or with no JSON, a git that cannot push the
+// branch, and a wait the run is cancelled during. A merge request refused
+// over a branch a failed run left stops the run without anything cloned.
 func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
 	opened := []map[string]any{{"iid": 1, "state": "opened"}}
 	closed := []map[string]any{{"iid": 1, "state": "closed"}}
 	mergeable := map[string]any{"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}
+	branch := "GET /api/v4/projects/10/repository/branches/feature%2Frestock-helper"
+	// notJSON is an answer GitLab gives with a 200 and a body no JSON reader
+	// takes, an error page from a proxy in front of it.
+	notJSON := jsonRoute(t, 200, "<html>")
 	cases := []struct {
 		name    string
 		routes  map[string]any
@@ -96,11 +102,20 @@ func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
 		{name: "a clone git refuses", routes: map[string]any{"GET " + kgMR: []any{}}, failGit: "clone", want: "git clone: exit status 128"},
 		{name: "a checkout git refuses", routes: map[string]any{"GET " + kgMR: []any{}}, failGit: "checkout", want: "git checkout: exit status 128"},
 		{name: "a wait cancelled", routes: map[string]any{"GET " + kgMR: opened, "GET " + kgMR + "/1": map[string]any{"detailed_merge_status": "checking"}}, cancel: true, want: "context canceled"},
+		{name: "a list answered null", routes: map[string]any{"GET " + kgMR: nil}, want: "cannot list the merge requests from feature/restock-helper (HTTP 200): null"},
+		{name: "a reopen answered closed", routes: map[string]any{"GET " + kgMR: closed, branch: map[string]any{"name": "x"}, "PUT " + kgMR + "/1": map[string]any{"iid": 1, "state": "closed"}}, want: "could not reopen MR !1 (HTTP 200)"},
+		{name: "a reopen answered with no JSON", routes: map[string]any{"GET " + kgMR: closed, branch: map[string]any{"name": "x"}, "PUT " + kgMR + "/1": notJSON}, want: "could not reopen MR !1 (HTTP 200): <html>"},
+		{name: "a new merge request answered with no JSON", routes: map[string]any{"GET " + kgMR: []any{}, "POST " + kgMR: notJSON}, want: "could not open the fixture MR (HTTP 200): <html>"},
+		{name: "a branch left behind whose merge request is refused", routes: map[string]any{"GET " + kgMR: []any{}, branch: map[string]any{"name": "x"}, "POST " + kgMR: "409"}, failGit: "clone", want: "could not open the fixture MR (HTTP 409)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			routes := inLineRoutes(t)
 			for key, body := range tc.routes {
+				if route, isRoute := body.(goldenRoute); isRoute {
+					routes[key] = route
+					continue
+				}
 				if status, isStatus := body.(string); isStatus {
 					routes[key] = jsonRoute(t, map[string]int{"403": 403, "409": 409, "500": 500}[status], map[string]string{"message": status})
 					continue
@@ -132,6 +147,7 @@ func TestPickMergeRequest_States_MergedThenOpenThenClosedNewestFirst(t *testing.
 		{name: "a merged one among others", requests: []mergeRequest{{IID: 3, State: "opened"}, {IID: 1, State: "merged"}, {IID: 4, State: "closed"}}, wantState: "merged", wantIID: 1},
 		{name: "the newest open one", requests: []mergeRequest{{IID: 2, State: "opened"}, {IID: 5, State: "opened"}, {IID: 7, State: "closed"}}, wantState: "opened", wantIID: 5},
 		{name: "the newest closed one", requests: []mergeRequest{{IID: 2, State: "closed"}, {IID: 6, State: "closed"}}, wantState: "closed", wantIID: 6},
+		{name: "the newest listed first", requests: []mergeRequest{{IID: 8, State: "opened"}, {IID: 3, State: "opened"}}, wantState: "opened", wantIID: 8},
 		{name: "only a locked one", requests: []mergeRequest{{IID: 2, State: "locked"}}},
 		{name: "none", requests: nil},
 	}
