@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
@@ -3799,8 +3801,9 @@ func shortenHTTPDeadlines(t *testing.T, read, write time.Duration) {
 // GET /api/v4/user after delay. An entry build asks it twice, the credential
 // probe and the user behind the credential, and an oauth verification once
 // more before the gate, so the build outlasts any deadline shorter than delay
-// while each request stays inside its own clock.
-func newSlowUserGitLab(t *testing.T, delay time.Duration) *httptest.Server {
+// while each request stays inside its own clock. lastUserAnswer reports when
+// the latest of those requests was answered, the zero time before the first.
+func newSlowUserGitLab(t *testing.T, delay time.Duration) (srv *httptest.Server, lastUserAnswer func() time.Time) {
 	t.Helper()
 	inner := newMockGitLabServerWithUser(t)
 	target, err := url.Parse(inner.URL)
@@ -3808,18 +3811,127 @@ func newSlowUserGitLab(t *testing.T, delay time.Duration) *httptest.Server {
 		t.Fatalf("parsing the stub's URL: %v", err)
 	}
 	forward := httputil.NewSingleHostReverseProxy(target)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var (
+		mu       sync.Mutex
+		answered time.Time
+	)
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/user" {
 			select {
 			case <-time.After(delay):
 			case <-r.Context().Done():
 				return
 			}
+			mu.Lock()
+			answered = time.Now()
+			mu.Unlock()
 		}
 		forward.ServeHTTP(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return answered
+	}
+}
+
+// deadlineTransport is how a deadline test reaches the server: over plain
+// HTTP/1.1, or over TLS the server terminates itself (--tls-cert), where the
+// client and the server negotiate HTTP/2. The two hold a deadline in different
+// places: HTTP/1.1 on the connection, which can be set again after it has
+// passed, and HTTP/2 on each stream, where a deadline that has fired has
+// already ended the stream's body or reset the stream.
+type deadlineTransport struct {
+	name  string
+	start func(t *testing.T, cfg *config.Config) (baseURL string, client *http.Client, shutdown func())
+}
+
+// deadlineTransports are the two ways a client reaches an HTTP deployment.
+func deadlineTransports() []deadlineTransport {
+	return []deadlineTransport{
+		{name: "http1", start: func(t *testing.T, cfg *config.Config) (string, *http.Client, func()) {
+			t.Helper()
+			addr, shutdown := startStatelessServeHTTP(t, cfg)
+			return "http://" + addr, testHTTPClient, shutdown
+		}},
+		{name: "tls-h2", start: startServeHTTPSWithHTTP2},
+	}
+}
+
+// startServeHTTPSWithHTTP2 serves cfg over TLS with a fresh self-signed pair,
+// as --tls-cert and --tls-key do, and returns its base URL with a client that
+// trusts the pair and negotiates HTTP/2. It fails the test when the server
+// answers its health check in anything else, so a case run through it is an
+// HTTP/2 case.
+func startServeHTTPSWithHTTP2(t *testing.T, cfg *config.Config) (baseURL string, client *http.Client, shutdown func()) {
+	t.Helper()
+	certPath, keyPath, cert := selfSignedTLSPair(t)
+	cfg.TLSCertFile, cfg.TLSKeyFile = certPath, keyPath
+
+	ctx, cancel := context.WithCancel(context.Background())
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		cancel()
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+
+	roots := x509.NewCertPool()
+	roots.AddCert(cert)
+	client = &http.Client{
+		Timeout: testCatalogBuildTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig:   &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+			ForceAttemptHTTP2: true,
+		},
+	}
+	baseURL = "https://" + addr
+	stop := func() {
+		client.CloseIdleConnections()
+		cancel()
+		select {
+		case serveErr := <-errCh:
+			if serveErr != nil {
+				t.Fatalf("serveHTTPOn() = %v, want a clean stop", serveErr)
+			}
+		case <-time.After(testHTTPLivenessTimeout):
+			t.Fatal("the TLS server did not shut down in time")
+		}
+	}
+
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
+	for {
+		select {
+		case serveErr := <-errCh:
+			cancel()
+			t.Fatalf("serveHTTPOn exited before answering: %v", serveErr)
+		default:
+		}
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, baseURL+"/health", nil)
+		if reqErr != nil {
+			stop()
+			t.Fatalf("build request: %v", reqErr)
+		}
+		resp, doErr := client.Do(req)
+		if doErr == nil {
+			readAndCloseBody(t, resp)
+			if resp.ProtoMajor != 2 {
+				stop()
+				t.Fatalf("/health over TLS answered in %s; want HTTP/2", resp.Proto)
+			}
+			return baseURL, client, stop
+		}
+		if time.Now().After(deadline) {
+			stop()
+			t.Fatalf("the TLS listener never answered: %v", doErr)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // deadlineMode is one authentication mode a deadline test runs in: the
@@ -3848,24 +3960,56 @@ func deadlineModes(gitlabURL string, jsonResponse bool) []deadlineMode {
 	}
 }
 
-// postInMode sends body to addr in mode and returns the status, the content
-// type and the body of the answer, or the error the exchange ended in.
-func postInMode(t *testing.T, addr string, mode deadlineMode, body string) (status int, contentType, answer string, err error) {
+// postInMode sends body through client to baseURL in mode and returns the
+// status, the content type and the body of the answer, or the error the
+// exchange ended in. A positive tailAfter holds back the second half of body
+// until that long after the request was sent.
+func postInMode(t *testing.T, baseURL string, client *http.Client, mode deadlineMode, body string, tailAfter time.Duration) (status int, contentType, answer string, err error) {
 	t.Helper()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+mode.path, strings.NewReader(body))
+	var reader io.Reader = strings.NewReader(body)
+	if tailAfter > 0 {
+		reader = lateTailBody(t, body[:len(body)/2], body[len(body)/2:], tailAfter)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, baseURL+mode.path, reader)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
+	req.ContentLength = int64(len(body))
 	req.Header.Set(hdrContentType, mimeJSON)
 	req.Header.Set("Accept", mimeJSONSSE)
 	req.Header.Set(mode.header, mode.value)
-	resp, err := testHTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, "", "", err
 	}
 	raw, err := io.ReadAll(resp.Body)
 	closeErr := resp.Body.Close()
 	return resp.StatusCode, resp.Header.Get(hdrContentType), string(raw), errors.Join(err, closeErr)
+}
+
+// lateTailBody is a request body that yields head at once and tail only once
+// after has passed, or ends with the test's error when the test ends first.
+// A body whose tail arrives late is what a read deadline is about on both
+// transports: HTTP/2 buffers what the client sent before the handler reads it,
+// so a body sent whole reads whole there whatever the deadline did.
+func lateTailBody(t *testing.T, head, tail string, after time.Duration) io.Reader {
+	t.Helper()
+	reader, writer := io.Pipe()
+	go func() {
+		if _, err := io.WriteString(writer, head); err != nil {
+			writer.CloseWithError(err)
+			return
+		}
+		select {
+		case <-time.After(after):
+		case <-t.Context().Done():
+			writer.CloseWithError(t.Context().Err())
+			return
+		}
+		_, err := io.WriteString(writer, tail)
+		writer.CloseWithError(err)
+	}()
+	return reader
 }
 
 // paddedPing is a ping carrying padding bytes in its _meta, which the server
@@ -3900,36 +4044,39 @@ func pingAnswered(answer string) bool {
 // TestMCPServerGate_EntryBuildOutlastsTheReadDeadline_StillReadsTheBody holds
 // the read half of issue 1821: the listener's read deadline is counted from
 // when the request starts being read, and the gate builds a new credential's
-// pool entry before the SDK reads the body, so a first POST whose body is
-// larger than what arrived with its headers used to fail its body read when
-// the build took longer than the deadline. The gate starts the deadline again
-// once it has built the entry, in legacy mode, where the build is the whole
-// wait, and in oauth mode, where the token's verification comes before it.
+// pool entry before the SDK reads the body, so a first POST whose body was
+// still arriving when the deadline passed used to fail its body read when the
+// build took longer than the deadline. The deadlines are held while the
+// server waits on GitLab, so the body is read whole, in legacy mode, where
+// the build is the whole wait, and in oauth mode, where the token's
+// verification comes before it, over HTTP/1.1 and over HTTP/2.
 //
 // Not parallel: it shortens the listener's deadlines.
 func TestMCPServerGate_EntryBuildOutlastsTheReadDeadline_StillReadsTheBody(t *testing.T) {
 	const readDeadline = 300 * time.Millisecond
 	shortenHTTPDeadlines(t, readDeadline, baseHTTPWriteTimeout)
-	gitlab := newSlowUserGitLab(t, 2*readDeadline)
+	gitlab, lastUserAnswer := newSlowUserGitLab(t, 2*readDeadline)
 	body := paddedPing(64 << 10)
 
-	for _, mode := range deadlineModes(gitlab.URL, false) {
-		t.Run(mode.name, func(t *testing.T) {
-			addr, shutdown := startStatelessServeHTTP(t, mode.cfg)
-			defer shutdown()
+	for _, transport := range deadlineTransports() {
+		for _, mode := range deadlineModes(gitlab.URL, false) {
+			t.Run(transport.name+"/"+mode.name, func(t *testing.T) {
+				baseURL, client, shutdown := transport.start(t, mode.cfg)
+				defer shutdown()
 
-			started := time.Now()
-			status, _, answer, err := postInMode(t, addr, mode, body)
-			if err != nil {
-				t.Fatalf("POST: %v", err)
-			}
-			if elapsed := time.Since(started); elapsed < readDeadline {
-				t.Fatalf("the exchange took %s, inside the %s read deadline: the build did not outlast it, so the test proves nothing", elapsed, readDeadline)
-			}
-			if status != http.StatusOK || !pingAnswered(answer) {
-				t.Errorf("status %d, body %.300s; want 200 with the ping's result, the body read after the build", status, answer)
-			}
-		})
+				started := time.Now()
+				status, _, answer, err := postInMode(t, baseURL, client, mode, body, readDeadline+readDeadline/3)
+				if err != nil {
+					t.Fatalf("POST: %v", err)
+				}
+				if built := lastUserAnswer().Sub(started); built < readDeadline {
+					t.Fatalf("GitLab answered the build's last request %s after the POST, inside the %s read deadline: the build did not outlast it, so the test proves nothing", built, readDeadline)
+				}
+				if status != http.StatusOK || !pingAnswered(answer) {
+					t.Errorf("status %d, body %.300s; want 200 with the ping's result, the body read after the build", status, answer)
+				}
+			})
+		}
 	}
 }
 
@@ -3937,34 +4084,105 @@ func TestMCPServerGate_EntryBuildOutlastsTheReadDeadline_StillReadsTheBody(t *te
 // write half of issue 1821: under --json-response nothing clears the write
 // deadline, which is counted from when the request's headers were read, so a
 // first response whose entry build took longer than the deadline was cut by
-// the server itself. The gate starts the deadline again once the entry is
-// built, so the response is delivered whole.
+// the server itself. The deadlines are held while the server waits on GitLab,
+// so the response is delivered whole, over HTTP/1.1 and over HTTP/2, where a
+// stream's write deadline that fires resets the stream.
 //
 // Not parallel: it shortens the listener's deadlines.
 func TestMCPServerGate_JSONResponsePastTheWriteDeadline_ArrivesWhole(t *testing.T) {
 	const writeDeadline = time.Second
 	shortenHTTPDeadlines(t, baseHTTPReadTimeout, writeDeadline)
-	gitlab := newSlowUserGitLab(t, writeDeadline)
+	gitlab, lastUserAnswer := newSlowUserGitLab(t, writeDeadline)
 
-	for _, mode := range deadlineModes(gitlab.URL, true) {
-		t.Run(mode.name, func(t *testing.T) {
-			addr, shutdown := startStatelessServeHTTP(t, mode.cfg)
-			defer shutdown()
+	for _, transport := range deadlineTransports() {
+		for _, mode := range deadlineModes(gitlab.URL, true) {
+			t.Run(transport.name+"/"+mode.name, func(t *testing.T) {
+				baseURL, client, shutdown := transport.start(t, mode.cfg)
+				defer shutdown()
 
-			started := time.Now()
-			status, contentType, answer, err := postInMode(t, addr, mode, paddedPing(0))
-			if err != nil {
-				t.Fatalf("POST: %v; want the JSON answer delivered whole", err)
-			}
-			if elapsed := time.Since(started); elapsed < writeDeadline {
-				t.Fatalf("the exchange took %s, inside the %s write deadline: the build did not outlast it, so the test proves nothing", elapsed, writeDeadline)
-			}
-			if status != http.StatusOK || !strings.HasPrefix(contentType, mimeJSON) {
-				t.Fatalf("status %d, content type %q; want 200 application/json", status, contentType)
-			}
-			if !pingAnswered(answer) {
-				t.Errorf("body %.300s is not the ping's result; want the whole JSON answer", answer)
-			}
-		})
+				started := time.Now()
+				status, contentType, answer, err := postInMode(t, baseURL, client, mode, paddedPing(0), 0)
+				if err != nil {
+					t.Fatalf("POST: %v; want the JSON answer delivered whole", err)
+				}
+				if built := lastUserAnswer().Sub(started); built < writeDeadline {
+					t.Fatalf("GitLab answered the build's last request %s after the POST, inside the %s write deadline: the build did not outlast it, so the test proves nothing", built, writeDeadline)
+				}
+				if status != http.StatusOK || !strings.HasPrefix(contentType, mimeJSON) {
+					t.Fatalf("status %d, content type %q; want 200 application/json", status, contentType)
+				}
+				if !pingAnswered(answer) {
+					t.Errorf("body %.300s is not the ping's result; want the whole JSON answer", answer)
+				}
+			})
+		}
+	}
+}
+
+// TestHoldRequestDeadlines_BodyThatNeverEnds_IsEndedByTheReadDeadline holds
+// that the deadlines are off only while the server works on its own: the
+// first read of the request's body or the first write of its response starts
+// both again, whichever comes first, so a body that never ends is still ended
+// by the read deadline, over HTTP/1.1 and over HTTP/2. A refused request
+// writes its status before it reads the body for its JSON-RPC id; an admitted
+// one has the SDK read the body before anything is written.
+//
+// Not parallel: it shortens the listener's deadlines.
+func TestHoldRequestDeadlines_BodyThatNeverEnds_IsEndedByTheReadDeadline(t *testing.T) {
+	const readDeadline = 300 * time.Millisecond
+	shortenHTTPDeadlines(t, readDeadline, baseHTTPWriteTimeout)
+	gitlab := newMockGitLabServerWithUser(t)
+
+	cases := []struct {
+		name       string
+		credential string
+		wantStatus int
+	}{
+		{name: "refused writes first", wantStatus: http.StatusUnauthorized},
+		{name: "admitted reads first", credential: testToken, wantStatus: http.StatusBadRequest},
+	}
+	for _, transport := range deadlineTransports() {
+		for _, tc := range cases {
+			t.Run(transport.name+"/"+tc.name, func(t *testing.T) {
+				cfg := statelessTestConfig(gitlab.URL, false)
+				baseURL, client, shutdown := transport.start(t, cfg)
+				defer shutdown()
+
+				// The tail never comes, so only a read deadline started again
+				// ends the read. The body ends with the request's context, so
+				// a server that never ends the read fails the test at limit
+				// rather than holding the client's write of the body forever.
+				const limit = 20 * readDeadline
+				ctx, cancel := context.WithTimeout(t.Context(), limit)
+				defer cancel()
+				reader, writer := io.Pipe()
+				go func() {
+					if _, err := io.WriteString(writer, `{"jsonrpc":"2.0","id":7,"method":"ping","params":{"_meta":{"padding":"`); err != nil {
+						return
+					}
+					<-ctx.Done()
+					writer.CloseWithError(ctx.Err())
+				}()
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/", reader)
+				if err != nil {
+					t.Fatalf("build request: %v", err)
+				}
+				req.ContentLength = 1 << 20
+				req.Header.Set(hdrContentType, mimeJSON)
+				req.Header.Set("Accept", mimeJSONSSE)
+				if tc.credential != "" {
+					req.Header.Set("PRIVATE-TOKEN", tc.credential)
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatalf("POST: %v; want an answer once the %s read deadline ended the body read, inside %s", err, readDeadline, limit)
+				}
+				answer := readAndCloseBody(t, resp)
+				if resp.StatusCode != tc.wantStatus {
+					t.Errorf("status %d, body %.300s; want %d", resp.StatusCode, answer, tc.wantStatus)
+				}
+			})
+		}
 	}
 }
