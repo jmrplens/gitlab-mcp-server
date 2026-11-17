@@ -740,6 +740,202 @@ func TestConfigurePullMirror_ResendingTheSourceItPullsFrom_Proceeds(t *testing.T
 	}
 }
 
+// TestConfigurePullMirror_AuthUserReaimingAnOverwritingMirror_IsRefused
+// verifies that auth_user is held to the rule a URL is held to where it picks
+// the repository (issue 1764). GitLab uses auth_user as the login in place of
+// the URL's own (Repositories::PullMirrors::UpdateService merges it over the
+// credentials Project#import_url= took from the URL, and
+// Gitlab::UrlSanitizer#full_url logs in with it), and over SSH a path that
+// starts with ~ is resolved in the home of the account git logs in as. So a
+// call that sends only auth_user to a mirror that overwrites diverged branches
+// and pulls such a path aims the overwrite at another account's repository,
+// and the dedicated route syncs at once. An empty auth_user is a re-aim too:
+// GitLab drops the login, and the path is resolved in the home of whichever
+// account the instance's SSH client logs in as by default.
+//
+// The question names the login GitLab will use, which is auth_user wherever
+// the call sends it, over the login of the URL the call sends as well, and no
+// login for an empty one. A call that sends no URL is asked about the source
+// the read reports, with auth_user in place of the login GitLab masks there.
+// A read that fails for any reason but a missing mirror is answered by asking,
+// as for a URL, with the question of the configured source, since the guard
+// cannot tell whether the login picks the repository.
+func TestConfigurePullMirror_AuthUserReaimingAnOverwritingMirror_IsRefused(t *testing.T) {
+	tests := []struct {
+		name       string
+		readStatus int
+		readBody   string
+		input      ConfigurePullMirrorInput
+		source     string
+		wantReads  int64
+	}{
+		{
+			name:       "auth_user alone on a home-relative source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+			source:     "ssh://alice@host.example/~/repo.git",
+			wantReads:  1,
+		},
+		{
+			name:       "an empty auth_user on a home-relative source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("")},
+			source:     "ssh://host.example/~/repo.git",
+			wantReads:  1,
+		},
+		{
+			name:       "auth_user beside the password on a home-relative source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice"), AuthPassword: new("secret")},
+			source:     "ssh://alice@host.example/~/repo.git",
+			wantReads:  1,
+		},
+		{
+			name:       "a home-relative URL whose own login auth_user replaces",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", URL: homeRelativeMirrorSource, AuthUser: new("alice")},
+			source:     "ssh://alice@host.example/~/repo.git",
+			wantReads:  1,
+		},
+		{
+			name:       "a home-relative URL whose own login an empty auth_user drops",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", URL: homeRelativeMirrorSource, AuthUser: new("")},
+			source:     "ssh://host.example/~/repo.git",
+			wantReads:  1,
+		},
+		{
+			name:       "auth_user alone where the configuration cannot be read",
+			readStatus: http.StatusInternalServerError,
+			readBody:   `{"message":"500 Internal Server Error"}`,
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+			source:     configuredMirrorSource,
+			wantReads:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, tt.readStatus, tt.readBody)
+
+			_, err := ConfigurePullMirror(t.Context(), client, tt.input)
+			if want := mirrorRefusal(opConfigurePullMirror, tt.source); err == nil || err.Error() != want {
+				t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+			}
+			if got := calls.reads.Load(); got != tt.wantReads {
+				t.Errorf("reads = %d, want %d", got, tt.wantReads)
+			}
+			if got := calls.writes.Load(); got != 0 {
+				t.Errorf("the configuration was applied %d time(s) despite being refused", got)
+			}
+		})
+	}
+}
+
+// TestConfigurePullMirror_ArmingWithAuthUser_NamesTheLoginGitLabUses verifies
+// the question of a call that arms the overwrite and decides it without a
+// read: it names auth_user as the login of a home-relative SSH URL, in place
+// of the URL's own, since that is the account whose home GitLab pulls from.
+func TestConfigurePullMirror_ArmingWithAuthUser_NamesTheLoginGitLabUses(t *testing.T) {
+	var calls guardCalls
+	client := guardedClient(t, &calls, http.StatusOK, storedMirrorJSON(false))
+
+	_, err := ConfigurePullMirror(t.Context(), client, ConfigurePullMirrorInput{
+		ProjectID:                        "42",
+		Enabled:                          new(true),
+		URL:                              "ssh://bob:secret@host.example/~/repo.git",
+		AuthUser:                         new("mallory"),
+		MirrorOverwritesDivergedBranches: new(true),
+	})
+	if want := mirrorRefusal(opConfigurePullMirror, "ssh://mallory@host.example/~/repo.git"); err == nil || err.Error() != want {
+		t.Errorf("refusal =\n%v\nwant\n%q", err, want)
+	}
+	if got := calls.reads.Load(); got != 0 {
+		t.Errorf("a call that sends both flags paid for %d inspection read(s)", got)
+	}
+}
+
+// TestConfigurePullMirror_AuthUserThatPicksNoRepository_Proceeds verifies that
+// auth_user is an ordinary credential wherever the login does not pick the
+// repository: over HTTPS, and over SSH with an absolute path, the URL names one
+// repository whoever logs in, so a call that sends auth_user alone to a
+// mirror that overwrites is the unrelated edit the guard lets through. Nor
+// does it ask about a home-relative mirror that does not overwrite, nor about
+// one GitLab answers not mirrored or 404, which overwrites nothing. Each of
+// them costs the one inspection read that tells it apart from the re-aim.
+func TestConfigurePullMirror_AuthUserThatPicksNoRepository_Proceeds(t *testing.T) {
+	tests := []struct {
+		name       string
+		readStatus int
+		readBody   string
+		input      ConfigurePullMirrorInput
+	}{
+		{
+			name:       "an HTTPS source",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedMirrorSourceURL),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+		},
+		{
+			name:       "an HTTPS source whose path starts with ~",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, "https://*****@host.example/~/repo.git"),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+		},
+		{
+			name:       "an absolute SSH path",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, "ssh://*****@host.example/srv/repo.git"),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("")},
+		},
+		{
+			name:       "the HTTPS source it already pulls from, sent again",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(true, maskedMirrorSourceURL),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", URL: mirrorSourceURL, AuthUser: new("alice")},
+		},
+		{
+			name:       "a home-relative source that does not overwrite",
+			readStatus: http.StatusOK,
+			readBody:   storedMirrorAt(false, maskedHomeRelativeMirrorSource),
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+		},
+		{
+			name:       "a project with no mirror",
+			readStatus: http.StatusBadRequest,
+			readBody:   notMirroredJSON,
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+		},
+		{
+			name:       "an instance that mounts no pull mirror route",
+			readStatus: http.StatusNotFound,
+			readBody:   `{"error":"404 Not Found"}`,
+			input:      ConfigurePullMirrorInput{ProjectID: "42", AuthUser: new("alice")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls guardCalls
+			client := guardedClient(t, &calls, tt.readStatus, tt.readBody)
+
+			if _, err := ConfigurePullMirror(t.Context(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := calls.reads.Load(); got != 1 {
+				t.Errorf("reads = %d, want the one inspection read", got)
+			}
+			if got := calls.writes.Load(); got != 1 {
+				t.Errorf("writes = %d, want the configuration applied once", got)
+			}
+		})
+	}
+}
+
 // TestSameMirrorSource_Values verifies which URLs name the repository a mirror
 // already pulls from, as GET /projects/:id/mirror/pull reports it. Credentials
 // never count, since GitLab reports them masked, and a scheme or host differing
@@ -1122,12 +1318,16 @@ func TestConfigurePullMirror_ThroughTheRoute_HonorsTheReservedConfirmKey(t *test
 // since git resolves that path in the login's home and the login therefore
 // names the repository: its password is still dropped. Over HTTPS the same
 // path names one repository whoever authenticates, and an absolute SSH path
-// does too, so their user is a credential like any other.
+// does too, so their user is a credential like any other. Where the login
+// names the repository, auth_user sent beside the URL is the login shown,
+// since GitLab logs in with it in place of the URL's own (issue 1764), and an
+// empty one shows none, since GitLab then logs in with none.
 func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  string
-		want string
+		name     string
+		raw      string
+		authUser *string
+		want     string
 	}{
 		{name: "host and path survive", raw: mirrorSourceURL, want: mirrorSourceURL},
 		{name: "userinfo is dropped", raw: "https://user:token@github.com/example/repo.git", want: mirrorSourceURL},
@@ -1148,11 +1348,19 @@ func TestPullMirrorSourceForPrompt_Values(t *testing.T) {
 		{name: "unparseable text is withheld", raw: "https://exa mple.com/\x7f", want: toolutil.RedactedPlaceholder},
 		{name: "a bare path names no scheme and is withheld", raw: "github.com/example/repo.git", want: toolutil.RedactedPlaceholder},
 		{name: "a local path names no host and is withheld", raw: "file:///srv/git/repo.git", want: toolutil.RedactedPlaceholder},
+		{name: "auth_user replaces the login of a home-relative SSH path", raw: "ssh://bob:secret@host.example/~/repo.git", authUser: new("alice"), want: "ssh://alice@host.example/~/repo.git"},
+		{name: "auth_user names the login a home-relative SSH path left out", raw: "ssh://host.example/~/repo.git", authUser: new("alice"), want: "ssh://alice@host.example/~/repo.git"},
+		{name: "auth_user replaces the login GitLab masks", raw: maskedHomeRelativeMirrorSource, authUser: new("alice"), want: "ssh://alice@host.example/~/repo.git"},
+		{name: "an empty auth_user drops the login of a home-relative SSH path", raw: homeRelativeMirrorSource, authUser: new(""), want: "ssh://host.example/~/repo.git"},
+		{name: "an @ in auth_user is escaped as the login", raw: "ssh://host.example/~/repo.git", authUser: new("mal@lory"), want: "ssh://mal%40lory@host.example/~/repo.git"},
+		{name: "auth_user over HTTPS stays a credential", raw: "https://host.example/~/repo.git", authUser: new("token"), want: "https://host.example/~/repo.git"},
+		{name: "auth_user on an absolute SSH path stays a credential", raw: "ssh://host.example/srv/repo.git", authUser: new("alice"), want: "ssh://host.example/srv/repo.git"},
+		{name: "auth_user does not reveal a withheld URL", raw: "https://github.com/example@evil.example/repo.git", authUser: new("alice"), want: toolutil.RedactedPlaceholder},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pullMirrorSourceForPrompt(tt.raw); got != tt.want {
-				t.Errorf("pullMirrorSourceForPrompt(%q) = %q, want %q", tt.raw, got, tt.want)
+			if got := pullMirrorSourceForPrompt(tt.raw, tt.authUser); got != tt.want {
+				t.Errorf("pullMirrorSourceForPrompt(%q, %v) = %q, want %q", tt.raw, tt.authUser, got, tt.want)
 			}
 		})
 	}
