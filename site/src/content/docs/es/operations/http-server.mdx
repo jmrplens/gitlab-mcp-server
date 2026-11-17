@@ -219,7 +219,7 @@ Para esos dos, una dirección privada, de loopback, CGNAT, de enlace local, loca
 
 Para un despliegue local contra un GitLab en la misma máquina, la salida son por tanto dos flags:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --allow-any-gitlab-url \
   --allow-private-instances=true
@@ -528,7 +528,7 @@ El modo sin estado encaja en despliegues con balanceo de carga donde las peticio
 
 Combina el modo sin estado con `--json-response` para clientes o gateways que prefieren cuerpos JSON planos en lugar de SSE:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
   --json-response
 ```
@@ -853,7 +853,7 @@ OpenCode guarda los servidores bajo `mcp` en `opencode.json`, y uno remoto lleva
 </TabItem>
 <TabItem label="curl (Pruebas)">
 
-```bash
+```bash run
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -868,7 +868,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **`--public-url` es lo que hace aceptable el host de un despliegue tras un proxy.** Un proxy reenvía el `Host` del cliente y se conecta al servidor por loopback, y esa es también la forma de un ataque de DNS rebinding: una página resuelve un nombre que controla el atacante a la dirección de loopback, y el navegador llega entonces al servidor local con ese nombre en `Host`. Así que un `Host` que nombra un host que nadie declaró se rechaza con `403` y JSON-RPC `-40300`, en `/health` y en cualquier otra ruta igual que en `/mcp`, y `--public-url=https://mcp.example.com/mcp` es la declaración:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --gitlab-url=https://gitlab.example.com \
   --public-url=https://mcp.example.com/mcp
@@ -1187,7 +1187,7 @@ Toda línea que el pool escribe sobre una entrada termina con `gitlab_url`, `ent
 
 `GET /health` no necesita credenciales. Responde `200` con un cuerpo JSON mientras el proceso atiende, y `503` con el mismo cuerpo una vez solicitada la parada:
 
-```bash
+```bash run
 curl -s http://localhost:8080/health
 ```
 
@@ -1225,17 +1225,17 @@ Lo que eso retiene es la ocupación frente a los llamantes en general, no el hec
 
 `/health` solo informa de que el proceso está en marcha: no hace ninguna llamada a GitLab. Para verificar la conectividad de extremo a extremo de un token concreto, llama a un método MCP autenticado:
 
-```bash
+```bash run
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | cut -c 1-200
 ```
 
 Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramientas disponibles. Para comprobar solo el código de estado:
 
-```bash
+```bash run
 curl -s -o /dev/null -w "%{http_code}" \
   -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
@@ -1251,7 +1251,7 @@ Son dos documentos, y ninguno necesita credenciales. No son el mismo documento.
 
 `GET /server-card` responde con la **ficha SEP-2127**: quién es este servidor y cómo conectarse. Identidad (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) y, cuando el despliegue declara `--public-url`, una entrada `remotes` con la cabecera de credencial que debe enviar el cliente. **No lleva herramientas, recursos, prompts ni capacidades**, y es una decisión de esa extensión: lo que un servidor expone varía según el usuario autenticado, la sesión, la configuración y los feature flags, así que un documento estático no puede responder a eso.
 
-```bash
+```bash run
 curl -s http://localhost:8080/server-card
 curl -s http://localhost:8080/mcp/server-card
 ```
@@ -1260,7 +1260,7 @@ La respuesta lleva `Content-Type: application/mcp-server-card+json`. La extensi�
 
 `GET /.well-known/mcp/server-card.json` responde con el **documento SEP-1649 anterior**, que sí enumera: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia y los bloques de autenticación, suscripciones y telemetría. Se sirve como `application/json`, y es lo que hay que pedir cuando quieres esa lista sin credencial.
 
-```bash
+```bash run
 curl -s http://localhost:8080/.well-known/mcp/server-card.json
 ```
 

@@ -70,7 +70,7 @@
 | MCP Icons                 | 52 icons (51 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 803 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 506 test files under `internal/tools/`                                                                       |
-| Go packages               | 331 in the module (`go list ./...`); 371 directories hold tracked `.go` files, the forty more being what `go list` leaves out: thirty-nine `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists and the four-package module its condition count reads, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 183 under `internal/tools/...` (the root package plus 182 sub-packages) |
+| Go packages               | 332 in the module (`go list ./...`); 372 directories hold tracked `.go` files, the forty more being what `go list` leaves out: thirty-nine `testdata` fixture packages (the two stand-in programs, the coverage audit's planted trees, the closed-server audit's planted module, the stand-in module the SDK route reader's tests read, the platform module the condition measurement's discovery lists and the four-package module its condition count reads, the escaping audit's two catalog fixtures and the person-facing text gate's two planted modules) and `test/e2e/modeleval/internal/provider`, whose every file sits behind a build tag. 183 under `internal/tools/...` (the root package plus 182 sub-packages) |
 
 ### Orbit live tests
 
@@ -189,7 +189,7 @@ gitlab-mcp-server/
 ├── docs/                             # Contributor documentation only (ADR-0025): a README and development/
 ├── site/                             # The documentation site, the only home of user documentation (English + es/ twin)
 ├── examples/telemetry/               # The worked collector example the telemetry page imports; test/e2e/collector holds it to the server
-├── test/e2e/                         # End-to-end tests: http/, stdio/, collector/, orbit/, internal/harness/, gitlab/{common,ce,ee}
+├── test/e2e/                         # End-to-end tests: http/, stdio/, collector/, orbit/, docs/, internal/harness/, gitlab/{common,ce,ee}
 ├── plan/                             # Untracked working area; make check-plan-untracked fails on a force-added file
 ├── vex/                              # The OpenVEX document every GitHub release attaches, held by make check-vex
 ├── mcpb/                             # Claude Desktop extension manifest, icon and the Linux launcher
@@ -387,6 +387,7 @@ make test-e2e-http                                     # HTTP transport module: 
 make test-e2e-cloudflare-tunnel                        # its Cloudflare Tunnel cases through a real quick tunnel (Docker, Internet; a public address while it runs; never on CI)
 make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
 make test-e2e-collector                                # telemetry into a real OTLP collector (Docker; skips without it)
+make test-e2e-docs                                     # the docs' shell blocks marked run or run=background, against ephemeral GitLab CE (Docker; never on CI)
 
 # Compile-only check. The runtime is decided by the package, not a build tag,
 # so all three are compiled together under the one `e2e` tag.

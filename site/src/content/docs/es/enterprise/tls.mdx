@@ -28,7 +28,7 @@ esta página.
 
 ## El TLS del propio listener
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=:8443 \
   --gitlab-url=https://gitlab.example.com \
   --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
@@ -116,7 +116,7 @@ distinguir a sus clientes. Toda conexión al socket es la única clave `unix`.
 Declara el proxy del socket como proxy de confianza y le dirá al servidor quién
 es cada cliente, igual que hace un proxy en TCP de loopback:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock \
   --gitlab-url=https://gitlab.example.com \
   --trusted-proxy-header=X-Real-IP --trusted-proxies=unix

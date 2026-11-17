@@ -219,7 +219,7 @@ For those two, a private, loopback, CGNAT, link-local, unique-local or unspecifi
 
 For a local deployment against a GitLab on the same machine, the hatch is therefore two flags:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --allow-any-gitlab-url \
   --allow-private-instances=true
@@ -528,7 +528,7 @@ Stateless mode suits load-balanced deployments where requests from one client ma
 
 Combine stateless mode with `--json-response` for clients or gateways that prefer plain JSON bodies over SSE:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
   --json-response
 ```
@@ -853,7 +853,7 @@ OpenCode keeps servers under `mcp` in `opencode.json`, and a remote one has `"ty
 </TabItem>
 <TabItem label="curl (Testing)">
 
-```bash
+```bash run
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -868,7 +868,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **`--public-url` is what makes a proxied deployment's host acceptable.** A proxy forwards the client's `Host` and connects to the server over loopback, and that is also the shape of a DNS-rebinding attack: a page resolves a name the attacker controls to the loopback address, and the browser then reaches the local server with that name in `Host`. So a `Host` naming a host nobody declared is refused with `403` and JSON-RPC `-40300`, on `/health` and every other path as well as on `/mcp`, and `--public-url=https://mcp.example.com/mcp` is the declaration:
 
-```bash
+```bash run=background
 gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
   --gitlab-url=https://gitlab.example.com \
   --public-url=https://mcp.example.com/mcp
@@ -1185,7 +1185,7 @@ Every line the pool writes about one entry ends with `gitlab_url`, `enterprise` 
 
 `GET /health` needs no credentials. It answers `200` with a JSON body while the process is serving, and `503` with the same body once shutdown has been requested:
 
-```bash
+```bash run
 curl -s http://localhost:8080/health
 ```
 
@@ -1223,17 +1223,17 @@ What that withholds is occupancy from callers in general, not the fact of a call
 
 `/health` reports only that the process is up: it performs no GitLab round trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 
-```bash
+```bash run
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | head -c 200
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | cut -c 1-200
 ```
 
 A successful response returns a JSON-RPC result with the list of available tools. To check the status code alone:
 
-```bash
+```bash run
 curl -s -o /dev/null -w "%{http_code}" \
   -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
@@ -1249,7 +1249,7 @@ Two documents, and neither needs a credential. They are not the same document.
 
 `GET /server-card` answers the **SEP-2127 Server Card**: who this server is and how to connect to it. Identity (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) and, when the deployment names a `--public-url`, a `remotes` entry with the credential header a client must send. It carries **no tools, resources, prompts or capabilities**, which is that extension's own decision: what a server exposes varies by authenticated user, session, configuration and feature flags, so a static document cannot answer it.
 
-```bash
+```bash run
 curl -s http://localhost:8080/server-card
 curl -s http://localhost:8080/mcp/server-card
 ```
@@ -1258,7 +1258,7 @@ The response carries `Content-Type: application/mcp-server-card+json`. The exten
 
 `GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649 document**, which does enumerate: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises and blocks describing authentication, subscriptions and telemetry. It is served as `application/json`, and it is what to fetch when you want that list without a credential.
 
-```bash
+```bash run
 curl -s http://localhost:8080/.well-known/mcp/server-card.json
 ```
 

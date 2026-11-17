@@ -332,13 +332,13 @@ Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin
 
 ### Hacerlo ejecutable (Linux/macOS)
 
-```bash
+```bash run
 chmod +x gitlab-mcp-server-*
 ```
 
 Opcionalmente, muévelo a un directorio en tu PATH:
 
-```bash
+```bash run
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
@@ -635,8 +635,8 @@ Un `.env` en el directorio de trabajo **no** se lee. Tu editor fija ese director
 
 Para despliegues en equipo, puedes ejecutar el servidor en modo HTTP donde cada usuario se autentica con su propio token:
 
-```bash
-./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
+```bash run=background
+gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
 Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab en cada petición, en una cabecera `PRIVATE-TOKEN` en el modo de autenticación por defecto (legacy); la entrada de cada cliente está en [Configuración de clientes](/gitlab-mcp-server/es/install/clients/). Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para más detalles.
@@ -646,7 +646,7 @@ Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab en cad
 Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuarios autorizan a través del navegador — no se requiere copiar ni distribuir tokens:
 
 ```bash
-./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
 ```
 
 Configura cada cliente con ese valor exacto de `--public-url` como URL del servidor: un cliente descarta los metadatos RFC 9728 cuando su `resource` difiere de la URL que usó.

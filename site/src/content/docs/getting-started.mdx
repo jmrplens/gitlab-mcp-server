@@ -330,13 +330,13 @@ Prefer to place the binary yourself? Download the latest binary for your platfor
 
 ### Make it executable (Linux/macOS)
 
-```bash
+```bash run
 chmod +x gitlab-mcp-server-*
 ```
 
 Optionally, move it to a directory in your PATH:
 
-```bash
+```bash run
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
@@ -633,8 +633,8 @@ A `.env` in the working directory is **not** read. Your editor sets that directo
 
 For team deployments, you can run the server in HTTP mode where each user authenticates with their own token:
 
-```bash
-./gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
+```bash run=background
+gitlab-mcp-server --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
 Each client connects via HTTP and provides its own GitLab token on every request, in a `PRIVATE-TOKEN` header in the default (legacy) authentication mode; the entry for each client is on [Client configuration](/gitlab-mcp-server/install/clients/). See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for details.
@@ -644,7 +644,7 @@ Each client connects via HTTP and provides its own GitLab token on every request
 For zero-config token management, use OAuth mode. Users authorize through the browser — no token copying or distribution required:
 
 ```bash
-./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com/mcp
 ```
 
 Configure each client with that exact `--public-url` value as the server's URL: a client discards the RFC 9728 metadata when its `resource` differs from the URL it used.
