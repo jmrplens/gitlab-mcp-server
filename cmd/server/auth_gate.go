@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -423,7 +424,6 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			sessionFailure.write(w, r)
 			return
 		}
-		restartRequestDeadlines(w)
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
 		// A POST that would open a stateful session takes its slots here,
 		// before the SDK creates anything, and is refused with a 503 when one
@@ -480,34 +480,108 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 	})
 }
 
-// restartRequestDeadlines starts the connection's read and write deadlines
-// again from now, once the gate has admitted a request and built its pool
-// entry.
+// holdRequestDeadlines takes the listener's read and write deadlines off a
+// request to the MCP endpoint while the server works on it without the
+// client, and starts both again, each counted from that moment, the first
+// time the request's body is read or its response written or flushed, or when
+// the handler returns having done neither.
 //
 // The listener counts the read deadline from when the request starts being
-// read and the write deadline from when its headers were read, and the gate
-// resolves the entry before the SDK reads a byte of the body. The first build
-// of an entry can take about 33 seconds on GitLab.com (38 for a fine-grained
-// token), past [baseHTTPReadTimeout], and in oauth mode the verification
-// before the gate adds up to about 35 more, past [baseHTTPWriteTimeout] for a
-// response nothing answers as an event stream (--json-response). Without this,
-// a first POST whose body is larger than what arrived with its headers fails
-// its body read, and such a response is cut by the server itself (issue 1821).
+// read and the write deadline from when its headers were read, and the server
+// verifies an oauth token and builds the credential's pool entry before the
+// SDK reads a byte of the body. The first build of an entry can take about 33
+// seconds on GitLab.com (38 for a fine-grained token), past
+// [baseHTTPReadTimeout], and in oauth mode the verification before it adds up
+// to about 35 more, past [baseHTTPWriteTimeout] for a response nothing answers
+// as an event stream (--json-response). Without the hold, a first POST whose
+// body is still arriving fails its body read, and such a response is cut by
+// the server itself (issue 1821).
 //
-// Only an admitted request gets here, so a caller the gate refuses is still
-// held to the deadlines as the listener set them, and an admitted one gets
-// each deadline once more, counted from the moment the wait it did not cause
-// ended. A response that commits to text/event-stream clears its write
-// deadline afterwards as before ([sseAwareWriter]).
+// The deadlines are taken off before the wait rather than set again after it
+// because over HTTP/2, which the binary negotiates whenever it terminates TLS
+// itself, each stream holds its own deadlines, and one that has fired has
+// already ended the stream's body or reset the stream: setting it again after
+// that changes nothing. Over HTTP/1.1 the deadlines are the connection's, and
+// both ways work there.
+//
+// Nothing the client sends or reads goes unbounded: the deadlines start again
+// before the first read of the body or write of the response, whoever does it,
+// so a refusal that reads the body to echo its JSON-RPC id ([requestIDFromBody])
+// reads it under a read deadline, and a response that commits to
+// text/event-stream still clears its write deadline afterwards
+// ([sseAwareWriter]). What runs while they are off is the server's own work on
+// GitLab, each request of it bounded by its own clock.
 //
 // A writer that cannot reach a connection, a test recorder, answers
-// [http.ErrNotSupported], and that changes nothing for it, so the errors are
-// not acted on.
-func restartRequestDeadlines(w http.ResponseWriter) {
-	controller := http.NewResponseController(w)
-	now := time.Now()
-	_ = controller.SetReadDeadline(now.Add(baseHTTPReadTimeout))
-	_ = controller.SetWriteDeadline(now.Add(baseHTTPWriteTimeout))
+// [http.ErrNotSupported] when the deadlines are taken off, and the request
+// passes on as it came.
+func holdRequestDeadlines(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		controller := http.NewResponseController(w)
+		if controller.SetReadDeadline(time.Time{}) != nil || controller.SetWriteDeadline(time.Time{}) != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		held := &deadlineHoldWriter{ResponseWriter: w, controller: controller}
+		defer held.restart()
+		r = r.WithContext(r.Context())
+		r.Body = &deadlineHoldBody{ReadCloser: r.Body, held: held}
+		next.ServeHTTP(held, r)
+	})
+}
+
+// deadlineHoldWriter is the writer [holdRequestDeadlines] hands on: it starts
+// the deadlines again before the first write or flush of the response.
+type deadlineHoldWriter struct {
+	http.ResponseWriter
+	controller *http.ResponseController
+	once       sync.Once
+}
+
+// restart starts both deadlines again from now, the first time it is called.
+func (w *deadlineHoldWriter) restart() {
+	w.once.Do(func() {
+		now := time.Now()
+		_ = w.controller.SetReadDeadline(now.Add(baseHTTPReadTimeout))
+		_ = w.controller.SetWriteDeadline(now.Add(baseHTTPWriteTimeout))
+	})
+}
+
+// WriteHeader starts the deadlines again, then writes the status.
+func (w *deadlineHoldWriter) WriteHeader(code int) {
+	w.restart()
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Write starts the deadlines again, then writes b.
+func (w *deadlineHoldWriter) Write(b []byte) (int, error) {
+	w.restart()
+	return w.ResponseWriter.Write(b)
+}
+
+// Flush starts the deadlines again, then flushes through the writer it wraps.
+// It is implemented here rather than left to [deadlineHoldWriter.Unwrap] so a
+// flush that comes first starts the deadlines too.
+func (w *deadlineHoldWriter) Flush() {
+	w.restart()
+	_ = w.controller.Flush()
+}
+
+// Unwrap exposes the writer it wraps, so [http.NewResponseController] further
+// in reaches the connection.
+func (w *deadlineHoldWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// deadlineHoldBody is the request body [holdRequestDeadlines] hands on: it
+// starts the deadlines again before the first read.
+type deadlineHoldBody struct {
+	io.ReadCloser
+	held *deadlineHoldWriter
+}
+
+// Read starts the deadlines again, then reads from the body it wraps.
+func (b *deadlineHoldBody) Read(p []byte) (int, error) {
+	b.held.restart()
+	return b.ReadCloser.Read(p)
 }
 
 // addressesSession reports whether a non-POST method can act on a live MCP

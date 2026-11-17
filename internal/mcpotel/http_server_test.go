@@ -208,11 +208,12 @@ func TestStatusRecorder_FlushIsSafeWithoutAFlusher(t *testing.T) {
 //
 // [http.NewResponseController] finds the connection by unwrapping the writer
 // it is handed, and a wrapper that does not unwrap answers
-// [http.ErrNotSupported] for every deadline. The MCP gate sits behind this
-// middleware and starts the read and write deadlines again once it has built a
-// credential's pool entry (issue 1821), so a recorder that stopped the unwrap
-// would leave a first request's body read and its JSON response to the
-// deadlines the build had already spent, with nothing failing but the request.
+// [http.ErrNotSupported] for every deadline. The MCP endpoint sits behind this
+// middleware and holds the read and write deadlines while the server verifies
+// a credential and builds its pool entry (issue 1821), so a recorder that
+// stopped the unwrap would leave a first request's body read and its JSON
+// response to the deadlines the build had already spent, with nothing failing
+// but the request.
 func TestServerMiddleware_ResponseController_ReachesTheConnection(t *testing.T) {
 	results := make(chan error, 1)
 	srv := httptest.NewServer(ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

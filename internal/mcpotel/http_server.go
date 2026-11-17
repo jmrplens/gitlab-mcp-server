@@ -185,9 +185,10 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 }
 
 // Unwrap exposes the underlying writer so [http.NewResponseController] reaches
-// the connection: the MCP gate behind this middleware starts the read and
-// write deadlines again once it has built a credential's pool entry, and a
-// wrapper that does not unwrap answers [http.ErrNotSupported] for both.
+// the connection: the MCP endpoint behind this middleware holds the read and
+// write deadlines while the server verifies a credential and builds its pool
+// entry, and a wrapper that does not unwrap answers [http.ErrNotSupported] for
+// both.
 //
 // Flush does not unwrap: this type implements it, so the controller finds it
 // here and the flush is recorded as committing the status.

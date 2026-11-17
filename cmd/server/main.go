@@ -255,9 +255,10 @@ const (
 	idleTimeoutDisabled = 10 * 365 * 24 * time.Hour
 )
 
-// The two deadlines the MCP gate starts again once it has admitted a request
-// and built its pool entry ([restartRequestDeadlines]). Vars, not consts, only
-// so tests can shorten them; nothing at runtime writes either.
+// The two deadlines the MCP endpoint holds while the server verifies a
+// request's credential and builds its pool entry, and starts again at the
+// request's first read or write ([holdRequestDeadlines]). Vars, not consts,
+// only so tests can shorten them; nothing at runtime writes either.
 var (
 	// baseHTTPReadTimeout bounds reading the full request, counted from when
 	// the request starts being read. Streamable HTTP request bodies (JSON-RPC)
@@ -3663,8 +3664,13 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // reverse proxy that forwards its prefix instead of stripping it: such a
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
+//
+// The deadlines are held from the handler on ([holdRequestDeadlines]), so the
+// oauth verification and the gate's entry build are not charged to the body
+// read or the response, while the Origin and protocol version refusals in
+// front, which answer at once, keep the deadlines the listener set.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, handler))
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, holdRequestDeadlines(handler)))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
