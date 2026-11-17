@@ -62,6 +62,16 @@ const timeoutStatus = 124
 // page's text stays as printed and the report shows what was answered.
 const curlrc = "fail-with-body\n"
 
+// blockShell is how the runner runs a block's file. -e ends the block at its
+// first failing command, as it would end a script. pipefail makes a pipeline
+// fail when any of its commands does: a block's curl is mostly piped, to jq
+// or a filter, and without it the pipeline's status is the last command's,
+// so a request that failed, or reached nothing, passed as long as the filter
+// did. A marked block therefore pipes nothing into a command that exits
+// before reading its input, such as head, which would fail the command
+// writing to it.
+const blockShell = "bash -e -o pipefail"
+
 // substitutions are the values a block's placeholders become: the release
 // the site renders %%VERSION%% as, the GitLab the reader reaches in place of
 // the instances the pages name, and the token in place of the token
@@ -180,7 +190,7 @@ func (r *runner) runPage(ctx context.Context, page string, blocks []docblocks.Bl
 func (r *runner) foreground(ctx context.Context, where, file string, bg *background, page string, probe bool) error {
 	deadline := time.Now().Add(r.readiness)
 	for {
-		out, err := r.shell.run(ctx, fmt.Sprintf("timeout -k 5 %s bash -e %s", seconds(r.blockTimeout), file))
+		out, err := r.shell.run(ctx, fmt.Sprintf("timeout -k 5 %s %s %s", seconds(r.blockTimeout), blockShell, file))
 		if err == nil {
 			if r.logf != nil {
 				r.logf("%s: passed:\n%s", where, r.subs.redact(out))
@@ -219,9 +229,9 @@ func (r *runner) start(ctx context.Context, page string, line int, file string) 
 	// setsid gives the block a process group whose id the pid file holds,
 	// written by the block's own shell so it names the group leader whether
 	// or not setsid had to fork, and stop signals the whole group.
-	script := fmt.Sprintf(`setsid bash -c 'echo $$ >%[1]s; exec bash -e %[2]s' >%[3]s 2>&1 </dev/null &
+	script := fmt.Sprintf(`setsid bash -c 'echo $$ >%[1]s; exec %[4]s %[2]s' >%[3]s 2>&1 </dev/null &
 for _ in $(seq 1 100); do [ -s %[1]s ] && exit 0; sleep 0.05; done
-echo "the block wrote no pid file" >&2; exit 1`, bg.pid, file, bg.log)
+echo "the block wrote no pid file" >&2; exit 1`, bg.pid, file, bg.log, blockShell)
 	if out, err := r.shell.run(ctx, script); err != nil {
 		return nil, fmt.Errorf("%s:%d: starting the block: %w:\n%s%w", page, line, err, r.subs.redact(out), errBlockFailed)
 	}

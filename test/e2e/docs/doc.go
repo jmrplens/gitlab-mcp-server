@@ -29,9 +29,13 @@
 // names as a prerequisite rather than a step: a certificate and key for
 // mcp.example.com at /etc/ssl/mcp.crt and /etc/ssl/mcp.key, and the
 // directory /run/gitlab-mcp for a socket. The marked blocks of a page run in
-// page order in that reader, each from its own file with `bash -e`, so a
-// failing command ends its block as it would end a script, while a pipeline
-// is judged by its last command, as in a reader's terminal.
+// page order in that reader, each from its own file with `bash -e -o
+// pipefail`, so a failing command ends its block as it would end a script,
+// and a pipeline fails when any of its commands does: a curl piped to jq
+// fails its block when the request does, where a reader's terminal would
+// show only jq's empty answer. A marked block therefore pipes nothing into a
+// command that exits before reading its input, such as head, which would fail
+// the command writing to it.
 //
 // A block is run as the page prints it, with three substitutions and no
 // other edit: %%VERSION%% becomes the release the tree's VERSION file names,

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/docblocks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // localShell is the reader of the controls: bash on this machine, in a home
@@ -149,6 +150,12 @@ func TestRunPage_BrokenStep_IsRed(t *testing.T) {
 			says: []string{"guide.mdx:5", "about to fail", "exit status 1"},
 		},
 		{
+			name: "a pipeline whose first command fails while the last succeeds",
+			page: fence(fg, "echo before\nfalse | cat"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "before", "exit status 1"},
+		},
+		{
 			name: "a command that is not there",
 			page: fence(fg, "no-such-command-anywhere --help"),
 			want: errBlockFailed,
@@ -249,8 +256,8 @@ func TestRunPage_ReaderSteps_Pass(t *testing.T) {
 				fence(fg, `! kill -0 "$(cat first.pid)" 2>/dev/null`),
 		},
 		{
-			name: "a pipeline is judged by its last command, as in a terminal",
-			page: fence(fg, "yes | head -c 10"),
+			name: "a pipeline whose every command succeeds",
+			page: fence(fg, "echo one | tr o O | grep -qx One"),
 		},
 		{
 			name: "the version, the instance and the token are substituted",
@@ -289,11 +296,17 @@ func TestRunPage_ReaderSteps_Pass(t *testing.T) {
 // ends with status 0 on any answer it receives, so without it a renamed route,
 // a refused token or a draining server would pass a block whose page printed
 // only the request, and a probe would take a 503 for a server that is up.
+// The same holds for a curl piped to a filter, which pipefail makes the
+// pipeline's status: a request that failed, or reached nothing, no longer
+// passes because jq or cat did.
 func TestRunPage_CurlAnswer_IsJudgedByItsStatus(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("curl"); err != nil {
-		t.Skipf("the control runs curl, as the reader's blocks do: %v", err)
+	for _, tool := range []string{"curl", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("the control runs %s, as the reader's blocks do: %v", tool, err)
+		}
 	}
+	dead := netfixture.DeadEndpoint(t)
 
 	answers := map[string]int{"/health": http.StatusOK, "/refused": http.StatusUnauthorized, "/draining": http.StatusServiceUnavailable}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +341,20 @@ func TestRunPage_CurlAnswer_IsJudgedByItsStatus(t *testing.T) {
 			page: fence(fg, "curl -s "+srv.URL+"/renamed"),
 			want: errBlockFailed,
 			says: []string{"guide.mdx:1", "answered 404", "exit status 22"},
+		},
+		{
+			name: "a renamed route piped to a filter that succeeds",
+			page: fence(fg, "curl -s "+srv.URL+"/renamed | cat"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "answered 404", "exit status 22"},
+		},
+		{
+			// jq reads no input and ends with status 0, so only curl's own
+			// status, 52 or 56 by how the connection ended, can fail it.
+			name: "a request nothing answers, piped to jq",
+			page: fence(fg, "curl -s "+dead+"/.well-known/mcp/server-card.json | jq .telemetry"),
+			want: errBlockFailed,
+			says: []string{"guide.mdx:1", "exit status 5"},
 		},
 		{
 			name: "a refused token, its status printed on its own",
