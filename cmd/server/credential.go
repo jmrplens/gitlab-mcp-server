@@ -386,7 +386,7 @@ func (sh *serverShell) newCredentialState(entry *serverpool.Entry) *credentialSt
 		owner:    entry.Owner(),
 		client:   entry.Client(),
 		limiter:  toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
-		listen:   &listenCounter{},
+		listen:   &listenCounter{credentialHash: entry.CredentialHash()},
 		subs:     sh.subs.newRuntime(entry.Owner(), entry.Client()),
 		streams:  sh.streams,
 		sessions: sh.sessions,

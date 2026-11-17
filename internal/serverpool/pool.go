@@ -209,6 +209,18 @@ func (e *Entry) Owner() string {
 	return e.owner
 }
 
+// CredentialHash returns the handle every line the pool writes about this
+// entry names its credential by ([CredentialHash] of it), so a line written
+// about the same credential outside the pool can name it the same way under
+// [telemetry.LogFieldCredentialHash] (issue 1780). It is the keyed digest
+// those lines carry and never the token, and the empty string on a nil entry.
+func (e *Entry) CredentialHash() string {
+	if e == nil {
+		return ""
+	}
+	return e.credentialHash
+}
+
 // tokenFacts returns what the entry knows of its token, read under the lock
 // the revalidation that learns a token's kind writes it under.
 func (e *Entry) tokenFacts() gitlabclient.TokenFacts {

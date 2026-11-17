@@ -23,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1595,6 +1596,12 @@ const maxListenStreamsSetting = "MAX_LISTEN_STREAMS"
 // listenCounter counts open streams against a ceiling.
 type listenCounter struct {
 	open atomic.Int64
+	// credentialHash is the handle of the pooled credential whose streams
+	// this counts ([serverpool.Entry.CredentialHash]), which the refusal of a
+	// stream past that credential's ceiling names it by (issue 1780). Empty
+	// for the process-wide counter and for a credential no pool entry holds,
+	// the one a stdio process serves.
+	credentialHash string
 }
 
 // acquire takes a slot, or reports that the ceiling is reached. A
@@ -1739,7 +1746,7 @@ func (l listenLimits) middleware(counterFor func(context.Context) *listenCounter
 			}
 			credential := counterFor(ctx)
 			if !credential.acquire(l.perCredential) {
-				return nil, l.tooMany(ctx, l.perCredential)
+				return nil, l.tooMany(ctx, l.perCredential, credential.credentialHash)
 			}
 			defer l.releaseCredential(credential)
 			if !l.processOpen.acquire(l.perProcess) {
@@ -1765,10 +1772,15 @@ func (l listenLimits) releaseProcess() {
 // tooMany is the refusal of a listen past its caller's own ceiling. It says
 // the caller holds too many and what to do about it, with 429's code, and
 // names the ceiling and its number so an operator reading the client's error
-// knows which setting to raise.
-func (l listenLimits) tooMany(ctx context.Context, limit int) error {
-	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams",
-		"scope", "per-credential", "limit", limit)
+// knows which setting to raise. The line names the credential by its handle
+// when a pool entry holds it, as every pool line about that entry does, and
+// names none on stdio, where the process serves one credential.
+func (l listenLimits) tooMany(ctx context.Context, limit int, handle string) error {
+	args := []any{"scope", "per-credential", "limit", limit}
+	if handle != "" {
+		args = append(args, telemetry.LogFieldCredentialHash, handle)
+	}
+	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams", args...)
 	return &jsonrpc.Error{
 		Code: codeTooManyRequests,
 		Message: fmt.Sprintf(
