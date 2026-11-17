@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -3779,6 +3781,190 @@ func TestMCPServerGate_ARefusedToken_IsLoggedByItsHandleAndNoneOfIt(t *testing.T
 				t.Fatalf("failure = %+v, want status %d", failure, tt.wantStatus)
 			}
 			assertNamesTheTokenByItsHandle(t, logged, tt.msg, token)
+		})
+	}
+}
+
+// shortenHTTPDeadlines sets the listener's read and write deadlines for one
+// test and restores them when it ends. A test calling it must not be parallel:
+// every HTTP server the package starts reads both.
+func shortenHTTPDeadlines(t *testing.T, read, write time.Duration) {
+	t.Helper()
+	restoreRead, restoreWrite := baseHTTPReadTimeout, baseHTTPWriteTimeout
+	baseHTTPReadTimeout, baseHTTPWriteTimeout = read, write
+	t.Cleanup(func() { baseHTTPReadTimeout, baseHTTPWriteTimeout = restoreRead, restoreWrite })
+}
+
+// newSlowUserGitLab is [newMockGitLabServerWithUser] answering every
+// GET /api/v4/user after delay. An entry build asks it twice, the credential
+// probe and the user behind the credential, and an oauth verification once
+// more before the gate, so the build outlasts any deadline shorter than delay
+// while each request stays inside its own clock.
+func newSlowUserGitLab(t *testing.T, delay time.Duration) *httptest.Server {
+	t.Helper()
+	inner := newMockGitLabServerWithUser(t)
+	target, err := url.Parse(inner.URL)
+	if err != nil {
+		t.Fatalf("parsing the stub's URL: %v", err)
+	}
+	forward := httputil.NewSingleHostReverseProxy(target)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/user" {
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		forward.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// deadlineMode is one authentication mode a deadline test runs in: the
+// configuration it serves and the header its credential travels in.
+type deadlineMode struct {
+	name   string
+	cfg    *config.Config
+	path   string
+	header string
+	value  string
+}
+
+// deadlineModes are the legacy and oauth deployments of gitlabURL, stateless
+// so a single POST is a whole exchange, answering JSON when jsonResponse is
+// set.
+func deadlineModes(gitlabURL string, jsonResponse bool) []deadlineMode {
+	legacy := statelessTestConfig(gitlabURL, jsonResponse)
+	oauthCfg := statelessTestConfig(gitlabURL, jsonResponse)
+	oauthCfg.AuthMode = config.AuthModeOAuth
+	oauthCfg.PublicURL = "https://mcp.example.com"
+	oauthCfg.OAuthCacheTTL = config.DefaultOAuthCacheTTL
+	oauthCfg.Tier, oauthCfg.TierExplicit, oauthCfg.IgnoreScopes = edition.Free, true, true
+	return []deadlineMode{
+		{name: "legacy", cfg: legacy, path: "/", header: "PRIVATE-TOKEN", value: testToken},
+		{name: "oauth", cfg: oauthCfg, path: "/mcp", header: "Authorization", value: "Bearer " + testToken},
+	}
+}
+
+// postInMode sends body to addr in mode and returns the status, the content
+// type and the body of the answer, or the error the exchange ended in.
+func postInMode(t *testing.T, addr string, mode deadlineMode, body string) (status int, contentType, answer string, err error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+mode.path, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set(mode.header, mode.value)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		return 0, "", "", err
+	}
+	raw, err := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	return resp.StatusCode, resp.Header.Get(hdrContentType), string(raw), errors.Join(err, closeErr)
+}
+
+// paddedPing is a ping carrying padding bytes in its _meta, which the server
+// reads and ignores, so its body can be larger than the one read that takes
+// in the request's headers.
+//
+// A ping because the readiness gate lets it through before the entry's
+// catalog is registered: the first registration in a process takes tens of
+// seconds under the race detector, and a call that waited for it would make
+// what these tests time depend on which test ran first.
+func paddedPing(padding int) string {
+	return `{"jsonrpc":"2.0","id":1,"method":"ping","params":{"_meta":{"padding":"` +
+		strings.Repeat("a", padding) + `"}}}`
+}
+
+// pingAnswered reports whether answer, a bare JSON-RPC message or one SSE
+// frame, is the result of the ping paddedPing sends.
+func pingAnswered(answer string) bool {
+	payload := answer
+	for line := range strings.SplitSeq(answer, "\n") {
+		if data, isData := strings.CutPrefix(line, "data: "); isData {
+			payload = data
+		}
+	}
+	var message struct {
+		ID     json.RawMessage  `json:"id"`
+		Result *json.RawMessage `json:"result"`
+	}
+	return json.Unmarshal([]byte(payload), &message) == nil && string(message.ID) == "1" && message.Result != nil
+}
+
+// TestMCPServerGate_EntryBuildOutlastsTheReadDeadline_StillReadsTheBody holds
+// the read half of issue 1821: the listener's read deadline is counted from
+// when the request starts being read, and the gate builds a new credential's
+// pool entry before the SDK reads the body, so a first POST whose body is
+// larger than what arrived with its headers used to fail its body read when
+// the build took longer than the deadline. The gate starts the deadline again
+// once it has built the entry, in legacy mode, where the build is the whole
+// wait, and in oauth mode, where the token's verification comes before it.
+//
+// Not parallel: it shortens the listener's deadlines.
+func TestMCPServerGate_EntryBuildOutlastsTheReadDeadline_StillReadsTheBody(t *testing.T) {
+	const readDeadline = 300 * time.Millisecond
+	shortenHTTPDeadlines(t, readDeadline, baseHTTPWriteTimeout)
+	gitlab := newSlowUserGitLab(t, 2*readDeadline)
+	body := paddedPing(64 << 10)
+
+	for _, mode := range deadlineModes(gitlab.URL, false) {
+		t.Run(mode.name, func(t *testing.T) {
+			addr, shutdown := startStatelessServeHTTP(t, mode.cfg)
+			defer shutdown()
+
+			started := time.Now()
+			status, _, answer, err := postInMode(t, addr, mode, body)
+			if err != nil {
+				t.Fatalf("POST: %v", err)
+			}
+			if elapsed := time.Since(started); elapsed < readDeadline {
+				t.Fatalf("the exchange took %s, inside the %s read deadline: the build did not outlast it, so the test proves nothing", elapsed, readDeadline)
+			}
+			if status != http.StatusOK || !pingAnswered(answer) {
+				t.Errorf("status %d, body %.300s; want 200 with the ping's result, the body read after the build", status, answer)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_JSONResponsePastTheWriteDeadline_ArrivesWhole holds the
+// write half of issue 1821: under --json-response nothing clears the write
+// deadline, which is counted from when the request's headers were read, so a
+// first response whose entry build took longer than the deadline was cut by
+// the server itself. The gate starts the deadline again once the entry is
+// built, so the response is delivered whole.
+//
+// Not parallel: it shortens the listener's deadlines.
+func TestMCPServerGate_JSONResponsePastTheWriteDeadline_ArrivesWhole(t *testing.T) {
+	const writeDeadline = time.Second
+	shortenHTTPDeadlines(t, baseHTTPReadTimeout, writeDeadline)
+	gitlab := newSlowUserGitLab(t, writeDeadline)
+
+	for _, mode := range deadlineModes(gitlab.URL, true) {
+		t.Run(mode.name, func(t *testing.T) {
+			addr, shutdown := startStatelessServeHTTP(t, mode.cfg)
+			defer shutdown()
+
+			started := time.Now()
+			status, contentType, answer, err := postInMode(t, addr, mode, paddedPing(0))
+			if err != nil {
+				t.Fatalf("POST: %v; want the JSON answer delivered whole", err)
+			}
+			if elapsed := time.Since(started); elapsed < writeDeadline {
+				t.Fatalf("the exchange took %s, inside the %s write deadline: the build did not outlast it, so the test proves nothing", elapsed, writeDeadline)
+			}
+			if status != http.StatusOK || !strings.HasPrefix(contentType, mimeJSON) {
+				t.Fatalf("status %d, content type %q; want 200 application/json", status, contentType)
+			}
+			if !pingAnswered(answer) {
+				t.Errorf("body %.300s is not the ping's result; want the whole JSON answer", answer)
+			}
 		})
 	}
 }

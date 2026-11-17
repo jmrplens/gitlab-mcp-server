@@ -237,18 +237,6 @@ const (
 	// baseHTTPReadHeaderTimeout bounds reading request headers.
 	baseHTTPReadHeaderTimeout = 10 * time.Second
 
-	// baseHTTPReadTimeout bounds reading the full request. Streamable HTTP request
-	// bodies (JSON-RPC) are small, so this does not affect established SSE streams.
-	baseHTTPReadTimeout = 30 * time.Second
-
-	// baseHTTPWriteTimeout is the fixed global response write timeout. It is kept at a
-	// safe default to protect standard endpoints (e.g. /health,
-	// /.well-known/mcp/server-card.json) from slow-write resource exhaustion
-	// (Slowloris). Long-lived SSE streams instead disable their write deadline
-	// dynamically (see sseWriteDeadlineMiddleware), because the MCP go-sdk SSE writer
-	// never resets it and WriteTimeout would otherwise sever the stream prematurely.
-	baseHTTPWriteTimeout = 60 * time.Second
-
 	// baseHTTPMaxHeaderBytes bounds the headers of one request.
 	//
 	// Go's own ceiling is 1 MiB, and a header is the cheapest thing an
@@ -265,6 +253,26 @@ const (
 	// Go falls back to ReadTimeout when IdleTimeout == 0; this large value instead
 	// keeps idle keep-alive connections effectively unrestricted.
 	idleTimeoutDisabled = 10 * 365 * 24 * time.Hour
+)
+
+// The two deadlines the MCP gate starts again once it has admitted a request
+// and built its pool entry ([restartRequestDeadlines]). Vars, not consts, only
+// so tests can shorten them; nothing at runtime writes either.
+var (
+	// baseHTTPReadTimeout bounds reading the full request, counted from when
+	// the request starts being read. Streamable HTTP request bodies (JSON-RPC)
+	// are small, so this does not affect established SSE streams.
+	baseHTTPReadTimeout = 30 * time.Second
+
+	// baseHTTPWriteTimeout is the fixed global response write timeout, counted
+	// from when the request's headers were read. It is kept at a safe default
+	// to protect standard endpoints (e.g. /health,
+	// /.well-known/mcp/server-card.json) from slow-write resource exhaustion
+	// (Slowloris). Long-lived SSE streams instead disable their write deadline
+	// dynamically (see sseWriteDeadlineMiddleware), because the MCP go-sdk SSE
+	// writer never resets it and WriteTimeout would otherwise sever the stream
+	// prematurely.
+	baseHTTPWriteTimeout = 60 * time.Second
 )
 
 // main parses CLI flags, handles one-shot commands such as --help and
