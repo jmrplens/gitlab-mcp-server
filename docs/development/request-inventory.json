@@ -16769,6 +16769,17 @@
       "kind": "rest",
       "method": "GET",
       "path": "/users/:user_id/contributed_projects",
+      "query": [
+        "imported",
+        "order_by",
+        "page",
+        "per_page",
+        "simple",
+        "sort",
+        "statistics",
+        "with_custom_attributes",
+        "with_programming_language"
+      ],
       "identifiers": {
         ":user_id": 2
       }

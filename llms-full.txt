@@ -7608,7 +7608,7 @@ Action guidance:
 - list_groups: List the ancestor and shared groups associated with a project. Send project_id. Optionally filter by search, shared visibility, or minimum access level.
 - list_invited_groups: List the groups invited to (shared with) a project. Send project_id. Optionally filter by search, relation, or minimum access level.
 - list_starrers: List the users who have starred a project, with the date each starred it. Send project_id and optionally search by name or username.
-- list_user_contributed: List projects a specific user has contributed to. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by. Page with page and per_page: GitLab does not page this list by keyset, so pagination keyset and page_token are refused.
+- list_user_contributed: List projects a specific user has contributed to. Send user_id (numeric ID or username), and optionally order_by, sort, simple, statistics, imported, with_programming_language and with_custom_attributes: GitLab's route reads no other filter, so this action offers none. To filter by anything else, list them here and filter the result, or use project.list_user_projects or project.list_user_starred, which take the project filters. Page with page and per_page: GitLab does not page this list by keyset, so pagination keyset and page_token are refused.
 - list_user_projects: List projects owned by a specific user. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.
 - list_user_starred: List projects a specific user has starred. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.
 - list_users: List the users who are members of a project. Send project_id and optionally search by name or username.
@@ -7660,7 +7660,7 @@ Action guidance:
 - transfer: Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target. GitLab 19.4 and later move the project in the background (19.4 checks there that the name and path are free in the target namespace, which 19.5 and later check with the request too), so this waits up to 45 seconds for the move and answers an error if GitLab reports it failed, quoting GitLab's reason from 19.5. If it has neither landed nor failed by then the answer carries transfer_queued and shows the project where it still is: read it back with project.get later, and do not send the transfer again, which GitLab runs a second time while the first is queued and refuses while it runs.
 - unarchive: Unarchive a previously archived project to restore write access. Send project_id. Requires Owner role.
 - unstar: Remove the authenticated user's star from a project. Send project_id. Idempotent if not currently starred.
-- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. An update that sets mirror_overwrites_diverged_branches true, enables a mirror that has it, points such a mirror at another import_url, or lets it pull branches it skipped by changing only_mirror_protected_branches or mirror_branch_regex discards this project's own commits on each diverged branch the mirror pulls, so it needs confirm=true (or an approved elicitation prompt), as project.pull_mirror_configure does: pass it only after the user approves discarding those commits, knowing the source and which branches the mirror pulls. Setting the flag while turning the mirror off needs it too: GitLab keeps a flag stored on a mirror that is off, by this call or by another client, and hides it until the mirror is turned back on, so that later call is not asked.
+- update: Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. For mirror settings, use project.pull_mirror_configure: GitLab deprecated this route's mirror params (all but import_url) and plans to remove them in v5 of its API. Only mirror_user_id, which runs the mirror as another user, has no counterpart there. An update that sets mirror_overwrites_diverged_branches true, enables a mirror that has it, points such a mirror at another import_url, or lets it pull branches it skipped by changing only_mirror_protected_branches or mirror_branch_regex discards this project's own commits on each diverged branch the mirror pulls, so it needs confirm=true (or an approved elicitation prompt), as project.pull_mirror_configure does: pass it only after the user approves discarding those commits, knowing the source and which branches the mirror pulls. Setting the flag while turning the mirror off needs it too: GitLab keeps a flag stored on a mirror that is off, by this call or by another client, and hides it until the mirror is turned back on, so that later call is not asked.
 - upload: Use to upload a file into a project's Markdown attachments store and obtain a Markdown-embeddable reference.
 - upload_avatar: Upload an avatar image for a project. Send project_id and the image content/path. Replaces any existing avatar.
 - upload_delete: Use to permanently remove a project Markdown upload identified by its numeric upload ID.
@@ -7869,7 +7869,8 @@ Users and groups:
 - share_with_group: project_id*, group_id*, group_access* (10-50), expires_at
 - delete_shared_group: project_id*, group_id*
 - list_invited_groups: project_id*, search, min_access_level
-- list_user_contributed / list_user_starred: user_id*, search, visibility, archived, order_by, sort, simple
+- list_user_contributed: user_id* (ID or username), order_by, sort, simple, statistics, imported, with_programming_language, with_custom_attributes
+- list_user_starred: user_id*, search, visibility, archived, order_by, sort, simple
 
 Members (member_*):
 - members: project_id*, query (filter name/username)
@@ -25037,8 +25038,8 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature (deprecated: use merge_requests_access_level)
-- `mirror` (boolean): Enable pull mirroring from import_url
-- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
+- `mirror` (boolean): Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead
+- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
 - `model_registry_access_level` (string): Model registry access level (disabled, private, enabled)
 - `monitor_access_level` (string): Monitor access level (disabled, private, enabled)
@@ -25130,8 +25131,8 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
 - `merge_requests_access_level` (string): Merge requests access level (disabled, private, enabled)
 - `merge_requests_enabled` (boolean): Enable merge requests feature (deprecated: use merge_requests_access_level)
-- `mirror` (boolean): Enable pull mirroring from import_url
-- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
+- `mirror` (boolean): Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead
+- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
 - `model_registry_access_level` (string): Model registry access level (disabled, private, enabled)
 - `monitor_access_level` (string): Monitor access level (disabled, private, enabled)
@@ -25746,38 +25747,15 @@ List projects a user contributed to, by offset pages only, since GitLab does not
 
 **Parameters:**
 
-- `active` (boolean): Limit to active (non-archived, non-pending-deletion) projects
-- `archived` (boolean): Filter by archived status (true=only archived, false=only active)
-- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
-- `id_after` (integer): Return projects with ID greater than this value
-- `id_before` (integer): Return projects with ID less than this value
 - `imported` (boolean): Limit to projects imported from an external source by the current user
-- `include_hidden` (boolean): Include hidden projects in results
-- `include_pending_delete` (boolean): Include projects marked/scheduled for deletion. Default false.
-- `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
-- `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
-- `membership` (boolean): Limit to projects where the current user is a member
-- `min_access_level` (integer): Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)
-- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
-- `owned` (boolean): Limit to projects explicitly owned by the current user
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, or star_count.
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `repository_storage` (string): Limit to projects on the given repository storage shard (admin only)
-- `search` (string): Search query for project name
-- `search_namespaces` (boolean): Include namespace in search
 - `simple` (boolean): Return only limited fields (faster)
 - `sort` (string): Sort direction (asc, desc)
-- `starred` (boolean): Limit to projects starred by the current user
 - `statistics` (boolean): Include project statistics in response
-- `topic` (string): Filter by topic name
-- `topic_id` (integer): Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic
-- `updated_after` (string): Return projects last updated on or after this time (ISO 8601 format)
-- `updated_before` (string): Return projects last updated on or before this time (ISO 8601 format)
 - `user_id` (string or integer) (required): User ID or username
-- `visibility` (string): Filter by visibility (private, internal, public)
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
-- `with_issues_enabled` (boolean): Filter by projects with issues feature enabled
-- `with_merge_requests_enabled` (boolean): Filter by projects with merge requests enabled
 - `with_programming_language` (string): Filter by programming language name
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -25972,8 +25950,8 @@ Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches re
 **Parameters:**
 
 - `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors. Pass an empty string to remove it. Omit the field to leave it untouched
-- `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched
-- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
+- `auth_user` (string): Authentication username for the mirror URL. GitLab logs in with it in place of a user written in the URL. Over SSH with a path starting with ~ it is the account whose home the path is resolved in, so it picks the repository: sending it, also empty, to such a mirror that overwrites diverged branches needs the user's approval, as pointing the mirror at another url does. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. Sending auth_user to such a mirror whose SSH path starts with ~ re-aims it. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked
 - `enabled` (boolean): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror. Pass an empty string to remove it, so every branch is mirrored. Omit the field to leave it untouched
 - `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
@@ -26305,7 +26283,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_update
 
-Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.
+Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer, gitlab_project_pull_mirror_configure.
 
 **Parameters:**
 
@@ -26372,11 +26350,11 @@ Update a project's settings. Returns: the updated project with its current confi
 - `merge_train_enforcement` (string): Who may merge a merge request around the merge train: allow_bypass, enforce_for_all_users or enforce_with_owner_override. It has no effect unless merge trains are enabled
 - `merge_trains_enabled` (boolean): Enable merge trains
 - `merge_trains_skip_train_allowed` (boolean): Allow skipping the merge train
-- `mirror` (boolean): Enable pull mirroring from import_url
-- `mirror_branch_regex` (string): Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched
-- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does
-- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates
-- `mirror_user_id` (integer): User ID used to run mirror updates (admin only)
+- `mirror` (boolean): Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead
+- `mirror_branch_regex` (string): Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab before 19.6 refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
+- `mirror_overwrites_diverged_branches` (boolean): Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
+- `mirror_trigger_builds` (boolean): Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
+- `mirror_user_id` (integer): User ID used to run mirror updates (admin only). Deprecated by GitLab on this route, but project.pull_mirror_configure always runs the mirror as the caller, so this param is the only way to run it as another user
 - `model_experiments_access_level` (string): Model experiments access level (disabled, private, enabled)
 - `model_registry_access_level` (string): Model registry access level (disabled, private, enabled)
 - `monitor_access_level` (string): Monitor access level (disabled, private, enabled)
@@ -26386,7 +26364,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `only_allow_merge_if_all_discussions_are_resolved` (boolean): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_all_status_checks_passed` (boolean): Only allow merge when all external status checks pass
 - `only_allow_merge_if_pipeline_succeeds` (boolean): Only allow merge when pipeline succeeds
-- `only_mirror_protected_branches` (boolean): Only mirror protected branches
+- `only_mirror_protected_branches` (boolean): Only mirror protected branches. Deprecated by GitLab on this route: use project.pull_mirror_configure instead
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)

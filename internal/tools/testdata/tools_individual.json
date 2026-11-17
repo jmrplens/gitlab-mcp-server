@@ -176952,14 +176952,14 @@
           ]
         },
         "mirror": {
-          "description": "Enable pull mirroring from import_url",
+          "description": "Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
           ]
         },
         "mirror_trigger_builds": {
-          "description": "Trigger pipelines for mirror updates",
+          "description": "Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
@@ -178531,14 +178531,14 @@
           ]
         },
         "mirror": {
-          "description": "Enable pull mirroring from import_url",
+          "description": "Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
           ]
         },
         "mirror_trigger_builds": {
-          "description": "Trigger pipelines for mirror updates",
+          "description": "Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
@@ -189989,89 +189989,12 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "active": {
-          "description": "Limit to active (non-archived, non-pending-deletion) projects",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "archived": {
-          "description": "Filter by archived status (true=only archived, false=only active)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "custom_attributes": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
-          "properties": {},
-          "type": "object"
-        },
-        "id_after": {
-          "description": "Return projects with ID greater than this value",
-          "type": "integer"
-        },
-        "id_before": {
-          "description": "Return projects with ID less than this value",
-          "type": "integer"
-        },
         "imported": {
           "description": "Limit to projects imported from an external source by the current user",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "include_hidden": {
-          "description": "Include hidden projects in results",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "include_pending_delete": {
-          "description": "Include projects marked/scheduled for deletion. Default false.",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "last_activity_after": {
-          "description": "Return projects with last activity after date (ISO 8601 format)",
-          "format": "date-time",
-          "type": "string"
-        },
-        "last_activity_before": {
-          "description": "Return projects with last activity before date (ISO 8601 format)",
-          "format": "date-time",
-          "type": "string"
-        },
-        "membership": {
-          "description": "Limit to projects where the current user is a member",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "min_access_level": {
-          "description": "Filter by minimum access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner)",
-          "enum": [
-            10,
-            15,
-            20,
-            25,
-            30,
-            40,
-            50
-          ],
-          "type": "integer"
+          "type": "boolean"
         },
         "order_by": {
-          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, or star_count.",
           "enum": [
             "id",
             "name",
@@ -190079,14 +190002,9 @@
             "created_at",
             "updated_at",
             "last_activity_at",
-            "similarity",
             "star_count"
           ],
           "type": "string"
-        },
-        "owned": {
-          "description": "Limit to projects explicitly owned by the current user",
-          "type": "boolean"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
@@ -190098,21 +190016,6 @@
           "maximum": 100,
           "minimum": 1,
           "type": "integer"
-        },
-        "repository_storage": {
-          "description": "Limit to projects on the given repository storage shard (admin only)",
-          "type": "string"
-        },
-        "search": {
-          "description": "Search query for project name",
-          "type": "string"
-        },
-        "search_namespaces": {
-          "description": "Include namespace in search",
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "simple": {
           "description": "Return only limited fields (faster)",
@@ -190126,37 +190029,9 @@
           ],
           "type": "string"
         },
-        "starred": {
-          "description": "Limit to projects starred by the current user",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "statistics": {
           "description": "Include project statistics in response",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "topic": {
-          "description": "Filter by topic name",
-          "type": "string"
-        },
-        "topic_id": {
-          "description": "Return projects having the topic with this ID (admin.topic_list lists the IDs). Unlike topic, which takes names, it takes one topic",
-          "type": "integer"
-        },
-        "updated_after": {
-          "description": "Return projects last updated on or after this time (ISO 8601 format)",
-          "format": "date-time",
-          "type": "string"
-        },
-        "updated_before": {
-          "description": "Return projects last updated on or before this time (ISO 8601 format)",
-          "format": "date-time",
-          "type": "string"
+          "type": "boolean"
         },
         "user_id": {
           "description": "User ID or username",
@@ -190165,35 +190040,9 @@
             "integer"
           ]
         },
-        "visibility": {
-          "description": "Filter by visibility (private, internal, public)",
-          "enum": [
-            "private",
-            "internal",
-            "public"
-          ],
-          "type": "string"
-        },
         "with_custom_attributes": {
           "description": "Include custom attributes in the response (admin only)",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "with_issues_enabled": {
-          "description": "Filter by projects with issues feature enabled",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
-        "with_merge_requests_enabled": {
-          "description": "Filter by projects with merge requests enabled",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "with_programming_language": {
           "description": "Filter by programming language name",
@@ -196423,14 +196272,14 @@
           ]
         },
         "auth_user": {
-          "description": "Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched",
+          "description": "Authentication username for the mirror URL. GitLab logs in with it in place of a user written in the URL. Over SSH with a path starting with ~ it is the account whose home the path is resolved in, so it picks the repository: sending it, also empty, to such a mirror that overwrites diverged branches needs the user's approval, as pointing the mirror at another url does. Treat as secret-adjacent and avoid logging with auth_password. Pass an empty string to remove it. Omit the field to leave it untouched",
           "type": [
             "null",
             "string"
           ]
         },
         "confirm": {
-          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on each diverged branch the mirror pulls. Pass true only after the user approves that. Only required when this call sets it true, also while turning the mirror off, or when it enables, re-aims or changes the branch filter of a mirror that is on and has it, or one whose settings cannot be read. Sending auth_user to such a mirror whose SSH path starts with ~ re-aims it. A change of the filter asks even when it narrows, unless the mirror already pulls every branch. Without it, a client that supports elicitation is asked. With it, or when the server runs in YOLO mode, nobody is asked",
           "type": "boolean"
         },
         "enabled": {
@@ -204273,7 +204122,7 @@
   },
   {
     "name": "gitlab_project_update",
-    "description": "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.",
+    "description": "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer, gitlab_project_pull_mirror_configure.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -204745,35 +204594,35 @@
           ]
         },
         "mirror": {
-          "description": "Enable pull mirroring from import_url",
+          "description": "Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
           ]
         },
         "mirror_branch_regex": {
-          "description": "Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched",
+          "description": "Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab before 19.6 refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "string"
           ]
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does",
+          "description": "Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
           ]
         },
         "mirror_trigger_builds": {
-          "description": "Trigger pipelines for mirror updates",
+          "description": "Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
           ]
         },
         "mirror_user_id": {
-          "description": "User ID used to run mirror updates (admin only)",
+          "description": "User ID used to run mirror updates (admin only). Deprecated by GitLab on this route, but project.pull_mirror_configure always runs the mirror as the caller, so this param is the only way to run it as another user",
           "type": [
             "null",
             "integer"
@@ -204831,7 +204680,7 @@
           ]
         },
         "only_mirror_protected_branches": {
-          "description": "Only mirror protected branches",
+          "description": "Only mirror protected branches. Deprecated by GitLab on this route: use project.pull_mirror_configure instead",
           "type": [
             "null",
             "boolean"
