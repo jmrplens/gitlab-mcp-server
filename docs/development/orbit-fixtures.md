@@ -136,6 +136,19 @@ holding GitLab's README alone, which is what a first push that failed
 leaves, takes the fixture's README in that commit too, and one
 provisioned before the `LICENSE` existed takes the `LICENSE`. A rerun
 that finds everything in line changes nothing.
+The squash-merged merge request of `kg-fixtures` is checked the same way
+(issue 1428): one from `feature/restock-helper` already merged is left
+alone, an open one is merged, a closed one is reopened and merged while its
+branch is there and replaced by a new one when the branch is gone. The merge
+is asked for once GitLab has finished checking the merge request
+(`detailed_merge_status`), read every two seconds for at most 60 reads, and
+a run whose merge GitLab refuses or answers with the merge request still
+unmerged stops with GitLab's answer. Before that fix the script treated a
+merge request in any state as provisioned and asked for the merge with a
+`POST`, a route GitLab does not have (the merge is a `PUT`), without
+reading the answer, which is how the first fixture merge request on
+GitLab.com, opened in June 2026, came to be closed unmerged in September
+while the script said it had merged it.
 The namespace may be a subgroup, as the default
 `jmrp-oss/orbit-fixtures` is: the script looks each project up by its
 full path with every slash encoded. It creates the projects public, as
