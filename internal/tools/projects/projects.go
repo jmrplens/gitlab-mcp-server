@@ -198,8 +198,8 @@ type CreateInput struct {
 	PublicJobs                      *bool  `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
 
 	// Mirroring
-	Mirror              *bool `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
-	MirrorTriggerBuilds *bool `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
+	Mirror              *bool `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead"`
+	MirrorTriggerBuilds *bool `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead"`
 
 	// Container registry cleanup
 	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
@@ -695,12 +695,12 @@ type UpdateInput struct {
 	PublicJobs                             *bool    `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
 
 	// Mirroring (additive)
-	Mirror                           *bool   `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url"`
-	MirrorTriggerBuilds              *bool   `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates"`
-	MirrorBranchRegex                *string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched"`
-	MirrorOverwritesDivergedBranches *bool   `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does"`
-	MirrorUserID                     *int64  `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only)"`
-	OnlyMirrorProtectedBranches      *bool   `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches"`
+	Mirror                           *bool   `json:"mirror,omitempty" tier:"premium" jsonschema:"Enable pull mirroring from import_url. Deprecated by GitLab on this route: configure the pull mirror with project.pull_mirror_configure instead"`
+	MirrorTriggerBuilds              *bool   `json:"mirror_trigger_builds,omitempty" tier:"premium" jsonschema:"Trigger pipelines for mirror updates. Deprecated by GitLab on this route: use project.pull_mirror_configure instead"`
+	MirrorBranchRegex                *string `json:"mirror_branch_regex,omitempty" tier:"premium" jsonschema:"Only mirror branches matching this regex. Pass an empty string to remove it, so every branch is mirrored. GitLab before 19.6 refuses an update carrying this field alone, so send it beside another setting. Omit the field to leave it untouched. Deprecated by GitLab on this route: use project.pull_mirror_configure instead"`
+	MirrorOverwritesDivergedBranches *bool   `json:"mirror_overwrites_diverged_branches,omitempty" tier:"premium" jsonschema:"Replace each diverged branch the mirror pulls with the source's version on every sync, discarding this project's own commits on it. Without it GitLab stops updating a diverged branch instead. Setting it true, also while turning the mirror off, needs the user's approval: confirm=true once they approve, or an elicitation prompt. Clearing it never does. Deprecated by GitLab on this route: use project.pull_mirror_configure instead"`
+	MirrorUserID                     *int64  `json:"mirror_user_id,omitempty" tier:"premium" jsonschema:"User ID used to run mirror updates (admin only). Deprecated by GitLab on this route, but project.pull_mirror_configure always runs the mirror as the caller, so this param is the only way to run it as another user"`
+	OnlyMirrorProtectedBranches      *bool   `json:"only_mirror_protected_branches,omitempty" tier:"premium" jsonschema:"Only mirror protected branches. Deprecated by GitLab on this route: use project.pull_mirror_configure instead"`
 	// Confirm is declared so the input schema advertises the reserved confirm
 	// key and strict validation accepts it. Its value is never populated:
 	// toolutil strips reserved keys before unmarshalling, so the guard reads
