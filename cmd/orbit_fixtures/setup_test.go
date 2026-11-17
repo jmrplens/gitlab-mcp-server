@@ -99,9 +99,10 @@ func (f *fakeGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(route.Status)
 	// A body recorded as a JSON string was served as its text, for an
-	// answer that is not JSON.
+	// answer that is not JSON. null decodes into a string too, and is
+	// served as itself.
 	var text string
-	if json.Unmarshal(route.Body, &text) == nil {
+	if bytes.HasPrefix(route.Body, []byte(`"`)) && json.Unmarshal(route.Body, &text) == nil {
 		_, _ = io.WriteString(w, text)
 		return
 	}
@@ -119,7 +120,7 @@ func (f *fakeGitLab) requests() []goldenRequest {
 // each clone and push as the script's stand-in did: a clone copies the
 // kg-fixtures fixture into the directory it names, and a push is logged with
 // its arguments but the flags. The steps between them do nothing, and what a
-// run reads of the fixture (ls-files and show) goes to the real git.
+// run reads of the fixture (ls-tree and show) goes to the real git.
 type fakeGit struct {
 	base, fixture string
 	mu            sync.Mutex
@@ -133,7 +134,7 @@ func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, 
 		return nil, fmt.Errorf("git %s: exit status 128: fatal: stand-in refusal", verb)
 	}
 	switch verb {
-	case "ls-files", "show":
+	case "ls-tree", "show":
 		return runGit(ctx, dir, args...)
 	case "clone":
 		target := args[len(args)-1]
@@ -258,10 +259,12 @@ func serveRoutes(t *testing.T, routes map[string]goldenRoute) (*httptest.Server,
 
 // TestSetup_WhatStopsAProject_StopsTheRun checks each way a fixture project
 // cannot be put in place stops the run with the reason: a tree answered
-// without a list or with something that is not JSON, a creation GitLab
-// answers without an id, a clone or push of a new project or of the mirror
-// that git refuses, a fixture git cannot list, and a visibility GitLab
-// refuses to set.
+// without a list, with null or with something that is not JSON, a tree that
+// never ends, a group without an id or answered with no JSON, a creation GitLab
+// answers without an id or with no JSON, a project lookup answered with no
+// JSON (read as no project, so a creation is asked for), a clone or push of a
+// new project or of the mirror that git refuses, a fixture git cannot list,
+// and a visibility GitLab refuses to set.
 func TestSetup_WhatStopsAProject_StopsTheRun(t *testing.T) {
 	const kgProject = "GET /api/v4/projects/plens1%2Fkg-fixtures"
 	cases := []struct {
@@ -277,6 +280,54 @@ func TestSetup_WhatStopsAProject_StopsTheRun(t *testing.T) {
 				routes["GET /api/v4/projects/10/repository/tree"] = jsonRoute(t, 200, map[string]string{"message": "x"})
 			},
 			want: "the project's file list is unreadable",
+		},
+		{
+			name: "a tree answered null",
+			change: func(routes map[string]goldenRoute) {
+				routes["GET /api/v4/projects/10/repository/tree"] = jsonRoute(t, 200, nil)
+			},
+			want: "the project's file list is unreadable",
+		},
+		{
+			name: "a tree that never ends",
+			change: func(routes map[string]goldenRoute) {
+				var page []map[string]string
+				for i := range 100 {
+					page = append(page, map[string]string{"path": fmt.Sprintf("filler/%d", i)})
+				}
+				routes["GET /api/v4/projects/10/repository/tree"] = jsonRoute(t, 200, page)
+			},
+			want: "the project's file list runs past 100 pages",
+		},
+		{
+			name: "a group without an id",
+			change: func(routes map[string]goldenRoute) {
+				routes["GET /api/v4/groups/plens1"] = jsonRoute(t, 200, map[string]any{"id": 0, "full_path": "plens1"})
+			},
+			want: "the namespace did not resolve to a group with an id and a full_path",
+		},
+		{
+			name: "a group answered with no JSON",
+			change: func(routes map[string]goldenRoute) {
+				routes["GET /api/v4/groups/plens1"] = jsonRoute(t, 200, "<html>")
+			},
+			want: "the namespace did not resolve to a group with an id and a full_path: <html>",
+		},
+		{
+			name: "a project answered with no JSON is created, and the creation refused",
+			change: func(routes map[string]goldenRoute) {
+				routes[kgProject] = jsonRoute(t, 200, "<html>")
+				routes["POST /api/v4/projects"] = jsonRoute(t, 400, map[string]string{"message": "name has already been taken"})
+			},
+			want: "failed to create project",
+		},
+		{
+			name: "a creation answered with no JSON",
+			change: func(routes map[string]goldenRoute) {
+				delete(routes, kgProject)
+				routes["POST /api/v4/projects"] = jsonRoute(t, 201, "<html>")
+			},
+			want: "failed to create project: <html>",
 		},
 		{
 			name: "a tree that is not JSON",
@@ -317,7 +368,7 @@ func TestSetup_WhatStopsAProject_StopsTheRun(t *testing.T) {
 		},
 		{
 			name:    "a fixture git cannot list",
-			failGit: "ls-files",
+			failGit: "ls-tree",
 			want:    "cannot compare the project's files with the fixture",
 		},
 		{
@@ -360,8 +411,8 @@ func TestSetup_WhatStopsAProject_StopsTheRun(t *testing.T) {
 				delete(routes, kgProject)
 				routes["POST /api/v4/projects"] = jsonRoute(t, 201, map[string]any{"id": 10})
 			},
-			failGit: "ls-files",
-			want:    "git ls-files: exit status 128",
+			failGit: "ls-tree",
+			want:    "git ls-tree: exit status 128",
 		},
 		{
 			name: "a new project whose fixture git cannot show",
@@ -401,6 +452,97 @@ func TestSetup_WhatStopsAProject_StopsTheRun(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAddMissingFiles_WhatTheProjectHolds_DecidesEachFile checks which files
+// the commit of a reconciliation carries and how, and what the run says of
+// each: a directory in the tree does not stand in for the fixture file of its
+// name, which is added; a project holding GitLab's README alone has it
+// replaced and every other file added; and a project holding one file that is
+// not the README has every fixture file added, the README among them.
+func TestAddMissingFiles_WhatTheProjectHolds_DecidesEachFile(t *testing.T) {
+	tracked, err := trackedFiles(t.Context(), runGit, kgFixture)
+	if err != nil {
+		t.Skipf("git cannot list the fixture here: %v", err)
+	}
+	var withoutLicense []map[string]string
+	for _, file := range tracked {
+		if file != "LICENSE" {
+			withoutLicense = append(withoutLicense, map[string]string{"path": file})
+		}
+	}
+	allCreated := map[string]string{}
+	for _, file := range tracked {
+		allCreated[file] = "create"
+	}
+	readmeReplaced := maps.Clone(allCreated)
+	readmeReplaced["README.md"] = "update"
+	cases := []struct {
+		name       string
+		tree       any
+		want       map[string]string
+		wantStderr []string
+	}{
+		{
+			name:       "a directory named like a fixture file",
+			tree:       append(slices.Clone(withoutLicense), map[string]string{"path": "LICENSE", "type": "tree"}),
+			want:       map[string]string{"LICENSE": "create"},
+			wantStderr: []string{"→ added LICENSE"},
+		},
+		{
+			name:       "GitLab's README alone",
+			tree:       []map[string]string{{"path": "README.md"}},
+			want:       readmeReplaced,
+			wantStderr: []string{"→ replaced README.md", "→ added LICENSE"},
+		},
+		{
+			name:       "one file that is not the README",
+			tree:       []map[string]string{{"path": "NOTES.md"}},
+			want:       allCreated,
+			wantStderr: []string{"→ added README.md", "→ added LICENSE"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := inLineRoutes(t)
+			routes["GET /api/v4/projects/10/repository/tree"] = jsonRoute(t, 200, tc.tree)
+			routes["POST /api/v4/projects/10/repository/commits"] = jsonRoute(t, 201, map[string]string{"id": "c0"})
+			server, fake := serveRoutes(t, routes)
+			git := &fakeGit{base: server.URL, fixture: kgFixture}
+			code, _, stderr := setupAgainst(t, goldenSetup{Flag: "--skip-mirror"}, server, git.run)
+			if code != 0 {
+				t.Fatalf("exit code %d, stderr:\n%s", code, stderr)
+			}
+			if got := committedActions(t, fake.requests()); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("the commit carries %v, want %v", got, tc.want)
+			}
+			for _, line := range tc.wantStderr {
+				if !strings.Contains(stderr, line) {
+					t.Errorf("stderr does not say %q:\n%s", line, stderr)
+				}
+			}
+		})
+	}
+}
+
+// committedActions is what the commits of kg-fixtures among requests carry:
+// each file path with its action.
+func committedActions(t *testing.T, requests []goldenRequest) map[string]string {
+	t.Helper()
+	actions := map[string]string{}
+	for _, request := range requests {
+		if request.Method != http.MethodPost || request.Path != "/api/v4/projects/10/repository/commits" {
+			continue
+		}
+		var commit struct{ Actions []fileAction }
+		if err := json.Unmarshal([]byte(request.Body), &commit); err != nil {
+			t.Fatalf("commit body %q: %v", request.Body, err)
+		}
+		for _, action := range commit.Actions {
+			actions[action.FilePath] = action.Action
+		}
+	}
+	return actions
 }
 
 // TestPushFixture_NewProject_HoldsOnlyWhatHEADTracks checks a new project is
@@ -460,7 +602,7 @@ func TestPushFixture_NewProject_HoldsOnlyWhatHEADTracks(t *testing.T) {
 				return readErr
 			})
 			return nil, err
-		case "ls-files", "show":
+		case "ls-tree", "show":
 			return runGit(ctx, dir, args...)
 		}
 		return nil, nil
@@ -502,7 +644,7 @@ func TestPushes_WhatTheWorkDirectoryRefuses_StopsThePush(t *testing.T) {
 				switch gitVerb(args) {
 				case "clone":
 					return nil, makeTree(args[len(args)-1], tc.clone)
-				case "ls-files":
+				case "ls-tree":
 					return []byte(tc.listed), nil
 				case "show":
 					return []byte("x"), nil

@@ -76,6 +76,52 @@ func TestRunWait_NoAnswerOrACancelledWait_IsReadAsSuchOrEndsTheWait(t *testing.T
 	}
 }
 
+// TestRunWait_AnIndexNotYetDone_IsReadAgain checks the two answers the
+// recorded scenarios leave out: an index READY with a project still left out
+// is not caught up, however many are indexed, and an index whose state is
+// empty is read as the null index.
+func TestRunWait_AnIndexNotYetDone_IsReadAgain(t *testing.T) {
+	const ready = `{"data":{"group":{"orbit":{"indexing":{"state":"READY","projects":{"indexed":2,"notIndexed":0}}}}}}`
+	cases := []struct {
+		name       string
+		first      string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "ready with a project left out",
+			first:      `{"data":{"group":{"orbit":{"indexing":{"state":"READY","projects":{"indexed":2,"notIndexed":1}}}}}}`,
+			wantStdout: "[1/2] state=READY indexed=2 not_indexed=1\n  [2/2] state=READY indexed=2 not_indexed=0\n  ✓ indexer caught up (2 projects indexed)",
+		},
+		{
+			name:       "an empty state",
+			first:      `{"data":{"group":{"orbit":{"indexing":{"state":"","projects":{"indexed":2,"notIndexed":0}}}}}}`,
+			wantStdout: "[1/2] state=null indexed=0 not_indexed=0\n  [2/2] state=READY",
+			wantStderr: "GitLab answered the index null",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server, seen := answerInOrder(t, []string{tc.first, ready})
+			cfg := waitConfig{
+				token: "x", gitlabURL: server.URL, namespace: "plens1", timeoutSeconds: 30,
+				client: server.Client(),
+				sleep:  func(context.Context, time.Duration) error { return nil },
+			}
+			var stdout, stderr bytes.Buffer
+			if code := runWait(t.Context(), cfg, &stdout, &stderr); code != 0 {
+				t.Errorf("exit code = %d, want 0", code)
+			}
+			if !strings.Contains(stdout.String(), tc.wantStdout) || !strings.Contains(stderr.String(), tc.wantStderr) {
+				t.Errorf("stdout %q, stderr %q; want %q and %q", stdout.String(), stderr.String(), tc.wantStdout, tc.wantStderr)
+			}
+			if got := len(seen()); got != 2 {
+				t.Errorf("%d reads, want 2", got)
+			}
+		})
+	}
+}
+
 // seenRequest is one request the stand-in GitLab received.
 type seenRequest struct {
 	path, authorization, contentType, body string

@@ -10,15 +10,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 )
 
 // TestRunMain_Subcommands_DispatchOrRefuse checks what the command line
 // decides before any request: no subcommand or an unknown one is a usage
-// error, help prints the usage, a bad setup flag or a stray argument is a
+// error, help, -h, -help and --help print the usage, a bad setup flag or a stray argument is a
 // usage error, setup -h prints its flags, and a timeout that is not a whole
 // number of seconds refuses the wait.
 func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 	noEnv := func(string) string { return "" }
+	deadURL := netfixture.DeadEndpoint(t)
+	deadInstance := func(key string) string {
+		if key == "ORBIT_FIXTURES_GITLAB_URL" {
+			return deadURL
+		}
+		return ""
+	}
 	cases := []struct {
 		name       string
 		args       []string
@@ -30,10 +39,15 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 		{name: "no subcommand", args: nil, want: 2, wantStderr: "usage: orbit_fixtures setup"},
 		{name: "an unknown subcommand", args: []string{"provision"}, want: 2, wantStderr: `unknown subcommand "provision"`},
 		{name: "help", args: []string{"help"}, want: 0, wantStdout: "usage: orbit_fixtures setup"},
+		{name: "-h", args: []string{"-h"}, want: 0, wantStdout: "-root is the repository root"},
+		{name: "-help", args: []string{"-help"}, want: 0, wantStdout: "usage: orbit_fixtures setup"},
+		{name: "--help", args: []string{"--help"}, want: 0, wantStdout: "usage: orbit_fixtures setup"},
 		{name: "an unknown setup flag", args: []string{"setup", "-nope"}, want: 2, wantStderr: "flag provided but not defined: -nope"},
 		{name: "a stray setup argument", args: []string{"setup", "acme"}, want: 2, wantStderr: `unknown argument "acme"`},
 		{name: "setup help", args: []string{"setup", "-h"}, want: 0, wantStderr: "-mirror-cli"},
-		{name: "setup without a token", args: []string{"setup"}, want: 1, wantStderr: "GITLAB_COM_TOKEN is required"},
+		// Without a token, nothing is sent: the instance is one nothing
+		// answers, so a run that went on anyway fails fast and says why.
+		{name: "setup without a token", args: []string{"setup"}, env: deadInstance, want: 1, wantStderr: "GITLAB_COM_TOKEN is required"},
 		{
 			name: "a timeout that is not a number", args: []string{"wait-indexer"}, want: 2, wantStderr: `ORBIT_FIXTURES_INDEXER_TIMEOUT="soon" is not a whole number of seconds`,
 			env: func(key string) string {
@@ -52,7 +66,17 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 				return ""
 			},
 		},
-		{name: "a wait without a token", args: []string{"wait-indexer"}, want: 1, wantStderr: "GITLAB_COM_TOKEN is required"},
+		// A timeout of zero is a whole number of seconds, which allows no
+		// read: a wait that went on without a token would end at once.
+		{
+			name: "a wait without a token", args: []string{"wait-indexer"}, want: 1, wantStderr: "GITLAB_COM_TOKEN is required",
+			env: func(key string) string {
+				if key == "ORBIT_FIXTURES_INDEXER_TIMEOUT" {
+					return "0"
+				}
+				return deadInstance(key)
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -148,5 +172,14 @@ func TestFirstNonEmpty_TakesTheFirstThatIsSet(t *testing.T) {
 	}
 	if got := firstNonEmpty("", ""); got != "" {
 		t.Errorf("firstNonEmpty of nothing = %q", got)
+	}
+}
+
+// TestHTTPClient_EveryRequest_HasADeadline checks the client a run sends
+// every request with gives each two minutes, so a GitLab that accepts a
+// connection and never answers ends the run.
+func TestHTTPClient_EveryRequest_HasADeadline(t *testing.T) {
+	if got := httpClient().Timeout; got != 2*time.Minute {
+		t.Errorf("timeout = %s, want 2m0s", got)
 	}
 }
