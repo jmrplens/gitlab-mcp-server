@@ -547,6 +547,7 @@ func TestPageRunBlocks_TwinDisagrees_IsRefused(t *testing.T) {
 		{name: "the twin lost a mark", english: start + ask, spanish: start + unmarked, names: []string{filepath.Join("es", "guide.mdx"), "marks 1 block", "2"}},
 		{name: "the twin marks one more", english: start + unmarked, spanish: start + ask, names: []string{filepath.Join("es", "guide.mdx"), "marks 2 blocks", "1"}},
 		{name: "the twin runs a block another way", english: start + ask, spanish: ask + ask, names: []string{filepath.Join("es", "guide.mdx"), "line 1", "run=background", "run"}},
+		{name: "the twin moves a mark to another block run the same way", english: ask + unmarked, spanish: unmarked + ask, names: []string{filepath.Join("es", "guide.mdx"), "line 4", "code block 2", "line 1", "code block 1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -325,28 +325,38 @@ func (p *Page) Block(key string) (Block, error) {
 }
 
 // RunBlocks returns the blocks of the English page whose fence carries a run
-// option, in page order, after checking that the Spanish twin marks as many
-// blocks, each the same way and in the same order. A page that marks nothing
-// returns none.
+// option, in page order, after checking that the Spanish twin marks the same
+// blocks, each the same way. A block is the same when it holds the same place
+// among the page's code blocks, the order check-i18n-code.mjs pairs the two
+// pages' blocks by, so a mark moved to another block of the twin is refused
+// even when the twin still marks as many blocks the same way. A page that
+// marks nothing returns none.
 func (p *Page) RunBlocks() ([]Block, error) {
 	english, twin := marked(p.blocks), marked(p.twin)
 	if len(english) != len(twin) {
 		return nil, fmt.Errorf("%s marks %s to run, and the English page marks %d: %w", p.Twin, blocksWord(len(twin)), len(english), ErrRunNotInTwin)
 	}
-	for i, block := range english {
-		if twin[i].Run != block.Run {
-			return nil, fmt.Errorf("%s: the block at line %d is marked %s, and the English block at line %d is marked %s: %w", p.Twin, twin[i].Line, twin[i].Run, block.Line, block.Run, ErrRunNotInTwin)
+	var out []Block
+	for i, at := range english {
+		block, other := p.blocks[at], p.twin[twin[i]]
+		if twin[i] != at {
+			return nil, fmt.Errorf("%s: the marked block at line %d is the page's code block %d, and the English page's marked block at line %d is its code block %d: %w", p.Twin, other.Line, twin[i]+1, block.Line, at+1, ErrRunNotInTwin)
 		}
+		if other.Run != block.Run {
+			return nil, fmt.Errorf("%s: the block at line %d is marked %s, and the English block at line %d is marked %s: %w", p.Twin, other.Line, other.Run, block.Line, block.Run, ErrRunNotInTwin)
+		}
+		out = append(out, block)
 	}
-	return english, nil
+	return out, nil
 }
 
-// marked returns the blocks a run option marks, in page order.
-func marked(blocks []Block) []Block {
-	var out []Block
-	for _, block := range blocks {
+// marked returns the places, among blocks, of the blocks a run option marks,
+// in page order.
+func marked(blocks []Block) []int {
+	var out []int
+	for i, block := range blocks {
 		if block.Run != RunNone {
-			out = append(out, block)
+			out = append(out, i)
 		}
 	}
 	return out
