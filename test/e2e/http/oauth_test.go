@@ -2261,13 +2261,16 @@ type slowGitLabStep func(path string, nth int) time.Duration
 // startSlowFakeGitLab is a GitLab that accepts the personal access token
 // token with the api scope, answering each request after what step says, and
 // records every request it answered with when, relative to its start.
-func startSlowFakeGitLab(t *testing.T, token string, step slowGitLabStep) (gitlabURL string, requests func() []string) {
+// lastAnswer reports when the latest request to any of paths was answered,
+// the zero time when none was.
+func startSlowFakeGitLab(t *testing.T, token string, step slowGitLabStep) (gitlabURL string, requests func() []string, lastAnswer func(paths ...string) time.Time) {
 	t.Helper()
 	var (
-		mu      sync.Mutex
-		counts  = map[string]int{}
-		log     []string
-		started = time.Now()
+		mu       sync.Mutex
+		counts   = map[string]int{}
+		log      []string
+		answered = map[string]time.Time{}
+		started  = time.Now()
 	)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -2281,7 +2284,9 @@ func startSlowFakeGitLab(t *testing.T, token string, step slowGitLabStep) (gitla
 			return
 		}
 		mu.Lock()
-		log = append(log, fmt.Sprintf("%5.1fs %s %s", time.Since(started).Seconds(), r.Method, r.URL.Path))
+		now := time.Now()
+		answered[r.URL.Path] = now
+		log = append(log, fmt.Sprintf("%5.1fs %s %s", now.Sub(started).Seconds(), r.Method, r.URL.Path))
 		mu.Unlock()
 		bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		w.Header().Set("Content-Type", "application/json")
@@ -2301,38 +2306,52 @@ func startSlowFakeGitLab(t *testing.T, token string, step slowGitLabStep) (gitla
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv.URL, func() []string {
-		mu.Lock()
-		defer mu.Unlock()
-		return slices.Clone(log)
-	}
+			mu.Lock()
+			defer mu.Unlock()
+			return slices.Clone(log)
+		}, func(paths ...string) time.Time {
+			mu.Lock()
+			defer mu.Unlock()
+			var last time.Time
+			for _, path := range paths {
+				if at := answered[path]; at.After(last) {
+					last = at
+				}
+			}
+			return last
+		}
 }
 
 // TestOAuth_FirstPOSTPastTheReadDeadline_IsReadOnceTheEntryIsBuilt holds
 // issue 1821 against the real binary. The listener's read deadline, 30
 // seconds, is counted from when the request starts being read; in oauth mode
 // the token is verified and its pool entry built before the SDK reads the
-// body, and together they can take longer than that. The server starts the
-// deadline again once the entry is built, so a first POST whose body is still
-// arriving after 30 seconds is read whole.
+// body, and together they can take longer than that. The server holds the
+// deadline while it waits on GitLab and starts it again when it reads the
+// body, so a first POST whose body is still arriving after 30 seconds is read
+// whole.
 //
-// The stand-in GitLab takes about 35 seconds over the verification and the
-// build, each request inside its own clock (ten seconds for a verification
-// request, five for the credential probe and the user behind the credential,
-// ten for what the build asks after the probe), and the client sends the
-// second half of its body only once 31 seconds have passed, after the
-// deadline the listener set and before the one the gate starts.
+// The stand-in GitLab takes about 32 seconds over the verification and the
+// build, each request at least two seconds inside its own clock (ten seconds
+// for a verification request, five for the credential probe and the user
+// behind the credential, ten for what the build asks after the probe), and the
+// client sends the second half of its body only once 31 seconds have passed,
+// after the deadline the listener set. What makes the case is the build
+// outlasting that deadline, so the test checks when the stand-in answered the
+// build's last request rather than how long the exchange took, which the late
+// tail alone makes longer than 31 seconds.
 //
-// Parallel, because it spends its 35 seconds waiting on its own server and
+// Parallel, because it spends its 32 seconds waiting on its own server and
 // stand-in, and would otherwise add them to the module's run.
 func TestOAuth_FirstPOSTPastTheReadDeadline_IsReadOnceTheEntryIsBuilt(t *testing.T) {
 	t.Parallel()
 	const token = "glpat-slow-build"
-	gitlabURL, requests := startSlowFakeGitLab(t, token, func(path string, nth int) time.Duration {
+	gitlabURL, requests, lastAnswer := startSlowFakeGitLab(t, token, func(path string, nth int) time.Duration {
 		switch {
 		// The verification before the gate: GET /user, then the token's own
 		// description, ten seconds each.
 		case path == "/api/v4/user" && nth == 1, path == "/api/v4/personal_access_tokens/self":
-			return 9 * time.Second
+			return 8 * time.Second
 		// The build: the credential probe and the user behind the credential,
 		// five seconds each, and the tier's namespace read, inside the ten
 		// seconds of what the build asks after the probe.
@@ -2391,8 +2410,8 @@ func TestOAuth_FirstPOSTPastTheReadDeadline_IsReadOnceTheEntryIsBuilt(t *testing
 	if err != nil {
 		t.Fatalf("reading the answer: %v", err)
 	}
-	if elapsed < 31*time.Second {
-		t.Fatalf("the exchange took %s, inside the 30-second read deadline: the stand-in did not hold the build past it, so the test proves nothing", elapsed)
+	if built := lastAnswer("/api/v4/user", "/api/v4/namespaces").Sub(started); built < 30*time.Second {
+		t.Fatalf("the stand-in answered the build's last request %s after the POST, inside the 30-second read deadline: the build did not outlast it, so the test proves nothing", built.Round(100*time.Millisecond))
 	}
 	var answer struct {
 		Result struct {
