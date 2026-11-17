@@ -5,14 +5,20 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -500,5 +506,133 @@ func TestAssemble_RealCatalog_ServerHealthCheckHasNoIndividualTool(t *testing.T)
 	}
 	if orbit := actionByID(t, ref, "orbit.query"); !orbit.dotcomOnly {
 		t.Error("orbit.query is not GitLab.com only")
+	}
+}
+
+// metaToolsPages are the meta-tools page and its Spanish twin. Their count
+// tables are written by hand, so nothing but the test below holds them to the
+// catalog.
+var metaToolsPages = []string{
+	"site/src/content/docs/tools/meta-tools.mdx",
+	"site/src/content/docs/es/tools/meta-tools.mdx",
+}
+
+// countRow is a row of a count table: a meta-tool in code, then one count per
+// tier the table states.
+var countRow = regexp.MustCompile("^\\| `(gitlab_[a-z0-9_]+)` +((?:\\| +[0-9]+ +)+)\\|")
+
+// entryCount is the entry_count of the page's gitlab://tools manifest
+// example, which is a read on Free/CE.
+var entryCount = regexp.MustCompile(`"entry_count": ([0-9]+)`)
+
+// countTables reads a page's count tables in page order, each row as its tool
+// and its counts joined by slashes ("gitlab_branch 11/11/11"). A table is a
+// run of lines that start with a pipe, and one without a count row is not a
+// count table.
+func countTables(page string) [][]string {
+	var tables [][]string
+	var current []string
+	for line := range strings.SplitSeq(page, "\n") {
+		if !strings.HasPrefix(line, "|") {
+			if len(current) > 0 {
+				tables = append(tables, current)
+				current = nil
+			}
+			continue
+		}
+		if m := countRow.FindStringSubmatch(line); m != nil {
+			counts := strings.Fields(strings.ReplaceAll(m[2], "|", " "))
+			current = append(current, m[1]+" "+strings.Join(counts, "/"))
+		}
+	}
+	if len(current) > 0 {
+		tables = append(tables, current)
+	}
+	return tables
+}
+
+// catalogCountTables is what the page's three count tables have to state, in
+// the same form as countTables: the meta-tools Free serves with their counts
+// at Free, Premium and Ultimate, then the ones Premium adds, then the ones
+// Ultimate adds, each of those two with the count it is served with. Counts
+// are a self-managed instance's, so a group only GitLab.com serves is in none
+// of them. An added group whose count still changes at a higher tier is given
+// every count from its first tier on, which a table of one count cannot state.
+func catalogCountTables(ref reference) [][]string {
+	tables := make([][]string, len(tiers))
+	for _, group := range ref.groups {
+		served := group.served[classIndex(false)]
+		first := slices.IndexFunc(served[:], func(n int) bool { return n > 0 })
+		if group.standalone || first < 0 {
+			continue
+		}
+		var counts []string
+		for _, n := range served[first:] {
+			counts = append(counts, strconv.Itoa(n))
+		}
+		if first > int(edition.Free) && len(slices.Compact(slices.Clone(counts))) == 1 {
+			counts = counts[:1]
+		}
+		tables[first] = append(tables[first], group.tool+" "+strings.Join(counts, "/"))
+	}
+	return tables
+}
+
+// rowsOnlyIn lists the rows of a that b lacks.
+func rowsOnlyIn(a, b []string) []string {
+	var only []string
+	for _, row := range a {
+		if !slices.Contains(b, row) {
+			only = append(only, row)
+		}
+	}
+	return only
+}
+
+// TestMetaToolsPage_RealCatalog_CountsWhatTheCatalogServes holds the count
+// tables of the meta-tools page, in English and in Spanish, to the catalog
+// this binary builds: the table of the meta-tools every tier serves, the two
+// of the ones Premium and Ultimate add, and the entry_count of the manifest
+// example, which counts every action Free serves, the standalone tools'
+// included. The tables are written by hand, and three of their rows fell
+// behind when an action joined their groups (issue 1658). It reads the rows,
+// never the prose around them.
+func TestMetaToolsPage_RealCatalog_CountsWhatTheCatalogServes(t *testing.T) {
+	freshness.SkipIfDeferred(t)
+	ref := mustRealReference(t)
+	root, err := mcpsurface.ProjectRoot()
+	if err != nil {
+		t.Fatalf("project root: %v", err)
+	}
+	want := catalogCountTables(ref)
+	wantEntries := strconv.Itoa(ref.served[classIndex(false)][edition.Free])
+	for _, rel := range metaToolsPages {
+		t.Run(rel, func(t *testing.T) {
+			content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+			if readErr != nil {
+				t.Fatalf("read the page: %v", readErr)
+			}
+			got := countTables(string(content))
+			if len(got) != len(want) {
+				t.Fatalf("the page has %d count tables, want %d: the meta-tools Free serves, then the ones Premium and Ultimate add", len(got), len(want))
+			}
+			for i, tier := range tiers {
+				if slices.Equal(got[i], want[i]) {
+					continue
+				}
+				lacks, extra := rowsOnlyIn(want[i], got[i]), rowsOnlyIn(got[i], want[i])
+				if lacks == nil && extra == nil {
+					t.Errorf("the table of the meta-tools %s brings has the rows the catalog serves, but not once each in tool name order: the page reads %q, want %q",
+						tierNames[tier], got[i], want[i])
+					continue
+				}
+				t.Errorf("the table of the meta-tools %s brings, in tool name order: the catalog serves %q, which the page lacks, and the page states %q, which the catalog does not serve",
+					tierNames[tier], lacks, extra)
+			}
+			entries := entryCount.FindAllStringSubmatch(string(content), -1)
+			if len(entries) != 1 || entries[0][1] != wantEntries {
+				t.Errorf("entry_count of the manifest example = %q, want one, of %s", entries, wantEntries)
+			}
+		})
 	}
 }
