@@ -152,45 +152,65 @@ func (g *fakeGit) run(ctx context.Context, dir string, args ...string) ([]byte, 
 	case "ls-tree", "show":
 		return runGit(ctx, dir, args...)
 	case "config":
-		if i := slices.Index(args, "http.extraHeader"); i >= 0 && i+1 < len(args) {
-			g.mu.Lock()
-			defer g.mu.Unlock()
-			if g.headers == nil {
-				g.headers = map[string]string{}
-			}
-			g.headers[dir] = args[i+1]
-		}
+		g.configure(dir, args)
 	case "clone":
-		target := args[len(args)-1]
-		var source string
-		for _, arg := range args {
-			if strings.HasPrefix(arg, "http") {
-				source = strings.ReplaceAll(arg, g.base, "{base}")
-			}
-		}
-		if strings.HasPrefix(source, "{base}") && !g.carriesToken("", args) {
-			return nil, g.refuse("clone " + source)
-		}
-		if slices.Contains(args, "--mirror") {
-			g.record("clone --mirror " + source)
-			return nil, os.MkdirAll(target, 0o750)
-		}
-		g.record("clone " + source)
-		return nil, os.CopyFS(target, os.DirFS(g.fixture))
+		return nil, g.clone(args)
 	case "push":
-		var kept []string
-		for _, arg := range args[slices.Index(args, "push")+1:] {
-			if arg != "--quiet" && arg != "-u" && arg != "--force" {
-				kept = append(kept, strings.ReplaceAll(arg, g.base, "{base}"))
-			}
-		}
-		line := "push " + strings.Join(kept, " ")
-		if !g.carriesToken(dir, args) {
-			return nil, g.refuse(line)
-		}
-		g.record(line)
+		return nil, g.push(dir, args)
 	}
 	return nil, nil
+}
+
+// configure keeps the http.extraHeader a config command sets in dir.
+func (g *fakeGit) configure(dir string, args []string) {
+	i := slices.Index(args, "http.extraHeader")
+	if i < 0 || i+1 >= len(args) {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.headers == nil {
+		g.headers = map[string]string{}
+	}
+	g.headers[dir] = args[i+1]
+}
+
+// clone copies the fixture into the directory args name last, or makes it
+// empty for a mirror, refusing a clone from the instance without the token.
+func (g *fakeGit) clone(args []string) error {
+	target := args[len(args)-1]
+	var source string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "http") {
+			source = strings.ReplaceAll(arg, g.base, "{base}")
+		}
+	}
+	if strings.HasPrefix(source, "{base}") && !g.carriesToken("", args) {
+		return g.refuse("clone " + source)
+	}
+	if slices.Contains(args, "--mirror") {
+		g.record("clone --mirror " + source)
+		return os.MkdirAll(target, 0o750)
+	}
+	g.record("clone " + source)
+	return os.CopyFS(target, os.DirFS(g.fixture))
+}
+
+// push logs a push run in dir with its arguments but the flags, refusing one
+// without the token.
+func (g *fakeGit) push(dir string, args []string) error {
+	var kept []string
+	for _, arg := range args[slices.Index(args, "push")+1:] {
+		if arg != "--quiet" && arg != "-u" && arg != "--force" {
+			kept = append(kept, strings.ReplaceAll(arg, g.base, "{base}"))
+		}
+	}
+	line := "push " + strings.Join(kept, " ")
+	if !g.carriesToken(dir, args) {
+		return g.refuse(line)
+	}
+	g.record(line)
+	return nil
 }
 
 // carriesToken reports whether a command run in dir with args sends the
