@@ -423,6 +423,7 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			sessionFailure.write(w, r)
 			return
 		}
+		restartRequestDeadlines(w)
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, entry.Server())
 		// A POST that would open a stateful session takes its slots here,
 		// before the SDK creates anything, and is refused with a 503 when one
@@ -477,6 +478,36 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 		ctx = withReadinessGate(ctx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// restartRequestDeadlines starts the connection's read and write deadlines
+// again from now, once the gate has admitted a request and built its pool
+// entry.
+//
+// The listener counts the read deadline from when the request starts being
+// read and the write deadline from when its headers were read, and the gate
+// resolves the entry before the SDK reads a byte of the body. The first build
+// of an entry can take about 33 seconds on GitLab.com (38 for a fine-grained
+// token), past [baseHTTPReadTimeout], and in oauth mode the verification
+// before the gate adds up to about 35 more, past [baseHTTPWriteTimeout] for a
+// response nothing answers as an event stream (--json-response). Without this,
+// a first POST whose body is larger than what arrived with its headers fails
+// its body read, and such a response is cut by the server itself (issue 1821).
+//
+// Only an admitted request gets here, so a caller the gate refuses is still
+// held to the deadlines as the listener set them, and an admitted one gets
+// each deadline once more, counted from the moment the wait it did not cause
+// ended. A response that commits to text/event-stream clears its write
+// deadline afterwards as before ([sseAwareWriter]).
+//
+// A writer that cannot reach a connection, a test recorder, answers
+// [http.ErrNotSupported], and that changes nothing for it, so the errors are
+// not acted on.
+func restartRequestDeadlines(w http.ResponseWriter) {
+	controller := http.NewResponseController(w)
+	now := time.Now()
+	_ = controller.SetReadDeadline(now.Add(baseHTTPReadTimeout))
+	_ = controller.SetWriteDeadline(now.Add(baseHTTPWriteTimeout))
 }
 
 // addressesSession reports whether a non-POST method can act on a live MCP

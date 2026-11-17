@@ -264,8 +264,8 @@ var notADecision = map[string]exemption{
 	// The server's own listener and the connections it holds.
 	"cmd/server:baseHTTPMaxHeaderBytes":    {categoryTransport, "the largest request header the HTTP listener reads, whoever sends it"},
 	"cmd/server:baseHTTPReadHeaderTimeout": {categoryTransport, "how long the listener waits for a request's headers"},
-	"cmd/server:baseHTTPReadTimeout":       {categoryTransport, "how long the listener waits for a whole request"},
-	"cmd/server:baseHTTPWriteTimeout":      {categoryTransport, "how long the listener takes to write a response"},
+	"cmd/server:baseHTTPReadTimeout":       {categoryTransport, "how long the listener waits for a whole request, counted again from when the MCP gate has built the request's pool entry (restartRequestDeadlines)"},
+	"cmd/server:baseHTTPWriteTimeout":      {categoryTransport, "how long the listener takes to write a response, counted again from when the MCP gate has built the request's pool entry (restartRequestDeadlines)"},
 	"cmd/server:defaultHTTPIdleTimeout":    {categoryTransport, "how long an idle keep-alive connection is kept"},
 	"cmd/server:idleTimeoutDisabled":       {categoryTransport, "the sentinel standing for no idle timeout, which Go would otherwise read as the read timeout"},
 	"cmd/server:sseKeepAliveInterval":      {categoryTransport, "how often an open event stream is sent a comment so an idle proxy does not cut it"},
