@@ -84,9 +84,17 @@ func runMain(ctx context.Context, args []string, getenv func(string) string, std
 
 // httpClient is the client every request to GitLab is made with. Each request
 // has a deadline of its own, so a connection GitLab accepts and never answers
-// ends the run instead of blocking it.
+// ends the run instead of blocking it. A redirect is the answer, as it was to
+// the script's curl, and is never followed: net/http would send the token
+// header to any host it named, and turn a write into a GET.
 func httpClient() *http.Client {
-	return &http.Client{Timeout: 2 * time.Minute, Transport: upstreamTransport}
+	return &http.Client{
+		Timeout:   2 * time.Minute,
+		Transport: upstreamTransport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 // sleepContext waits for d or until ctx ends, whichever comes first.
