@@ -73,8 +73,9 @@ type Grant struct {
 // GrantScope is one granular scope as GitLab's entity exposes it
 // (lib/api/entities/personal_access_token_granular_scope.rb), which the
 // caller reads from what client-go decodes of GET
-// /personal_access_tokens/:id. The package takes it in its own type so that
-// what it decides stays independent of the SDK.
+// /personal_access_tokens/self or, when that answer does not carry the
+// scopes, of GET /personal_access_tokens/:id. The package takes it in its own
+// type so that what it decides stays independent of the SDK.
 type GrantScope struct {
 	Access      string
 	Permissions []string
@@ -83,7 +84,8 @@ type GrantScope struct {
 }
 
 // GrantFromScopes reads a token's grant out of what GitLab answered GET
-// /personal_access_tokens/:id with, holding it to at most maxScopes scopes:
+// /personal_access_tokens/self or GET /personal_access_tokens/:id with,
+// holding it to at most maxScopes scopes:
 // granular is the token's granular flag, nil when the answer did not carry
 // it, and scopes its granular scopes, nil when the answer carried none or
 // null and empty, not nil, when it carried an empty list.
