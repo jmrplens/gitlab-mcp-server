@@ -36,6 +36,7 @@ const (
 	actionProjectCreateForkRel    = "project.create_fork_relation"
 	actionProjectAddPushRule      = "project.push_rule_add"
 	actionProjectMembers          = "project.members"
+	actionProjectPullMirrorConfig = "project.pull_mirror_configure"
 	actionGroupGet                = "group.get"
 	statusSuccess                 = "success"
 	tagWebhook                    = "webhook"
@@ -420,10 +421,10 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		description: "Create a project on behalf of a user (admin). Returns: the created project with id, owner namespace, visibility, and web URL. See also: gitlab_project_create, gitlab_project_get.",
 	},
 	"gitlab_project_update": {
-		usage:       "Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. An update that sets mirror_overwrites_diverged_branches true, enables a mirror that has it, points such a mirror at another import_url, or lets it pull branches it skipped by changing only_mirror_protected_branches or mirror_branch_regex discards this project's own commits on each diverged branch the mirror pulls, so it needs confirm=true (or an approved elicitation prompt), as project.pull_mirror_configure does: pass it only after the user approves discarding those commits, knowing the source and which branches the mirror pulls. Setting the flag while turning the mirror off needs it too: GitLab keeps a flag stored on a mirror that is off, by this call or by another client, and hides it until the mirror is turned back on, so that later call is not asked.",
+		usage:       "Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change. For mirror settings, use project.pull_mirror_configure: GitLab deprecated this route's mirror params (all but import_url) and plans to remove them in v5 of its API. Only mirror_user_id, which runs the mirror as another user, has no counterpart there. An update that sets mirror_overwrites_diverged_branches true, enables a mirror that has it, points such a mirror at another import_url, or lets it pull branches it skipped by changing only_mirror_protected_branches or mirror_branch_regex discards this project's own commits on each diverged branch the mirror pulls, so it needs confirm=true (or an approved elicitation prompt), as project.pull_mirror_configure does: pass it only after the user approves discarding those commits, knowing the source and which branches the mirror pulls. Setting the flag while turning the mirror off needs it too: GitLab keeps a flag stored on a mirror that is off, by this call or by another client, and hides it until the mirror is turned back on, so that later call is not asked.",
 		aliases:     []string{"update project", "edit project settings", "change project configuration", "modify project settings"},
-		related:     []string{actionProjectGet, actionProjectArchive, "project.transfer"},
-		description: "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.",
+		related:     []string{actionProjectGet, actionProjectArchive, "project.transfer", actionProjectPullMirrorConfig},
+		description: "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer, gitlab_project_pull_mirror_configure.",
 	},
 	"gitlab_project_restore": {
 		usage:       "Restore a project previously marked for delayed deletion, before the retention period expires. Send the project_id of the pending-deletion project.",
@@ -674,7 +675,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	"gitlab_project_pull_mirror_get": {
 		usage:       "Get a project's pull-mirror configuration (the upstream URL it mirrors from and its sync status). Send project_id. Premium/Ultimate.",
 		aliases:     []string{"get pull mirror", "show mirror configuration", "project mirror status"},
-		related:     []string{"project.pull_mirror_configure", "project.start_mirroring"},
+		related:     []string{actionProjectPullMirrorConfig, "project.start_mirroring"},
 		description: "Get a project's pull-mirror configuration. Returns: the mirror URL, enabled flag, and last sync status. See also: gitlab_project_pull_mirror_configure, gitlab_project_start_mirroring.",
 	},
 	"gitlab_project_pull_mirror_configure": {
@@ -686,7 +687,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	"gitlab_project_start_mirroring": {
 		usage:       "Trigger an immediate pull-mirror sync for a project so it fetches from its configured upstream now. Send project_id. Premium/Ultimate.",
 		aliases:     []string{"start mirroring", "sync pull mirror now", "trigger pull mirror sync"},
-		related:     []string{"project.pull_mirror_get", "project.pull_mirror_configure"},
+		related:     []string{"project.pull_mirror_get", actionProjectPullMirrorConfig},
 		description: "Trigger a pull-mirror sync. Returns: a success confirmation naming the project. See also: gitlab_project_pull_mirror_get, gitlab_project_pull_mirror_configure.",
 	},
 	"gitlab_project_get_push_rules": {

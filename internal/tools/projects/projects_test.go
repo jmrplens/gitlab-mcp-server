@@ -11110,3 +11110,80 @@ func TestList_UpdatedBoundWithoutTheUpdatedAtOrder_IsRefusedBeforeAnyRequest(t *
 		}
 	})
 }
+
+// schemaText returns the jsonschema description of the field of input whose
+// JSON name is name, or fails the test when input has no such field.
+func schemaText(t *testing.T, input any, name string) string {
+	t.Helper()
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(input)) {
+		if strings.Split(field.Tag.Get("json"), ",")[0] == name {
+			return field.Tag.Get("jsonschema")
+		}
+	}
+	t.Fatalf("%T has no field %q", input, name)
+	return ""
+}
+
+// TestMirrorParams_OnTheProjectRoutes_SayGitLabDeprecatedThem holds the
+// descriptions of the pull-mirror params project.update, project.create and
+// project.create_for_user send to the project routes to what GitLab says of
+// them (issue 1749, option 1): GitLab deprecated configuring pull mirroring on
+// PUT /projects/:id, POST /projects and POST /projects/user/:user_id in 17.6,
+// and the live record marks each of them [Deprecated]. Each one says so and
+// names project.pull_mirror_configure, which sends the dedicated route, as
+// other deprecated params here name what replaces them.
+//
+// mirror_user_id has no counterpart there: the dedicated route always runs
+// the mirror as the caller, so its description says this param is the only
+// way to name another user rather than pointing at the action. import_url is
+// not marked, since GitLab reads it for an import too and does not deprecate
+// it. project.update's usage line and related actions name the dedicated
+// action for mirror settings.
+func TestMirrorParams_OnTheProjectRoutes_SayGitLabDeprecatedThem(t *testing.T) {
+	const dedicated = "project.pull_mirror_configure"
+	marked := []struct {
+		input any
+		name  string
+	}{
+		{CreateInput{}, "mirror"},
+		{CreateInput{}, "mirror_trigger_builds"},
+		{UpdateInput{}, "mirror"},
+		{UpdateInput{}, "mirror_trigger_builds"},
+		{UpdateInput{}, "mirror_branch_regex"},
+		{UpdateInput{}, "mirror_overwrites_diverged_branches"},
+		{UpdateInput{}, "only_mirror_protected_branches"},
+	}
+	for _, tc := range marked {
+		t.Run(reflect.TypeOf(tc.input).Name()+"."+tc.name, func(t *testing.T) {
+			text := schemaText(t, tc.input, tc.name)
+			if !strings.Contains(text, "Deprecated by GitLab on this route") || !strings.Contains(text, dedicated) {
+				t.Errorf("%s description = %q, want it to say GitLab deprecated it on this route and to name %s", tc.name, text, dedicated)
+			}
+		})
+	}
+	t.Run("UpdateInput.mirror_user_id", func(t *testing.T) {
+		text := schemaText(t, UpdateInput{}, "mirror_user_id")
+		if !strings.Contains(text, "Deprecated by GitLab on this route") || !strings.Contains(text, "only way to") {
+			t.Errorf("mirror_user_id description = %q, want it deprecated and named the only way to run the mirror as another user", text)
+		}
+	})
+	t.Run("UpdateInput.import_url", func(t *testing.T) {
+		if text := schemaText(t, UpdateInput{}, "import_url"); strings.Contains(strings.ToLower(text), "deprecated") {
+			t.Errorf("import_url description = %q, want it unmarked: GitLab does not deprecate it", text)
+		}
+	})
+	t.Run("mirror_branch_regex_alone", func(t *testing.T) {
+		if text := schemaText(t, UpdateInput{}, "mirror_branch_regex"); !strings.Contains(text, "GitLab before 19.6 refuses an update carrying this field alone") {
+			t.Errorf("mirror_branch_regex description = %q, want the refusal of the field alone said of GitLab before 19.6", text)
+		}
+	})
+	t.Run("project.update", func(t *testing.T) {
+		meta := projectActionMeta["gitlab_project_update"]
+		if !strings.Contains(meta.usage, "mirror settings, use "+dedicated) {
+			t.Errorf("project.update usage = %q, want it to send mirror settings to %s", meta.usage, dedicated)
+		}
+		if !slices.Contains(meta.related, dedicated) {
+			t.Errorf("project.update related = %v, want it to name %s", meta.related, dedicated)
+		}
+	})
+}
