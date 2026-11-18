@@ -2529,14 +2529,18 @@ func (e *exportRecorder) exported() string {
 // installs when telemetry is on ([telemetry.NewSlogHandler]): stderr as JSON
 // into the returned buffer, and the exported copy into the returned recorder,
 // so a test can hold a line to what each leg carries.
-func captureBothLogLegs(t *testing.T) (*bytes.Buffer, *exportRecorder) {
+//
+// The buffer locks its reads as well as its writes: a test that builds a pool
+// entry has started a catalog registration that logs through the same default
+// logger on its own goroutine, and the JSON handler's lock covers only writes.
+func captureBothLogLegs(t *testing.T) (*lockedBuffer, *exportRecorder) {
 	t.Helper()
 	recorder := &exportRecorder{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(recorder)))
 	previousProvider, previousLogger := otel.GetLoggerProvider(), slog.Default()
 	otel.SetLoggerProvider(provider)
-	var stderr bytes.Buffer
-	terminal := slog.NewJSONHandler(&stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	stderr := &lockedBuffer{}
+	terminal := slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(telemetry.NewSlogHandler(terminal, slog.LevelDebug, nil)))
 	forgetRefusalLines()
 	t.Cleanup(func() {
@@ -2544,7 +2548,7 @@ func captureBothLogLegs(t *testing.T) (*bytes.Buffer, *exportRecorder) {
 		otel.SetLoggerProvider(previousProvider)
 		_ = provider.Shutdown(context.Background())
 	})
-	return &stderr, recorder
+	return stderr, recorder
 }
 
 // assertTheHandleStaysOnStderr fails unless the stderr line logged with msg
@@ -2552,10 +2556,11 @@ func captureBothLogLegs(t *testing.T) (*bytes.Buffer, *exportRecorder) {
 // unless the exported copy of that line was sent without the field or the
 // handle: the operator's terminal is where a refusal is correlated, and the
 // collector records nobody (issue 1780).
-func assertTheHandleStaysOnStderr(t *testing.T, stderr *bytes.Buffer, recorder *exportRecorder, msg, handle string) {
+func assertTheHandleStaysOnStderr(t *testing.T, logged *lockedBuffer, recorder *exportRecorder, msg, handle string) {
 	t.Helper()
 	named := false
-	for raw := range strings.Lines(stderr.String()) {
+	stderr := logged.String()
+	for raw := range strings.Lines(stderr) {
 		var line map[string]any
 		if err := json.Unmarshal([]byte(raw), &line); err != nil {
 			t.Fatalf("a log line is not JSON: %q: %v", raw, err)
@@ -2587,7 +2592,7 @@ func assertTheHandleStaysOnStderr(t *testing.T, stderr *bytes.Buffer, recorder *
 // credential, while the export drops the handle (issue 1780).
 func TestBearerGuard_VerificationUnavailable_NamesTheTokenByItsHandle(t *testing.T) {
 	stderr, recorder := captureBothLogLegs(t)
-	const token = "glpat-verification-unavailable"
+	const token = "glpat-unverifiable"
 	guard := &bearerGuard{}
 
 	upstream := &oauth.UpstreamError{Status: http.StatusBadGateway, Err: errors.New("bad gateway")}
