@@ -26593,7 +26593,8 @@
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "projects.overwritesAfterCall"
+            "projects.overwritesAfterCall",
+            "projects.reportedMirrorURL"
           ],
           "sdk_methods": [
             "Projects.GetProjectPullMirrorDetails"
@@ -27583,7 +27584,8 @@
           "class": "optional",
           "classic": "read_api",
           "sites": [
-            "projects.overwritesAfterCall"
+            "projects.overwritesAfterCall",
+            "projects.reportedMirrorURL"
           ],
           "sdk_methods": [
             "Projects.GetProjectPullMirrorDetails"
