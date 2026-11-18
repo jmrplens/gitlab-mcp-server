@@ -6,6 +6,7 @@ package projects
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -306,6 +307,36 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	}
 	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "sort"); !sameProjectStringSet(got, []string{"asc", "desc"}) {
 		t.Fatalf("sort enum = %v, want asc/desc", got)
+	}
+}
+
+// TestActionSpecs_ListUserContributed_OffersNoSimilarityOrdering verifies the
+// contributed list does not offer order_by=similarity. GitLab's route declares
+// it, but orders by similarity only with a search, which this route never
+// filters by and the action no longer takes (issue 1838): GitLab.com answered
+// order_by=similarity alone with a 500 and, beside a search, left the list
+// unordered, on 18 November 2026. The other project lists keep it, since their
+// routes read search.
+func TestActionSpecs_ListUserContributed_OffersNoSimilarityOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specs := ActionSpecs(client, false)
+
+	contributed := projectActionSpecByTool(t, specs, "gitlab_project_list_user_contributed").Route.InputSchema
+	if got := projectSchemaPropertyEnum(t, contributed, "order_by"); !sameProjectStringSet(got, []string{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "star_count"}) {
+		t.Errorf("contributed order_by enum = %v, want every project ordering field but similarity", got)
+	}
+	props, _ := contributed["properties"].(map[string]any)
+	orderBy, _ := props["order_by"].(map[string]any)
+	if description, _ := orderBy["description"].(string); strings.Contains(description, "similarity") {
+		t.Errorf("contributed order_by description = %q, want no mention of similarity", description)
+	}
+	for _, tool := range []string{"gitlab_project_list_forks", "gitlab_project_list_user_projects", "gitlab_project_list_user_starred"} {
+		t.Run(tool, func(t *testing.T) {
+			schema := projectActionSpecByTool(t, specs, tool).Route.InputSchema
+			if got := projectSchemaPropertyEnum(t, schema, "order_by"); !slices.Contains(got, "similarity") {
+				t.Errorf("%s order_by enum = %v, want similarity kept", tool, got)
+			}
+		})
 	}
 }
 
