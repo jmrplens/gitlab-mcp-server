@@ -184,6 +184,16 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return r.ResponseWriter.Write(b)
 }
 
+// Unwrap exposes the underlying writer so [http.NewResponseController] reaches
+// the connection: the MCP endpoint behind this middleware holds the read and
+// write deadlines while the server verifies a credential and builds its pool
+// entry, and a wrapper that does not unwrap answers [http.ErrNotSupported] for
+// both.
+//
+// Flush does not unwrap: this type implements it, so the controller finds it
+// here and the flush is recorded as committing the status.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 // Flush forwards to the underlying writer when it supports flushing.
 //
 // Not optional here. This server's default HTTP mode answers with

@@ -237,18 +237,6 @@ const (
 	// baseHTTPReadHeaderTimeout bounds reading request headers.
 	baseHTTPReadHeaderTimeout = 10 * time.Second
 
-	// baseHTTPReadTimeout bounds reading the full request. Streamable HTTP request
-	// bodies (JSON-RPC) are small, so this does not affect established SSE streams.
-	baseHTTPReadTimeout = 30 * time.Second
-
-	// baseHTTPWriteTimeout is the fixed global response write timeout. It is kept at a
-	// safe default to protect standard endpoints (e.g. /health,
-	// /.well-known/mcp/server-card.json) from slow-write resource exhaustion
-	// (Slowloris). Long-lived SSE streams instead disable their write deadline
-	// dynamically (see sseWriteDeadlineMiddleware), because the MCP go-sdk SSE writer
-	// never resets it and WriteTimeout would otherwise sever the stream prematurely.
-	baseHTTPWriteTimeout = 60 * time.Second
-
 	// baseHTTPMaxHeaderBytes bounds the headers of one request.
 	//
 	// Go's own ceiling is 1 MiB, and a header is the cheapest thing an
@@ -265,6 +253,28 @@ const (
 	// Go falls back to ReadTimeout when IdleTimeout == 0; this large value instead
 	// keeps idle keep-alive connections effectively unrestricted.
 	idleTimeoutDisabled = 10 * 365 * 24 * time.Hour
+)
+
+// The two deadlines the MCP endpoint holds while the server verifies a
+// request's credential and builds its pool entry, and starts again at the
+// request's first read or write, the read deadline only for a request with a
+// body ([holdRequestDeadlines]). Vars, not consts, only so tests can shorten
+// them; nothing at runtime writes either.
+var (
+	// baseHTTPReadTimeout bounds reading the full request, counted from when
+	// the request starts being read. Streamable HTTP request bodies (JSON-RPC)
+	// are small, so this does not affect established SSE streams.
+	baseHTTPReadTimeout = 30 * time.Second
+
+	// baseHTTPWriteTimeout is the fixed global response write timeout, counted
+	// from when the request's headers were read. It is kept at a safe default
+	// to protect standard endpoints (e.g. /health,
+	// /.well-known/mcp/server-card.json) from slow-write resource exhaustion
+	// (Slowloris). Long-lived SSE streams instead disable their write deadline
+	// dynamically (see sseWriteDeadlineMiddleware), because the MCP go-sdk SSE
+	// writer never resets it and WriteTimeout would otherwise sever the stream
+	// prematurely.
+	baseHTTPWriteTimeout = 60 * time.Second
 )
 
 // main parses CLI flags, handles one-shot commands such as --help and
@@ -3655,8 +3665,13 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // reverse proxy that forwards its prefix instead of stripping it: such a
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
+//
+// The deadlines are held from the handler on ([holdRequestDeadlines]), so the
+// oauth verification and the gate's entry build are not charged to the body
+// read or the response, while the Origin and protocol version refusals in
+// front, which answer at once, keep the deadlines the listener set.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, handler))
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, holdRequestDeadlines(handler)))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
