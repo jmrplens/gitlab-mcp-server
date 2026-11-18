@@ -96,12 +96,12 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 	if toolutil.IsYOLOMode() || toolutil.ExplicitConfirmFromRequest(req) {
 		return nil
 	}
-	ask, branches := overwritesAfterCall(ctx, client, input)
+	ask, branches, reported := overwritesAfterCall(ctx, client, input)
 	if ask == askNothing {
 		return nil
 	}
 
-	question := pullMirrorQuestion(input, ask, branches)
+	question := pullMirrorQuestion(input, ask, branches, reported)
 	flow, flowErr := elicitation.FlowFromRequest(ctx, req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
@@ -133,12 +133,16 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 // sentence when the client cannot ask. A call that names no URL keeps the
 // source the project has, which the question names in the person's language
 // rather than reveals; one that names a URL is asked about that URL as the
-// caller wrote it, redacted. ask is the question [overwritesAfterCall] chose.
-// A call that leaves the mirror off is asked whether to store the overwrite
-// for when the mirror is turned on, since nothing is pulled before that. A
-// call that only widens the branches a mirror that overwrites pulls is asked
-// about those branches, which are what changes, named as branches, the filter
-// the mirror pulls through after the call.
+// caller wrote it, redacted, with the login GitLab will use where the login
+// picks the repository, as [pullMirrorSourceShown] says. reported is the url
+// GitLab reported for the mirror where the guard read it, which names the
+// source of a call that re-aims the mirror through auth_user alone. ask is
+// the question [overwritesAfterCall] chose. A call that leaves the mirror off
+// is asked whether to store the overwrite for when the mirror is turned on,
+// since nothing is pulled before that. A call that only widens the branches a
+// mirror that overwrites pulls is asked about those branches, which are what
+// changes, named as branches, the filter the mirror pulls through after the
+// call.
 //
 // Each of the six is written out in full because the catalog audit reads a
 // question's key and the placeholders it fills from the call that renders it.
@@ -147,20 +151,21 @@ func confirmDivergedOverwrite(ctx context.Context, client *gitlabclient.Client, 
 // a value through [toolutil.EscapeConsentValue], as every guard's question
 // fences what the call wrote: unfenced, a line break, emphasis or a link in
 // them would read as the server's own words to the person who decides.
-func pullMirrorQuestion(input ConfigurePullMirrorInput, ask mirrorAsk, branches branchFilter) i18n.Message {
+func pullMirrorQuestion(input ConfigurePullMirrorInput, ask mirrorAsk, branches branchFilter, reported string) i18n.Message {
 	project := toolutil.EscapeConsentValue(string(input.ProjectID))
+	source := pullMirrorSourceShown(input, reported)
 	if ask == askOverwriteWhileOff {
-		if input.URL == "" {
+		if source == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
 				i18n.S("project", project),
 				i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
 		}
 		return i18n.New(i18n.ConfirmPullMirrorOverwriteWhileOff,
 			i18n.S("project", project),
-			i18n.S("source", pullMirrorSourceShown(input.URL)))
+			i18n.S("source", source))
 	}
 	if ask == askWidening {
-		if input.URL == "" {
+		if source == "" {
 			return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
 				i18n.S("project", project),
 				i18n.M("branches", branchesPulled(branches)),
@@ -169,23 +174,38 @@ func pullMirrorQuestion(input ConfigurePullMirrorInput, ask mirrorAsk, branches 
 		return i18n.New(i18n.ConfirmPullMirrorOverwriteWiden,
 			i18n.S("project", project),
 			i18n.M("branches", branchesPulled(branches)),
-			i18n.S("source", pullMirrorSourceShown(input.URL)))
+			i18n.S("source", source))
 	}
-	if input.URL == "" {
+	if source == "" {
 		return i18n.New(i18n.ConfirmPullMirrorOverwrite,
 			i18n.S("project", project),
 			i18n.M("source", i18n.New(i18n.ConfirmPullMirrorConfiguredSource)))
 	}
 	return i18n.New(i18n.ConfirmPullMirrorOverwrite,
 		i18n.S("project", project),
-		i18n.S("source", pullMirrorSourceShown(input.URL)))
+		i18n.S("source", source))
 }
 
-// pullMirrorSourceShown is the source a question names: the rendering
-// [pullMirrorSourceForPrompt] makes of the URL, fenced as a value, or the
-// placeholder it withholds a URL with, which is the server's own text.
-func pullMirrorSourceShown(raw string) string {
-	source := pullMirrorSourceForPrompt(raw)
+// pullMirrorSourceShown is the source a question about input names, or "" for
+// the source the project has, which the question names from the catalog.
+//
+// It is the rendering [pullMirrorSourceForPrompt] makes of the call's URL,
+// fenced as a value, or the placeholder it withholds a URL with, which is the
+// server's own text. A call that sends no URL is asked about the source the
+// project has, unless it sends auth_user to a mirror whose reported url,
+// reported, is one the login picks the repository of: that call re-aims the
+// mirror through the login alone, so the question names the reported url with
+// auth_user as its login, the one part of it the call changes (issue 1764).
+// reported is "" where the guard did not read the mirror or the read failed.
+func pullMirrorSourceShown(input ConfigurePullMirrorInput, reported string) string {
+	raw := input.URL
+	if raw == "" {
+		if !authUserReaims(input, reported) {
+			return ""
+		}
+		raw = reported
+	}
+	source := pullMirrorSourceForPrompt(raw, input.AuthUser)
 	if source == toolutil.RedactedPlaceholder {
 		return source
 	}
@@ -222,9 +242,15 @@ func (input UpdateInput) pullMirrorSettings() ConfigurePullMirrorInput {
 // enables the mirror, aims it somewhere else, or sends the branch filter, an
 // empty regex included, since removing the regex can widen it. Which of the
 // filter's changes widen it takes the read to say.
+//
+// Sending auth_user, an empty one included, can aim the mirror somewhere else
+// too: where the mirror's SSH path starts with ~, the login picks whose home
+// it is resolved in, and GitLab logs in with auth_user (issue 1764). Only the
+// read says whether the mirror's url is such a path, so a call that sends
+// auth_user alone pays for it, as [authUserReaims] describes.
 func armsOverwrite(input ConfigurePullMirrorInput) bool {
 	return isTrue(input.MirrorOverwritesDivergedBranches) || isTrue(input.Enabled) || input.URL != "" ||
-		input.OnlyMirrorProtectedBranches != nil || input.MirrorBranchRegex != nil
+		input.OnlyMirrorProtectedBranches != nil || input.MirrorBranchRegex != nil || input.AuthUser != nil
 }
 
 // mirrorAsk is the question, if any, [overwritesAfterCall] decides a call is
@@ -351,12 +377,24 @@ func isTrue(flag *bool) bool {
 //
 // A call that sends neither flag can arm nothing but by re-aiming the mirror
 // or widening the branches it pulls, so its URL is held to the source the
-// project already pulls from, and its branch filter to the one the mirror
-// pulls through, both of which the read reports. One that names that same
-// repository and reaches no branch the mirror skipped is answered like the
-// unrelated edit it is, since it changes neither what the mirror pulls nor
-// whether it overwrites. [sameMirrorSource] says what counts as the same
-// repository and [branchFilter.widenedBy] what counts as widening.
+// project already pulls from, its auth_user to whether the login picks that
+// source, and its branch filter to the one the mirror pulls through, all of
+// which the read reports. One that names that same repository and reaches no
+// branch the mirror skipped is answered like the unrelated edit it is, since
+// it changes neither what the mirror pulls nor whether it overwrites.
+// [sameMirrorSource] says what counts as the same repository,
+// [authUserReaims] when a login re-aims it and [branchFilter.widenedBy] what
+// counts as widening.
+//
+// The url the read reports is returned with every answer the read decides,
+// and "" with the rest, so the question can name the source of a call that
+// re-aims the mirror through auth_user alone. A call that sends both flags
+// and auth_user but no URL is decided without the read too, yet reads the
+// mirror for that url alone ([reportedMirrorURL]): its question would
+// otherwise name the configured source and leave out the login GitLab pulls
+// a home-relative SSH path with, the one part of the source the call changes
+// (issue 1764). Where that read fails the question names the configured
+// source, since the guard cannot see whether the login picks the repository.
 //
 // A project with no mirror at all inherits nothing, so an unsent overwrite flag
 // is off, and GitLab answers the read of a mirror that is off the same way, 400
@@ -378,43 +416,61 @@ func isTrue(flag *bool) bool {
 // that follows is refused for as well. Any other read failure is answered by
 // asking, with the question of a mirror that pulls: a guard that cannot see
 // the configuration must not assume the harmless one.
-func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (mirrorAsk, branchFilter) {
+func overwritesAfterCall(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (mirrorAsk, branchFilter, string) {
 	overwrite, overwriteSent := flagValue(input.MirrorOverwritesDivergedBranches)
 	enabled, enabledSent := flagValue(input.Enabled)
 	if overwriteSent && !overwrite {
-		return askNothing, branchFilter{}
+		return askNothing, branchFilter{}, ""
 	}
 	if overwriteSent && enabledSent {
+		reported := reportedMirrorURL(ctx, client, input)
 		if enabled {
-			return askOverwrite, branchFilter{}
+			return askOverwrite, branchFilter{}, reported
 		}
-		return askOverwriteWhileOff, branchFilter{}
+		return askOverwriteWhileOff, branchFilter{}, reported
 	}
 	if enabledSent && !enabled {
-		return askNothing, branchFilter{}
+		return askNothing, branchFilter{}, ""
 	}
 
 	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if isNotMirrored(err) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			if overwriteSent {
-				return askOverwriteWhileOff, branchFilter{}
+				return askOverwriteWhileOff, branchFilter{}, ""
 			}
-			return askNothing, branchFilter{}
+			return askNothing, branchFilter{}, ""
 		}
-		return askOverwrite, branchFilter{}
+		return askOverwrite, branchFilter{}, ""
 	}
 	if !overwriteSent && !current.MirrorOverwritesDivergedBranches {
-		return askNothing, branchFilter{}
+		return askNothing, branchFilter{}, current.URL
 	}
-	if overwriteSent || enabledSent || (input.URL != "" && !sameMirrorSource(input.URL, current.URL)) {
-		return askOverwrite, branchFilter{}
+	if overwriteSent || enabledSent || (input.URL != "" && !sameMirrorSource(input.URL, current.URL)) ||
+		authUserReaims(input, current.URL) {
+		return askOverwrite, branchFilter{}, current.URL
 	}
 	held := branchFilter{protectedOnly: current.OnlyMirrorProtectedBranches, regex: current.MirrorBranchRegex}
 	if next := held.after(input); held.widenedBy(next) {
-		return askWidening, next
+		return askWidening, next, current.URL
 	}
-	return askNothing, branchFilter{}
+	return askNothing, branchFilter{}, current.URL
+}
+
+// reportedMirrorURL is the url GitLab reports for the pull mirror of a call
+// that sends auth_user and no URL, read for the question alone. It is "" for
+// any other call, which names its source or changes no login, and where the
+// read fails for any reason, which leaves the question naming the configured
+// source.
+func reportedMirrorURL(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) string {
+	if input.AuthUser == nil || input.URL != "" {
+		return ""
+	}
+	current, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
+	if err != nil {
+		return ""
+	}
+	return current.URL
 }
 
 // flagValue reports an optional flag's value and whether the caller sent it.
@@ -499,7 +555,7 @@ func isNotMirrored(err error) bool {
 }
 
 // pullMirrorSourceForPrompt names the URL a call points the mirror at, for the
-// confirmation.
+// confirmation, logging in as authUser where the call sends one.
 //
 // The URL is the caller's own parameter and may carry credentials in its
 // userinfo despite the schema saying not to, so it is rendered through
@@ -513,25 +569,69 @@ func isNotMirrored(err error) bool {
 // rendering would name a host GitLab does not pull from, and the first would
 // show that password too.
 //
-// The one user shown is the login of an SSH URL whose path [homeRelative]
-// says the login resolves, without its password: there the login names the
+// The one user shown is the login of a URL [loginPicksRepository] says the
+// login resolves, without its password: there the login names the
 // repository, so dropping it would ask about ssh://host/~/repo.git whichever
 // account's home the call points the mirror at, the masked form GitLab's own
 // settings page shows for the source the mirror has. Over HTTPS the same path
 // names one repository whoever authenticates, and a user there can be a token,
 // so it is dropped like any other credential.
 //
-// A call that sends no URL keeps the source the project already has, which
-// [confirmDivergedOverwrite] names from the catalog rather than reveals:
-// reading it would cost a round trip to tell the user something the project's
-// own settings page already shows them.
-func pullMirrorSourceForPrompt(raw string) string {
+// That login is authUser wherever the call sends auth_user, and the URL's own
+// only where it does not: GitLab logs in with auth_user in place of the URL's
+// login (Repositories::PullMirrors::UpdateService merges it over the
+// credentials Project#import_url= took from the URL, and
+// Gitlab::UrlSanitizer#full_url sets it as the login), and with none for an
+// empty one, which Gitlab::UrlSanitizer reads as absent. So the question
+// names the account whose home GitLab will pull from (issue 1764). The same
+// rule renders the url GitLab reports for the mirror, whose login it masks,
+// for a call that sends auth_user alone.
+//
+// A call that sends no URL and no such login keeps the source the project
+// already has, which [confirmDivergedOverwrite] names from the catalog rather
+// than reveals: reading it would cost a round trip to tell the user something
+// the project's own settings page already shows them.
+func pullMirrorSourceForPrompt(raw string, authUser *string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || readsPastUserinfo(parsed) {
 		return toolutil.RedactedPlaceholder
 	}
-	if login := parsed.User.Username(); login != "" && parsed.Scheme == "ssh" && homeRelative(parsed.Path) {
-		return parsed.Scheme + "://" + url.User(login).String() + "@" + parsed.Host + parsed.EscapedPath()
+	if !loginPicksRepository(parsed) {
+		return toolutil.RedactURL(parsed)
 	}
-	return toolutil.RedactURL(parsed)
+	login := parsed.User.Username()
+	if authUser != nil {
+		login = *authUser
+	}
+	if login == "" {
+		return toolutil.RedactURL(parsed)
+	}
+	return parsed.Scheme + "://" + url.User(login).String() + "@" + parsed.Host + parsed.EscapedPath()
+}
+
+// loginPicksRepository reports whether the login of parsed decides which
+// repository it names: an SSH URL whose path [homeRelative] says git resolves
+// in the home of the account it logs in as.
+func loginPicksRepository(parsed *url.URL) bool {
+	return parsed.Scheme == "ssh" && homeRelative(parsed.Path)
+}
+
+// authUserReaims reports whether a call sending authUser points the mirror at
+// another repository through the login alone: it sends auth_user, an empty one
+// included, and the URL the mirror pulls from after the call is one
+// [loginPicksRepository] says the login resolves. That URL is the call's own
+// where it sends one and current, the url GitLab reports for the mirror, where
+// it does not. GitLab reports the login masked, so whether auth_user names the
+// account the mirror already logs in as cannot be told, and the call is a
+// re-aim as a home-relative URL is (issue 1764).
+func authUserReaims(input ConfigurePullMirrorInput, current string) bool {
+	if input.AuthUser == nil {
+		return false
+	}
+	target := input.URL
+	if target == "" {
+		target = current
+	}
+	parsed, err := url.Parse(target)
+	return err == nil && loginPicksRepository(parsed)
 }
