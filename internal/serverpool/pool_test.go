@@ -5404,6 +5404,13 @@ func TestEntry_AnswersForTheCredentialRatherThanForTheServer(t *testing.T) {
 		}, "two credentials report one identity; a constant would pass every other check here"},
 		{"each entry has an owner token", func() bool { return first.Owner() != "" && second.Owner() != "" }, "an entry was built with no owner token"},
 		{"the owner tokens are distinct", func() bool { return first.Owner() != second.Owner() }, "two credentials share one owner token"},
+		// The handle is the one every pool line about the entry names it by,
+		// so a line cmd/server writes about the same credential can name it
+		// too (issue 1780), and it is the handle and never the token.
+		{"the handle is the credential's", func() bool {
+			return first.CredentialHash() == CredentialHash("glpat-first") && second.CredentialHash() == CredentialHash("glpat-second")
+		}, "CredentialHash() is not the handle of the entry's credential"},
+		{"the handle is the one the pool's lines name", func() bool { return first.CredentialHash() == first.credentialHash }, "CredentialHash() does not report the handle the entry was built with"},
 	}
 	for _, fact := range facts {
 		t.Run(fact.name, func(t *testing.T) {
@@ -5442,6 +5449,7 @@ func TestEntry_TheZeroHandleAnswersTheZeroValues(t *testing.T) {
 		{"Config", func() bool { return absent.Config() == nil }},
 		{"Owner", func() bool { return absent.Owner() == "" }},
 		{"Identity", func() bool { return !absent.Identity().Resolved() }},
+		{"CredentialHash", func() bool { return absent.CredentialHash() == "" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

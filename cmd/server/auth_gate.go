@@ -893,7 +893,8 @@ func (g *mcpServerGate) classify(ctx context.Context, err error, ip, source, ins
 	// be built: the credential was never judged. Counting it would let a
 	// GitLab outage lock out clients holding valid tokens, which is the same
 	// conflation of causes this gate exists to remove.
-	slog.ErrorContext(ctx, "failed to create server for token", "error", err)
+	slog.ErrorContext(ctx, "failed to create server for token", "error", err,
+		telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 	// The pool error can name internal state, so it is logged but not
 	// returned to the caller.
 	return &gateFailure{

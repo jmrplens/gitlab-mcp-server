@@ -16,6 +16,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
@@ -393,7 +394,8 @@ func adoptPooledEntry(
 ) bool {
 	shape := shapes.forServer(entry.Server())
 	if shape == nil {
-		slog.WarnContext(ctx, "dropping a pooled credential whose configuration shape failed to register")
+		slog.WarnContext(ctx, "dropping a pooled credential whose configuration shape failed to register",
+			telemetry.LogFieldCredentialHash, entry.CredentialHash())
 		return false
 	}
 	credentials.add(shape.shell.newCredentialState(entry))

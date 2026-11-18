@@ -323,7 +323,8 @@ func (g *bearerGuard) classify(ctx context.Context, err error, ip, source, insta
 		if delay <= 0 {
 			delay = upstreamRetryAfter
 		}
-		slog.Warn("token verification unavailable", "status", upstream.Status, "error", err)
+		slog.WarnContext(ctx, "token verification unavailable", "status", upstream.Status, "error", err,
+			telemetry.LogFieldCredentialHash, serverpool.CredentialHash(token))
 		return &gateFailure{
 			status:  http.StatusServiceUnavailable,
 			code:    errCodeUpstreamUnavailable,

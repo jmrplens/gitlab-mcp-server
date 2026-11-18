@@ -267,6 +267,23 @@ func TestMCPServerGate_PoolFailure_Returns503WithoutLeakingDetail(t *testing.T) 
 	}
 }
 
+// TestMCPServerGate_PoolFailure_NamesTheTokenByItsHandle covers the line the
+// gate writes when a credential's pool entry could not be built: the token was
+// never judged, and the line names it by its handle so an operator can tie it
+// to the pool's own lines about the same credential, while the export drops
+// the handle (issue 1780).
+func TestMCPServerGate_PoolFailure_NamesTheTokenByItsHandle(t *testing.T) {
+	stderr, recorder := captureBothLogLegs(t)
+	gate := newGate(t, failingFactory)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+
+	if _, failure := gate.resolve(req); failure == nil || failure.status != http.StatusServiceUnavailable {
+		t.Fatalf("failure = %+v, want the 503 of an entry that could not be built", failure)
+	}
+	assertTheHandleStaysOnStderr(t, stderr, recorder, "failed to create server for token", serverpool.CredentialHash(gateTestToken))
+}
+
 // TestMCPServerGate_CredentialGitLabRefuses_Returns401 covers the admission
 // check: a token GitLab answers 401 to is an authentication failure, so it must
 // surface as 401 with a challenge — not as the 503 every other pool error gets.
