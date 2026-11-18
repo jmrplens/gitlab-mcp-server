@@ -744,6 +744,17 @@ var projectListOrderByOverride = toolutil.SchemaPropertyOverride("order_by", map
 	"description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
 })
 
+// projectContributedOrderByOverride is the order_by enum of the contributed
+// list, every value of [projectListOrderByOverride] but similarity. GitLab's
+// route declares similarity, but orders by it only beside a search, which
+// the route never filters by and the action does not take (issue 1838):
+// GitLab.com answered order_by=similarity alone with a 500, and beside a
+// search left the list unordered, on 18 November 2026.
+var projectContributedOrderByOverride = toolutil.SchemaPropertyOverride("order_by", map[string]any{
+	"enum":        []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "star_count"},
+	"description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, or star_count.",
+})
+
 // projectSettingsEnumOverrides are the input-schema enum constraints shared by
 // project create and update operations for fixed-value CI/CD and merge settings
 // parameters whose valid set is enumerated in the GitLab API documentation.
@@ -814,7 +825,7 @@ var projectActionSchemaOverrides = map[string][]toolutil.InputSchemaOverride{
 	"gitlab_project_approval_rule_create":  {projectApprovalRuleTypeOverride},
 	"gitlab_project_list_forks":            {projectListOrderByOverride},
 	"gitlab_project_list_user_projects":    {projectListOrderByOverride},
-	"gitlab_project_list_user_contributed": {projectListOrderByOverride},
+	"gitlab_project_list_user_contributed": {projectContributedOrderByOverride},
 	"gitlab_project_list_user_starred":     {projectListOrderByOverride},
 	"gitlab_project_share_with_group":      {toolutil.ProjectAccessLevels.SchemaOverride("group_access")},
 }
