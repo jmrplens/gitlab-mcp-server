@@ -6,3 +6,8 @@
 # take goes in pnpm-workspace.yaml as an override instead, and an entry here
 # turns into a failure the day the lockfile moves past the advisory, which is
 # what removes it.
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2027-02-18
+reason = "vulnerable_code_cannot_be_controlled_by_adversary: the advisory is a ReDoS in how picomatch parses a glob pattern that holds a repeated extglob such as +(*), so the attacker has to choose the pattern. picomatch 2.3.2 and 4.0.7 are reached here only by the site's build and development tooling (astro's content loader, asset plugin and route cache, @astrojs/internal-helpers, vite, tinyglobby through fdir, starlight-links-validator, and unstorage through anymatch), and every pattern they compile is written in this repository's configuration or in those packages' own code, none of it an extglob. The site is published as static files, so no deployed process runs picomatch on a request. Every release up to 4.0.7, the newest, is affected and the advisory names no fixed version, so no override can clear it."
