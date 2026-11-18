@@ -4236,6 +4236,81 @@ func TestHoldRequestDeadlines_StatefulGETStream_OutlivesTheReadDeadline(t *testi
 	}
 }
 
+// readDeadlineOnlyWriter is a response writer that can take its read deadline
+// off and refuses to touch its write deadline, the one way the second half of
+// [holdRequestDeadlines]'s check fails while the first half succeeds.
+type readDeadlineOnlyWriter struct {
+	http.ResponseWriter
+	readDeadlines int
+}
+
+// SetReadDeadline counts the call and succeeds.
+func (w *readDeadlineOnlyWriter) SetReadDeadline(time.Time) error {
+	w.readDeadlines++
+	return nil
+}
+
+// SetWriteDeadline refuses, as a writer that cannot reach a connection does.
+func (w *readDeadlineOnlyWriter) SetWriteDeadline(time.Time) error {
+	return http.ErrNotSupported
+}
+
+// TestHoldRequestDeadlines_WriterWithoutDeadlines_PassesTheRequestOnAsItCame
+// holds that a writer whose deadlines cannot both be taken off has its request
+// passed on untouched: the handler further in is given the writer and the body
+// it came with, so nothing later starts a deadline on a writer that has none.
+// A test recorder refuses the read deadline already; the other case takes the
+// read deadline off and refuses the write deadline, so each half of the check
+// is the one that fails once.
+func TestHoldRequestDeadlines_WriterWithoutDeadlines_PassesTheRequestOnAsItCame(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		wrap          func(*httptest.ResponseRecorder) http.ResponseWriter
+		readDeadlines int
+	}{
+		{
+			name: "no deadlines at all",
+			wrap: func(rec *httptest.ResponseRecorder) http.ResponseWriter { return rec },
+		},
+		{
+			name: "a read deadline but no write deadline",
+			wrap: func(rec *httptest.ResponseRecorder) http.ResponseWriter {
+				return &readDeadlineOnlyWriter{ResponseWriter: rec}
+			},
+			readDeadlines: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			w := tt.wrap(rec)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+			body := req.Body
+			var gotWriter http.ResponseWriter
+			var gotBody io.ReadCloser
+			holdRequestDeadlines(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotWriter, gotBody = w, r.Body
+				w.WriteHeader(http.StatusNoContent)
+			})).ServeHTTP(w, req)
+
+			if gotWriter != w {
+				t.Errorf("the handler was given %T; want the writer the request came with, %T", gotWriter, w)
+			}
+			if gotBody != body {
+				t.Errorf("the handler was given a body of %T; want the request's own, %T", gotBody, body)
+			}
+			if rec.Code != http.StatusNoContent {
+				t.Errorf("status = %d; want %d from the handler", rec.Code, http.StatusNoContent)
+			}
+			if only, ok := w.(*readDeadlineOnlyWriter); ok && only.readDeadlines != tt.readDeadlines {
+				t.Errorf("read deadline set %d times; want %d, the one taking it off", only.readDeadlines, tt.readDeadlines)
+			}
+		})
+	}
+}
+
 // openStatefulSession initializes a session of a --stateless=false
 // deployment at baseURL through client and announces it initialized. It
 // returns the session's ID and a func that ends the session, to be called
