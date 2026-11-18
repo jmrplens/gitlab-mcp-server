@@ -2562,7 +2562,6 @@ var membershipLevelParams = map[string]map[string]membershipLevels{
 	"project.list_forks":             {"min_access_level": membershipEveryRole},
 	"project.list_groups":            {"shared_min_access_level": membershipEveryRole},
 	"project.list_invited_groups":    {"min_access_level": membershipEveryRole},
-	"project.list_user_contributed":  {"min_access_level": membershipEveryRole},
 	"project.list_user_projects":     {"min_access_level": membershipEveryRole},
 	"project.list_user_starred":      {"min_access_level": membershipEveryRole},
 	"group.list":                     {"min_access_level": membershipEveryRole},

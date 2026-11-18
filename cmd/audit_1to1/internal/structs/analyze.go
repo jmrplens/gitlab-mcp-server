@@ -200,6 +200,10 @@ const (
 	// option client-go's CreateProjectOptions carries and GitLab's update
 	// route alone takes.
 	projectParamUpdateOnly = "declared by PUT /projects/:id and not by POST /projects in GitLab 19.5.0 (gitlab-api-live.json; the update param groups of lib/api/helpers/projects_helpers.rb and ee/lib/ee/api/helpers/projects_helpers.rb), so a create drops the value; project.update offers it, and client-go's CreateProjectOptions keeps the field"
+	// contributedProjectsUnfiltered is the reason a user's contributed
+	// projects list offers only the gl.ListProjectsOptions fields that route
+	// reads, of the ones client-go sends it with.
+	contributedProjectsUnfiltered = "GET /users/:user_id/contributed_projects declares user_id, order_by, sort, simple, page and per_page and nothing else (gitlab-api-live.json, 19.5.0-ee), and builds ContributedProjectsFinder without params (lib/api/projects.rb); its present_projects reads four more undeclared, statistics, imported and with_programming_language in apply_filters and with_custom_attributes in API::Helpers::CustomAttributes, which the input offers too, so every other gl.ListProjectsOptions field reaches nothing there and a list sent one answered unfiltered (issue 1838)"
 	// mrApprovalRulesOffsetOnly is the reason the approval rules list offers
 	// no ordering or keyset field of the gl.ListOptions it pages with.
 	mrApprovalRulesOffsetOnly = "GET /projects/:id/merge_requests/:merge_request_iid/approval_rules declares only page and per_page (gitlab-api-live.json, 19.4.1-ee); gl.ListOptions ordering and keyset fields are unused plumbing there"
@@ -1150,6 +1154,10 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// answer all five lists at once.
 	"projects.userProjectFilter.repository_checksum_failed": projectChecksumFiltersUnread,
 	"projects.userProjectFilter.wiki_checksum_failed":       projectChecksumFiltersUnread,
+	// The contributed list's route reads four of the project filters without
+	// declaring them and none of the rest, so its input offers the params the
+	// route reads and nothing else.
+	"projects.ListUserContributedProjectsInput": contributedProjectsUnfiltered,
 
 	// A param client-go models before the pinned GitLab takes it.
 	"impersonationtokens.CreatePATInput.granular_scopes": "POST /users/:user_id/personal_access_tokens takes granular_scopes " +

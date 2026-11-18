@@ -158,21 +158,18 @@ func buildAcceptedEnumGaps() map[string]string {
 		// The project lists build their options in a helper the handlers
 		// hand their input's fields, or their input whole, which is where the
 		// pairing meets them.
-		"projects.ListInput.min_access_level=0":                         minAccessLevelFilter,
-		"projects.ListInput.min_access_level=5":                         minAccessLevelFilter,
-		"projects.ListInput.min_access_level=60":                        minAccessLevelFilter,
-		"projects.ListForksInput.min_access_level=0":                    minAccessLevelFilter,
-		"projects.ListForksInput.min_access_level=5":                    minAccessLevelFilter,
-		"projects.ListForksInput.min_access_level=60":                   minAccessLevelFilter,
-		"projects.ListUserProjectsInput.min_access_level=0":             minAccessLevelFilter,
-		"projects.ListUserProjectsInput.min_access_level=5":             minAccessLevelFilter,
-		"projects.ListUserProjectsInput.min_access_level=60":            minAccessLevelFilter,
-		"projects.ListUserContributedProjectsInput.min_access_level=0":  minAccessLevelFilter,
-		"projects.ListUserContributedProjectsInput.min_access_level=5":  minAccessLevelFilter,
-		"projects.ListUserContributedProjectsInput.min_access_level=60": minAccessLevelFilter,
-		"projects.ListUserStarredProjectsInput.min_access_level=0":      minAccessLevelFilter,
-		"projects.ListUserStarredProjectsInput.min_access_level=5":      minAccessLevelFilter,
-		"projects.ListUserStarredProjectsInput.min_access_level=60":     minAccessLevelFilter,
+		"projects.ListInput.min_access_level=0":                     minAccessLevelFilter,
+		"projects.ListInput.min_access_level=5":                     minAccessLevelFilter,
+		"projects.ListInput.min_access_level=60":                    minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=0":                minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=5":                minAccessLevelFilter,
+		"projects.ListForksInput.min_access_level=60":               minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=0":         minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=5":         minAccessLevelFilter,
+		"projects.ListUserProjectsInput.min_access_level=60":        minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=0":  minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=5":  minAccessLevelFilter,
+		"projects.ListUserStarredProjectsInput.min_access_level=60": minAccessLevelFilter,
 
 		// The group member role is built by the instance one's builder, and
 		// the two access token creates in a helper handed an intermediate.
