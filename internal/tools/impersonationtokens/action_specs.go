@@ -68,7 +68,7 @@ func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("state", "all", "active", "inactive"),
 		}
-	case "gitlab_create_impersonation_token":
+	case "gitlab_create_impersonation_token", "gitlab_create_personal_access_token":
 		options.InputSchemaOverrides = tokengrantdata.SchemaOverrides()
 	}
 	return options
@@ -132,9 +132,9 @@ var userTokenActionMeta = map[string]userTokenActionMetaEntry{
 		description: "Revoke an impersonation token for a user by token id. Returns: a confirmation naming the user_id and token_id with the revoked flag set. See also: gitlab_list_impersonation_tokens, gitlab_get_impersonation_token.",
 	},
 	"gitlab_create_personal_access_token": {
-		usage:       "Create a personal access token for another user (admin token required). Use to provision a PAT with explicit scopes, an optional description, and an optional expiry on behalf of the target user.",
-		aliases:     []string{"create personal access token for user", "create user PAT", "mint user personal access token"},
+		usage:       "Create a personal access token for another user (admin token required). Use to provision a PAT on behalf of the target user: a classic one with scopes or, from GitLab 19.6, a fine-grained one with granular_scopes (exactly one of the two), with an optional description and expiry.",
+		aliases:     []string{"create personal access token for user", "create user PAT", "mint user personal access token", "create fine-grained personal access token for user"},
 		related:     []string{actionPersonalTokenList, actionPersonalTokenRevoke, actionImpersonationTokenCreate},
-		description: "Create a personal access token for a user with the given scopes, optional description, and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke, gitlab_create_impersonation_token.",
+		description: "Create a personal access token for a user with classic scopes or, from GitLab 19.6, a fine-grained granular_scopes grant, an optional description, and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke, gitlab_create_impersonation_token.",
 	},
 }
