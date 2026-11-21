@@ -28,7 +28,7 @@
     "i18n:check": "node scripts/check-i18n-parity.mjs && node scripts/check-i18n-code.mjs",
     "llms:check": "node scripts/gen-llms.mjs --check",
     "twins:check": "node scripts/check-twins.mjs",
-    "twins:test": "node --test 'src/lib/**/*.test.mjs'",
+    "twins:test": "node --test 'src/lib/**/*.test.mjs' 'scripts/**/*.test.mjs'",
     "version:check": "node scripts/check-version-token.mjs",
     "a11y:check": "node scripts/check-headings-labels.mjs"
   },
