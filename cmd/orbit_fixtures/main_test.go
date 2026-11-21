@@ -33,6 +33,11 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 		}
 		return ""
 	}
+	pollEvery := func(seconds string) func(string) string {
+		return func(key string) string {
+			return map[string]string{"GITLAB_COM_TOKEN": standInToken, "ORBIT_FIXTURES_MERGE_POLL_SECONDS": seconds, "ORBIT_FIXTURES_GITLAB_URL": deadURL}[key]
+		}
+	}
 	waitable := func(key string) string {
 		return map[string]string{"GITLAB_COM_TOKEN": standInToken, "ORBIT_FIXTURES_INDEXER_TIMEOUT": "0", "ORBIT_FIXTURES_GITLAB_URL": deadURL}[key]
 	}
@@ -56,6 +61,12 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 		// Without a token, nothing is sent: the instance is one nothing
 		// answers, so a run that went on anyway fails fast and says why.
 		{name: "setup without a token", args: []string{"setup"}, env: deadInstance, want: 1, wantStderr: "GITLAB_COM_TOKEN is required"},
+		// A poll interval that is not a number of seconds, zero or more, is a
+		// usage error before anything is sent, never a wait of another length.
+		{name: "a poll interval that is not a number", args: []string{"setup"}, env: pollEvery("soon"), want: 2, wantStderr: `setup: ORBIT_FIXTURES_MERGE_POLL_SECONDS="soon" is not a number of seconds, zero or more`},
+		{name: "a negative poll interval", args: []string{"setup"}, env: pollEvery("-1"), want: 2, wantStderr: `ORBIT_FIXTURES_MERGE_POLL_SECONDS="-1" is not a number of seconds`},
+		{name: "a poll interval that is no number", args: []string{"setup"}, env: pollEvery("NaN"), want: 2, wantStderr: `ORBIT_FIXTURES_MERGE_POLL_SECONDS="NaN" is not a number of seconds`},
+		{name: "a poll interval past what a duration holds", args: []string{"setup"}, env: pollEvery("1e10"), want: 2, wantStderr: `ORBIT_FIXTURES_MERGE_POLL_SECONDS="1e10" is not a number of seconds`},
 		{
 			name: "a timeout that is not a number", args: []string{"wait-indexer"}, want: 2, wantStderr: `ORBIT_FIXTURES_INDEXER_TIMEOUT="soon" is not a whole number of seconds`,
 			env: func(key string) string {
@@ -148,6 +159,39 @@ func TestSetupFromArgs_Environment_FillsTheSettingsOrTheDefaults(t *testing.T) {
 	cfg, _, _ = setupFromArgs([]string{"--mirror-cli", "--skip-mirror"}, func(string) string { return "" }, &stderr)
 	if cfg.mirror {
 		t.Error("-skip-mirror left the mirror on")
+	}
+}
+
+// TestSetupFromArgs_MergePollSeconds_SetsTheWaitBetweenReads checks the wait
+// between two reads of the fixture merge request while GitLab checks it comes
+// from ORBIT_FIXTURES_MERGE_POLL_SECONDS, which scripts/setup-orbit-fixtures.sh
+// documented and the port first dropped, read as the script's sleep read it:
+// two seconds when unset, a fraction of one, and zero for no wait at all, the
+// way a suite against a stand-in that answers at once keeps from waiting. The
+// number of reads stays 60 whatever the interval.
+func TestSetupFromArgs_MergePollSeconds_SetsTheWaitBetweenReads(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{name: "unset", value: "", want: 2 * time.Second},
+		{name: "whole seconds", value: "3", want: 3 * time.Second},
+		{name: "a fraction", value: "0.5", want: 500 * time.Millisecond},
+		{name: "zero", value: "0", want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			env := map[string]string{"ORBIT_FIXTURES_MERGE_POLL_SECONDS": tc.value}
+			cfg, _, ok := setupFromArgs(nil, func(key string) string { return env[key] }, &stderr)
+			if !ok {
+				t.Fatalf("refused: %s", stderr.String())
+			}
+			if cfg.mergeInterval != tc.want || cfg.mergePolls != 60 {
+				t.Errorf("merge wait %d x %s, want 60 x %s", cfg.mergePolls, cfg.mergeInterval, tc.want)
+			}
+		})
 	}
 }
 
