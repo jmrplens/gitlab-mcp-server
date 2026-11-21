@@ -104,15 +104,23 @@ exit 0
 # with "HTTP Basic: Access denied", so the stand-in does too, logging it as
 # refused, unless the push carries the token as a -c value or the work tree
 # was configured with it: a -c value given to the clone is not kept in the
-# clone's configuration, so it does not reach the push. The steps between
-# them do nothing, and every other command (the ls-files and show the
-# reconciliation reads) goes to the real git.
+# clone's configuration, so it does not reach the push. With GIT_CLONE_FAILS
+# set, a clone is refused, logged as refused, and leaves no directory behind,
+# as a clone git cannot make does. The steps between them do nothing, and
+# every other command (the ls-files and show the reconciliation reads) goes to
+# the real git.
 GIT = r"""#!/bin/sh
 for last; do :; done
 header=
 for a; do case "$a" in http.extraHeader=*) header=${a#http.extraHeader=} ;; esac; done
 case " $* " in
-  *" clone "*) mkdir -p "$last" && cp -R "$GIT_FIXTURE/." "$last/" && printf 'clone\n' >> "$GIT_LOG"; exit 0 ;;
+  *" clone "*)
+    if [ -n "$GIT_CLONE_FAILS" ]; then
+      printf 'clone refused\n' >> "$GIT_LOG"
+      echo "fatal: unable to access the repository" >&2
+      exit 128
+    fi
+    mkdir -p "$last" && cp -R "$GIT_FIXTURE/." "$last/" && printf 'clone\n' >> "$GIT_LOG"; exit 0 ;;
   *" config "*" http.extraHeader "*) printf '%s' "$last" > .stand-in-header; exit 0 ;;
   *" push "*)
     if [ -z "$header" ] && [ -f .stand-in-header ]; then header=$(cat .stand-in-header); fi
@@ -215,7 +223,7 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             }
         )
 
-    def run_script(self, routes, flag="--skip-mirror"):
+    def run_script(self, routes, flag="--skip-mirror", cwd=None):
         os.mkdir(self.routes)
         for key, answer in routes.items():
             status, body = answer if isinstance(answer, tuple) else (200, answer)
@@ -231,7 +239,7 @@ class SetupOrbitFixturesTest(unittest.TestCase):
                 with open(os.path.join(self.routes, route_file(key) + ".status"), "w") as f:
                     f.write(str(status))
         return subprocess.run(
-            [BASH, SCRIPT, flag], env=self.env, capture_output=True, text=True, timeout=600
+            [BASH, SCRIPT, flag], env=self.env, capture_output=True, text=True, timeout=600, cwd=cwd
         )
 
     def committed_actions(self):
@@ -859,6 +867,25 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn(MR, [r["path"] for r in self.requests("POST")])
         self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/2/merge"])
         self.assertIn("MR !2 merged", result.stdout)
+
+    def test_a_clone_git_cannot_make_stops_the_run_before_anything_is_pushed(self):
+        # The branch is prepared where the run calls it from, errexit being
+        # off there, so a failed clone left every step after it to run in the
+        # caller's directory: the token configured, a branch made, whatever
+        # was there committed and pushed.
+        git_log = self.use_stand_in_git()
+        self.env["GIT_CLONE_FAILS"] = "1"
+        caller = os.path.join(self.tmp, "caller")
+        os.mkdir(caller)
+        routes = self.merge_routes([{"iid": 1, "state": "closed"}])
+        result = self.run_script(routes, cwd=caller)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not clone kg-fixtures", result.stderr)
+        with open(git_log) as f:
+            self.assertEqual(f.read().splitlines(), ["clone refused"])
+        self.assertEqual(os.listdir(caller), [], "nothing runs in the caller's directory")
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertEqual(self.requests("PUT"), [])
 
     def test_an_unreadable_branch_stops_the_run(self):
         routes = self.merge_routes(
