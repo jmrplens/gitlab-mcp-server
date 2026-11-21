@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+// gitQuiet keeps a clone, commit or push from writing its progress, which
+// says nothing a run reports.
+const gitQuiet = "--quiet"
+
 // gitFunc runs git with args in dir and returns its standard output. A test
 // replaces it to stand in for the clones and pushes a run asks for.
 type gitFunc func(ctx context.Context, dir string, args ...string) ([]byte, error)
@@ -20,9 +24,18 @@ type gitFunc func(ctx context.Context, dir string, args ...string) ([]byte, erro
 // in the error it returns when it fails. Nothing it is handed is shown in a
 // message but the command's own words: the token reaches git as a
 // configuration value, which git does not echo.
+//
+// The program is resolved to an absolute path first, as every other command
+// here runs a tool it did not build (cmd/gen_orbit_record runs git this way):
+// the lookup is the one exec would do, decided here rather than again by
+// whatever PATH holds when the command starts.
 func runGit(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	//#nosec G204 -- git from the PATH, with arguments this command builds
-	command := exec.CommandContext(ctx, "git", args...)
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		return nil, fmt.Errorf("find git: %w", err)
+	}
+	//#nosec G204 -- the absolute path just resolved, with arguments this command builds
+	command := exec.CommandContext(ctx, bin, args...)
 	command.Dir = dir
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
