@@ -93,7 +93,9 @@ func setupCase(t *testing.T, routes map[string]goldenRoute, failGit string, chan
 // TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun checks each answer
 // that leaves the fixture merge request unmerged stops the run with GitLab's
 // answer: an unreadable list, later page of it, merge request or branch, a
-// list that never ends, a list answered null,
+// list that never ends, a list answered null, a read of the merge request
+// answered null or with no JSON, which leaves nothing to tell a check that
+// has ended from one that has not,
 // a refused reopen or one answered with the merge request still closed or with
 // no JSON, a merge answered with the merge request still open, a new merge
 // request answered without an iid or with no JSON, a git that cannot push the
@@ -128,6 +130,8 @@ func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
 		{name: "a checkout git refuses", routes: map[string]any{"GET " + kgMR: []any{}}, failGit: "checkout", want: "git checkout: exit status 128"},
 		{name: "a wait cancelled", routes: map[string]any{"GET " + kgMR: opened, "GET " + kgMR + "/1": map[string]any{"detailed_merge_status": "checking"}}, cancel: true, want: "context canceled"},
 		{name: "a list answered null", routes: map[string]any{"GET " + kgMR: nil}, want: "cannot list the merge requests from feature/restock-helper (HTTP 200): null"},
+		{name: "a merge request read answered null", routes: map[string]any{"GET " + kgMR: opened, "GET " + kgMR + "/1": nil}, want: "cannot read MR !1 (HTTP 200): null"},
+		{name: "a merge request read answered with no JSON", routes: map[string]any{"GET " + kgMR: opened, "GET " + kgMR + "/1": notJSON}, want: "cannot read MR !1 (HTTP 200): <html>"},
 		{name: "a reopen answered closed", routes: map[string]any{"GET " + kgMR: closed, branch: map[string]any{"name": "x"}, "PUT " + kgMR + "/1": map[string]any{"iid": 1, "state": "closed"}}, want: "could not reopen MR !1 (HTTP 200)"},
 		{name: "a reopen answered with no JSON", routes: map[string]any{"GET " + kgMR: closed, branch: map[string]any{"name": "x"}, "PUT " + kgMR + "/1": notJSON}, want: "could not reopen MR !1 (HTTP 200): <html>"},
 		{name: "a new merge request answered with no JSON", routes: map[string]any{"GET " + kgMR: []any{}, "POST " + kgMR: notJSON}, want: "could not open the fixture MR (HTTP 200): <html>"},
