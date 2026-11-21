@@ -1,0 +1,29 @@
+{
+  "answers": [
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"READY\", \"projects\": {\"indexed\": 1, \"notIndexed\": 0}}}}}}",
+    "{\"data\": {\"group\": {\"orbit\": {\"indexing\": {\"state\": \"READY\", \"projects\": {\"indexed\": 1, \"notIndexed\": 0}}}}}}"
+  ],
+  "requests": [
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    },
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    }
+  ],
+  "scenario": "too-few-projects-indexed",
+  "status": 0,
+  "stderr": "  \u26a0 indexer did not catch up within 30s\n    Proceeding anyway \u2014 live test assertions are tolerant of\n    partial indexing (row_count > 0 rather than strict equality)\n",
+  "stdout": "\n=== Waiting for Orbit indexer to catch up (timeout: 30s) ===\n  [1/2] state=READY indexed=1 not_indexed=0\n  [2/2] state=READY indexed=1 not_indexed=0\n",
+  "timeout": "30"
+}

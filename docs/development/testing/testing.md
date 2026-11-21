@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,110 |
-| Unit test functions                                   | 22,309 |
+| Total test functions                                  | 24,150 |
+| Unit test functions                                   | 22,349 |
 | E2E test functions                                    |  1,801 |
-| cmd test functions                                    |  6,024 |
+| cmd test functions                                    |  6,064 |
 | Test files (internal/)                                |    781 |
-| Test files (cmd/)                                     |    492 |
+| Test files (cmd/)                                     |    499 |
 | Test files (test/e2e/)                                |    457 |
 | Tool sub-packages tested                              |    182 |
 | Core packages tested                                  |     36 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,814 | 57.3% |
+| `TestFunc_Scenario` (2-part)           | 13,817 | 57.2% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,397 | 39.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,434 | 39.1% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (182) |         11,450 |        491 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,801 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          6,024 |        492 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,110** |  **1,730** |                                                                                                 |
+| cmd packages            |          6,064 |        499 | server entry point and developer command utilities                                              |
+| **Total**               |     **24,150** |  **1,737** |                                                                                                 |
 
 ### Core Packages
 
@@ -423,6 +423,7 @@
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
 | cmd/merge_coverage                        |   100.0% |
+| cmd/orbit_fixtures                        |      n/a |
 | cmd/release_checks                        |   100.0% |
 | cmd/release_packages                      |   100.0% |
 | cmd/reproduce_release                     |   100.0% |
@@ -1012,7 +1013,7 @@ GITLAB_COM_TOKEN=glpat-... \
   go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./test/e2e/orbit/
 ```
 
-See [Orbit Live Test Fixtures](../orbit-fixtures.md) for fixture contents, the `scripts/setup-orbit-fixtures.sh` script, and the indexer caveat.
+See [Orbit Live Test Fixtures](../orbit-fixtures.md) for fixture contents, the `cmd/orbit_fixtures` setup and indexer wait, and the indexer caveat.
 
 ## Test Infrastructure
 

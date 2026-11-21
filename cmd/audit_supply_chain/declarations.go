@@ -211,7 +211,6 @@ type scriptDeclaration struct {
 var pendingPorts = map[int]string{
 	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
-	7:  "the Orbit fixture setup and indexer wait beside cmd/gen_orbit_record",
 	8:  "the SonarCloud scan beside the coverage command",
 	13: "one command that builds and validates the npm, PyPI and NuGet packages and verifies what each registry published",
 	14: "the release stamp beside cmd/gen_lhm_manifest, written byte for byte as jq writes it today",
@@ -272,8 +271,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/packaging_checksums_test.py":           {category: scriptPortPending, item: 13},
 	"scripts/publish_npm_sh_test.py":                {category: scriptPortPending, item: 15},
 	"scripts/publish_pypi_sh_test.py":               {category: scriptPortPending, item: 15},
-	"scripts/setup-orbit-fixtures.sh":               {category: scriptPortPending, item: 7},
-	"scripts/setup_orbit_fixtures_sh_test.py":       {category: scriptPortPending, item: 7},
 	"scripts/site_check_i18n_code_test.py":          {category: scriptPortPending, item: 15},
 	"scripts/site_normalize_html_test.py":           {category: scriptPortPending, item: 15},
 	"scripts/site_version_token_test.py":            {category: scriptPortPending, item: 15},

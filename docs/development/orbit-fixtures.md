@@ -45,15 +45,15 @@ subgroups included, so every project added to `jmrp-oss` follows them:
 - **Every project carries an OSI-approved license.** Both fixture
   projects carry this repository's MIT `LICENSE`, and
   `test/fixtures/orbit/{kg,security}-fixtures/LICENSE` is the same file,
-  so a project the setup script provisions again carries it too, and a
+  so a project the setup provisions again carries it too, and a
   rerun adds it to a project that already exists without it. Both
   fixtures took theirs on 2026-10-26 by a push of their own, before the
-  script did that. GitLab
+  setup did that. GitLab
   reports the license it detects as `license.key` of
   `GET /projects/:id?license=true`; check it before moving a project in,
   a fork above all, since a repository that mixes licenses may not be
   detected as one.
-- **Every project and every group is public.** The setup script creates
+- **Every project and every group is public.** The setup creates
   its projects public unless `ORBIT_FIXTURES_VISIBILITY` says otherwise,
   and every subgroup has to be created with `visibility: public`, which
   is not necessarily the create call's default.
@@ -120,14 +120,18 @@ the API accepts the statement and returns a valid envelope, even with
 
 ```bash
 # 1. Create a personal access token with api + write_repository scopes
-# 2. Run the setup script with the namespace and token
+# 2. Run the setup with the namespace and token (or set both in .env and
+#    run make orbit-setup-fixtures)
 
 GITLAB_COM_TOKEN=glpat-... \
 ORBIT_FIXTURES_NAMESPACE=mynamespace \
-./scripts/setup-orbit-fixtures.sh
+go run ./cmd/orbit_fixtures/ setup
 ```
 
-The script is **idempotent**: it checks for existing resources through
+The setup is `cmd/orbit_fixtures`, which replaced
+`scripts/setup-orbit-fixtures.sh` (issue 1114, item 7); see
+[cmd utilities](cmd-utilities.md#orbit_fixtures) for how it is held to
+what the script did. It is **idempotent**: it checks for existing resources through
 the API and leaves those in place. A project that already exists is
 reconciled rather than skipped: every fixture file git tracks that it
 lacks is added in one commit, with the bytes committed at `HEAD` rather
@@ -144,21 +148,22 @@ merge request at all, a branch left by a run that pushed it and then failed
 to open the merge request is opened as it is, since a new commit pushed over
 it is not a fast-forward and GitLab refuses it. Only a merge request from
 `kg-fixtures` itself into `main` counts: the project is public, so a fork
-can open one from a branch of the same name, and the script merges what it
+can open one from a branch of the same name, and the setup merges what it
 picks with the operator's token. Every page of the list is read before it
 chooses, since merge requests from forks can push the fixture's own off
 the first page. The merge
 is asked for once GitLab has finished checking the merge request
-(`detailed_merge_status`), read every two seconds for at most 60 reads, and
+(`detailed_merge_status`), read every two seconds for at most 60 reads
+(`ORBIT_FIXTURES_MERGE_POLL_SECONDS` sets the seconds between two), and
 a run whose merge GitLab refuses or answers with the merge request still
-unmerged stops with GitLab's answer. Before that fix the script treated a
+unmerged stops with GitLab's answer. Before that fix the setup script treated a
 merge request in any state as provisioned and asked for the merge with a
 `POST`, a route GitLab does not have (the merge is a `PUT`), without
 reading the answer, which is how the first fixture merge request on
 GitLab.com, opened in June 2026, came to be closed unmerged in September
 while the script said it had merged it.
 The namespace may be a subgroup, as the default
-`jmrp-oss/orbit-fixtures` is: the script looks each project up by its
+`jmrp-oss/orbit-fixtures` is: the setup looks each project up by its
 full path with every slash encoded. It creates the projects public, as
 `jmrp-oss` requires; set `ORBIT_FIXTURES_VISIBILITY=private` for a
 private group of your own, since GitLab refuses a public project in a
@@ -171,14 +176,14 @@ and `make test-e2e-gitlab-com` hand this setting and the others on from
 their command line, else the environment, else `.env` (see the
 orchestrator below).
 
-### What the script creates
+### What the setup creates
 
 | Project                  | Content                                                                                                                                                                                                             | Why                                                                                                                                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `<ns>/kg-fixtures`       | MIT `LICENSE` + Python package `acme.orders` (7 source files, 2 test files) + `.gitlab-ci.yml` (4 stages, 5 jobs, SAST, Secret-Detection) + 7 labels + 1 milestone + 5 issues + 2 environments + 1 squash-merged MR | Populates File, Definition, Directory, ImportedSymbol, Branch, MergeRequest, MergeRequestDiff, MergeRequestDiffFile, Note, Label, Milestone, WorkItem, Pipeline, Job, Stage, Environment |
 | `<ns>/security-fixtures` | MIT `LICENSE` + intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates                                                       | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner                                                                   |
 
-The script provisions everything from `test/fixtures/orbit/{kg,security}-fixtures/`
+The setup provisions everything from `test/fixtures/orbit/{kg,security}-fixtures/`
 in this repo. The fixture content is committed and reproducible, so
 no external state is needed.
 
@@ -188,7 +193,7 @@ The end-to-end fixture lifecycle has four phases: validate the environment, prov
 
 ```mermaid
 flowchart LR
-    A[setup-orbit-fixtures.sh] -->|idempotent POSTs| B[GitLab.com API]
+    A[orbit_fixtures setup] -->|idempotent requests| B[GitLab.com API]
     B -->|creates| C[kg-fixtures project]
     B -->|creates| D[security-fixtures project]
     C -->|push events| E[Orbit indexer]
@@ -199,7 +204,8 @@ flowchart LR
 
 ## Optional: mirror a public GitLab repo
 
-The setup script accepts `--mirror-cli` to additionally push
+The setup accepts `-mirror-cli` (`ORBIT_FIXTURES_MIRROR=true` through
+make) to additionally push
 `gitlab-org/cli` (the glab CLI, ~10k files, 1k stars, 1000+ branches)
 into `<ns>/glab-mirror`. The mirror takes several minutes and adds
 real-world data: hundreds of MergeRequests, real CI runs on main,
@@ -208,7 +214,7 @@ real cross-file `ImportedSymbol` references.
 ```bash
 GITLAB_COM_TOKEN=glpat-... \
 ORBIT_FIXTURES_NAMESPACE=mynamespace \
-./scripts/setup-orbit-fixtures.sh --mirror-cli
+go run ./cmd/orbit_fixtures/ setup -mirror-cli
 ```
 
 Re-runs are safe: the mirror step checks for project existence and
@@ -226,7 +232,7 @@ The Orbit indexer is eventually consistent. After a fresh push:
    rather than strict equality, so a transient re-indexing blip
    surfaces as `PASS` with a low `row_count`, not a hard failure.
 
-If `row_count` is consistently 0 long after the script completes, the
+If `row_count` is consistently 0 long after the setup completes, the
 indexer has not yet linked the resource. Re-run the test after a
 few minutes, or ask GraphQL what the indexer knows,
 `group(fullPath: "<ns>") { orbit { indexing { state projects { indexed notIndexed } } } }`

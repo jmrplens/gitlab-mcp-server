@@ -1,0 +1,338 @@
+{
+  "env": {},
+  "flag": "--skip-mirror",
+  "git": [
+    "clone {base}/plens1/kg-fixtures.git",
+    "push origin main",
+    "clone {base}/plens1/security-fixtures.git",
+    "push origin main"
+  ],
+  "requests": [
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/groups/plens1",
+      "query": ""
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/plens1%2Fkg-fixtures",
+      "query": ""
+    },
+    {
+      "body": "{\n  \"name\": \"kg-fixtures\",\n  \"path\": \"kg-fixtures\",\n  \"namespace_id\": 1,\n  \"description\": \"Knowledge Graph fixture project: source code with imports, CI pipelines, issues, milestones, merge requests. Designed to exercise every entity type in the Orbit ontology.\",\n  \"visibility\": \"public\",\n  \"initialize_with_readme\": true,\n  \"default_branch\": \"main\",\n  \"issues_enabled\": true,\n  \"merge_requests_enabled\": true,\n  \"wiki_enabled\": false\n}",
+      "method": "POST",
+      "path": "/api/v4/projects",
+      "query": ""
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=bug"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=enhancement"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=documentation"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=good%20first%20issue"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=ci"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=security"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/labels",
+      "query": "search=fixture"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/milestones",
+      "query": "title=v0.2%20%E2%80%94%20KG%20coverage%20milestone"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/issues",
+      "query": "search=Add%20reserve_stock%20seed%20helper"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/issues",
+      "query": "search=Index%20additional%20entity%20types%20in%20graph_status"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/issues",
+      "query": "search=Document%20the%20Orbit%20query%20DSL"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/issues",
+      "query": "search=Trigger%20security%20scanning%20for%20security%20domain"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/issues",
+      "query": "search=Tighten%20ruff%20rules%20in%20CI"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/environments",
+      "query": "name=staging"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/environments",
+      "query": "name=production"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/10/merge_requests",
+      "query": "source_branch=feature/restock-helper&state=all&per_page=100&page=1"
+    },
+    {
+      "body": "",
+      "method": "GET",
+      "path": "/api/v4/projects/plens1%2Fsecurity-fixtures",
+      "query": ""
+    },
+    {
+      "body": "{\n  \"name\": \"security-fixtures\",\n  \"path\": \"security-fixtures\",\n  \"namespace_id\": 1,\n  \"description\": \"Security scan fixture: intentional vulnerable patterns so SAST, Secret Detection, and Dependency Scanning report findings.\",\n  \"visibility\": \"public\",\n  \"initialize_with_readme\": true,\n  \"default_branch\": \"main\",\n  \"issues_enabled\": true,\n  \"merge_requests_enabled\": true,\n  \"wiki_enabled\": false\n}",
+      "method": "POST",
+      "path": "/api/v4/projects",
+      "query": ""
+    }
+  ],
+  "routes": {
+    "GET /api/v4/groups/plens1": {
+      "body": {
+        "full_path": "plens1",
+        "id": 1
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/10": {
+      "body": {
+        "id": 10,
+        "visibility": "public"
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/10/environments": {
+      "body": [
+        {
+          "id": 700
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/issues": {
+      "body": [
+        {
+          "id": 600
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/labels": {
+      "body": [
+        {
+          "id": 1,
+          "name": "bug"
+        },
+        {
+          "id": 2,
+          "name": "enhancement"
+        },
+        {
+          "id": 3,
+          "name": "documentation"
+        },
+        {
+          "id": 4,
+          "name": "good first issue"
+        },
+        {
+          "id": 5,
+          "name": "ci"
+        },
+        {
+          "id": 6,
+          "name": "security"
+        },
+        {
+          "id": 7,
+          "name": "fixture"
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/merge_requests": {
+      "body": [
+        {
+          "iid": 1,
+          "source_project_id": 10,
+          "state": "merged",
+          "target_branch": "main",
+          "target_project_id": 10
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/milestones": {
+      "body": [
+        {
+          "id": 500
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/10/repository/tree": {
+      "body": [
+        {
+          "path": ".gitlab-ci.yml"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "pyproject.toml"
+        },
+        {
+          "path": "src/acme/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__main__.py"
+        },
+        {
+          "path": "src/acme/orders/cli.py"
+        },
+        {
+          "path": "src/acme/orders/fulfillment.py"
+        },
+        {
+          "path": "src/acme/orders/models.py"
+        },
+        {
+          "path": "src/acme/orders/pricing.py"
+        },
+        {
+          "path": "tests/test_fulfillment.py"
+        },
+        {
+          "path": "tests/test_pricing.py"
+        }
+      ],
+      "status": 200
+    },
+    "GET /api/v4/projects/20": {
+      "body": {
+        "id": 20,
+        "visibility": "public"
+      },
+      "status": 200
+    },
+    "GET /api/v4/projects/20/repository/tree": {
+      "body": [
+        {
+          "path": ".gitlab-ci.yml"
+        },
+        {
+          "path": "LICENSE"
+        },
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "pyproject.toml"
+        },
+        {
+          "path": "src/acme/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/__init__.py"
+        },
+        {
+          "path": "src/acme/orders/auth.py"
+        },
+        {
+          "path": "src/acme/orders/legacy_db.py"
+        },
+        {
+          "path": "tests/test_smoke.py"
+        }
+      ],
+      "status": 200
+    },
+    "POST /api/v4/projects#1": {
+      "body": {
+        "id": 10
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects#2": {
+      "body": {
+        "id": 20
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects/10/environments": {
+      "body": {
+        "id": 701
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects/10/issues": {
+      "body": {
+        "id": 601
+      },
+      "status": 200
+    },
+    "POST /api/v4/projects/10/milestones": {
+      "body": {
+        "id": 501
+      },
+      "status": 200
+    }
+  },
+  "scenario": "creates-both-projects",
+  "status": 0
+}

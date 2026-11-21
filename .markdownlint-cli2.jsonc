@@ -29,9 +29,7 @@
         "plan/**",
         "**/node_modules/**",
         "**/dist/**",
-        "vendor/**",
-        ".tmp-kg-fixtures/**",
-        ".tmp-*/**"
+        "vendor/**"
     ],
     // Output settings
     "noProgress": true,

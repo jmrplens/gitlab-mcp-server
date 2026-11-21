@@ -1,0 +1,9 @@
+{
+  "answers": [],
+  "requests": [],
+  "scenario": "a-timeout-below-one-read",
+  "status": 0,
+  "stderr": "  \u26a0 indexer did not catch up within 10s\n    Proceeding anyway \u2014 live test assertions are tolerant of\n    partial indexing (row_count > 0 rather than strict equality)\n",
+  "stdout": "\n=== Waiting for Orbit indexer to catch up (timeout: 10s) ===\n",
+  "timeout": "10"
+}

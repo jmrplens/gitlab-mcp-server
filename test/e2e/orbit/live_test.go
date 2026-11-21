@@ -133,7 +133,7 @@ const liveGitLabComURL = "https://gitlab.com"
 const queryCommand = "query_graph"
 
 // Fixture project names created under <namespace>/ by
-// scripts/setup-orbit-fixtures.sh. kg-fixtures populates the Project,
+// cmd/orbit_fixtures. kg-fixtures populates the Project,
 // MergeRequest, File, Milestone and Pipeline entities; security-fixtures
 // populates the Vulnerability and Finding entities. See
 // docs/development/orbit-fixtures.md for the full layout.
@@ -255,7 +255,7 @@ func projectPath(namespace, project string) string {
 }
 
 // orbitFixturesNamespace returns the namespace under which
-// scripts/setup-orbit-fixtures.sh provisioned the fixtures. Defaults
+// cmd/orbit_fixtures provisioned the fixtures. Defaults
 // to "jmrp-oss/orbit-fixtures", the subgroup that holds only the two
 // fixture projects, so a query bounded by the namespace's path counts no
 // other project of jmrp-oss. It can be overridden by the developer running
@@ -1092,7 +1092,7 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 // GitLab namespace (defaults to jmrp-oss/orbit-fixtures, configurable
 // via ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
 // literal property instead of hardcoded project ids so the test is portable
-// across namespaces: any developer who runs `scripts/setup-orbit-fixtures.sh`
+// across namespaces: any developer who runs `make orbit-setup-fixtures`
 // with their own token gets a working test surface.
 //
 // The Orbit indexer is eventually consistent: if a fresh push has not

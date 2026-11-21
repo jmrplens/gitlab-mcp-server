@@ -1,0 +1,20 @@
+{
+  "answers": [
+    "{\"data\": {\"group\": null}}"
+  ],
+  "requests": [
+    {
+      "body": "{\"query\":\"query OrbitWaitIndexer($fullPath: ID!) { group(fullPath: $fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }\",\"variables\":{\"fullPath\":\"plens1\"}}",
+      "headers": [
+        "Authorization: Bearer stand-in-token",
+        "Content-Type: application/json"
+      ],
+      "url": "{base}/api/graphql"
+    }
+  ],
+  "scenario": "a-group-gitlab-does-not-know",
+  "status": 0,
+  "stderr": "    GitLab answered the index null: Orbit is not served for plens1 to this token\n  \u26a0 indexer did not catch up within 15s\n    Proceeding anyway \u2014 live test assertions are tolerant of\n    partial indexing (row_count > 0 rather than strict equality)\n",
+  "stdout": "\n=== Waiting for Orbit indexer to catch up (timeout: 15s) ===\n  [1/1] state=null indexed=0 not_indexed=0\n",
+  "timeout": "15"
+}
