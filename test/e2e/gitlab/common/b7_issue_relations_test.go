@@ -118,6 +118,10 @@ func TestIssueParticipants_List_PagesOneParticipantAtATime(t *testing.T) {
 		assignee := fixture.NewUser(e, "issueparticipantpage")
 		fixture.AddProjectMember(e, f.project, assignee, gl.DeveloperPermissions)
 		fixture.AssignIssue(e, f.project, f.issue.IID, assignee)
+		awaitParticipant(e, assignee.Username, func() ([]*gl.BasicUser, error) {
+			listed, _, err := e.Client().GL().Issues.GetParticipants(f.project.ID, f.issue.IID, gl.WithContext(e.Ctx))
+			return listed, err
+		})
 		return f
 	}, func(e *harness.Env, surface harness.Surface, f issueFixture) {
 		assertPagesOneAtATime(e, e.On(surface), actionIssueParticipants, f.params(),
