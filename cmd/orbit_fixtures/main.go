@@ -25,7 +25,9 @@ wait-indexer takes no flag or argument.
 Settings come from the environment: GITLAB_COM_TOKEN (required),
 ORBIT_FIXTURES_NAMESPACE (default jmrp-oss/orbit-fixtures),
 ORBIT_FIXTURES_GITLAB_URL (default https://gitlab.com),
-ORBIT_FIXTURES_VISIBILITY (setup, default public) and
+ORBIT_FIXTURES_VISIBILITY (setup, default public),
+ORBIT_FIXTURES_MERGE_POLL_SECONDS (setup, seconds between two reads of the
+fixture merge request while GitLab checks it, default 2) and
 ORBIT_FIXTURES_INDEXER_TIMEOUT (wait-indexer, seconds, default 600).
 `
 

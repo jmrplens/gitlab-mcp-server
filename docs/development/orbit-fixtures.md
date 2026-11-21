@@ -153,7 +153,8 @@ picks with the operator's token. Every page of the list is read before it
 chooses, since merge requests from forks can push the fixture's own off
 the first page. The merge
 is asked for once GitLab has finished checking the merge request
-(`detailed_merge_status`), read every two seconds for at most 60 reads, and
+(`detailed_merge_status`), read every two seconds for at most 60 reads
+(`ORBIT_FIXTURES_MERGE_POLL_SECONDS` sets the seconds between two), and
 a run whose merge GitLab refuses or answers with the merge request still
 unmerged stops with GitLab's answer. Before that fix the setup script treated a
 merge request in any state as provisioned and asked for the merge with a

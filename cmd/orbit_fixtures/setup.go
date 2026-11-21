@@ -10,10 +10,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -87,6 +89,11 @@ func setupFromArgs(args []string, getenv func(string) string, stderr io.Writer) 
 		fmt.Fprintf(stderr, "%s setup: unknown argument %q\n", toolName, flags.Arg(0))
 		return setupConfig{}, 2, false
 	}
+	mergeInterval, err := mergePollInterval(getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "%s setup: %v\n", toolName, err)
+		return setupConfig{}, 2, false
+	}
 	token := getenv("GITLAB_COM_TOKEN")
 	gitlabURL := strings.TrimSuffix(firstNonEmpty(getenv("ORBIT_FIXTURES_GITLAB_URL"), defaultGitLabURL), "/")
 	return setupConfig{
@@ -99,9 +106,23 @@ func setupFromArgs(args []string, getenv func(string) string, stderr io.Writer) 
 		api:           gitlabAPI{root: gitlabURL + "/api/v4", token: token, client: httpClient()},
 		git:           runGit,
 		mergePolls:    60,
-		mergeInterval: 2 * time.Second,
+		mergeInterval: mergeInterval,
 		sleep:         sleepContext,
 	}, 0, true
+}
+
+// mergePollInterval is the wait between two reads of the fixture merge
+// request while GitLab checks it: ORBIT_FIXTURES_MERGE_POLL_SECONDS seconds, 2
+// by default, read as the script's sleep read it, so a fraction counts and 0
+// reads again at once. A value that is not a number of seconds, zero or more,
+// or that a duration cannot hold, is refused rather than waited on.
+func mergePollInterval(getenv func(string) string) (time.Duration, error) {
+	value := firstNonEmpty(getenv("ORBIT_FIXTURES_MERGE_POLL_SECONDS"), "2")
+	seconds, err := strconv.ParseFloat(value, 64)
+	if err != nil || !(seconds >= 0) || seconds >= float64(math.MaxInt64)/float64(time.Second) {
+		return 0, fmt.Errorf("ORBIT_FIXTURES_MERGE_POLL_SECONDS=%q is not a number of seconds, zero or more", value)
+	}
+	return time.Duration(seconds * float64(time.Second)), nil
 }
 
 // runSetup provisions the fixtures and returns the exit code: 0 when every

@@ -31,8 +31,11 @@
 //
 // Both read GITLAB_COM_TOKEN, ORBIT_FIXTURES_NAMESPACE (jmrp-oss/orbit-fixtures
 // by default) and ORBIT_FIXTURES_GITLAB_URL (https://gitlab.com by default);
-// setup also reads ORBIT_FIXTURES_VISIBILITY (public by default), and
-// wait-indexer ORBIT_FIXTURES_INDEXER_TIMEOUT, in seconds (600 by default).
+// setup also reads ORBIT_FIXTURES_VISIBILITY (public by default) and
+// ORBIT_FIXTURES_MERGE_POLL_SECONDS, the seconds between two reads of the
+// fixture merge request while GitLab checks it (2 by default, a fraction
+// allowed), and wait-indexer ORBIT_FIXTURES_INDEXER_TIMEOUT, in seconds (600
+// by default).
 // make orbit-setup-fixtures and make orbit-wait-indexer pass them on from the
 // make command line, the environment or .env.
 //
