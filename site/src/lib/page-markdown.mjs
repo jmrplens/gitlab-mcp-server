@@ -673,14 +673,22 @@ function renderSelfClosing(name, attributes, context) {
  * @property {(content: unknown, context: Context) => string} [renderHome]
  */
 
+// The containers whose children are sibling components and nothing else. MDX
+// ignores how far each child is indented, and the pages indent them unevenly
+// (the first <Card> of a grid one space in, the rest four), so a child of one
+// of these is placed at the container's own indentation rather than its own:
+// kept, the deeper cards would nest under the first as a sub-list.
+const LAYOUT = new Set(["CardGrid", "Tabs", "Facts"]);
+
 /**
  * Reduces MDX to markdown, resolving components as it goes.
  *
  * @param {string} source code already masked
  * @param {Context} context
+ * @param {boolean} [flat] children of a LAYOUT container, placed at no indentation of their own
  * @returns {string}
  */
-function reduce(source, context) {
+function reduce(source, context, flat = false) {
 	let out = "";
 	let rest = source;
 	for (;;) {
@@ -693,7 +701,7 @@ function reduce(source, context) {
 			throw new Error(`${context.file}: </${name}> without an opening tag`);
 		}
 		const attributes = parseAttributes(raw, context.bindings, context.file);
-		const indent = (/(?:^|\n)([ \t]*)$/.exec(out) ?? ["", ""])[1];
+		const indent = flat ? "" : (/(?:^|\n)([ \t]*)$/.exec(out) ?? ["", ""])[1];
 		if (selfClosing) {
 			out += indentBy(renderSelfClosing(name, attributes, context), indent);
 			continue;
@@ -721,7 +729,7 @@ function reduce(source, context) {
 			renderWrapper(
 				name,
 				attributes,
-				dedent(reduce(children, context)),
+				dedent(reduce(children, context, LAYOUT.has(name))),
 				context,
 			),
 			indent,

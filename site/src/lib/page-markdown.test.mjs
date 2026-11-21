@@ -150,6 +150,24 @@ describe("components", () => {
 		assert.match(out, /^- \*\*Review\*\*\n\n {2}First\.\n\n {2}Second\.$/m);
 	});
 
+	test("cards of a grid stay siblings however unevenly they are indented", () => {
+		const out = reduce(
+			[
+				"<CardGrid>",
+				' <Card title="Review">',
+				"  First.",
+				" </Card>",
+				"",
+				'    <Card title="Deploy">',
+				"     Second.",
+				"    </Card>",
+				"</CardGrid>",
+			].join("\n"),
+		);
+		assert.match(out, /^- \*\*Review\*\*$/m);
+		assert.match(out, /^- \*\*Deploy\*\*\n\n {2}Second\.$/m);
+	});
+
 	test("FAQ renders the frontmatter questions with their tokens resolved", () => {
 		const out = reduce(
 			'import FAQ from "../../components/FAQ.astro";\n\n<FAQ />',
