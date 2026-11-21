@@ -129,6 +129,9 @@ exec "$REAL_GIT" "$@"
 
 MR = API + "/projects/%d/merge_requests" % KG_ID
 BRANCH = API + "/projects/%d/repository/branches/feature%%2Frestock-helper" % KG_ID
+# What GitLab says of a merge request opened from kg-fixtures itself into
+# main, the only one the script may take for the fixture's.
+FROM_FIXTURE = {"source_project_id": KG_ID, "target_project_id": KG_ID, "target_branch": "main"}
 
 
 def route_file(key):
@@ -172,7 +175,7 @@ def existing_fixtures(namespace="plens1"):
         "GET " + API + "/projects/%d/milestones" % KG_ID: [],
         "GET " + API + "/projects/%d/issues" % KG_ID: [],
         "GET " + API + "/projects/%d/environments" % KG_ID: [],
-        "GET " + API + "/projects/%d/merge_requests" % KG_ID: [{"iid": 1, "state": "merged"}],
+        "GET " + API + "/projects/%d/merge_requests" % KG_ID: [dict(FROM_FIXTURE, iid=1, state="merged")],
         "POST " + API + "/projects/%d/milestones" % KG_ID: {"id": 501},
         "POST " + API + "/projects/%d/issues" % KG_ID: {"id": 601},
         "POST " + API + "/projects/%d/environments" % KG_ID: {"id": 701},
@@ -703,8 +706,14 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         return log
 
     def merge_routes(self, listed, *answers):
-        """The fixtures with the merge requests listed from the branch, and answers added."""
+        """The fixtures with the merge requests listed from the branch, and answers added.
+
+        A merge request listed is one from kg-fixtures into main, unless it
+        names its own projects or target branch.
+        """
         routes = existing_fixtures()
+        if isinstance(listed, list):
+            listed = [dict(FROM_FIXTURE, **mr) for mr in listed]
         routes["GET " + MR] = listed
         for key, answer in answers:
             routes[key] = answer
@@ -881,6 +890,59 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("cannot tell whether branch feature/restock-helper exists", result.stderr)
         self.assertFalse(os.path.exists(git_log), "nothing is pushed over a branch that could not be read")
         self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+
+    # The fixture projects are public, so anyone can fork kg-fixtures and open
+    # a merge request into it from a branch of the fixture branch's name. The
+    # list filters by branch name only, and the run merges what it picks with
+    # the operator's token, so a merge request is the fixture's only when it
+    # comes from kg-fixtures itself and targets main.
+
+    def test_a_merge_request_from_a_fork_is_never_merged_or_reopened(self):
+        self.use_stand_in_git()
+        routes = self.merge_routes(
+            [
+                {"iid": 5, "state": "opened", "source_project_id": 99},
+                {"iid": 4, "state": "closed", "source_project_id": 99},
+                {"iid": 3, "state": "merged", "source_project_id": 99},
+            ],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 6, "state": "opened"}),
+            ("GET " + MR + "/6", {"iid": 6, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/6/merge", {"iid": 6, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/6/merge"])
+        self.assertIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertNotIn("MR !3 is merged", result.stdout)
+        self.assertIn("MR !6 merged", result.stdout)
+
+    def test_a_merge_request_into_another_project_or_branch_is_not_the_fixture(self):
+        self.use_stand_in_git()
+        routes = self.merge_routes(
+            [
+                {"iid": 5, "state": "opened", "target_branch": "release"},
+                {"iid": 4, "state": "opened", "target_project_id": 99},
+                {"iid": 3, "state": "merged", "target_branch": "release"},
+            ],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 6, "state": "opened"}),
+            ("GET " + MR + "/6", {"iid": 6, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/6/merge", {"iid": 6, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/6/merge"])
+        self.assertIn("MR !6 merged", result.stdout)
+
+    def test_the_fixture_merge_request_is_picked_beside_one_from_a_fork(self):
+        routes = self.merge_routes(
+            [{"iid": 7, "state": "opened", "source_project_id": 99}, {"iid": 2, "state": "merged"}],
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertIn("MR !2 is merged", result.stdout)
 
 
 if __name__ == "__main__":
