@@ -125,11 +125,18 @@ function mask(text) {
 	return out;
 }
 
+// An empty code line: the marker alone on its line, or behind the indentation
+// and the `>` a blockquote put before it. A `>` of the page's own code is
+// masked by then, so every `>` this matches is a quote marker.
+const EMPTY_CODE_LINE = /^([ \t>]*?)[ \t]*\u{ffffd}[ \t]*$/u;
+
 /** @param {string} text @returns {string} the text with every mask lifted */
 function unmask(text) {
 	return text
 		.split("\n")
-		.map((line) => (line.trim() === EMPTY_LINE ? "" : line))
+		.map((line) =>
+			line.replace(EMPTY_CODE_LINE, (_, prefix) => prefix.trimEnd()),
+		)
 		.join("\n")
 		.replace(/[\u{f0000}-\u{ffffd}]/gu, (char) =>
 			String.fromCodePoint((char.codePointAt(0) ?? MASK_BASE) - MASK_BASE),
