@@ -831,6 +831,52 @@ func TestCreatePAT_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest(t *testin
 	}
 }
 
+// TestCreatePAT_AGrantAnOlderGitLabRefuses_NamesGitLab196 holds the hint for
+// the refusal an instance older than GitLab 19.6 answers a grant with: the
+// administrator route requires classic scopes there and ignores
+// granular_scopes, so it says scopes is missing. The hint follows that
+// refusal of a grant alone; a classic call refused the same way, and a grant
+// refused for another reason, keep the route's own hint.
+func TestCreatePAT_AGrantAnOlderGitLabRefuses_NamesGitLab196(t *testing.T) {
+	grant := []tokengrantdata.GranularScopeInput{{Access: "user", Permissions: []string{"read_user"}}}
+	for _, tc := range []struct {
+		name     string
+		input    CreatePATInput
+		body     string
+		wantHint bool
+	}{
+		{
+			name:     "a grant GitLab 19.5 refuses",
+			input:    CreatePATInput{UserID: 42, Name: "tok", GranularScopes: grant},
+			body:     `{"error":"scopes is missing"}`,
+			wantHint: true,
+		},
+		{
+			name:  "a grant refused for another reason",
+			input: CreatePATInput{UserID: 42, Name: "tok", GranularScopes: grant},
+			body:  `{"error":"name is missing"}`,
+		},
+		{
+			name:  "classic scopes refused the same way",
+			input: CreatePATInput{UserID: 42, Name: "tok", Scopes: []string{"api"}},
+			body:  `{"error":"scopes is missing"}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, tc.body)
+			}))
+			_, err := CreatePAT(t.Context(), client, tc.input)
+			if err == nil {
+				t.Fatal("CreatePAT() error = nil, want the 400")
+			}
+			if got := strings.Contains(err.Error(), grantNeedsGitLab196Hint); got != tc.wantHint {
+				t.Errorf("CreatePAT() error = %q, carries the GitLab 19.6 hint = %t, want %t", err.Error(), got, tc.wantHint)
+			}
+		})
+	}
+}
+
 // TestCreatePAT_EmptyScopes asserts that CreatePAT refuses a token with no
 // scopes with an error naming the field, before any request.
 func TestCreatePAT_EmptyScopes(t *testing.T) {

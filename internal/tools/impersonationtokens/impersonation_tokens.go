@@ -19,6 +19,12 @@ import (
 
 const errUserIDPositive = "user_id must be a positive integer"
 
+// grantNeedsGitLab196Hint explains the 400 an instance older than GitLab 19.6
+// answers a grant on the administrator token route with: the route requires
+// classic scopes there and ignores granular_scopes, so the refusal names the
+// parameter the caller did not send rather than the one it did.
+const grantNeedsGitLab196Hint = "the administrator route takes granular_scopes from GitLab 19.6 on; an older instance requires classic scopes there, so send scopes instead, or create the fine-grained token on GitLab 19.6 or later"
+
 // Output represents an impersonation token: what [gl.ImpersonationToken]
 // decodes, its description and granular_scopes (set on a granular token the
 // endpoint asked them for) included, plus what
@@ -298,6 +304,9 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessToken(input.UserID, opts, gl.WithContext(ctx))
+	if err != nil && granular != nil && toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, "scopes is missing") {
+		return PATOutput{}, toolutil.WrapErrWithHint("create_personal_access_token", err, grantNeedsGitLab196Hint)
+	}
 	if err != nil {
 		return PATOutput{}, tokengrantdata.WrapCreateErr("create_personal_access_token", err, granular != nil, toolutil.IsPermissionRefusal,
 			"creating PAT for another user requires admin token; scopes must include valid PAT scopes; expires_at format YYYY-MM-DD")
