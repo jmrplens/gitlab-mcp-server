@@ -579,20 +579,32 @@ try:
 except Exception: pass' 2>/dev/null
 }
 
+# api_body_is_object  ->  succeeds when API_BODY is one JSON object, the shape
+#   of a merge request, and fails on anything else: null, a list, a number, or
+#   a body that is not JSON at all.
+api_body_is_object() {
+  printf '%s' "$API_BODY" | python3 -c 'import json,sys
+try:
+    sys.exit(0 if isinstance(json.load(sys.stdin), dict) else 1)
+except Exception:
+    sys.exit(1)' 2>/dev/null
+}
+
 # wait_for_mergeability IID
 #   GitLab decides whether a merge request can be merged asynchronously, after
 #   it is opened or reopened, and refuses a merge asked for while it is still
 #   deciding (#1428). Reads the merge request until detailed_merge_status says
 #   the check has ended, at most MERGE_POLLS times, and fails on a read GitLab
-#   does not answer. An answer without the field, from a GitLab older than it,
-#   leaves the merge itself to say whether it can be made.
+#   does not answer, or answers with no merge request in it. An answer that is
+#   one without the field, from a GitLab older than it, leaves the merge itself
+#   to say whether it can be made.
 MERGE_POLLS=60
 MERGE_POLL_SECONDS="${ORBIT_FIXTURES_MERGE_POLL_SECONDS:-2}"
 wait_for_mergeability() {
   local iid="$1" status="" _
   for _ in $(seq 1 "$MERGE_POLLS"); do
     api_request GET "/projects/$KG_ID/merge_requests/$iid"
-    if [ "$API_STATUS" != "200" ]; then
+    if [ "$API_STATUS" != "200" ] || ! api_body_is_object; then
       echo "    ✗ cannot read MR !$iid (HTTP $API_STATUS): $API_BODY" >&2
       return 1
     fi
