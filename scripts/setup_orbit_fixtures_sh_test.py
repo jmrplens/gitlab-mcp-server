@@ -81,6 +81,11 @@ key=${key//\//!}
 status=404
 answer="$CURL_ROUTES/$key"
 [ -n "$page" ] && [ -f "$CURL_ROUTES/$key@$page" ] && answer="$CURL_ROUTES/$key@$page"
+# The nth request to a route takes the answer kept as <route>#<n> when there
+# is one, for a route whose answer changes between two reads.
+calls=$(( $(cat "$CURL_ROUTES/.calls-$key" 2>/dev/null || echo 0) + 1 ))
+printf '%s' "$calls" > "$CURL_ROUTES/.calls-$key"
+[ -f "$CURL_ROUTES/$key#$calls" ] && answer="$CURL_ROUTES/$key#$calls"
 if [ -f "$answer" ]; then
   cat "$answer"
   status=200
@@ -91,6 +96,42 @@ fi
 [ "$want_status" = 1 ] && printf '\n%s' "$status"
 exit 0
 """
+
+
+# A stand-in git for the cases that push the fixture branch: a clone copies
+# the kg-fixtures fixture into the directory named last, and a push is logged
+# with the branch it pushes. GitLab.com refuses a push that carries no token
+# with "HTTP Basic: Access denied", so the stand-in does too, logging it as
+# refused, unless the push carries the token as a -c value or the work tree
+# was configured with it: a -c value given to the clone is not kept in the
+# clone's configuration, so it does not reach the push. The steps between
+# them do nothing, and every other command (the ls-files and show the
+# reconciliation reads) goes to the real git.
+GIT = r"""#!/bin/sh
+for last; do :; done
+header=
+for a; do case "$a" in http.extraHeader=*) header=${a#http.extraHeader=} ;; esac; done
+case " $* " in
+  *" clone "*) mkdir -p "$last" && cp -R "$GIT_FIXTURE/." "$last/" && printf 'clone\n' >> "$GIT_LOG"; exit 0 ;;
+  *" config "*" http.extraHeader "*) printf '%s' "$last" > .stand-in-header; exit 0 ;;
+  *" push "*)
+    if [ -z "$header" ] && [ -f .stand-in-header ]; then header=$(cat .stand-in-header); fi
+    if [ "$header" != "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" ]; then
+      printf 'push %s refused\n' "$last" >> "$GIT_LOG"
+      echo "remote: HTTP Basic: Access denied" >&2
+      exit 128
+    fi
+    printf 'push %s\n' "$last" >> "$GIT_LOG"; exit 0 ;;
+  *" checkout "*|*" add "*|*" commit "*|*" config "*) exit 0 ;;
+esac
+exec "$REAL_GIT" "$@"
+"""
+
+MR = API + "/projects/%d/merge_requests" % KG_ID
+BRANCH = API + "/projects/%d/repository/branches/feature%%2Frestock-helper" % KG_ID
+# What GitLab says of a merge request opened from kg-fixtures itself into
+# main, the only one the script may take for the fixture's.
+FROM_FIXTURE = {"source_project_id": KG_ID, "target_project_id": KG_ID, "target_branch": "main"}
 
 
 def route_file(key):
@@ -134,7 +175,7 @@ def existing_fixtures(namespace="plens1"):
         "GET " + API + "/projects/%d/milestones" % KG_ID: [],
         "GET " + API + "/projects/%d/issues" % KG_ID: [],
         "GET " + API + "/projects/%d/environments" % KG_ID: [],
-        "GET " + API + "/projects/%d/merge_requests" % KG_ID: [{"iid": 1}],
+        "GET " + API + "/projects/%d/merge_requests" % KG_ID: [dict(FROM_FIXTURE, iid=1, state="merged")],
         "POST " + API + "/projects/%d/milestones" % KG_ID: {"id": 501},
         "POST " + API + "/projects/%d/issues" % KG_ID: {"id": 601},
         "POST " + API + "/projects/%d/environments" % KG_ID: {"id": 701},
@@ -168,6 +209,9 @@ class SetupOrbitFixturesTest(unittest.TestCase):
                 "GITLAB_COM_TOKEN": "stand-in-token",
                 "ORBIT_FIXTURES_NAMESPACE": "plens1",
                 "ORBIT_FIXTURES_GITLAB_URL": "https://gitlab.example.test",
+                # The stand-in answers at once, so the wait between two reads
+                # of a merge request being checked only slows the suite.
+                "ORBIT_FIXTURES_MERGE_POLL_SECONDS": "0",
             }
         )
 
@@ -638,6 +682,267 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         )
         for row in self.request_bodies("PUT"):
             self.assertEqual(json.loads(row["body"]), {"visibility": visibility})
+
+    # The fixture merge request (#1428). The script used to treat a merge
+    # request from the fixture branch in any state as provisioned, and to ask
+    # for the merge of a new one with a POST, which GitLab does not route (the
+    # merge is a PUT), printing "merged" whatever the answer was:
+    # plens1/kg-fixtures!1 was never merged and a rerun never repaired it.
+
+    def use_stand_in_git(self):
+        """Puts the stand-in git first on PATH and returns the log it writes."""
+        git = os.path.join(self.tmp, "bin", "git")
+        with open(git, "w") as f:
+            f.write(GIT)
+        os.chmod(git, 0o755)
+        log = os.path.join(self.tmp, "git.log")
+        self.env.update(
+            {
+                "REAL_GIT": shutil.which("git"),
+                "GIT_FIXTURE": os.path.join(ROOT, "test", "fixtures", "orbit", "kg-fixtures"),
+                "GIT_LOG": log,
+            }
+        )
+        return log
+
+    def merge_routes(self, listed, *answers):
+        """The fixtures with the merge requests listed from the branch, and answers added.
+
+        A merge request listed is one from kg-fixtures into main, unless it
+        names its own projects or target branch.
+        """
+        routes = existing_fixtures()
+        if isinstance(listed, list):
+            listed = [dict(FROM_FIXTURE, **mr) for mr in listed]
+        routes["GET " + MR] = listed
+        for key, answer in answers:
+            routes[key] = answer
+        return routes
+
+    def test_a_merged_mr_is_left_alone(self):
+        result = self.run_script(self.merge_routes([{"iid": 2, "state": "closed"}, {"iid": 3, "state": "merged"}]))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertIn("MR !3 is merged", result.stdout)
+
+    def test_an_open_mr_is_merged_once_gitlab_has_checked_it(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "opened"}],
+            ("GET " + MR + "/1#1", {"iid": 1, "state": "opened", "detailed_merge_status": "unchecked"}),
+            ("GET " + MR + "/1#2", {"iid": 1, "state": "opened", "detailed_merge_status": "checking"}),
+            ("GET " + MR + "/1", {"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/1/merge", {"iid": 1, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("GET")].count(MR + "/1"), 3)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/1/merge"])
+        self.assertFalse(
+            [r for r in self.requests("POST") if r["path"].startswith(MR)], "the merge is a PUT"
+        )
+        body = json.loads(self.request_bodies("PUT")[0]["body"])
+        self.assertTrue(body["squash"])
+        self.assertTrue(body["should_remove_source_branch"])
+        self.assertIn("MR !1 merged", result.stdout)
+
+    def test_a_refused_merge_stops_the_run(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "opened"}],
+            ("GET " + MR + "/1", {"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/1/merge", (405, {"message": "405 Method Not Allowed"})),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("405 Method Not Allowed", result.stderr)
+        self.assertNotIn("MR !1 merged", result.stdout)
+        self.assertNotIn(">>> fixture: plens1/security-fixtures", result.stdout)
+
+    def test_a_merge_answered_with_an_unmerged_mr_stops_the_run(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "opened"}],
+            ("GET " + MR + "/1", {"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/1/merge", {"iid": 1, "state": "opened"}),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("MR !1 is opened after the merge", result.stderr)
+        self.assertNotIn("MR !1 merged", result.stdout)
+
+    def test_a_check_that_never_ends_stops_the_run_before_any_merge(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "opened"}],
+            ("GET " + MR + "/1", {"iid": 1, "state": "opened", "detailed_merge_status": "checking"}),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("still being checked", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_an_unreadable_mr_stops_the_run_before_any_merge(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "opened"}],
+            ("GET " + MR + "/1", (500, {"message": "boom"})),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot read MR !1", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_an_unreadable_mr_list_stops_the_run(self):
+        routes = self.merge_routes((500, {"message": "boom"}))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot list the merge requests", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+
+    def test_a_closed_mr_whose_branch_exists_is_reopened_and_merged(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "closed"}],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("PUT " + MR + "/1", {"iid": 1, "state": "opened"}),
+            ("GET " + MR + "/1", {"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/1/merge", {"iid": 1, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/1", MR + "/1/merge"])
+        self.assertEqual(json.loads(self.request_bodies("PUT")[0]["body"]), {"state_event": "reopen"})
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertIn("MR !1 reopened", result.stdout)
+        self.assertIn("MR !1 merged", result.stdout)
+
+    def test_a_refused_reopen_stops_the_run(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "closed"}],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("PUT " + MR + "/1", (403, {"message": "403 Forbidden"})),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not reopen MR !1", result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/1"])
+
+    def test_a_closed_mr_without_its_branch_is_recreated_and_merged(self):
+        git_log = self.use_stand_in_git()
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "closed"}],
+            ("POST " + MR, {"iid": 2, "state": "opened"}),
+            ("GET " + MR + "/2", {"iid": 2, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/2/merge", {"iid": 2, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # The push carries the token: GitLab.com refuses the branch otherwise,
+        # and the merge request then has nothing to be opened from.
+        with open(git_log) as f:
+            self.assertEqual(f.read().splitlines(), ["clone", "push feature/restock-helper"])
+        self.assertIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/2/merge"])
+        self.assertIn("MR !2 merged", result.stdout)
+
+    def test_an_unreadable_branch_stops_the_run(self):
+        routes = self.merge_routes(
+            [{"iid": 1, "state": "closed"}],
+            ("GET " + BRANCH, (500, {"message": "boom"})),
+        )
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot tell whether branch feature/restock-helper exists", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_a_new_mr_answered_without_an_iid_stops_the_run(self):
+        self.use_stand_in_git()
+        routes = self.merge_routes([], ("POST " + MR, (409, {"message": ["Another open merge request already exists"]})))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("could not open the fixture MR", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    # A run that pushed the fixture branch and then failed to open its merge
+    # request leaves the branch on GitLab with no merge request from it. A new
+    # commit pushed over it is not a fast-forward, so a rerun that pushed again
+    # would be refused on every run until someone deleted the branch by hand.
+
+    def test_a_branch_left_without_an_mr_is_opened_as_it_is(self):
+        git_log = self.use_stand_in_git()
+        routes = self.merge_routes(
+            [],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 2, "state": "opened"}),
+            ("GET " + MR + "/2", {"iid": 2, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/2/merge", {"iid": 2, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(git_log), "the branch is there, so nothing is cloned or pushed")
+        self.assertIn(BRANCH, [r["path"] for r in self.requests("GET")])
+        self.assertIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/2/merge"])
+        self.assertIn("MR !2 merged", result.stdout)
+
+    def test_an_unreadable_branch_without_an_mr_stops_the_run(self):
+        git_log = self.use_stand_in_git()
+        routes = self.merge_routes([], ("GET " + BRANCH, (500, {"message": "boom"})))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot tell whether branch feature/restock-helper exists", result.stderr)
+        self.assertFalse(os.path.exists(git_log), "nothing is pushed over a branch that could not be read")
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+
+    # The fixture projects are public, so anyone can fork kg-fixtures and open
+    # a merge request into it from a branch of the fixture branch's name. The
+    # list filters by branch name only, and the run merges what it picks with
+    # the operator's token, so a merge request is the fixture's only when it
+    # comes from kg-fixtures itself and targets main.
+
+    def test_a_merge_request_from_a_fork_is_never_merged_or_reopened(self):
+        self.use_stand_in_git()
+        routes = self.merge_routes(
+            [
+                {"iid": 5, "state": "opened", "source_project_id": 99},
+                {"iid": 4, "state": "closed", "source_project_id": 99},
+                {"iid": 3, "state": "merged", "source_project_id": 99},
+            ],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 6, "state": "opened"}),
+            ("GET " + MR + "/6", {"iid": 6, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/6/merge", {"iid": 6, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/6/merge"])
+        self.assertIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertNotIn("MR !3 is merged", result.stdout)
+        self.assertIn("MR !6 merged", result.stdout)
+
+    def test_a_merge_request_into_another_project_or_branch_is_not_the_fixture(self):
+        self.use_stand_in_git()
+        routes = self.merge_routes(
+            [
+                {"iid": 5, "state": "opened", "target_branch": "release"},
+                {"iid": 4, "state": "opened", "target_project_id": 99},
+                {"iid": 3, "state": "merged", "target_branch": "release"},
+            ],
+            ("GET " + BRANCH, {"name": "feature/restock-helper"}),
+            ("POST " + MR, {"iid": 6, "state": "opened"}),
+            ("GET " + MR + "/6", {"iid": 6, "state": "opened", "detailed_merge_status": "mergeable"}),
+            ("PUT " + MR + "/6/merge", {"iid": 6, "state": "merged"}),
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([r["path"] for r in self.requests("PUT")], [MR + "/6/merge"])
+        self.assertIn("MR !6 merged", result.stdout)
+
+    def test_the_fixture_merge_request_is_picked_beside_one_from_a_fork(self):
+        routes = self.merge_routes(
+            [{"iid": 7, "state": "opened", "source_project_id": 99}, {"iid": 2, "state": "merged"}],
+        )
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertIn("MR !2 is merged", result.stdout)
 
 
 if __name__ == "__main__":
