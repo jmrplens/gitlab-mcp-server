@@ -467,15 +467,20 @@ Each surface keeps the rule in one place:
   dynamic execute uses (`actioncatalog.UnmetAlternatives`, which both read),
   rather than having a user approve a call the handler then refuses. Like the
   dynamic execute it counts a name by its presence and leaves a call naming two
-  groups of a `oneOf` to the handler. On the meta tool under `opaque` and
-  `compact` such a destructive call is still confirmed before its handler
-  refuses it.
+  groups of a `oneOf` to the handler. On the meta tool, under every mode,
+  such a destructive call is still confirmed before its handler refuses it.
 - **Meta tools**: the `opaque` envelope carries none. The `compact` and `full`
   envelopes serve each action's params schema under `$defs`, named after the
   action, and `toolutil.addMetaTool` holds a call's `params` to the definition
   of its action before the dispatcher runs, which is the check a root `allOf`
   of `if`/`then` conditionals used to make through the SDK. A call that leaves
-  `params` out is held to it as an empty object. The lockdown and the
+  `params` out is held to it as an empty object. The definition is held
+  without the combinators and conditionals at its root, as the individual
+  projection serves the action's schema, so a call completing none of the
+  alternatives an action states, or two of a `oneOf`, reaches the handler and
+  is refused in its words, which name the parameters, rather than with the
+  validator's `oneOf: did not validate against any of [<anonymous schema>
+  ...]`, which names none (issue 1884). The lockdown and the
   pagination bounds descend `$defs`, so the served definitions are closed and
   bounded as the conditionals' were. No keyword of the envelope refers to the
   definitions, and a client that drops the definitions nothing refers to, as

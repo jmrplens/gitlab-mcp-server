@@ -4,6 +4,7 @@
 package toolutil
 
 import (
+	"maps"
 	"slices"
 )
 
@@ -57,4 +58,13 @@ func dropRootCombinators(schema map[string]any) {
 			delete(schema, keyword)
 		}
 	}
+}
+
+// withoutRootCombinators returns a copy of schema without the keywords of
+// [rootCombinatorKeywords] at its root, sharing every other value with it, and
+// leaves schema as it was.
+func withoutRootCombinators(schema map[string]any) map[string]any {
+	trimmed := maps.Clone(schema)
+	dropRootCombinators(trimmed)
+	return trimmed
 }

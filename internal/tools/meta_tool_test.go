@@ -8,7 +8,9 @@ package tools
 
 import (
 	"context"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
@@ -520,6 +523,193 @@ func TestMetaSchema_DispatchParity(t *testing.T) {
 	if responses["opaque"] != responses["full"] {
 		t.Errorf("opaque vs full response differ:\n  opaque=%q\n  full=%q", responses["opaque"], responses["full"])
 	}
+}
+
+// TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerNamingTheParams
+// drives three actions that state alternatives at the root of their schema,
+// a snippet create, the LDAP group link and a token create that takes scopes
+// or granular_scopes, through their meta tool under the compact and full
+// parameter schema modes, with a placeholder in every required input and no
+// name of any group, and then with the names of two groups, and requires the
+// refusal their handler gives, which names a name of every group, before any
+// request reaches GitLab.
+//
+// Under full the params check used to hold such a call to the oneOf as well,
+// and refused it first with the validator's "oneOf: did not validate against
+// any of [<anonymous schema> ...]", which names no parameter (issue 1884). It
+// now leaves the root alternatives to the handler, whose words
+// TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest holds every
+// such action to.
+func TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerNamingTheParams(t *testing.T) {
+	var requests atomic.Int64
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	})
+	schemas := make(map[string]map[string]any)
+	for _, action := range mustBuildActionCatalog(t, newTestClient(t, handler), ActionCatalogOptions{Tier: edition.Ultimate}).Actions() {
+		schemas[string(action.ID)] = action.Route.InputSchema
+	}
+	calls := []rootAlternativeCall{
+		{id: "snippet.create", tool: "gitlab_snippet", action: "create"},
+		{id: "group.ldap_link_add", tool: "gitlab_group", action: "ldap_link_add"},
+		{id: "user.create_current_user_pat", tool: "gitlab_user", action: "create_current_user_pat"},
+	}
+	for _, mode := range []string{toolutil.MetaParamSchemaCompact, toolutil.MetaParamSchemaFull} {
+		t.Run(mode, func(t *testing.T) {
+			t.Cleanup(SetMetaParamSchemaScoped(mode))
+			session := newIsolatedMetaMCPSession(t, handler, true)
+			for _, call := range calls {
+				t.Run(call.id, func(t *testing.T) {
+					schema := schemas[call.id]
+					groups := actioncatalog.RequiredParamAlternatives(schema)
+					if len(groups) < 2 || !actioncatalog.RequiredParamAlternativesExclusive(schema) {
+						t.Fatalf("%s states alternatives %v, want two or more exclusive groups", call.id, groups)
+					}
+					required := withPlaceholders(schema, map[string]any{}, requiredInputs(schema)...)
+					attempts := []struct {
+						name   string
+						params map[string]any
+					}{
+						{name: "naming no group", params: required},
+						{name: "naming two groups", params: withPlaceholders(schema, required, slices.Concat(groups[0], groups[1])...)},
+					}
+					for _, attempt := range attempts {
+						t.Run(attempt.name, func(t *testing.T) {
+							requests.Store(0)
+							text := callRootAlternativeMiss(t, session, call, attempt.params)
+							assertRefusalNamesEveryGroup(t, call.id+" "+attempt.name, text, groups)
+							if got := requests.Load(); got != 0 {
+								t.Errorf("%s %s sent %d request(s) before refusing, want none", call.id, attempt.name, got)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+// rootAlternativeCall names a catalog action that states alternatives at the
+// root of its schema, and the meta tool and action that serve it.
+type rootAlternativeCall struct {
+	id, tool, action string
+}
+
+// withPlaceholders returns a copy of params with a [schemaPlaceholder] under
+// each of names, read from the properties of schema.
+func withPlaceholders(schema, params map[string]any, names ...string) map[string]any {
+	props, _ := schema["properties"].(map[string]any)
+	params = maps.Clone(params)
+	for _, name := range names {
+		prop, _ := props[name].(map[string]any)
+		params[name] = schemaPlaceholder(name, prop)
+	}
+	return params
+}
+
+// callRootAlternativeMiss calls call's meta tool through session with params
+// and returns the text of the refusal it answers, failing the test when the
+// call is not refused.
+func callRootAlternativeMiss(t *testing.T, session *mcp.ClientSession, call rootAlternativeCall, params map[string]any) string {
+	t.Helper()
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      call.tool,
+		Arguments: map[string]any{"action": call.action, "params": params},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(%s, %s): %v", call.tool, call.action, err)
+	}
+	return metaErrorText(t, result)
+}
+
+// assertRefusalNamesEveryGroup requires text, the refusal of the call named by
+// label, to name a name of every one of groups and not to be the params
+// check's, whose summary of a failed oneOf names none.
+func assertRefusalNamesEveryGroup(t *testing.T, label, text string, groups [][]string) {
+	t.Helper()
+	for _, group := range groups {
+		if !slices.ContainsFunc(group, func(param string) bool { return namesParam(text, param) }) {
+			t.Errorf("%s refusal %q, want one naming one of %v", label, text, group)
+		}
+	}
+	if strings.Contains(text, "oneOf") || strings.Contains(text, "params do not match") {
+		t.Errorf("%s refusal %q is the params check's, want the handler's", label, text)
+	}
+}
+
+// namesParam reports whether text names param as a whole identifier, so that
+// "granular_scopes" does not count as naming "scopes": the characters on each
+// side of a match must not be letters, digits or underscores.
+func namesParam(text, param string) bool {
+	isIdent := func(r byte) bool {
+		return r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+	}
+	for from := 0; ; {
+		i := strings.Index(text[from:], param)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(param)
+		if (start == 0 || !isIdent(text[start-1])) && (end == len(text) || !isIdent(text[end])) {
+			return true
+		}
+		from = start + 1
+	}
+}
+
+// TestNamesParam_MatchesWholeIdentifiersOnly holds namesParam to whole
+// identifiers, so a refusal that names only granular_scopes is not read as
+// naming scopes too.
+func TestNamesParam_MatchesWholeIdentifiersOnly(t *testing.T) {
+	cases := []struct {
+		name, text, param string
+		want              bool
+	}{
+		{"embedded in a longer name", "granular_scopes is required", "scopes", false},
+		{"the longer name itself", "granular_scopes is required", "granular_scopes", true},
+		{"alone between quotes", "one of 'scopes' or 'granular_scopes' is required", "scopes", true},
+		{"at the end", "missing scopes", "scopes", true},
+		{"absent", "group_id is required", "scopes", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := namesParam(tc.text, tc.param); got != tc.want {
+				t.Errorf("namesParam(%q, %q) = %v, want %v", tc.text, tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+// schemaPlaceholder returns a placeholder for the property name, whose schema
+// is prop, that the schema accepts down to its items: a list holds one
+// placeholder item, and an object with properties carries a placeholder in
+// each property it requires. Every other value is [placeholderParam]'s. The
+// meta params check under full holds a list's items to their schema, so an
+// empty object in a list of objects is refused there before any handler runs.
+func schemaPlaceholder(name string, prop map[string]any) any {
+	typ, _ := prop["type"].(string)
+	if types, ok := prop["type"].([]any); ok {
+		for _, candidate := range types {
+			if s, _ := candidate.(string); s != "null" {
+				typ = s
+			}
+		}
+	}
+	switch typ {
+	case "array":
+		items, _ := prop["items"].(map[string]any)
+		return []any{schemaPlaceholder(name, items)}
+	case "object":
+		props, _ := prop["properties"].(map[string]any)
+		value := make(map[string]any)
+		for _, field := range requiredInputs(prop) {
+			fieldProp, _ := props[field].(map[string]any)
+			value[field] = schemaPlaceholder(field, fieldProp)
+		}
+		return value
+	}
+	return placeholderParam(name, prop)
 }
 
 // TestMetaSchema_InlineModesAdvertiseEachActionsParams verifies that ListTools
