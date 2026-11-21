@@ -629,12 +629,55 @@ func callRootAlternativeMiss(t *testing.T, session *mcp.ClientSession, call root
 func assertRefusalNamesEveryGroup(t *testing.T, label, text string, groups [][]string) {
 	t.Helper()
 	for _, group := range groups {
-		if !slices.ContainsFunc(group, func(param string) bool { return strings.Contains(text, param) }) {
+		if !slices.ContainsFunc(group, func(param string) bool { return namesParam(text, param) }) {
 			t.Errorf("%s refusal %q, want one naming one of %v", label, text, group)
 		}
 	}
 	if strings.Contains(text, "oneOf") || strings.Contains(text, "params do not match") {
 		t.Errorf("%s refusal %q is the params check's, want the handler's", label, text)
+	}
+}
+
+// namesParam reports whether text names param as a whole identifier, so that
+// "granular_scopes" does not count as naming "scopes": the characters on each
+// side of a match must not be letters, digits or underscores.
+func namesParam(text, param string) bool {
+	isIdent := func(r byte) bool {
+		return r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+	}
+	for from := 0; ; {
+		i := strings.Index(text[from:], param)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(param)
+		if (start == 0 || !isIdent(text[start-1])) && (end == len(text) || !isIdent(text[end])) {
+			return true
+		}
+		from = start + 1
+	}
+}
+
+// TestNamesParam_MatchesWholeIdentifiersOnly holds namesParam to whole
+// identifiers, so a refusal that names only granular_scopes is not read as
+// naming scopes too.
+func TestNamesParam_MatchesWholeIdentifiersOnly(t *testing.T) {
+	cases := []struct {
+		name, text, param string
+		want              bool
+	}{
+		{"embedded in a longer name", "granular_scopes is required", "scopes", false},
+		{"the longer name itself", "granular_scopes is required", "granular_scopes", true},
+		{"alone between quotes", "one of 'scopes' or 'granular_scopes' is required", "scopes", true},
+		{"at the end", "missing scopes", "scopes", true},
+		{"absent", "group_id is required", "scopes", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := namesParam(tc.text, tc.param); got != tc.want {
+				t.Errorf("namesParam(%q, %q) = %v, want %v", tc.text, tc.param, got, tc.want)
+			}
+		})
 	}
 }
 
