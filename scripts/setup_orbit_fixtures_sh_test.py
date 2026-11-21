@@ -789,6 +789,24 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertIn("cannot read MR !1", result.stderr)
         self.assertEqual(self.requests("PUT"), [])
 
+    # A read answered with a 200 and no merge request in it used to read as a
+    # check that had ended, as an answer from a GitLab older than
+    # detailed_merge_status does, and the merge was asked for.
+
+    def test_a_null_mr_read_stops_the_run_before_any_merge(self):
+        routes = self.merge_routes([{"iid": 1, "state": "opened"}], ("GET " + MR + "/1", "null"))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot read MR !1 (HTTP 200): null", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
+    def test_an_mr_read_with_no_json_stops_the_run_before_any_merge(self):
+        routes = self.merge_routes([{"iid": 1, "state": "opened"}], ("GET " + MR + "/1", "<html>"))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot read MR !1 (HTTP 200): <html>", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+
     def test_an_unreadable_mr_list_stops_the_run(self):
         routes = self.merge_routes((500, {"message": "boom"}))
         result = self.run_script(routes)
