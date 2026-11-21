@@ -233,6 +233,6 @@ const orbitRoutesRemoved = "client-go's Orbit.GetStatus, GetSchema and GetGraphS
 // from a held struct, or copied from one field by field.
 var optionStructDeclarations = map[string]optionStructDeclaration{
 	"UpdateSettingsOptions":         {categoryMapInput, "internal/tools/settings.Update decodes the input's settings map into it (json.Unmarshal), after refusing every key the struct does not model or PUT /application/settings does not declare; TestModeledSettingKeys_ReadTheOptionsStructRatherThanAList and TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare hold those keys to the struct's json tags"},
-	"ListActiveIntegrationsOptions": {categorySDKModelsUnused, "it embeds gl.ListOptions and nothing else, and GET /groups/:id/integrations declares id alone (gitlab-api-live.json, 19.5.0-ee): GitLab answers the whole list unpaged, so internal/tools/integrations.ListGroupIntegrations sends nil"},
+	"ListActiveIntegrationsOptions": {categorySDKModelsUnused, "it embeds gl.ListOptions and nothing else, and GET /groups/:id/integrations declares id alone (gitlab-api-live.json, 19.6.1-ee): GitLab answers the whole list unpaged, so internal/tools/integrations.ListGroupIntegrations sends nil"},
 	"GroupAccessLevel":              {categoryScalarList, "DefaultBranchProtectionDefaultsOptions takes allowed_to_push and allowed_to_merge as lists of {access_level}, and groups.BranchProtectionDefaultsInput offers each as []int, one access level per element, which groups.accessLevelOptions turns into one struct each"},
 }
