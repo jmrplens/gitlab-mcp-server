@@ -108,6 +108,33 @@ describe("components", () => {
 		assert.match(out, /^> \*\*Tip\*\*\n>\n> A hint\./m);
 	});
 
+	test("a blank line of a code sample in an aside or a directive stays blank", () => {
+		const out = reduce(
+			[
+				'<Aside type="note">',
+				"",
+				"```sh",
+				"echo one",
+				"",
+				"echo two",
+				"```",
+				"",
+				"</Aside>",
+				"",
+				":::tip",
+				"```sh",
+				"a",
+				"",
+				"b",
+				"```",
+				":::",
+			].join("\n"),
+		);
+		assert.match(out, /^> ```sh\n> echo one\n>\n> echo two\n> ```$/m);
+		assert.match(out, /^> ```sh\n> a\n>\n> b\n> ```$/m);
+		assert.doesNotMatch(out, /�/);
+	});
+
 	test("a directive on a Spanish page takes the Spanish default title", () => {
 		assert.match(
 			reduce(":::note\nUna nota.\n:::", { route: "es/guide" }),
