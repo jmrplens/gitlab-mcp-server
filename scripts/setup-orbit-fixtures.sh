@@ -699,11 +699,15 @@ JSON
 # closed without being merged is reopened and merged while its branch is
 # there, or replaced by a new one when the branch is gone. A merge request
 # found in any state used to count as provisioned, so a closed one was never
-# repaired.
+# repaired. Only a merge request from kg-fixtures itself into main counts: the
+# project is public, anyone can open one from a fork branch of the same name,
+# the list filters by branch name alone, and what is picked here is merged
+# with the operator's token.
 api_request GET "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all"
 fixture_mr=""
 if [ "$API_STATUS" = "200" ]; then
-  fixture_mr=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
+  fixture_mr=$(printf '%s' "$API_BODY" | KG_ID="$KG_ID" python3 -c 'import json,os,sys
+kg = int(os.environ["KG_ID"])
 try:
     listed = json.load(sys.stdin)
 except Exception:
@@ -712,7 +716,11 @@ if not isinstance(listed, list):
     sys.exit()
 found = {}
 for mr in listed:
-    if isinstance(mr, dict) and isinstance(mr.get("iid"), int) and mr.get("state") in ("merged", "opened", "closed"):
+    if not isinstance(mr, dict) or not isinstance(mr.get("iid"), int):
+        continue
+    if mr.get("source_project_id") != kg or mr.get("target_project_id") != kg or mr.get("target_branch") != "main":
+        continue
+    if mr.get("state") in ("merged", "opened", "closed"):
         found.setdefault(mr["state"], []).append(mr["iid"])
 for state in ("merged", "opened", "closed"):
     if state in found:
