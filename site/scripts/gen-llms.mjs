@@ -57,6 +57,12 @@ export const TWIN_NOTE = {
 	es: "Cada página de esta lista se sirve también como markdown en su propia ruta con `index.md` al final, que es la forma más barata de leer una página como texto.",
 };
 
+// The blog series that tells how the server was built, in each language.
+const BLOG_SERIES = {
+	en: "https://jmrp.io/blog/series/gitlab-mcp-server/",
+	es: "https://jmrp.io/es/blog/series/gitlab-mcp-server/",
+};
+
 // The repository's own machine-readable files, republished here under their own
 // names. `label` is what the index calls them; `covers` says what a retriever
 // gets by fetching that one file instead of the whole catalog. Their contents
@@ -444,6 +450,14 @@ function renderIndex({ locale, pages, version, referenceSizes }) {
 	// sibling sites use, so a reader of any of their indexes learns the same
 	// convention. scripts/check-twins.mjs holds the built index to it.
 	push(es ? TWIN_NOTE.es : TWIN_NOTE.en);
+	push();
+	// The blog series is not a page of this site, so no entry lists it; it is
+	// named here for the same reason the about page links it.
+	push(
+		es
+			? `La historia de cómo se construyó el servidor se cuenta en una serie del blog: ${BLOG_SERIES.es}`
+			: `The story of how the server was built is told in a blog series: ${BLOG_SERIES.en}`,
+	);
 	push();
 	push(
 		es

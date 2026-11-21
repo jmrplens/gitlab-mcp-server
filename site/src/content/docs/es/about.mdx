@@ -39,9 +39,11 @@ El mantenedor toma la decisión final sobre cada cambio y cada release. Los camb
 
 ## Por qué existe
 
-La mayoría de integraciones MCP para GitLab exponen una porción curada de la API —lo justo para leer un merge request o abrir un issue— porque una lista de herramientas mantenida a mano es más fácil de mantener coherente. Este proyecto partió de la premisa contraria: generar _toda_ la superficie de la API desde el catálogo, para que ninguna operación falte simplemente porque nadie llegó a añadirla, y que siga funcionando en Community Edition con solo un token de acceso personal.
+La mayoría de integraciones MCP para GitLab exponen una porción curada de la API, lo justo para leer un merge request o abrir un issue, porque una lista de herramientas mantenida a mano es más fácil de mantener coherente. Este proyecto partió de la premisa contraria: generar _toda_ la superficie de la API desde el catálogo, para que ninguna operación falte simplemente porque nadie llegó a añadirla, y que siga funcionando en Community Edition con solo un token de acceso personal.
 
 Eso creó un segundo problema. Un servidor que registra mil herramientas consume más contexto de arranque del que la mayoría de modelos puede permitirse, y por eso la superficie predeterminada son dos herramientas y no mil. El [conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) resuelve cualquier operación bajo demanda, y la [página de arquitectura](/gitlab-mcp-server/es/architecture/) recoge las decisiones de diseño que se derivan de ello.
+
+Cómo se llegó a construir así el servidor se cuenta en una [serie del blog](https://jmrp.io/es/blog/series/gitlab-mcp-server/), que incluye [lo que enseñó la API de GitLab por el camino](https://jmrp.io/es/blog/013-gitlab-mcp-server-api-lessons/) y [cómo se comprueban los tokens fine-grained por acción](https://jmrp.io/es/blog/014-gitlab-fine-grained-tokens-per-action/).
 
 ## Sin afiliación con GitLab Inc
 
