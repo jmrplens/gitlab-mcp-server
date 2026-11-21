@@ -6806,9 +6806,14 @@ type fineGrainedGitLab struct {
 	self       atomic.Int64
 	grants     atomic.Int64
 	versions   atomic.Int64
-	// onSelf, when set, runs inside the self request, after the tier was
-	// detected and before the fine-grained reads.
+	// onUser, when set, runs inside the credential probe.
+	onUser atomic.Pointer[func()]
+	// onSelf, when set, runs inside the self request, after the credential
+	// probe and before the tier is detected.
 	onSelf atomic.Pointer[func()]
+	// onLicense, when set, runs inside the tier's license read, the first
+	// request of its detection, which the stand-in answers 404.
+	onLicense atomic.Pointer[func()]
 	// onGrant, when set, runs inside the grant read.
 	onGrant atomic.Pointer[func()]
 }
@@ -6841,7 +6846,12 @@ func newFineGrainedGitLab(t *testing.T) *fineGrainedGitLab {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		run(&g.onUser)
 		_, _ = w.Write([]byte(`{"id":5,"username":"grantee"}`))
+	})
+	mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, r *http.Request) {
+		run(&g.onLicense)
+		http.NotFound(w, r)
 	})
 	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
 		g.self.Add(1)
@@ -7054,41 +7064,179 @@ func TestGetOrCreateEntryWithFacts_TakesTheVerifiersFacts(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves verifies
-// the build's two fine-grained reads take one of the pool's probe slots and
-// that the slot is not yet held while the token is being detected, which
-// comes after the tier: the slot is taken around the reads and given back.
-func TestGetOrCreate_FineGrainedReads_HoldAProbeSlotOnlyAroundThemselves(t *testing.T) {
+// TestGetOrCreate_FineGrainedBuild_HoldsTheProbesSlotThroughTheSelfReadAndNotTheTier
+// verifies where a build holds a probe slot (issue 1863): the slot the
+// credential probe takes is still held while the token's own description is
+// read, which carries the grant from GitLab 19.5, and is given back before the
+// tier is detected; the fine-grained reads after the tier take one of their
+// own, and nothing is held once the entry exists.
+func TestGetOrCreate_FineGrainedBuild_HoldsTheProbesSlotThroughTheSelfReadAndNotTheTier(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	var pool *ServerPool
-	var heldAtSelf, heldAtGrant atomic.Int64
+	var heldAtUser, heldAtSelf, heldAtLicense, heldAtGrant atomic.Int64
+	heldAtLicense.Store(-1)
+	heldAtUser.Store(-1)
+	// The first GET /user is the credential probe; the one after the entry
+	// exists reads the user behind the credential, under no slot.
+	onUser := func() { heldAtUser.CompareAndSwap(-1, int64(len(pool.probes))) }
 	onSelf := func() { heldAtSelf.Store(int64(len(pool.probes))) }
+	onLicense := func() { heldAtLicense.Store(int64(len(pool.probes))) }
 	onGrant := func() { heldAtGrant.Store(int64(len(pool.probes))) }
+	g.onUser.Store(&onUser)
 	g.onSelf.Store(&onSelf)
+	g.onLicense.Store(&onLicense)
 	g.onGrant.Store(&onGrant)
 	cfg := testConfig(g.server.URL)
 	cfg.IgnoreScopes = false
+	cfg.TierExplicit = false
 	pool = New(cfg, testFactory())
 	if _, err := pool.GetOrCreateEntry("glpat-slot", g.server.URL, nil); err != nil {
 		t.Fatalf("GetOrCreateEntry() error: %v", err)
 	}
-	if heldAtSelf.Load() != 0 || heldAtGrant.Load() != 1 || len(pool.probes) != 0 {
-		t.Errorf("slots held: %d at the token's description, %d at the grant read, %d after; want 0, 1, 0",
-			heldAtSelf.Load(), heldAtGrant.Load(), len(pool.probes))
+	got := []int64{heldAtUser.Load(), heldAtSelf.Load(), heldAtLicense.Load(), heldAtGrant.Load(), int64(len(pool.probes))}
+	if want := []int64{1, 1, 0, 1, 0}; !slices.Equal(got, want) {
+		t.Errorf("slots held at the credential probe, the token's description, the tier's license read, "+
+			"the grant read and after the build = %v, want %v", got, want)
+	}
+}
+
+// TestGetOrCreate_ConcurrentBuildsOfDistinctCredentials_ReadTheirTokensWithinTheProbeSlots
+// verifies the self reads of builds for distinct credentials are bounded
+// across builds by the probe slots (issue 1863): with every slot held by a
+// build whose token's description has not been answered yet, a build for
+// another credential sends no request for its own until a slot is free, and is
+// answered ErrCredentialProbeBusy once the probe wait passes, while the builds
+// holding the slots finish once GitLab answers them.
+func TestGetOrCreate_ConcurrentBuildsOfDistinctCredentials_ReadTheirTokensWithinTheProbeSlots(t *testing.T) {
+	g := newFineGrainedGitLab(t)
+	answer := make(chan struct{})
+	var inSelf atomic.Int64
+	park := func() {
+		inSelf.Add(1)
+		<-answer
+	}
+	g.onSelf.Store(&park)
+	cfg := testConfig(g.server.URL)
+	cfg.IgnoreScopes = false
+	pool := New(cfg, testFactory(), func(p *ServerPool) { p.probeQueueTimeout = 50 * time.Millisecond })
+
+	const latecomers = 4
+	holderErrs := make(chan error, maxConcurrentCredentialProbes)
+	lateErrs := make(chan error, latecomers)
+	var holders, late sync.WaitGroup
+	answered := false
+	answerAll := func() {
+		if !answered {
+			answered = true
+			close(answer)
+		}
+	}
+	defer func() {
+		answerAll()
+		holders.Wait()
+		late.Wait()
+	}()
+
+	for i := range maxConcurrentCredentialProbes {
+		holders.Go(func() {
+			_, err := pool.GetOrCreate("glpat-holder-"+strconv.Itoa(i), g.server.URL)
+			holderErrs <- err
+		})
+	}
+	awaitCondition(t, "every probe slot's build reading its token", func() bool {
+		return inSelf.Load() == maxConcurrentCredentialProbes
+	})
+	for i := range latecomers {
+		late.Go(func() {
+			_, err := pool.GetOrCreate("glpat-latecomer-"+strconv.Itoa(i), g.server.URL)
+			lateErrs <- err
+		})
+	}
+	awaitCondition(t, "the latecomers answered, or reading their tokens", func() bool {
+		return len(lateErrs) == latecomers || inSelf.Load() > maxConcurrentCredentialProbes
+	})
+	if got := inSelf.Load(); got != maxConcurrentCredentialProbes {
+		t.Errorf("token descriptions in flight = %d, want at most the %d probe slots", got, maxConcurrentCredentialProbes)
+	}
+
+	answerAll()
+	holders.Wait()
+	late.Wait()
+	close(holderErrs)
+	close(lateErrs)
+	for err := range holderErrs {
+		if err != nil {
+			t.Errorf("a build holding a slot: error %v, want an entry", err)
+		}
+	}
+	for err := range lateErrs {
+		if !errors.Is(err, ErrCredentialProbeBusy) {
+			t.Errorf("a build that found no slot: error %v, want ErrCredentialProbeBusy", err)
+		}
+	}
+}
+
+// TestGetOrCreate_SelfReadUnderTheProbesSlot_AddsNoWait verifies holding the
+// credential probe's slot through the token's description makes no build wait
+// for a second slot (issue 1863): every other slot is taken for good while the
+// credential is probed, so a build that waited for one would be answered
+// ErrCredentialProbeBusy, and yet a classic token, a fine-grained one and a
+// token the OAuth verifier described are each built. Only the fine-grained
+// token's reads after the tier take a slot again, the one the build gave back.
+func TestGetOrCreate_SelfReadUnderTheProbesSlot_AddsNoWait(t *testing.T) {
+	described := gitlabclient.FactsFromScopes([]string{"api"}, 0)
+	cases := []struct {
+		name       string
+		selfScopes string
+		known      *gitlabclient.TokenFacts
+		wantSelf   int64
+		wantGrants int64
+	}{
+		{name: "classic token in legacy mode", selfScopes: `["api"]`, wantSelf: 1},
+		{name: "fine-grained token in legacy mode", selfScopes: `["granular"]`, wantSelf: 1, wantGrants: 1},
+		{name: "token the OAuth verifier described", selfScopes: `["api"]`, known: &described},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newFineGrainedGitLab(t)
+			scopes := tc.selfScopes
+			g.selfScopes.Store(&scopes)
+			var pool *ServerPool
+			var heldAtSelf atomic.Int64
+			fill := func() { fillProbeSlots(pool) }
+			onSelf := func() { heldAtSelf.Store(int64(len(pool.probes))) }
+			g.onUser.Store(&fill)
+			g.onSelf.Store(&onSelf)
+			cfg := testConfig(g.server.URL)
+			cfg.IgnoreScopes = false
+			pool = New(cfg, testFactory(), func(p *ServerPool) { p.probeQueueTimeout = 20 * time.Millisecond })
+			if _, err := pool.GetOrCreateEntryWithFacts("glpat-no-wait", g.server.URL, tc.known); err != nil {
+				t.Fatalf("GetOrCreateEntryWithFacts() error = %v, want an entry built without a wait", err)
+			}
+			if g.self.Load() != tc.wantSelf || g.grants.Load() != tc.wantGrants {
+				t.Errorf("self requests %d, grant reads %d; want %d, %d", g.self.Load(), g.grants.Load(), tc.wantSelf, tc.wantGrants)
+			}
+			if tc.wantSelf > 0 && heldAtSelf.Load() != maxConcurrentCredentialProbes {
+				t.Errorf("slots held at the token's description = %d, want all %d, the build's among them",
+					heldAtSelf.Load(), maxConcurrentCredentialProbes)
+			}
+		})
 	}
 }
 
 // TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused verifies a
 // build whose fine-grained reads find every probe slot taken past the wait is
 // answered ErrCredentialProbeBusy, the retryable 503 POL-006 declares, and
-// builds no entry.
+// builds no entry. The slots are taken while the tier is detected, after the
+// build gave back the one it read its token under.
 func TestGetOrCreate_FineGrainedReadsFindNoSlot_AreBusyNotRefused(t *testing.T) {
 	g := newFineGrainedGitLab(t)
 	var pool *ServerPool
 	fill := func() { fillProbeSlots(pool) }
-	g.onSelf.Store(&fill)
+	g.onLicense.Store(&fill)
 	cfg := testConfig(g.server.URL)
 	cfg.IgnoreScopes = false
+	cfg.TierExplicit = false
 	pool = New(cfg, testFactory(), func(p *ServerPool) { p.probeQueueTimeout = 20 * time.Millisecond })
 	_, err := pool.GetOrCreateEntry("glpat-busy", g.server.URL, nil)
 	if !errors.Is(err, ErrCredentialProbeBusy) || pool.Size() != 0 || g.grants.Load() != 0 {

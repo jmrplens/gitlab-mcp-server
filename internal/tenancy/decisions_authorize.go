@@ -335,8 +335,12 @@ func authorizeDecisions() []Decision {
 			// permission, is passed to GitLab even when the listing leaves the
 			// action out. The bounds on the read itself are a request bound,
 			// RQB-011, and the build's reads take POL-006's probe slots,
-			// which that row declares: the version, and the grant by id when
-			// the self answer the token was described with did not carry it. The call middleware's refusal carries
+			// which that row declares: the self answer the token is described
+			// with, and so the grant it carries from GitLab 19.5, under the
+			// slot the credential probe took, given back before the tier
+			// (issue 1863), and after the tier, under a slot of their own, the
+			// version, and the grant by id when the self answer did not carry
+			// it. The call middleware's refusal carries
 			// the resultType its revision requires, as AUT-007 says, so the row
 			// carries no F-20.
 			ID: "AUT-008", Question: Authorize, Kind: Rule, Class: ClassC, Disposition: Ruled,
