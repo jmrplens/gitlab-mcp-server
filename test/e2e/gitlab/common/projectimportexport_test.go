@@ -175,21 +175,36 @@ func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 			e.T.Fatalf("export_download answered %d bytes that decode to %d with error %v, want a gzip archive of the size it reports", archive.SizeBytes, len(decoded), err)
 		}
 
-		name := e.Name("imported")
-		imported := importArchive(e, s, archive.ContentBase64, name)
-		if imported.ID == 0 || imported.ImportStatus == "" || imported.Path != name {
-			e.T.Errorf("import_from_file answered %+v, want the project %q with an ID and an import status", imported, name)
+		// GitLab 19.6 checks the import source again in the Sidekiq job that
+		// loads the archive, whose settings cache can still hold the
+		// disabled source after the API admitted the import: such an import
+		// fails with the source named as disabled. It is imported again,
+		// under a new name, until the window the cache lags by has passed.
+		deadline := time.Now().Add(settingsLagWait)
+		for attempt := 1; ; attempt++ {
+			name := e.Name(fmt.Sprintf("imported%d", attempt))
+			imported := importArchive(e, s, archive.ContentBase64, name)
+			if imported.ID == 0 || imported.ImportStatus == "" || imported.Path != name {
+				e.T.Errorf("import_from_file answered %+v, want the project %q with an ID and an import status", imported, name)
+			}
+			// The answer above is the import accepted, not the import done,
+			// so the status is read until GitLab says the archive was loaded.
+			unfinished := importFinished(e, s, imported.ID)
+			if unfinished != nil && strings.Contains(unfinished.Error(), "import source is disabled") && time.Now().Before(deadline) {
+				continue
+			}
+			if unfinished != nil {
+				e.T.Error(unfinished)
+			}
+			break
 		}
-		// The answer above is the import accepted, not the import done, so the
-		// status is read until GitLab says the archive was loaded.
-		assertImportFinished(e, s, imported.ID)
 	})
 }
 
-// assertImportFinished polls the import status of a project until GitLab
-// reports the archive loaded, failing the test on the status it reports for an
-// import that will not finish.
-func assertImportFinished(e *harness.Env, s *harness.Session, projectID int64) {
+// importFinished polls the import status of a project until GitLab reports
+// the archive loaded, and returns why it did not for an import that will not
+// finish.
+func importFinished(e *harness.Env, s *harness.Session, projectID int64) error {
 	e.T.Helper()
 
 	// The ID as a string, like every other call in this file: project_id is
@@ -227,9 +242,14 @@ func assertImportFinished(e *harness.Env, s *harness.Session, projectID int64) {
 		return last == "finished", "status=" + last, nil
 	})
 	if err != nil {
-		e.T.Errorf("the import of project %d never finished (last status %q, last read error %v): %v",
-			projectID, last, lastErr, err)
+		lastRead := "<nil>"
+		if lastErr != nil {
+			lastRead = lastErr.Error()
+		}
+		return fmt.Errorf("the import of project %d never finished (last status %q, last read error %s): %w",
+			projectID, last, lastRead, err)
 	}
+	return nil
 }
 
 // importStatusFailuresAllowed is how many consecutive failed status reads are
