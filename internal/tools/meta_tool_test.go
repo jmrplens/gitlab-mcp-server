@@ -550,9 +550,7 @@ func TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerNamingTheParams(t *te
 	for _, action := range mustBuildActionCatalog(t, newTestClient(t, handler), ActionCatalogOptions{Tier: edition.Ultimate}).Actions() {
 		schemas[string(action.ID)] = action.Route.InputSchema
 	}
-	calls := []struct {
-		id, tool, action string
-	}{
+	calls := []rootAlternativeCall{
 		{id: "snippet.create", tool: "gitlab_snippet", action: "create"},
 		{id: "group.ldap_link_add", tool: "gitlab_group", action: "ldap_link_add"},
 		{id: "user.create_current_user_pat", tool: "gitlab_user", action: "create_current_user_pat"},
@@ -568,41 +566,19 @@ func TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerNamingTheParams(t *te
 					if len(groups) < 2 || !actioncatalog.RequiredParamAlternativesExclusive(schema) {
 						t.Fatalf("%s states alternatives %v, want two or more exclusive groups", call.id, groups)
 					}
-					props, _ := schema["properties"].(map[string]any)
-					withNames := func(params map[string]any, names ...string) map[string]any {
-						params = maps.Clone(params)
-						for _, name := range names {
-							prop, _ := props[name].(map[string]any)
-							params[name] = schemaPlaceholder(name, prop)
-						}
-						return params
-					}
-					required := withNames(map[string]any{}, requiredInputs(schema)...)
-					for _, attempt := range []struct {
+					required := withPlaceholders(schema, map[string]any{}, requiredInputs(schema)...)
+					attempts := []struct {
 						name   string
 						params map[string]any
 					}{
 						{name: "naming no group", params: required},
-						{name: "naming two groups", params: withNames(required, slices.Concat(groups[0], groups[1])...)},
-					} {
+						{name: "naming two groups", params: withPlaceholders(schema, required, slices.Concat(groups[0], groups[1])...)},
+					}
+					for _, attempt := range attempts {
 						t.Run(attempt.name, func(t *testing.T) {
 							requests.Store(0)
-							result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-								Name:      call.tool,
-								Arguments: map[string]any{"action": call.action, "params": attempt.params},
-							})
-							if err != nil {
-								t.Fatalf("CallTool(%s, %s): %v", call.tool, call.action, err)
-							}
-							text := metaErrorText(t, result)
-							for _, group := range groups {
-								if !slices.ContainsFunc(group, func(param string) bool { return strings.Contains(text, param) }) {
-									t.Errorf("%s %s refusal %q, want one naming one of %v", call.id, attempt.name, text, group)
-								}
-							}
-							if strings.Contains(text, "oneOf") || strings.Contains(text, "params do not match") {
-								t.Errorf("%s %s refusal %q is the params check's, want the handler's", call.id, attempt.name, text)
-							}
+							text := callRootAlternativeMiss(t, session, call, attempt.params)
+							assertRefusalNamesEveryGroup(t, call.id+" "+attempt.name, text, groups)
 							if got := requests.Load(); got != 0 {
 								t.Errorf("%s %s sent %d request(s) before refusing, want none", call.id, attempt.name, got)
 							}
@@ -611,6 +587,54 @@ func TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerNamingTheParams(t *te
 				})
 			}
 		})
+	}
+}
+
+// rootAlternativeCall names a catalog action that states alternatives at the
+// root of its schema, and the meta tool and action that serve it.
+type rootAlternativeCall struct {
+	id, tool, action string
+}
+
+// withPlaceholders returns a copy of params with a [schemaPlaceholder] under
+// each of names, read from the properties of schema.
+func withPlaceholders(schema, params map[string]any, names ...string) map[string]any {
+	props, _ := schema["properties"].(map[string]any)
+	params = maps.Clone(params)
+	for _, name := range names {
+		prop, _ := props[name].(map[string]any)
+		params[name] = schemaPlaceholder(name, prop)
+	}
+	return params
+}
+
+// callRootAlternativeMiss calls call's meta tool through session with params
+// and returns the text of the refusal it answers, failing the test when the
+// call is not refused.
+func callRootAlternativeMiss(t *testing.T, session *mcp.ClientSession, call rootAlternativeCall, params map[string]any) string {
+	t.Helper()
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      call.tool,
+		Arguments: map[string]any{"action": call.action, "params": params},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(%s, %s): %v", call.tool, call.action, err)
+	}
+	return metaErrorText(t, result)
+}
+
+// assertRefusalNamesEveryGroup requires text, the refusal of the call named by
+// label, to name a name of every one of groups and not to be the params
+// check's, whose summary of a failed oneOf names none.
+func assertRefusalNamesEveryGroup(t *testing.T, label, text string, groups [][]string) {
+	t.Helper()
+	for _, group := range groups {
+		if !slices.ContainsFunc(group, func(param string) bool { return strings.Contains(text, param) }) {
+			t.Errorf("%s refusal %q, want one naming one of %v", label, text, group)
+		}
+	}
+	if strings.Contains(text, "oneOf") || strings.Contains(text, "params do not match") {
+		t.Errorf("%s refusal %q is the params check's, want the handler's", label, text)
 	}
 }
 
