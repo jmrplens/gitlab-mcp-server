@@ -7379,6 +7379,127 @@ func TestMetaParamsGuard_HoldsNothingItCannotRead(t *testing.T) {
 	}
 }
 
+// TestMetaParamsGuard_RootCombinators_AreLeftToTheHandler verifies that the
+// params check of the inline modes holds a call to its action's definition
+// without the combinators and conditionals at the definition's root, and to
+// everything else in it, and that it leaves the served definition as it was.
+//
+// A root oneOf or anyOf is how an action states alternatives, which its
+// handler refuses in words that name the parameters. The check used to hold a
+// call to them as well, and refused one completing no alternative with the
+// validator's "oneOf: did not validate against any of [<anonymous schema>
+// ...]", before the handler and in place of its words (issue 1884).
+func TestMetaParamsGuard_RootCombinators_AreLeftToTheHandler(t *testing.T) {
+	branch := map[string]any{"required": []any{"cn"}}
+	definition := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"name": map[string]any{"type": "string"}, "cn": map[string]any{"type": "string"}},
+		"required":   []any{"name"},
+		"allOf":      []any{branch}, "anyOf": []any{branch}, "oneOf": []any{branch},
+		"not": map[string]any{"required": []any{"name"}}, "if": branch, "then": branch, "else": branch,
+	}
+	guard := metaParamsGuard("gitlab_widget", map[string]any{"$defs": map[string]any{"add": definition}}, MetaParamSchemaFull)
+	if guard == nil {
+		t.Fatal("full mode has no params check")
+	}
+	cases := []struct {
+		name    string
+		params  map[string]any
+		refused string
+	}{
+		{name: "a call completing no root alternative", params: map[string]any{"name": "x"}},
+		{name: "a call leaving out a required field", params: map[string]any{"cn": "dev"}, refused: "name"},
+		{name: "a call with a value of the wrong type", params: map[string]any{"name": 5}, refused: "name"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			refusal := guard(MetaToolInput{Action: "add", Params: tc.params})
+			if tc.refused == "" {
+				if refusal != nil {
+					t.Fatalf("guard() = %#v, want the call passed on to the handler", refusal)
+				}
+				return
+			}
+			if refusal == nil || !refusal.IsError {
+				t.Fatalf("guard() = %#v, want an error result", refusal)
+			}
+			if text := refusal.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, tc.refused) {
+				t.Errorf("refusal %q does not name %q", text, tc.refused)
+			}
+		})
+	}
+	for _, keyword := range rootCombinatorKeywords {
+		if _, kept := definition[keyword]; !kept {
+			t.Errorf("the served definition lost %s, which the check must leave as it is", keyword)
+		}
+	}
+}
+
+// ldapLinkTestInput is the input of a test route whose schema states at its
+// root that a call names exactly one of cn and filter, as the LDAP group
+// link's does.
+type ldapLinkTestInput struct {
+	GroupID string `json:"group_id" jsonschema:"Group,required"`
+	CN      string `json:"cn,omitempty" jsonschema:"Common name"`
+	Filter  string `json:"filter,omitempty" jsonschema:"LDAP filter"`
+}
+
+// TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerInEveryMode verifies
+// that a meta call completing none, or two, of the alternatives its action
+// states at the root of its schema reaches the action's handler under every
+// parameter schema mode, and is refused there in the handler's words, which
+// name the parameters.
+//
+// Under full the params check used to refuse it first, with the validator's
+// summary of a failed oneOf, which names no parameter (issue 1884). A value of
+// the wrong type is still refused by the check before the handler runs.
+func TestMetaTool_RootAlternativeMiss_IsRefusedByTheHandlerInEveryMode(t *testing.T) {
+	const handlerRefusal = "ldap_link_add: exactly one of cn or filter is required"
+	cases := []struct {
+		name     string
+		params   map[string]any
+		reaches  bool
+		mentions string
+	}{
+		{name: "naming neither", params: map[string]any{"group_id": "g"}, reaches: true, mentions: handlerRefusal},
+		{name: "naming both", params: map[string]any{"group_id": "g", "cn": "dev", "filter": "(cn=dev)"}, reaches: true, mentions: handlerRefusal},
+		{name: "a value of the wrong type", params: map[string]any{"group_id": "g", "cn": 5}, mentions: "cn"},
+	}
+	for _, mode := range []string{MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull} {
+		for _, tc := range cases {
+			t.Run(mode+"/"+tc.name, func(t *testing.T) {
+				ran := 0
+				route := RouteAction(nil, func(_ context.Context, _ *gitlabclient.Client, input ldapLinkTestInput) (testOutput, error) {
+					ran++
+					if (input.CN == "") == (input.Filter == "") {
+						return testOutput{}, errors.New(handlerRefusal)
+					}
+					return testOutput{Result: "added"}, nil
+				})
+				spec := NewActionSpec("ldap_link_add", route, ActionSpecOptions{
+					InputSchemaOverrides: []InputSchemaOverride{SchemaOneOfRequired("cn", "filter")},
+				})
+				text, refused := callMetaToolRoutes(t, mode, ActionMap{"ldap_link_add": spec.Route}, map[string]any{
+					"action": "ldap_link_add",
+					"params": tc.params,
+				})
+				if !refused {
+					t.Fatalf("call answered %q, want a refusal", text)
+				}
+				if wantRuns := map[bool]int{true: 1, false: 0}[tc.reaches]; ran != wantRuns {
+					t.Errorf("the handler ran %d times, want %d (text %q)", ran, wantRuns, text)
+				}
+				if !strings.Contains(text, tc.mentions) {
+					t.Errorf("refusal %q does not name %q", text, tc.mentions)
+				}
+				if tc.reaches && strings.Contains(text, "oneOf") {
+					t.Errorf("refusal %q is the oneOf summary that names no parameter", text)
+				}
+			})
+		}
+	}
+}
+
 // TestResolveMetaDefinition_RefusesWhatIsNoSchema verifies a definition is
 // resolved only when it is one: a value JSON cannot hold, a keyword of the
 // wrong type and a pattern that does not compile each resolve to nothing.
