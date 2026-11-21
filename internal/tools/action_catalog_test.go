@@ -2440,9 +2440,10 @@ func assertDateInputRefused(t *testing.T, input dateNamedInput, requests *atomic
 // groups are exclusive is also sent two of them, and refused the same way.
 //
 // No served input schema carries such a rule at its root, since the
-// Anthropic Messages API refuses a tool list holding one, so on the
-// individual surface and on the meta tool under its opaque and compact
-// modes the handler is the only thing that holds a call to it. The
+// Anthropic Messages API refuses a tool list holding one, and the meta
+// tool's params check leaves it to the handler under every mode (issue
+// 1884), so on the individual and meta surfaces the handler is the only
+// thing that holds a call to it. The
 // seventeen actions that state one were found by reading every override and
 // the one schema that writes an anyOf by hand, and one of them, the registry
 // protection create, posted the rule GitLab refuses; this enumerates the

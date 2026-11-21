@@ -66,9 +66,8 @@ func ProjectCreateInputSchemaMap() map[string]any {
 // A field counts in a branch only with a value, a string that is not empty or
 // a list that is not, which is how the handler counts it and what it sends.
 // Each branch also leaves the other's field empty or out, so the files beside
-// a content complete neither, with or without a file_name, and a validator
-// holding a call to the oneOf, the meta tool's full parameter-schema mode,
-// refuses what GitLab refuses. Each leaves the call's other properties open,
+// a content complete neither, with or without a file_name, and the oneOf
+// states what GitLab refuses. Each leaves the call's other properties open,
 // for the reason toolutil's valuedBranch gives.
 func addSnippetCreateFileRequirement(schema *jsonschema.Schema) {
 	if schema == nil {

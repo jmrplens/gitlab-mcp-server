@@ -2895,7 +2895,8 @@ const metaToolInlineParamsDescription = "Action-specific parameters as a JSON ob
 // What the conditional held a call to, the dispatcher holds it to now, against
 // the same definition ([metaParamsGuard]), so the schema still says what is
 // refused and a refusal is still the validator's, which names a field that is
-// missing or of the wrong type and none for a broken oneOf.
+// missing or of the wrong type. The alternatives a definition states at its
+// root are left to the action's handler, which names the parameters.
 func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 	actions := make([]string, 0, len(routes))
 	for name := range routes {
@@ -3128,6 +3129,15 @@ func buildMetaActionDefinitions(routes ActionMap, sortedActions []string, compac
 // envelope defines no schema for, which the action enum refuses before a
 // meta call reaches here, is left to the dispatcher.
 //
+// The definition is held without the combinators and conditionals at its
+// root ([rootCombinatorKeywords]), as the individual surface serves the
+// action's schema. A root oneOf or anyOf is how an action states
+// alternatives, and its handler refuses a call completing none of them, or
+// two that exclude each other, in words that name the parameters. Holding
+// the call to them here refused it first, with the validator's "oneOf: did
+// not validate against any of [<anonymous schema> ...]", which names none
+// (issue 1884). The served definition keeps them, as the catalog does.
+//
 // Each definition is resolved once, the first time a call names its action.
 // One that cannot be resolved holds nothing, as the SDK would have refused
 // to register a tool whose schema it could not resolve.
@@ -3142,7 +3152,9 @@ func metaParamsGuard(toolName string, envelope map[string]any, mode string) func
 		if !defined {
 			return nil
 		}
-		schema := resolved.Load(input.Action, func() *jsonschema.Resolved { return resolveMetaDefinition(definition) })
+		schema := resolved.Load(input.Action, func() *jsonschema.Resolved {
+			return resolveMetaDefinition(withoutRootCombinators(definition))
+		})
 		if schema == nil {
 			return nil
 		}
