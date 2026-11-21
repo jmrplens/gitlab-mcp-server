@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -131,7 +132,7 @@ func TestSetupFromArgs_Environment_FillsTheSettingsOrTheDefaults(t *testing.T) {
 	if cfg.token != "glpat-x" || cfg.namespace != "acme/fixtures" || cfg.gitlabURL != "https://gitlab.example.test" || cfg.visibility != "private" || !cfg.mirror {
 		t.Errorf("settings = %+v", cfg)
 	}
-	if cfg.fixtures != "/repo/test/fixtures/orbit" {
+	if cfg.fixtures != filepath.Join("/repo", "test", "fixtures", "orbit") {
 		t.Errorf("fixtures = %q", cfg.fixtures)
 	}
 	cfg, _, _ = setupFromArgs([]string{"--mirror-cli", "--skip-mirror"}, func(string) string { return "" }, &stderr)
