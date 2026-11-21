@@ -277,6 +277,22 @@ describe("expressions", () => {
 		assert.equal(out, "875 on Free, 1,102 at most,\n6 more, {literal}.");
 	});
 
+	test("arithmetic follows the precedence MDX evaluates it with", () => {
+		const none = new Map();
+		const cases = [
+			["2 + 3 * 4", 14],
+			["2 * 3 + 4", 10],
+			["10 - 4 / 2", 8],
+			["1 - 2 - 3", -4],
+			["24 / 4 / 2", 3],
+			["2 + 3", 5],
+		];
+		for (const [expression, expected] of cases) {
+			assert.equal(evaluate(expression, none, "x.mdx"), expected, expression);
+		}
+		assert.equal(evaluate('"n" + 2 * 3', none, "x.mdx"), "n6");
+	});
+
 	test("an expression naming nothing the page imports fails", () => {
 		assert.throws(
 			() => reduce("{footprint.total}"),
