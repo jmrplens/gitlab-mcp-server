@@ -773,8 +773,8 @@ var routeFamilies = []routeFamily{
 	tracked(issueOrbitRoutes, 1, on(http.MethodPost), "/orbit/context",
 		"reads the context of a graph entity, from 19.6; no action reads it yet"),
 	// The GitLab Duo domain (issueDuoRoutes).
-	tracked(issueDuoRoutes, 28, on(), "/ai/duo_workflows/**",
-		"the GitLab Duo Agent Platform's flows: creates, reads, updates, restarts, resumes and executes a workflow, writes and reads its checkpoints and events, reads its trace, the tools and agent privileges it may use and the connection details of its service and WebSocket, reads the Duo Code Review custom instructions, ingests audit events and revokes the workflow's token. Fourteen skip the fine-grained check for ai_workflows_oauth_auth or ai_workflows_token_auth, which a user's token with the api scope calls"),
+	tracked(issueDuoRoutes, 27, on(), "/ai/duo_workflows/**",
+		"the GitLab Duo Agent Platform's flows: creates, reads, updates, restarts, resumes and executes a workflow, writes and reads its checkpoints and events, uploads its session files and reads them and their raw content, reads its catalog items and its trace, the tools and agent privileges it may use and the connection details of its service and WebSocket, reads the Duo Code Review custom instructions, ingests audit events and revokes the workflow's token. Fifteen skip the fine-grained check for ai_workflows_oauth_auth or ai_workflows_token_auth, which a user's token with the api scope calls"),
 	tracked(issueDuoRoutes, 1, on(http.MethodPost), "/ai/billable_usage/**",
 		"posts GitLab Duo billing events as a Snowplow tracker payload, a route the record leaves without a fine-grained permission"),
 	tracked(issueDuoRoutes, 1, on(http.MethodPost), "/ai/llm/git_command",

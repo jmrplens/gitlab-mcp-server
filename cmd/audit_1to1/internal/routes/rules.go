@@ -143,6 +143,7 @@ func compositeIdentity(file string) skipReason {
 var skipExceptions = map[string]skipReason{
 	"POST /projects/:id/merge_requests/:merge_request_iid/suggested_reviewers": compositeIdentity("ee/lib/api/ai_suggested_reviewers.rb"),
 	"POST /ai/duo_workflows/code_review/add_comments":                          compositeIdentity("ee/lib/api/ai/duo_workflows/code_review.rb"),
+	"POST /ai/duo_workflows/tools/risk_assessment/results":                     compositeIdentity("ee/lib/api/ai/duo_workflows/tools/risk_assessment/results.rb"),
 }
 
 // skipped decides a route that skips the fine-grained check: a reason the
