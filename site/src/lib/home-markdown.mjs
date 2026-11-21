@@ -12,8 +12,12 @@
 // a block missing from the twin: keep the two in step.
 import { inlineHtml } from "./page-markdown.mjs";
 
-/** A table cell: a pipe inside one would split the row. */
-const cell = (value) => String(value).replace(/\|/g, "\\|");
+/**
+ * A table cell: a pipe inside one would split the row, so it is escaped, and
+ * so is a backslash, in the same pass, or one the copy writes before a pipe
+ * would escape that pipe's escape and the pipe would split the row anyway.
+ */
+const cell = (value) => String(value).replace(/[\\|]/g, "\\$&");
 
 /**
  * @param {string} code
