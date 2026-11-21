@@ -506,6 +506,23 @@ func TestDirectiveProblems_HoldsEveryDirectiveToTheShapesGitLabReads(t *testing.
 				sites(" PROJECT") + "): GitLab resolves no boundary for it"},
 		},
 		{
+			name: "a parent_authorizes skip naming permissions passes",
+			directives: []apilive.Directive{
+				{SkipReason: apilive.SkipParentAuthorizes, ParentAuthorizes: []string{"read_project", "read_code"}},
+			},
+		},
+		{
+			name:       "parent_authorizes beside another skip reason",
+			directives: []apilive.Directive{{SkipReason: "not_a_resource", ParentAuthorizes: []string{"read_project"}}},
+			want: []string{"4 GraphQL directives carry parent_authorizes without the parent_authorizes skip reason (" +
+				sites("") + "): a reader cannot tell whether the type or the fields returning it are checked"},
+		},
+		{
+			name:       "a parent_authorizes permission GitLab does not define",
+			directives: []apilive.Directive{{SkipReason: apilive.SkipParentAuthorizes, ParentAuthorizes: []string{"read_nothing"}}},
+			want:       []string{notDefined(4, sites(" read_nothing"))},
+		},
+		{
 			name:       "an argument nothing reads",
 			directives: []apilive.Directive{{SkipReason: "parent_authorizes", UnknownKeys: []string{"weight", "zone"}}},
 			want: []string{"4 GraphQL directives carry arguments nothing here reads (" + sites(" weight+zone") +
@@ -674,8 +691,24 @@ func TestTodoProblems_HoldsTheComputedSetToTheListGitLabShips(t *testing.T) {
 		{
 			name:   "an entry of a kind nothing compares",
 			mutate: func(a *apilive.GraphQLAuthz) { a.Todo.UnknownEntries = []string{"widget:Thing"} },
-			want: []string{"authorization_todo.txt holds 1 entries of a kind other than type and mutation (widget:Thing): " +
+			want: []string{"authorization_todo.txt holds 1 entries of a kind other than type, mutation and parent_authorizes (widget:Thing): " +
 				"the list now names something this record does not compare"},
+		},
+		{
+			// GitLab 19.6 lists the types skipped with parent_authorizes that
+			// declare no permissions, computed by its ParentAuthorizesCheck.
+			name:   "parent_authorizes types only the list holds",
+			mutate: func(a *apilive.GraphQLAuthz) { a.Todo.ParentAuthorizes = []string{"AccessLevel"} },
+			want: []string{"the undeclared GraphQL parent_authorizes types computed with GitLab's todo rule differ from its " +
+				"authorization_todo.txt (none only computed; 1 only listed: AccessLevel): the walk did not see the schema, " +
+				"or apply the rule, that GitLab's task does"},
+		},
+		{
+			name: "parent_authorizes types both sides hold",
+			mutate: func(a *apilive.GraphQLAuthz) {
+				a.Todo.ParentAuthorizes = []string{"AccessLevel"}
+				a.UndeclaredByTodoRule.ParentAuthorizes = []string{"AccessLevel"}
+			},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -218,7 +218,7 @@ func TestRunCheck_ARouteDeclaringACursorTheRecordDoesNotFollow_IsRefused(t *test
 			dir := t.TempDir()
 			writeRecordAt(t, dir, wholeEnough(), today())
 			record := readJSONFile(t, apilive.Path(dir))
-			record["schema_version"] = float64(5)
+			record["schema_version"] = float64(apilive.SchemaVersion)
 			markKeyset(t, record)
 			testCase.edit(record)
 			writeJSONFile(t, apilive.Path(dir), record)
@@ -242,7 +242,7 @@ func TestRunCheck_AVersion4RecordLabeled5_IsRefused(t *testing.T) {
 	dir := t.TempDir()
 	writeRecordAt(t, dir, wholeEnough(), today())
 	record := readJSONFile(t, apilive.Path(dir))
-	record["schema_version"] = float64(5)
+	record["schema_version"] = float64(apilive.SchemaVersion)
 	delete(record, "keyset_paginators")
 	delete(record["source"].(map[string]any), "keyset_routes")
 	for _, route := range record["routes"].([]any) {
