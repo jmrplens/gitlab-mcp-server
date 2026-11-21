@@ -502,18 +502,8 @@ const (
 // gl.Group, against every route client-go answers with that struct.
 const reasonApprovalGroupSDKRoute = "mrapprovals.GroupOutput pairs with gl.Group through groupOutput, so readSDKRoutes holds it against the group routes GroupsService answers with that struct (GET /groups, GET /groups/:id, POST /groups and the rest). No handler in internal/tools/mrapprovals calls any of them: the type is filled from the groups nested in an approval rule (ee/lib/api/entities/merge_request_approval_rule.rb, through gl.MergeRequestApprovalRule) and, under group, in the approver_groups of the approval state an Enterprise instance answers the approvals GET with (ee/lib/api/entities/approval_state.rb). It keeps the documented reference subset of those groups, and group.get returns a group whole."
 
-// The entities the closes-issues route and the two create_todo routes are read
-// on.
-const (
-	mrNoteEntity = "API::Entities::MRNote"
-	todoEntity   = "API::Entities::Todo"
-)
-
-// reasonClosesIssuesPresentsIssues answers the note the closes-issues route is
-// annotated with.
-const reasonClosesIssuesPresentsIssues = "lib/api/merge_requests.rb:980 declares success Entities::MRNote and line 999 presents " +
-	"Entities::IssueBasic beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and " +
-	"never a note."
+// todoEntity is the entity the two create_todo routes are read on.
+const todoEntity = "API::Entities::Todo"
 
 // reasonTodoGroupOnProjectRoutes answers the group of the to-do the two
 // create_todo routes present.
@@ -709,16 +699,6 @@ const (
 // last one of them is unused.
 var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglobals // the adjudication table, emptied by the test stub
 	{
-		Package:  toolsDir + "/keys",
-		Entity:   "API::Entities::UserWithAdmin",
-		Field:    declaredSegment,
-		Category: categoryDocumentedNotSent,
-		Reason: "lib/api/keys.rb describes the fingerprint lookup, GET /keys, as answering with Entities::UserWithAdmin " +
-			"and presents Entities::SSHKeyWithUser or Entities::DeployKeyWithUser: the response is a key, and the user " +
-			"fields the document lists at its top level are the key's user one level down, which the type publishes " +
-			"under `user`.",
-	},
-	{
 		Package:  toolsDir + "/invites",
 		Entity:   "API::Entities::Invitation",
 		Field:    declaredSegment,
@@ -768,6 +748,14 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// entity because every key of both is there for the one reason.
 	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: groupEntity, Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
 	{Package: mrApprovalsPkg, Type: "GroupOutput", Entity: groupDetailEntity, Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalGroupSDKRoute},
+
+	// The Enterprise approval state the approve answers with, which
+	// mergerequests.ApproveOutput publishes through the embed of
+	// mrapprovals.EnterpriseApprovalState, another package's type the type
+	// grain does not flatten. A splat over the entity because every key the
+	// embed carries is there for that one reason; the keys ApproveOutput
+	// declares itself are still compared one by one.
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: "API::Entities::MergeRequestApprovals", Field: declaredSegment, Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
 
 	// The two entities client-go's own return types put in front of the merge
 	// request output, answered with a splat because every key the entity has is
@@ -865,13 +853,6 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 		Reason: "GET /groups/:id/epics/:epic_iid/issues is what renders EpicIssue, and internal/tools/epicissues is the " +
 			"package that calls it and publishes it. None of the fifteen issue routes sends the epic-link keys.",
 	},
-
-	// The third case of a desc annotation naming an entity the handler does
-	// not present, after the two already recorded upstream. Both packages
-	// reading the route are answered: the issue package renders its rows and
-	// the merge request package calls it.
-	{Package: issuesPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
-	{Package: mergeRequestsPkg, Entity: mrNoteEntity, Field: "note", Category: categoryDocumentedNotSent, Reason: reasonClosesIssuesPresentsIssues},
 
 	// avatar_path on the participants of an issue and of a merge request, the
 	// member family's answer for the same entity: neither route passes

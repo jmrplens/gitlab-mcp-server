@@ -1,9 +1,10 @@
 {
-  "gitlab_version": "19.5.0-ee",
-  "gitlab_revision": "883b289c40e",
-  "origin": "https://gitlab.com/gitlab-org/gitlab/-/jobs/17187176880/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql",
-  "sha256": "4223e634c7b04ce5067f39b440f12c10c3c3c32ef436176419efe3bbd8a06287",
-  "sdl_sha256": "3f374f70f7b167116c7e517055d724a377c817bce60fc1f17c498a49a8ebefd0",
-  "retrieved_at": "2026-10-30",
-  "types": 4546
+  "gitlab_version": "19.6.1-ee",
+  "gitlab_revision": "9a0e1ddc75b",
+  "origin": ".cache/graphql-schema-dump-job-18210278050/gitlab_schema.graphql",
+  "from_file": true,
+  "sha256": "9f1823e6f272aeb3b1dbc3adcd1b29c13c51e2549968d9f267bc5feafd8b1537",
+  "sdl_sha256": "1d53547030ef3f8a5bd141b6bdc8c98f904ba923375598f8cdc312a99fa840dd",
+  "retrieved_at": "2026-11-21",
+  "types": 4676
 }
