@@ -830,13 +830,21 @@ function isImage(text, offset) {
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
+// A reference definition, `[label]: destination "title"`, at the start of a
+// line or behind the quote and list markers of the blocks it sits in. The
+// destination is bare or in angle brackets. A label opening with `^` is a
+// footnote's, which carries text rather than a destination.
+const DEFINITION =
+	/^((?:[ \t]*(?:>|[-*+][ \t]|\d{1,9}[.)][ \t]))*[ \t]*\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*)(?:<([^<>\n]*)>|([^\s<]\S*))/gm;
+
 /**
  * Every link and image target, `href` and `src` made absolute. The twins are
  * read as text, often after being copied off the site, and text keeps no host
  * to resolve `/gitlab-mcp-server/about/` against, nor a page to resolve
  * `#heading` against. A site-rooted target gets the origin, a fragment the
  * page it was written on, a relative target its file in the repository. Any
- * other target throws, because it resolves nowhere a reader can follow.
+ * other target throws, because it resolves nowhere a reader can follow. The
+ * destination of a reference definition is a target like any other.
  */
 function absoluteTargets(text, { file, route }) {
 	const dir = posix.dirname(`site/${file}`);
@@ -869,6 +877,11 @@ function absoluteTargets(text, { file, route }) {
 		.replace(
 			/\b(href|src)="([^"]*)"/g,
 			(_, name, target) => `${name}="${absolute(target)}"`,
+		)
+		.replace(DEFINITION, (_, lead, bracketed, bare) =>
+			bracketed === undefined
+				? `${lead}${absolute(bare)}`
+				: `${lead}<${absolute(bracketed)}>`,
 		);
 }
 
