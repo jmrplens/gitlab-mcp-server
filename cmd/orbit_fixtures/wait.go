@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,6 +61,28 @@ func waitFromEnv(getenv func(string) string) (waitConfig, error) {
 		client:         httpClient(),
 		sleep:          sleepContext,
 	}, nil
+}
+
+// waitArgs judges what the wait is handed after its name and returns the exit
+// code and whether to wait. It takes no flag and no argument, its settings
+// coming from the environment, so a flag it does not know or a stray argument
+// is a usage error rather than a wait with the defaults, and -h prints the
+// usage without waiting.
+func waitArgs(args []string, stderr io.Writer) (int, bool) {
+	flags := flag.NewFlagSet(toolName+" wait-indexer", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() { fmt.Fprint(stderr, usage) }
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0, false
+		}
+		return 2, false
+	}
+	if flags.NArg() > 0 {
+		fmt.Fprintf(stderr, "%s wait-indexer: unknown argument %q\n", toolName, flags.Arg(0))
+		return 2, false
+	}
+	return 0, true
 }
 
 // indexing is the progress one read reports: the state GitLab answered, or

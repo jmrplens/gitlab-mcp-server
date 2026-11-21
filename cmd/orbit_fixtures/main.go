@@ -20,6 +20,7 @@ const usage = `usage: orbit_fixtures setup [-mirror-cli] [-skip-mirror] [-root d
        orbit_fixtures wait-indexer
 
 -root is the repository root that holds test/fixtures/orbit (default ".").
+wait-indexer takes no flag or argument.
 
 Settings come from the environment: GITLAB_COM_TOKEN (required),
 ORBIT_FIXTURES_NAMESPACE (default jmrp-oss/orbit-fixtures),
@@ -68,6 +69,9 @@ func runMain(ctx context.Context, args []string, getenv func(string) string, std
 		}
 		return runSetup(ctx, cfg, stdout, stderr)
 	case "wait-indexer":
+		if code, wait := waitArgs(args[1:], stderr); !wait {
+			return code
+		}
 		cfg, err := waitFromEnv(getenv)
 		if err != nil {
 			fmt.Fprintf(stderr, "%s wait-indexer: %v\n", toolName, err)
