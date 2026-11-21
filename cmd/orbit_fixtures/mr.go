@@ -17,6 +17,17 @@ type mergeRequest struct {
 	IID                 int64  `json:"iid"`
 	State               string `json:"state"`
 	DetailedMergeStatus string `json:"detailed_merge_status"`
+	SourceProjectID     int64  `json:"source_project_id"`
+	TargetProjectID     int64  `json:"target_project_id"`
+	TargetBranch        string `json:"target_branch"`
+}
+
+// fromFixture reports whether the merge request comes from the project kgID
+// itself and targets its main, the only kind a run may take for the
+// fixture's: the project is public, so anyone can fork it and open one from a
+// branch of the fixture branch's name.
+func (r mergeRequest) fromFixture(kgID int64) bool {
+	return r.SourceProjectID == kgID && r.TargetProjectID == kgID && r.TargetBranch == "main"
 }
 
 // stillChecking are the detailed_merge_status values GitLab answers while it
@@ -43,7 +54,7 @@ func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 	if listed.status != 200 || !listed.decode(&requests) || requests == nil {
 		return fmt.Errorf("    ✗ cannot list the merge requests from %s (HTTP %d): %s", mrBranch, listed.status, listed)
 	}
-	state, iid := pickMergeRequest(requests)
+	state, iid := pickMergeRequest(requests, p.kgID)
 	switch state {
 	case "merged":
 		fmt.Fprintf(p.out, "    ✓ MR !%d is merged\n", iid)
@@ -90,13 +101,16 @@ func (p *provisioner) openAndMerge(ctx context.Context, push bool) error {
 	return p.merge(ctx, iid)
 }
 
-// pickMergeRequest picks the merge request that decides the run: a merged one
-// before an open one before a closed one, the newest of a state, and "" when
-// the branch has none in any of the three.
-func pickMergeRequest(requests []mergeRequest) (state string, iid int64) {
+// pickMergeRequest picks the merge request that decides the run among those
+// from kg-fixtures (kgID) itself into main: a merged one before an open one
+// before a closed one, the newest of a state, and "" when the branch has none
+// in any of the three. One from anywhere else is passed over, since the list
+// filters by branch name alone and what is picked is merged with the
+// operator's token.
+func pickMergeRequest(requests []mergeRequest, kgID int64) (state string, iid int64) {
 	for _, candidate := range []string{"merged", "opened", "closed"} {
 		for _, request := range requests {
-			if request.State == candidate {
+			if request.State == candidate && request.fromFixture(kgID) {
 				iid = max(iid, request.IID)
 			}
 		}
