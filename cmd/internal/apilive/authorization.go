@@ -425,7 +425,11 @@ type TodoSet struct {
 	Mutations []string `json:"mutations"`
 	// ParentAuthorizes are the types skipped with parent_authorizes that
 	// declare no permissions although a field on a checked type returns them,
-	// the pending list's parent_authorizes: entries (GitLab 19.6 on).
+	// the pending list's parent_authorizes: entries (GitLab 19.6 on). On the
+	// rule side of [GraphQLAuthz.UndeclaredByTodoRule] they are what the
+	// image's own Tasks::Gitlab::Permissions::Graphql::ParentAuthorizesCheck
+	// reports, not a set derived here, so the comparison holds the list to
+	// GitLab's checker.
 	ParentAuthorizes []string `json:"parent_authorizes,omitempty"`
 }
 

@@ -343,6 +343,25 @@ func TestKeysetProblems_EachRule_NamesWhatItRefuses(t *testing.T) {
 			},
 		},
 		{
+			name: "a cursor request context recorded inside the strategies helper",
+			edit: func(d *apilive.Document) {
+				d.Routes[6].Keyset = append(d.Routes[6].Keyset, apilive.KeysetSite{
+					Paginator: apilive.PaginatorCursorContext, File: apilive.StrategiesHelperFile, Line: 31,
+					Cursor: []string{"cursor"},
+				})
+				d.Routes[7].Keyset[0] = apilive.KeysetSite{
+					Paginator: apilive.PaginatorCursorContext, File: "lib/api/helpers/work_items/cursor_pagination.rb", Line: 52,
+					Cursor: []string{"cursor"},
+				}
+			},
+			want: []string{
+				"1 keyset sites are a cursor request context inside lib/api/helpers/pagination_strategies.rb " +
+					"(GET /api/:version/fixture/6 lib/api/helpers/pagination_strategies.rb:31): that context is the one " +
+					"paginate_with_strategies builds for itself, recorded at the helper's call, and recorded again it " +
+					"hands every route the helper serves a cursor its call may never be asked by",
+			},
+		},
+		{
 			name: "a site on the first line of its file is located",
 			edit: func(d *apilive.Document) { d.Routes[4].Keyset[0].Line = 1 },
 		},

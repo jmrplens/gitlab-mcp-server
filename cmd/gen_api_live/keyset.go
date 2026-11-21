@@ -68,16 +68,20 @@ func paginatorProblems(paginators map[string][]string) []string {
 }
 
 // siteProblems holds every keyset site to what a reader takes from it: a
-// paginator it knows, a place to read, and the parameter the next page is
-// asked by.
+// paginator it knows, recorded where a route serves the page rather than
+// inside the strategies helper, a place to read, and the parameter the next
+// page is asked by.
 func siteProblems(routes []apilive.Route) []string {
 	known := apilive.Paginators()
-	var unknown, unlocated, uncursored []string
+	var unknown, unlocated, uncursored, strategiesContext []string
 	for _, route := range routes {
 		name := route.Method + " " + route.Path
 		for _, site := range route.Keyset {
 			if !slices.Contains(known, site.Paginator) {
 				unknown = append(unknown, name+" "+quoted(site.Paginator))
+			}
+			if site.Paginator == apilive.PaginatorCursorContext && site.File == apilive.StrategiesHelperFile {
+				strategiesContext = append(strategiesContext, name+" "+site.File+":"+strconv.Itoa(site.Line))
 			}
 			if site.File == "" || site.Line <= 0 {
 				unlocated = append(unlocated, name)
@@ -89,6 +93,10 @@ func siteProblems(routes []apilive.Route) []string {
 	}
 	problems := reportSites(nil, unknown,
 		"%d keyset sites name a paginator nothing here reads (%s): introspect.rb met a paginator this build does not know")
+	problems = reportSites(problems, strategiesContext,
+		"%d keyset sites are a cursor request context inside "+apilive.StrategiesHelperFile+" (%s): that context is "+
+			"the one paginate_with_strategies builds for itself, recorded at the helper's call, and recorded again it "+
+			"hands every route the helper serves a cursor its call may never be asked by")
 	problems = reportSites(problems, unlocated,
 		"%d keyset sites carry no file and line (%s): nobody could read the code that serves the page")
 	return reportSites(problems, uncursored,

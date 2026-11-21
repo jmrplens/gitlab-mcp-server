@@ -60,8 +60,20 @@ const (
 	// Gitlab::Pagination::Keyset::CursorBasedRequestContext, asked by the
 	// same `cursor`: the work item routes of GitLab 19.6, for a collection
 	// paged by offset behind an opaque cursor and for their discussions.
+	// It is recorded only where a route writes those headers itself, never
+	// inside [StrategiesHelperFile]: there the context is the one
+	// paginate_with_strategies builds for its own keyset page, which its
+	// call's [PaginatorStrategies] site already records with the cursor
+	// that call is asked by.
 	PaginatorCursorContext = "cursor_request_context"
 )
+
+// StrategiesHelperFile is where paginate_with_strategies is defined, whose
+// keyset paginator builds a cursor request context of its own (19.6.1-ee,
+// line 31). A [PaginatorCursorContext] site in it would hand every route the
+// helper serves, `use_cursor: false` callers such as the project list among
+// them, a cursor their call is never asked by.
+const StrategiesHelperFile = "lib/api/helpers/pagination_strategies.rb"
 
 // The keys of [Document.KeysetPaginators]: the paginators the introspection
 // asks which parameter their next link names.

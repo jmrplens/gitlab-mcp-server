@@ -398,6 +398,13 @@ func mutationFieldProblems(authz *apilive.GraphQLAuthz) []string {
 // the list names, such as DependencyPathEdge. The types the rule calls
 // undeclared and the check never runs on are not a difference: they are
 // counted apart, in [apilive.AuthorizationCounts.GraphQLUncheckedUndeclaredTypes].
+//
+// The parent_authorizes half is held the same way, against a set the image
+// computes rather than one introspect.rb derives: the script runs the image's
+// own Tasks::Gitlab::Permissions::Graphql::ParentAuthorizesCheck, the checker
+// GitLab's CI keeps the list's parent_authorizes: entries exact with, and
+// records what it reports, so a difference names the list against GitLab's
+// checker and not against a reading of it made here.
 func todoProblems(doc apilive.Document) []string {
 	if doc.GraphQLAuthz == nil || doc.GraphQLAuthz.Todo == nil {
 		return nil

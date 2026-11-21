@@ -7,7 +7,7 @@
   "version": "19.6.1-ee",
   "revision": "9a0e1ddc75b",
   "retrieved_at": "2026-11-21",
-  "sha256": "d584d887e694c2bf7c2fc197adfe2b74d9dc4d0670921714ca7637a717385c50",
+  "sha256": "ebcc7b88b9925f9e2cb0353b4f25d64b8484f72aba463043943ac171b7407686",
   "entities": 617,
   "fields": 7721,
   "routes": 2219,
@@ -38550,21 +38550,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_groups_with_pagination_strategies",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -40211,20 +40196,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -40461,20 +40432,6 @@
      "file": "lib/api/ci/jobs.rb",
      "line": 74,
      "text": "present paginate_with_strategies(builds, user_project, paginator_params: { without_count: true }), with: Entities::Ci::Job",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -41632,20 +41589,6 @@
      "file": "lib/api/ci/runners.rb",
      "line": 423,
      "text": "jobs = paginate_with_strategies(jobs, paginator_params: paginator_params)",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -42986,20 +42929,6 @@
      "file": "lib/api/ci/user_pipelines.rb",
      "line": 62,
      "text": "pipelines = paginate_with_strategies(pipelines)",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -65185,20 +65114,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -71212,20 +71127,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -75484,20 +75385,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -76225,21 +76112,6 @@
       "id_after",
       "id_before"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_projects",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -76298,21 +76170,6 @@
      "cursor": [
       "id_after",
       "id_before"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_projects",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
      ]
     }
    ]
@@ -76503,21 +76360,6 @@
      "cursor": [
       "id_after",
       "id_before"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_projects",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
      ]
     }
    ]
@@ -76817,21 +76659,6 @@
      "cursor": [
       "id_after",
       "id_before"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_projects",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
      ]
     }
    ]
@@ -78016,21 +77843,6 @@
       "id_after",
       "id_before"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "present_projects",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -79165,20 +78977,6 @@
      "file": "ee/lib/ee/api/projects.rb",
      "line": 68,
      "text": "present paginate_with_strategies(audit_events), with: ::API::Entities::AuditEvent",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -86150,23 +85948,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_work_items_collection_for",
-      "paginate_work_items_collection",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -86515,23 +86296,6 @@
       "render_work_items_collection_for",
       "paginate_work_items_collection",
       "paginate_with_keyset_cursor"
-     ],
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_work_items_collection_for",
-      "paginate_work_items_collection",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
      ],
      "cursor": [
       "cursor"
@@ -86901,23 +86665,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_work_items_collection_for",
-      "paginate_work_items_collection",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -87097,23 +86844,6 @@
       "render_children_for",
       "render_paginated_work_items_for",
       "paginate_with_keyset_cursor"
-     ],
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_children_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
      ],
      "cursor": [
       "cursor"
@@ -87312,23 +87042,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_children_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -87480,23 +87193,6 @@
       "render_children_for",
       "render_paginated_work_items_for",
       "paginate_with_keyset_cursor"
-     ],
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_children_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
      ],
      "cursor": [
       "cursor"
@@ -87673,23 +87369,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_linked_items_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -87755,23 +87434,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_linked_items_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -87833,23 +87495,6 @@
       "render_linked_items_for",
       "render_paginated_work_items_for",
       "paginate_with_keyset_cursor"
-     ],
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_linked_items_for",
-      "render_paginated_work_items_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
      ],
      "cursor": [
       "cursor"
@@ -88885,23 +88530,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_notes_endpoint_for",
-      "render_notes_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -89146,23 +88774,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_notes_endpoint_for",
-      "render_notes_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -89351,23 +88962,6 @@
       "render_notes_endpoint_for",
       "render_notes_for",
       "paginate_with_keyset_cursor"
-     ],
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "render_notes_endpoint_for",
-      "render_notes_for",
-      "paginate_with_keyset_cursor",
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
      ],
      "cursor": [
       "cursor"
@@ -92922,20 +92516,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -95520,20 +95100,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -95699,20 +95265,6 @@
      "file": "lib/api/group_service_accounts.rb",
      "line": 253,
      "text": "paginated_tokens = paginate_with_strategies(service_account_pats)",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -98538,20 +98090,6 @@
      "cursor": [
       "cursor"
      ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
-     "cursor": [
-      "cursor"
-     ]
     }
    ]
   },
@@ -98717,20 +98255,6 @@
      "file": "lib/api/project_service_accounts.rb",
      "line": 242,
      "text": "paginated_tokens = paginate_with_strategies(service_account_pats)",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -99757,20 +99281,6 @@
      "file": "lib/api/service_accounts.rb",
      "line": 88,
      "text": "present paginate_with_strategies(users), with: Entities::ServiceAccount",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -103520,20 +103030,6 @@
      "file": "lib/api/users.rb",
      "line": 270,
      "text": "present paginate_with_strategies(users), **options",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]
@@ -108195,20 +107691,6 @@
      "file": "ee/lib/api/admin/data_management.rb",
      "line": 224,
      "text": "present paginate_with_strategies(relation.keyset_order_by_primary_key(params[:sort])),",
-     "cursor": [
-      "cursor"
-     ]
-    },
-    {
-     "paginator": "cursor_request_context",
-     "file": "lib/api/helpers/pagination_strategies.rb",
-     "line": 31,
-     "text": "request_context_class = Gitlab::Pagination::Keyset::CursorBasedRequestContext",
-     "via": [
-      "paginate_with_strategies",
-      "paginator",
-      "keyset_paginator"
-     ],
      "cursor": [
       "cursor"
      ]

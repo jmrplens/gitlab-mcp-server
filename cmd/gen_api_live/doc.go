@@ -70,7 +70,8 @@
 //     and, only where it differs, the reading GitLab's permission task makes
 //     of its field, every field-level directive, and the undeclared set
 //     computed with GitLab's own todo rule beside the authorization_todo.txt
-//     the image ships.
+//     the image ships, its parent_authorizes: half computed by the image's
+//     own ParentAuthorizesCheck rather than by a reading of it made here.
 //
 // -check refuses a record that lacks either block, falls below the
 // fine-grained floors, maps a raw permission to an assignable that is not its
@@ -116,6 +117,9 @@
 //   - a route writing the cursor headers of a page it built itself through
 //     Gitlab::Pagination::Keyset::CursorBasedRequestContext, asked by
 //     `cursor`: the work item routes of 19.6, offset behind an opaque cursor.
+//     The context paginate_with_strategies builds for its own keyset page,
+//     in lib/api/helpers/pagination_strategies.rb, is not one: the helper's
+//     call is the site, and the gate refuses a record that says otherwise.
 //
 // Each site is located, quoted, and named with the helpers the walk went
 // through to reach it and the feature flags it is behind, with their defaults:

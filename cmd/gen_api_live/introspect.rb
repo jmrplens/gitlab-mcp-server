@@ -552,7 +552,13 @@ end
 #       built itself through Gitlab::Pagination::Keyset::CursorBasedRequestContext,
 #       which the work item routes of 19.6 do for a collection paged by offset
 #       behind an opaque cursor (paginate_with_offset_cursor) and for their
-#       discussions; the next page is asked by the same `cursor`.
+#       discussions; the next page is asked by the same `cursor`. It is
+#       recorded only where a route writes those headers itself: the
+#       strategies helper builds one for its own keyset page (19.6.1,
+#       pagination_strategies.rb line 31), which the helper's call already
+#       records with the cursor that call is asked by, and recorded there too
+#       it would hand every route the helper serves, the project list's
+#       `use_cursor: false` among them, a cursor it is never asked by.
 #
 # The walk follows calls on the endpoint itself, which is what a helper call
 # is, and never calls on another object: a finder or a service that pages by
@@ -572,6 +578,10 @@ VM_CALL_FCALL = 1 << 2
 # NON_POSITIONAL_KEYS are the keys a next link carries beside its cursor: the
 # page size and the order, which repeat the request rather than position it.
 NON_POSITIONAL_KEYS = %w[per_page page sort order_by pagination].freeze
+
+# STRATEGIES_HELPER_FILE is where paginate_with_strategies is defined, the one
+# file whose cursor request context is not a site of its own (see above).
+STRATEGIES_HELPER_FILE = "lib/api/helpers/pagination_strategies.rb"
 
 # CursorProbe is the request context a paginator is handed when it is asked,
 # below, which parameter its next link names: it answers params as a request
@@ -853,7 +863,8 @@ class KeysetWalk
       state.flag = nil
       if name.end_with?("Gitlab::Pagination::GitalyKeysetPager")
         site("gitaly_keyset_pager", state.path, state.line, state.via, active, @paginators["gitaly_keyset_pager"])
-      elsif name.end_with?("Gitlab::Pagination::Keyset::CursorBasedRequestContext")
+      elsif name.end_with?("Gitlab::Pagination::Keyset::CursorBasedRequestContext") &&
+            repo_relative(state.path) != STRATEGIES_HELPER_FILE
         site("cursor_request_context", state.path, state.line, state.via, active, @paginators["cursor_headers"])
       end
     elsif operation == :putobject && state.feature && state.flag.nil? && instruction[1].is_a?(Symbol)
