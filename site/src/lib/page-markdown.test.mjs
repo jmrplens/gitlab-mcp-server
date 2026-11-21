@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Unit tests for the markdown twin reducer (src/lib/page-markdown.mjs).
-// Run with `pnpm run test` (node --test), which the site lint runs too.
+// Run with `pnpm run twins:test` (node --test), which the site lint runs too.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
