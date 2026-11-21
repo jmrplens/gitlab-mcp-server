@@ -161,11 +161,23 @@ func addOwnGPGKey(e *harness.Env, key string) {
 	})
 }
 
+// maxGPGOwnerBytes is the longest owner newGPGPublicKey names: the fixture's
+// user id spends 38 bytes around two copies of it, so 60 keeps the user id at
+// 158 bytes, within the 160 GitLab 19.6 accepts.
+const maxGPGOwnerBytes = 60
+
 // newGPGPublicKey generates an armored public key naming its owner, failing
 // the test if the generator did.
 func newGPGPublicKey(e *harness.Env, owner string) string {
 	e.T.Helper()
 
+	// GitLab 19.6 refuses a key whose user id is longer than 160 bytes, and
+	// the fixture's user id names its owner twice: a fixture username is
+	// long enough to pass that, so the owner is cut to what keeps the user id
+	// within it.
+	if len(owner) > maxGPGOwnerBytes {
+		owner = owner[:maxGPGOwnerBytes]
+	}
 	key, err := fixture.GPGPublicKey(owner)
 	if err != nil {
 		e.T.Fatal(err)
