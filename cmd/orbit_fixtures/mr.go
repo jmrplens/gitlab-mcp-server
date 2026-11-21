@@ -188,17 +188,19 @@ func (p *provisioner) merge(ctx context.Context, iid int64) error {
 // waitForMergeability reads the merge request until detailed_merge_status
 // says GitLab has finished checking it, at most mergePolls times, since
 // GitLab decides asynchronously after a merge request is opened or reopened
-// and refuses a merge asked for before. An answer without the field, from a
-// GitLab older than it, leaves the merge itself to say whether it can be made.
+// and refuses a merge asked for before. A read that is not answered with one
+// merge request object, null and a body that is not JSON included, stops the
+// wait, since it says nothing of the check. A merge request without the
+// field, from a GitLab older than it, leaves the merge itself to say whether
+// it can be made.
 func (p *provisioner) waitForMergeability(ctx context.Context, iid int64) error {
 	status := ""
 	for range p.mergePolls {
 		got := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/merge_requests/%d", p.kgID, iid), nil)
-		if got.status != 200 {
+		var request *mergeRequest
+		if got.status != 200 || !got.decode(&request) || request == nil {
 			return fmt.Errorf("    ✗ cannot read MR !%d (HTTP %d): %s", iid, got.status, got)
 		}
-		var request mergeRequest
-		got.decode(&request)
 		status = request.DetailedMergeStatus
 		if !stillChecking[status] {
 			return nil
