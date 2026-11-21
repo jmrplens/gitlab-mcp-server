@@ -224,6 +224,9 @@ orbit_setting = $(if $(filter command line environment,$(origin $(1))),$($(1)),$
 # test applies it to each test binary on its own, so with the run naming two
 # packages, common and ee, each package gets the whole budget rather than the
 # two sharing it. E2E_GITLAB_TIMEOUT below is the same flag for the CE run.
+# On GitLab 19.6.1 the common package of the licensed run took 3439 seconds
+# on one complete run and outran 3600 on the next, so the budget is 90
+# minutes.
 #
 # E2E_SWEEP_MIN_AGE, at e2e-clean-orphans, must stay above this timeout plus
 # the exit hooks' budgets: it is the only thing that keeps the orphan sweep off
@@ -232,7 +235,7 @@ orbit_setting = $(if $(filter command line environment,$(origin $(1))),$($(1)),$
 # plus those budgets' 8m reaches it, a timeout of 112 minutes or more at the 2h
 # default; a run given a longer timeout on the command line is one that test
 # cannot see, and e2e-clean-orphans below says what to do then.
-E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
+E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 5400s
 # Where the e2e Docker fixture is reached from the machine running the suite.
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
 # run on another host: `DOCKER_HOST=ssh://truenas

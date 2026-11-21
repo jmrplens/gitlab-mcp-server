@@ -339,7 +339,7 @@ GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:l
 GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 ./test/e2e/scripts/register-runner.sh
 
-E2E_MODE=docker go test -v -tags e2e -p 1 -count=1 -timeout 3600s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
+E2E_MODE=docker go test -v -tags e2e -p 1 -count=1 -timeout 5400s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
