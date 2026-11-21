@@ -11,8 +11,15 @@
 // them.
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
+// A reference definition's destination, bare or in angle brackets, on a line
+// of its own behind any quote or list markers. A footnote's label opens with
+// `^` and carries text, not a destination.
+const DEFINITION =
+	/^(?:[ \t]*(?:>|[-*+][ \t]|\d{1,9}[.)][ \t]))*[ \t]*\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*(?:<([^<>\n]*)>|([^\s<]\S*))/gm;
+
 /**
- * The link and image targets of a markdown text that carry no scheme.
+ * The link and image targets of a markdown text that carry no scheme, the
+ * destinations of reference definitions included.
  *
  * @param {string} text
  * @returns {string[]}
@@ -33,6 +40,10 @@ export function unanchoredTargets(text) {
 		}
 		for (const match of bare.matchAll(/\b(?:href|src)="([^"]*)"/g)) {
 			if (!SCHEME.test(match[1])) found.push(match[1]);
+		}
+		for (const match of bare.matchAll(DEFINITION)) {
+			const target = match[1] ?? match[2];
+			if (!SCHEME.test(target)) found.push(target);
 		}
 		prose = [];
 	};
