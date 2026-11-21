@@ -1012,6 +1012,19 @@ class SetupOrbitFixturesTest(unittest.TestCase):
             ],
         )
 
+    def test_a_page_of_merge_requests_spread_over_lines_is_read_whole(self):
+        # JSON allows a newline between any two tokens, so a line of a page
+        # is not a page: the pages read used to be joined a line each and
+        # split at every newline, and a list GitLab printed over several lines
+        # read as no list at all.
+        listed = json.dumps([dict(FROM_FIXTURE, iid=2, state="merged")], indent=2)
+        self.assertIn("\n", listed)
+        result = self.run_script(self.merge_routes(listed))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertIn("MR !2 is merged", result.stdout)
+
     def test_an_unreadable_later_page_of_merge_requests_stops_the_run(self):
         self.use_stand_in_git()
         forks = [dict(FROM_FIXTURE, iid=100 + n, state="opened", source_project_id=99) for n in range(100)]
