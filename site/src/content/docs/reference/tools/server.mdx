@@ -31,7 +31,7 @@ Read-only actions: 2 of 2, the ones a deployment in read-only mode keeps. A toke
 
 ## Actions
 
-The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.5.0 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
+The description of each action, and of each of its parameters, is the text the server serves for it on the default surface, quoted as served. The token lines say what GitLab 19.6.1 requires of a token for the requests each action sends; on an instance with Admin Mode turned on, an action only an administrator may run also needs `admin_mode`.
 
 | Action                                       | Individual             |
 | -------------------------------------------- | ---------------------- |
@@ -53,7 +53,7 @@ No parameters.
 
 ### `server.status`
 
-> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/reference/tools/user/#userme).
+> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition, licensed plan (GitLab 19.6 and later) and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/reference/tools/user/#userme).
 
 - **Meta-tool**: `gitlab_server`, action `status`
 - **Individual tool**: `gitlab_server_status`

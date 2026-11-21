@@ -552,7 +552,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_create_issue_discussion: Create a new discussion thread on an issue with an initial note.
 - gitlab_create_mr_context_commits: Attach existing repository commit SHAs to a merge request as context commits.
 - gitlab_create_package_protection_rule: Create a package protection rule for a project.
-- gitlab_create_personal_access_token: Create a personal access token for a user with the given scopes, optional description, and optional expiry.
+- gitlab_create_personal_access_token: Create a personal access token for a user with classic scopes or, from GitLab 19.6, a fine-grained granular_scopes grant, an optional description, and an option...
 - gitlab_create_project_alias: Create a project alias mapping a unique name to a numeric project_id (admin-only).
 - gitlab_create_project_external_status_check: Create an external status check service for a project.
 - gitlab_create_secure_file: Create a secure file.
@@ -743,7 +743,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_get_license: Get the active instance license.
 - gitlab_get_license_template: Get a single license template by key, optionally substituting project and fullname placeholders.
 - gitlab_get_merge_request_on_merge_train: Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration...
-- gitlab_get_metadata: Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag.
+- gitlab_get_metadata: Get GitLab instance metadata such as version, revision, KAS endpoints, enterprise edition flag, and the plan the instance is licensed for (GitLab 19.6 and later...
 - gitlab_get_metric_definitions: Get usage metric definitions.
 - gitlab_get_non_sql_metrics: Get non-SQL usage metrics.
 - gitlab_get_plan_limits: Get plan limits for a plan.
