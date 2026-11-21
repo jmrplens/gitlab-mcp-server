@@ -438,20 +438,37 @@ export function evaluate(expression, bindings, file) {
 		return value;
 	};
 	if (parts.length === 0 || parts.length % 2 === 0) fail("is not one");
-	let value = term(parts[0]);
+	/** @param {unknown} left @param {string} op @param {unknown} right */
+	const apply = (left, op, right) => {
+		if (typeof left !== "number" || typeof right !== "number") {
+			if (op === "+") return `${left}${right}`;
+			return fail("does arithmetic on something that is not a number");
+		}
+		if (op === "+") return left + right;
+		if (op === "-") return left - right;
+		if (op === "*") return left * right;
+		return left / right;
+	};
+	// JavaScript's precedence, which MDX evaluates with: `*` and `/` fold into
+	// the term before them as they are read, then `+` and `-` fold the terms,
+	// each level left to right.
+	const terms = [term(parts[0])];
+	const additive = [];
 	for (let i = 1; i < parts.length; i += 2) {
 		const op = parts[i];
 		const right = term(parts[i + 1]);
 		if (!/^[-+*/]$/.test(op)) fail(`uses ${op}`);
-		if (typeof value !== "number" || typeof right !== "number") {
-			if (op === "+") value = `${value}${right}`;
-			else fail("does arithmetic on something that is not a number");
-		} else if (op === "+") value += right;
-		else if (op === "-") value -= right;
-		else if (op === "*") value *= right;
-		else value /= right;
+		if (op === "*" || op === "/") {
+			terms.push(apply(terms.pop(), op, right));
+		} else {
+			additive.push(op);
+			terms.push(right);
+		}
 	}
-	return value;
+	return additive.reduce(
+		(value, op, i) => apply(value, op, terms[i + 1]),
+		terms[0],
+	);
 }
 
 /**
