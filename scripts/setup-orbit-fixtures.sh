@@ -644,19 +644,30 @@ merge_fixture_mr() {
 #   seed_stock helper added to the fulfillment module. The token given to the
 #   clone with -c is not kept in the clone's configuration, so it is set there
 #   for the push to origin, as for a new project's first push above.
+#
+#   Every step is checked by hand and fails the function: it runs under
+#   open_fixture_mr, which the run calls on the left of an || inside a command
+#   substitution, where errexit is off and stays off for a set -e of its own.
+#   An unchecked clone that failed used to leave the cd into it failing too,
+#   and every step after it ran in the caller's directory, the token
+#   configured, its changes committed and pushed.
 push_fixture_mr_branch() {
   local work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
   rm -rf "$work"
-  git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
-    clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2 >&2
-  (
-    cd "$work"
-    git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN"
-    git config user.email "orbit-fixtures@local"
-    git config user.name  "Orbit Fixtures Bot"
-    git checkout -q -b feature/restock-helper
+  if ! git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
+    clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2 >&2; then
+    echo "    ✗ could not clone kg-fixtures to push feature/restock-helper" >&2
+    rm -rf "$work"
+    return 1
+  fi
+  if ! (
+    cd "$work" || exit 1
+    git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" || exit 1
+    git config user.email "orbit-fixtures@local" || exit 1
+    git config user.name  "Orbit Fixtures Bot" || exit 1
+    git checkout -q -b feature/restock-helper || exit 1
     # Insert a seed_stock helper (deterministic diff)
-    python3 - <<'PY'
+    python3 - <<'PY' || exit 1
 from pathlib import Path
 p = Path("src/acme/orders/fulfillment.py")
 src = p.read_text()
@@ -672,19 +683,24 @@ idx = src.find(needle)
 assert idx > 0
 p.write_text(src[:idx] + seed + src[idx:])
 PY
-    git add -A
-    git commit -m "feat(fulfillment): add seed_stock helper for fixture test runs" --quiet
-    git push --quiet -u origin feature/restock-helper 2>&1 | tail -2
-  ) >&2
+    git add -A || exit 1
+    git commit -m "feat(fulfillment): add seed_stock helper for fixture test runs" --quiet || exit 1
+    git push --quiet -u origin feature/restock-helper 2>&1 | tail -2 || exit 1
+  ) >&2; then
+    echo "    ✗ could not push feature/restock-helper" >&2
+    rm -rf "$work"
+    return 1
+  fi
   rm -rf "$work"
 }
 
 # open_fixture_mr [--from-existing-branch]  ->  pushes the fixture branch from
 #   main, unless it is already there, and opens its merge request, then echoes
 #   the new merge request's iid, or fails with GitLab's answer when it carries
-#   none.
+#   none. A branch that could not be pushed fails it before any merge request
+#   is asked for.
 open_fixture_mr() {
-  [ "${1:-}" = "--from-existing-branch" ] || push_fixture_mr_branch
+  [ "${1:-}" = "--from-existing-branch" ] || push_fixture_mr_branch || return 1
   api_request POST "/projects/$KG_ID/merge_requests" "$(cat <<'JSON'
 {
   "source_branch": "feature/restock-helper",
