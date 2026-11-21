@@ -351,14 +351,20 @@ juzga en una instancia que informa de una versión 19.6. Una instancia con otra 
 nombrando la versión de la que informó y la registrada. A esa sesión solo se le retiene
 lo que ningún token de grano fino alcanza en 19.6.1, así que en 19.5 se listan las
 acciones de épicas, work items, vistas guardadas y logros y se pasan a GitLab, que las
-responde vacías o con null para todo token de grano fino, como antes de 19.6. Se hace
-una excepción con la versión previa del minor siguiente al registrado (`19.7.0-pre`),
-que es la que informa GitLab.com: a una sesión en una instancia que la informa se le
-**lista** lo que alcanza su concesión en 19.6.1, y cada llamada que permitiría la retención se pasa a GitLab, así
-que un permiso que GitLab cambió en ese único hito aparece como rechazo del propio
-GitLab y no como un rechazo aquí con un nombre desfasado. Cuando GitLab.com pase de esa
-versión previa, caerá en la retención como cualquier otra versión hasta que la tabla se
-vuelva a registrar, y la prueba del propio servidor contra GitLab.com lo avisa.
+responde vacías o con null para todo token de grano fino, como antes de 19.6. Una
+lectura vaciada así llega sin la [nota](#lo-que-puede-significar-una-respuesta-vacía)
+que dice que vacío puede no significar que no haya nada, porque la nota lee la tabla de
+19.6.1, donde esos tipos declaran un permiso; una escritura que GitLab responde allí
+sin su objeto se sigue respondiendo como
+[probablemente confirmada](#una-escritura-respondida-sin-su-objeto). Se hace una
+excepción con la versión previa del minor siguiente al registrado (`19.7.0-pre`), que es
+la que informa GitLab.com: a una sesión en una instancia que la informa se le **lista**
+lo que alcanza su concesión en 19.6.1, y cada llamada que permitiría la retención se
+pasa a GitLab, así que un permiso que GitLab cambió en ese único hito aparece como
+rechazo del propio GitLab y no como un rechazo aquí con un nombre desfasado. Cuando
+GitLab.com pase de esa versión previa, caerá en la retención como cualquier otra
+versión hasta que la tabla se vuelva a registrar, y la prueba del propio servidor
+contra GitLab.com lo avisa.
 
 ## Leer una respuesta retenida
 
@@ -475,8 +481,9 @@ crea una segunda. Responden así dos tipos de escritura:
 - Las escrituras de la segunda fila de la
   [tabla de arriba](#lo-que-ningún-token-de-grano-fino-alcanza). Con la tabla que este
   servidor registra de GitLab 19.6.1 se retienen a toda sesión que el servidor sabe de
-  grano fino, sea cual sea su concesión y la versión que ejecute la instancia. La respuesta está para una
-  tabla registrada de una versión posterior que deje de retener alguna mientras una
+  grano fino, sea cual sea su concesión y la versión que ejecute la instancia. La
+  respuesta está para una tabla registrada de una versión posterior que deje de retener
+  alguna mientras una
   concesión todavía pueda dejar fuera su objeto, como pasó con la creación de un emoji
   personalizado cuando GitLab 19.5 declaró Custom Emoji: Read, y con las creaciones de
   épicas y work items con GitLab 19.6.

@@ -337,9 +337,14 @@ falls back as [above](#when-the-grant-is-not-evaluated), naming the version it r
 and the one recorded. Such a session is withheld only what no fine-grained token reaches
 at 19.6.1, so on 19.5 the epic, work item, saved view and achievement actions are listed
 and passed to GitLab, which answers them empty or null for every fine-grained token as it
-did before 19.6. One exception is made for the prerelease of the minor right after
-the recorded one (`19.7.0-pre`), which is what GitLab.com reports: a session on an
-instance that reports it is **listed** what its grant reaches at 19.6.1, and every call
+did before 19.6. A read emptied that way comes without the
+[note](#what-an-empty-answer-can-mean) that says empty may not mean there is nothing,
+since the note reads the 19.6.1 table, where those types declare a permission; a write
+GitLab answers there without its object is still answered as
+[probably committed](#a-write-answered-without-its-object). One exception is made for
+the prerelease of the minor right after the recorded one (`19.7.0-pre`), which is what
+GitLab.com reports: a session on an instance that reports it is **listed** what its
+grant reaches at 19.6.1, and every call
 the fallback would allow is passed to GitLab, so a permission GitLab changed in that one
 milestone surfaces as GitLab's own refusal rather than as a refusal here with a stale
 name. Once GitLab.com moves past that prerelease, it falls back like any other release
@@ -444,18 +449,20 @@ Two kinds of write are answered this way:
   `group.epic_discussion_create` and `group.epic_discussion_add_note`), whose note is read
   with a permission Work Item: Create does not grant. An epic note created this way may
   also be a body of quick actions alone, which GitLab runs without keeping a note, and the
-  answer says so. A session reaches one with a grant that holds the write without the read, when the grant was not evaluated, or when it holds the
-  read on another project or group than the one written to. An edited note answered
+  answer says so. A session reaches one with a grant that holds the write without the
+  read, when the grant was not evaluated, or when it holds the read on another project
+  or group than the one written to. An edited note answered
   this way may also be a note GitLab deleted because its new body held only quick
   actions, and the answer says so, since a fine-grained token is not shown what told the
   two apart.
 - The writes of the second row of the
   [table above](#what-no-fine-grained-token-can-reach). With the table this server
   records from GitLab 19.6.1 they are withheld from every session the server knows to be
-  fine-grained, whatever its grant and whatever release the instance runs. The answer is there for a table
-  recorded from a later release that stops withholding one while a grant can still leave
-  its object out, as the custom emoji creation did when GitLab 19.5 declared Custom
-  Emoji: Read, and the epic and work item creations did with GitLab 19.6.
+  fine-grained, whatever its grant and whatever release the instance runs. The answer
+  is there for a table recorded from a later release that stops withholding one while a
+  grant can still leave its object out, as the custom emoji creation did when GitLab
+  19.5 declared Custom Emoji: Read, and the epic and work item creations did with
+  GitLab 19.6.
 
 A token whose kind the server could not learn
 ([above](#when-the-server-cannot-tell-what-kind-of-token-it-holds)) is served as a
