@@ -350,9 +350,16 @@ func (a *analyzer) judge(at *position, spine map[*position]bool) (Element, bool)
 		}
 		element.Groups = append(element.Groups, directiveGroups(recorded.Granular)...)
 	}
-	if fieldLevel := a.authz.Fields[at.owner+"."+at.field]; len(fieldLevel) > 0 && !anySkip(fieldLevel) {
+	fieldLevel := a.authz.Fields[at.owner+"."+at.field]
+	if len(fieldLevel) > 0 && !anySkip(fieldLevel) {
 		checked, allSkip = true, false
 		element.Groups = append(element.Groups, directiveGroups(fieldLevel)...)
+	}
+	if len(fieldLevel) == 0 {
+		if parent := a.parentChecks(at); len(parent) > 0 {
+			checked, allSkip = true, false
+			element.Groups = append(element.Groups, parent...)
+		}
 	}
 	if !checked {
 		return Element{}, false
@@ -363,6 +370,74 @@ func (a *analyzer) judge(at *position, spine map[*position]bool) (Element, bool)
 	element.Effect = effect
 	element.Fatal = spine[landing]
 	return element, true
+}
+
+// parentChecks reads the check GitLab 19.6 runs on a field without a
+// directive of its own that returns a type skipped with parent_authorizes
+// (Types::BaseField#parent_authorizes_check): the permissions the returned
+// type declares, held at the boundary the directives of the field's parent
+// locate. The returned type is the item type of a connection or an edge, and
+// for an interface or a union every possible type has to declare the same
+// permissions, or nothing is checked. A parent that declares nothing or skips
+// locates no boundary, so it checks nothing either; for a parent selected as
+// an interface or a union, each possible type that locates one adds its own.
+func (a *analyzer) parentChecks(at *position) []requirement {
+	permissions := a.parentPermissions(at.typeName)
+	if len(permissions) == 0 {
+		return nil
+	}
+	owners := []string{at.owner}
+	if abstract, ok := a.authz.Abstract[at.owner]; ok {
+		owners = abstract.PossibleTypes
+	}
+	var out []requirement
+	for _, owner := range owners {
+		directives := a.authz.Types[owner].Granular
+		if len(directives) == 0 || anySkip(directives) {
+			continue
+		}
+		group := requirement{perms: permissions}
+		for _, directive := range directives {
+			group.any |= boundaryOf(directive.BoundaryType)
+		}
+		if group.any == 0 {
+			group.any = finegrained.AllBoundaries
+		}
+		out = append(out, group)
+	}
+	return out
+}
+
+// parentPermissions are the permissions a field returning typeName checks on
+// its parent, sorted, and nil when it checks none: those the type declares
+// with parent_authorizes, read through a connection or an edge to its items,
+// and for an interface or a union only when every possible type declares the
+// same ones.
+func (a *analyzer) parentPermissions(typeName string) []string {
+	if strings.HasSuffix(typeName, "Connection") || strings.HasSuffix(typeName, "Edge") {
+		fields := a.authz.Types[typeName].ObjectFields
+		item, ok := fields["nodes"]
+		if !ok {
+			item, ok = fields["node"]
+		}
+		if !ok {
+			return nil
+		}
+		typeName = item.NamedType()
+	}
+	candidates := []string{typeName}
+	if abstract, ok := a.authz.Abstract[typeName]; ok {
+		candidates = abstract.PossibleTypes
+	}
+	var declared []string
+	for i, candidate := range candidates {
+		permissions := apilive.ParentPermissions(a.authz.Types[candidate].Granular)
+		if permissions == nil || (i > 0 && !slices.Equal(permissions, declared)) {
+			return nil
+		}
+		declared = permissions
+	}
+	return declared
 }
 
 // landing reads where a denial at a position takes the answer, and what it

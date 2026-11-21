@@ -112,7 +112,10 @@
 //   - a route writing its own next link or cursor headers through
 //     Gitlab::Pagination::Keyset::HeaderBuilder, asked by what the hash it
 //     hands the builder names (`last` on the registry tags);
-//   - keyset_paginate, asked by the param it is handed as its cursor.
+//   - keyset_paginate, asked by the param it is handed as its cursor;
+//   - a route writing the cursor headers of a page it built itself through
+//     Gitlab::Pagination::Keyset::CursorBasedRequestContext, asked by
+//     `cursor`: the work item routes of 19.6, offset behind an opaque cursor.
 //
 // Each site is located, quoted, and named with the helpers the walk went
 // through to reach it and the feature flags it is behind, with their defaults:

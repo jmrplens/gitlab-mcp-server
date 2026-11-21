@@ -75,7 +75,16 @@ require "set"
 # keyset paginator, so GitLab ignores pagination=keyset there and answers an
 # offset page, while in version 4 the same absence meant "not recorded"; a
 # reader taking one for the other would call every keyset route an offset one.
-SCHEMA_VERSION = 5
+#
+# Version 6 records the permissions a GraphQL type skipped with
+# `parent_authorizes` declares, a directive's `parent_authorizes`, and the
+# pending list's `parent_authorizes:` entries. From GitLab 19.6 every field
+# without a directive of its own that returns such a type checks those
+# permissions on the boundary of its parent (Types::BaseField
+# #parent_authorizes_check), while in version 5 a type skipped with that reason
+# required nothing; a reader taking one for the other would judge those fields
+# as checking nothing.
+SCHEMA_VERSION = 6
 
 # ---------------------------------------------------------------------------
 # Entities
@@ -519,7 +528,7 @@ end
 # page can be served, not a promise that one is: see paginate_with_strategies
 # below.
 #
-# Five shapes call one, each recorded under its own name:
+# Six shapes call one, each recorded under its own name:
 #
 #   paginate_with_strategies - the helper (lib/api/helpers/pagination_strategies.rb)
 #       that pages by keyset when pagination=keyset: CursorPager, asked by
@@ -539,6 +548,11 @@ end
 #   keyset_header_builder - a route writing its own keyset next link or cursor
 #       headers through Gitlab::Pagination::Keyset::HeaderBuilder.
 #   keyset_paginate - a relation paged with `keyset_paginate(cursor: ...)`.
+#   cursor_request_context - a route writing the cursor headers of a page it
+#       built itself through Gitlab::Pagination::Keyset::CursorBasedRequestContext,
+#       which the work item routes of 19.6 do for a collection paged by offset
+#       behind an opaque cursor (paginate_with_offset_cursor) and for their
+#       discussions; the next page is asked by the same `cursor`.
 #
 # The walk follows calls on the endpoint itself, which is what a helper call
 # is, and never calls on another object: a finder or a service that pages by
@@ -839,6 +853,8 @@ class KeysetWalk
       state.flag = nil
       if name.end_with?("Gitlab::Pagination::GitalyKeysetPager")
         site("gitaly_keyset_pager", state.path, state.line, state.via, active, @paginators["gitaly_keyset_pager"])
+      elsif name.end_with?("Gitlab::Pagination::Keyset::CursorBasedRequestContext")
+        site("cursor_request_context", state.path, state.line, state.via, active, @paginators["cursor_headers"])
       end
     elsif operation == :putobject && state.feature && state.flag.nil? && instruction[1].is_a?(Symbol)
       state.flag = instruction[1].to_s
@@ -1124,8 +1140,12 @@ GRANULAR_SCOPE = ::Directives::Authz::GranularScope
 
 # The arguments of Directives::Authz::GranularScope. Any other is recorded by
 # name as unknown, so an argument a later release adds is seen.
+# parent_authorizes arrived in 19.6: the permissions a type skipped with that
+# reason needs, checked by every field that returns it on the boundary of the
+# field's parent.
 GRANULAR_DIRECTIVE_ARGUMENTS = %w[
   permissions boundary_type boundary boundary_argument requirement_group assignable_when skip_reason
+  parent_authorizes
 ].freeze
 
 def directive_of(directive)
@@ -1266,6 +1286,28 @@ def pending_rule_type?(rule, name, type)
   type.kind.object? && !name.end_with?("Payload", "Connection", "Edge")
 end
 
+# PARENT_RULE_CLASS lists the pending list's parent_authorizes: entries from
+# 19.6 on: the types skipped with parent_authorizes that declare no
+# permissions although a field on a type with its own token check returns
+# them. PARENT_RULE_FILE is where the image keeps it.
+PARENT_RULE_CLASS = "Tasks::Gitlab::Permissions::Graphql::ParentAuthorizesCheck"
+PARENT_RULE_FILE = "lib/tasks/gitlab/permissions/graphql/parent_authorizes_check.rb"
+
+# pending_parent_types answers the parent_authorizes: half of the pending list
+# with the image's own check, as GitLab's validate task computes it, and nil
+# for an image that ships no such check, where the list has no such half.
+def pending_parent_types
+  check = PARENT_RULE_CLASS.safe_constantize
+  if check.nil?
+    path = Rails.root.join(PARENT_RULE_FILE)
+    require path.to_s if File.exist?(path)
+    check = PARENT_RULE_CLASS.safe_constantize
+  end
+  return nil unless check.is_a?(Class)
+
+  check.new(GitlabSchema).undeclared_types.keys.map(&:to_s).sort
+end
+
 # pending_list_document reads the pending list, when the image ships it, so
 # the set computed below can be held to it.
 def pending_list_document
@@ -1274,6 +1316,7 @@ def pending_list_document
 
   content = File.read(path)
   out = { "digest" => "sha256:#{Digest::SHA256.hexdigest(content)}", "types" => [], "mutations" => [] }
+  parent = []
   unknown = []
   content.each_line do |line|
     entry = line.strip
@@ -1283,11 +1326,13 @@ def pending_list_document
     case kind
     when "type" then out["types"] << name
     when "mutation" then out["mutations"] << name
+    when "parent_authorizes" then parent << name
     else unknown << entry
     end
   end
   out["types"].sort!
   out["mutations"].sort!
+  out["parent_authorizes"] = parent.sort unless parent.empty?
   out["unknown_entries"] = unknown.sort unless unknown.empty?
   out
 end
@@ -1389,12 +1434,15 @@ end
 def graphql_authz_document
   types, abstract, rule_types = graphql_named_types
   mutations, rule_mutations = graphql_mutations
+  rule = { "types" => rule_types.sort, "mutations" => rule_mutations.sort }
+  parent = pending_parent_types
+  rule["parent_authorizes"] = parent if parent && !parent.empty?
   document = {
     "types" => types,
     "abstract" => abstract,
     "mutations" => mutations,
     "fields" => graphql_field_declarations,
-    "undeclared_by_todo_rule" => { "types" => rule_types.sort, "mutations" => rule_mutations.sort },
+    "undeclared_by_todo_rule" => rule,
   }
   pending = pending_list_document
   document["todo"] = pending if pending

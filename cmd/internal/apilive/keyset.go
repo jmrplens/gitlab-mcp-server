@@ -55,6 +55,12 @@ const (
 	PaginatorHeaderBuilder = "keyset_header_builder"
 	// PaginatorKeysetPaginate is a relation paged with keyset_paginate.
 	PaginatorKeysetPaginate = "keyset_paginate"
+	// PaginatorCursorContext is a route writing the cursor headers of a page
+	// it built itself through
+	// Gitlab::Pagination::Keyset::CursorBasedRequestContext, asked by the
+	// same `cursor`: the work item routes of GitLab 19.6, for a collection
+	// paged by offset behind an opaque cursor and for their discussions.
+	PaginatorCursorContext = "cursor_request_context"
 )
 
 // The keys of [Document.KeysetPaginators]: the paginators the introspection
@@ -77,7 +83,7 @@ const (
 func Paginators() []string {
 	return []string{
 		PaginatorStrategies, PaginatorGitalyKeysetPager, PaginatorGitalyPagination,
-		PaginatorHeaderBuilder, PaginatorKeysetPaginate,
+		PaginatorHeaderBuilder, PaginatorKeysetPaginate, PaginatorCursorContext,
 	}
 }
 

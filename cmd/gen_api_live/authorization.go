@@ -306,10 +306,17 @@ func directiveProblems(doc apilive.Document) []string {
 		return nil
 	}
 	permissions := newPermissionChecker(doc.Granular)
-	var ambiguous, unknownKeys, badTypes []string
+	var ambiguous, unknownKeys, badTypes, strayParent []string
 	judge := func(site string, directives []apilive.Directive) {
 		for _, directive := range directives {
 			permissions.check(site, directive.Permissions)
+			permissions.check(site, directive.ParentAuthorizes)
+			// GitLab writes parent_authorizes only beside the skip reason of
+			// the same name; anywhere else the fields returning the type would
+			// check permissions the type itself does not skip for.
+			if len(directive.ParentAuthorizes) > 0 && directive.SkipReason != apilive.SkipParentAuthorizes {
+				strayParent = append(strayParent, site)
+			}
 			// A skip and a requirement on one directive cannot both be meant,
 			// and a directive carrying neither requires nothing anybody can
 			// name; GitLab's own validator refuses both.
@@ -342,6 +349,9 @@ func directiveProblems(doc apilive.Document) []string {
 	problems = reportSites(problems, badTypes,
 		"%d GraphQL directives name a boundary type outside project, group, user and instance (%s): "+
 			"GitLab resolves no boundary for it")
+	problems = reportSites(problems, strayParent,
+		"%d GraphQL directives carry parent_authorizes without the parent_authorizes skip reason (%s): "+
+			"a reader cannot tell whether the type or the fields returning it are checked")
 	return reportSites(problems, unknownKeys,
 		"%d GraphQL directives carry arguments nothing here reads (%s): introspect.rb met an argument it "+
 			"does not know, and a reader would judge the element without it")
@@ -401,6 +411,7 @@ func todoProblems(doc apilive.Document) []string {
 	}{
 		{"types", rule.Types, todo.Types},
 		{"mutations", rule.Mutations, todo.Mutations},
+		{"parent_authorizes types", rule.ParentAuthorizes, todo.ParentAuthorizes},
 	} {
 		onlyRule, onlyTodo := setDifference(kind.rule, kind.todo), setDifference(kind.todo, kind.rule)
 		if len(onlyRule)+len(onlyTodo) == 0 {
@@ -413,7 +424,7 @@ func todoProblems(doc apilive.Document) []string {
 		))
 	}
 	return reportSites(problems, todo.UnknownEntries,
-		"authorization_todo.txt holds %d entries of a kind other than type and mutation (%s): "+
+		"authorization_todo.txt holds %d entries of a kind other than type, mutation and parent_authorizes (%s): "+
 			"the list now names something this record does not compare")
 }
 
