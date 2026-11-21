@@ -19,6 +19,8 @@
 #   ORBIT_FIXTURES_VISIBILITY (default: public)
 #                                       every project in jmrp-oss is public; set private for a private group
 #   ORBIT_FIXTURES_GITLAB_URL (default: https://gitlab.com)
+#   ORBIT_FIXTURES_MERGE_POLL_SECONDS (default: 2)
+#                                       seconds between two reads of the fixture MR while GitLab checks it
 #
 # Flags:
 #   --mirror-cli    additionally mirror gitlab-org/cli (the glab CLI) as
@@ -33,7 +35,9 @@
 #     - the repository's MIT LICENSE
 #     - Python package (acme.orders) with cross-module imports
 #     - .gitlab-ci.yml (4 stages, 5 jobs, SAST, Secret Detection)
-#     - 1 squash-merged MR (feature/restock-helper)
+#     - 1 squash-merged MR (feature/restock-helper), merged once GitLab
+#       has checked it; a closed one is reopened, or replaced when its
+#       branch is gone, and a merge that does not end merged stops the run
 #     - 5 issues, 1 milestone, 7 labels
 #   <namespace>/security-fixtures
 #     - the repository's MIT LICENSE
@@ -563,26 +567,107 @@ JSON
 done
 
 echo "    → squash-merged MR (feature/restock-helper → main)"
-# Idempotency: only create the branch and MR if MR !1 does not exist
-existing_mr=$(api_get "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all" \
-  | python3 -c 'import sys,json
+
+# mr_field FIELD  ->  echoes FIELD of the merge request API_BODY holds, or
+#   nothing when the answer is not one or does not carry it as a string or a
+#   number.
+mr_field() {
+  printf '%s' "$API_BODY" | FIELD="$1" python3 -c 'import json,os,sys
 try:
-    arr = json.load(sys.stdin)
-    if isinstance(arr, list) and arr:
-        print(arr[0]["iid"])
-except Exception: pass' 2>/dev/null)
-if [ -z "$existing_mr" ]; then
-  work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
+    value = json.load(sys.stdin).get(os.environ["FIELD"])
+    if isinstance(value, (str, int)) and not isinstance(value, bool): print(value)
+except Exception: pass' 2>/dev/null
+}
+
+# api_body_is_object  ->  succeeds when API_BODY is one JSON object, the shape
+#   of a merge request, and fails on anything else: null, a list, a number, or
+#   a body that is not JSON at all.
+api_body_is_object() {
+  printf '%s' "$API_BODY" | python3 -c 'import json,sys
+try:
+    sys.exit(0 if isinstance(json.load(sys.stdin), dict) else 1)
+except Exception:
+    sys.exit(1)' 2>/dev/null
+}
+
+# wait_for_mergeability IID
+#   GitLab decides whether a merge request can be merged asynchronously, after
+#   it is opened or reopened, and refuses a merge asked for while it is still
+#   deciding (#1428). Reads the merge request until detailed_merge_status says
+#   the check has ended, at most MERGE_POLLS times, and fails on a read GitLab
+#   does not answer, or answers with no merge request in it. An answer that is
+#   one without the field, from a GitLab older than it, leaves the merge itself
+#   to say whether it can be made.
+MERGE_POLLS=60
+MERGE_POLL_SECONDS="${ORBIT_FIXTURES_MERGE_POLL_SECONDS:-2}"
+wait_for_mergeability() {
+  local iid="$1" status="" _
+  for _ in $(seq 1 "$MERGE_POLLS"); do
+    api_request GET "/projects/$KG_ID/merge_requests/$iid"
+    if [ "$API_STATUS" != "200" ] || ! api_body_is_object; then
+      echo "    ✗ cannot read MR !$iid (HTTP $API_STATUS): $API_BODY" >&2
+      return 1
+    fi
+    status=$(mr_field detailed_merge_status)
+    case "$status" in
+      unchecked | checking | preparing | approvals_syncing) sleep "$MERGE_POLL_SECONDS" ;;
+      *) return 0 ;;
+    esac
+  done
+  echo "    ✗ MR !$iid was still being checked after $MERGE_POLLS reads (detailed_merge_status $status)" >&2
+  return 1
+}
+
+# merge_fixture_mr IID
+#   Squash-merges the fixture merge request once GitLab has checked it, and
+#   fails unless GitLab answers the merge with the merge request merged. The
+#   merge is a PUT: the POST this script used to send is a route GitLab does
+#   not have, and its answer was never read.
+merge_fixture_mr() {
+  local iid="$1" state
+  wait_for_mergeability "$iid" || return 1
+  api_request PUT "/projects/$KG_ID/merge_requests/$iid/merge" \
+    '{"squash":true,"should_remove_source_branch":true,"squash_commit_message":"Add seed_stock helper for fixture test runs"}'
+  if ! api_ok; then
+    echo "    ✗ GitLab refused to merge MR !$iid (HTTP $API_STATUS): $API_BODY" >&2
+    return 1
+  fi
+  state=$(mr_field state)
+  if [ "$state" != "merged" ]; then
+    echo "    ✗ MR !$iid is ${state:-in no state} after the merge, not merged: $API_BODY" >&2
+    return 1
+  fi
+  echo "    ✓ MR !$iid merged"
+}
+
+# push_fixture_mr_branch  ->  pushes the fixture branch from main, with the
+#   seed_stock helper added to the fulfillment module. The token given to the
+#   clone with -c is not kept in the clone's configuration, so it is set there
+#   for the push to origin, as for a new project's first push above.
+#
+#   Every step is checked by hand and fails the function: it runs under
+#   open_fixture_mr, which the run calls on the left of an || inside a command
+#   substitution, where errexit is off and stays off for a set -e of its own.
+#   An unchecked clone that failed used to leave the cd into it failing too,
+#   and every step after it ran in the caller's directory, the token
+#   configured, its changes committed and pushed.
+push_fixture_mr_branch() {
+  local work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
   rm -rf "$work"
-  git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
-    clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2
-  (
-    cd "$work"
-    git config user.email "orbit-fixtures@local"
-    git config user.name  "Orbit Fixtures Bot"
-    git checkout -q -b feature/restock-helper
+  if ! git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
+    clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2 >&2; then
+    echo "    ✗ could not clone kg-fixtures to push feature/restock-helper" >&2
+    rm -rf "$work"
+    return 1
+  fi
+  if ! (
+    cd "$work" || exit 1
+    git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" || exit 1
+    git config user.email "orbit-fixtures@local" || exit 1
+    git config user.name  "Orbit Fixtures Bot" || exit 1
+    git checkout -q -b feature/restock-helper || exit 1
     # Insert a seed_stock helper (deterministic diff)
-    python3 - <<'PY'
+    python3 - <<'PY' || exit 1
 from pathlib import Path
 p = Path("src/acme/orders/fulfillment.py")
 src = p.read_text()
@@ -598,11 +683,25 @@ idx = src.find(needle)
 assert idx > 0
 p.write_text(src[:idx] + seed + src[idx:])
 PY
-    git add -A
-    git commit -m "feat(fulfillment): add seed_stock helper for fixture test runs" --quiet
-    git push --quiet -u origin feature/restock-helper 2>&1 | tail -2
-  )
-  new_mr=$(api_post "/projects/$KG_ID/merge_requests" "$(cat <<'JSON'
+    git add -A || exit 1
+    git commit -m "feat(fulfillment): add seed_stock helper for fixture test runs" --quiet || exit 1
+    git push --quiet -u origin feature/restock-helper 2>&1 | tail -2 || exit 1
+  ) >&2; then
+    echo "    ✗ could not push feature/restock-helper" >&2
+    rm -rf "$work"
+    return 1
+  fi
+  rm -rf "$work"
+}
+
+# open_fixture_mr [--from-existing-branch]  ->  pushes the fixture branch from
+#   main, unless it is already there, and opens its merge request, then echoes
+#   the new merge request's iid, or fails with GitLab's answer when it carries
+#   none. A branch that could not be pushed fails it before any merge request
+#   is asked for.
+open_fixture_mr() {
+  [ "${1:-}" = "--from-existing-branch" ] || push_fixture_mr_branch || return 1
+  api_request POST "/projects/$KG_ID/merge_requests" "$(cat <<'JSON'
 {
   "source_branch": "feature/restock-helper",
   "target_branch": "main",
@@ -612,14 +711,127 @@ PY
   "squash": true
 }
 JSON
-)" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("iid",""))')
-  echo "    ✓ MR !$new_mr opened"
-  api_post "/projects/$KG_ID/merge_requests/$new_mr/merge" '{"squash":true,"should_remove_source_branch":true,"merge_commit_message":"Add seed_stock helper for fixture test runs"}' >/dev/null
-  echo "    ✓ MR !$new_mr merged"
-  rm -rf "$work"
-else
-  echo "    ✓ MR with source=feature/restock-helper already exists (!$existing_mr)"
+)"
+  local iid=""
+  api_ok && iid=$(mr_field iid)
+  if [ -z "$iid" ]; then
+    echo "    ✗ could not open the fixture MR (HTTP $API_STATUS): $API_BODY" >&2
+    return 1
+  fi
+  echo "    ✓ MR !$iid opened" >&2
+  echo "$iid"
+}
+
+# The merge requests from the fixture branch, in any state, decide what is
+# left to do (#1428): one merged is the fixture, one open is merged, and one
+# closed without being merged is reopened and merged while its branch is
+# there, or replaced by a new one when the branch is gone. A merge request
+# found in any state used to count as provisioned, so a closed one was never
+# repaired. Only a merge request from kg-fixtures itself into main counts: the
+# project is public, anyone can open one from a fork branch of the same name,
+# the list filters by branch name alone, and what is picked here is merged
+# with the operator's token. Every page is read before choosing: GitLab answers
+# twenty at a time unless asked for more, and merge requests from forks can push
+# the fixture's own off the first page, which would then be opened again.
+mr_page=1
+mr_pages=""
+fixture_mr=""
+while :; do
+  api_request GET "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all&per_page=100&page=$mr_page"
+  [ "$API_STATUS" = "200" ] || { mr_pages=""; break; }
+  # The page is kept re-encoded on one line, after its count: the pages are
+  # read back a line each, and JSON may spread one list over many lines.
+  mr_read=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
+try:
+    listed = json.load(sys.stdin)
+    print(len(listed), json.dumps(listed)) if isinstance(listed, list) else print("ERR")
+except Exception:
+    print("ERR")')
+  [ "$mr_read" != "ERR" ] || { mr_pages=""; break; }
+  mr_count=${mr_read%% *}
+  mr_pages+="${mr_read#* }"$'\n'
+  [ "$mr_count" -lt 100 ] && break
+  mr_page=$((mr_page + 1))
+done
+if [ -n "$mr_pages" ]; then
+  fixture_mr=$(printf '%s' "$mr_pages" | KG_ID="$KG_ID" python3 -c 'import json,os,sys
+kg = int(os.environ["KG_ID"])
+listed = []
+for line in sys.stdin:
+    if line.strip():
+        listed.extend(json.loads(line))
+found = {}
+for mr in listed:
+    if not isinstance(mr, dict) or not isinstance(mr.get("iid"), int):
+        continue
+    if mr.get("source_project_id") != kg or mr.get("target_project_id") != kg or mr.get("target_branch") != "main":
+        continue
+    if mr.get("state") in ("merged", "opened", "closed"):
+        found.setdefault(mr["state"], []).append(mr["iid"])
+for state in ("merged", "opened", "closed"):
+    if state in found:
+        print(state, max(found[state]))
+        break
+else:
+    print("none")' 2>/dev/null)
 fi
+if [ -z "$fixture_mr" ]; then
+  echo "    ✗ cannot list the merge requests from feature/restock-helper (HTTP $API_STATUS): $API_BODY" >&2
+  exit 1
+fi
+read -r mr_state mr_iid <<< "$fixture_mr"
+case "$mr_state" in
+  merged)
+    echo "    ✓ MR !$mr_iid is merged"
+    ;;
+  opened)
+    merge_fixture_mr "$mr_iid" || exit 1
+    ;;
+  closed)
+    api_request GET "/projects/$KG_ID/repository/branches/feature%2Frestock-helper"
+    case "$API_STATUS" in
+      200)
+        api_request PUT "/projects/$KG_ID/merge_requests/$mr_iid" '{"state_event":"reopen"}'
+        if ! api_ok || [ "$(mr_field state)" != "opened" ]; then
+          echo "    ✗ could not reopen MR !$mr_iid (HTTP $API_STATUS): $API_BODY" >&2
+          exit 1
+        fi
+        echo "    ✓ MR !$mr_iid reopened"
+        merge_fixture_mr "$mr_iid" || exit 1
+        ;;
+      404)
+        echo "    → MR !$mr_iid was closed and its branch is gone: opening a new one"
+        new_mr=$(open_fixture_mr) || exit 1
+        merge_fixture_mr "$new_mr" || exit 1
+        ;;
+      *)
+        echo "    ✗ cannot tell whether branch feature/restock-helper exists (HTTP $API_STATUS): $API_BODY" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  *)
+    # A run that pushed the branch and then failed to open its merge request
+    # leaves the branch behind. A new commit pushed over it is not a
+    # fast-forward and GitLab refuses it, so the merge request is opened from
+    # the branch as it is.
+    api_request GET "/projects/$KG_ID/repository/branches/feature%2Frestock-helper"
+    case "$API_STATUS" in
+      200)
+        echo "    → branch feature/restock-helper is there without a merge request: opening one from it"
+        new_mr=$(open_fixture_mr --from-existing-branch) || exit 1
+        ;;
+      404)
+        new_mr=$(open_fixture_mr) || exit 1
+        ;;
+      *)
+        echo "    ✗ cannot tell whether branch feature/restock-helper exists (HTTP $API_STATUS): $API_BODY" >&2
+        exit 1
+        ;;
+    esac
+    merge_fixture_mr "$new_mr" || exit 1
+    ;;
+esac
 
 # ─── Fixture 2: security-fixtures ─────────────────────────────────────
 
