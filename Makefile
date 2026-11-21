@@ -565,9 +565,11 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # It was 1800s and that was not a budget, it was the wall the run hit. A CE
 # run of common measures ~1800s on a developer machine, so the margin was two
 # seconds, and CI, on a slower runner, panicked with "test timed out after
-# 30m0s" after 1800.077s. The figure is the same 3600s the licensed run uses:
-# common grows with every scenario, and a timeout is meant to stop a hang
-# rather than to cap a suite that is doing its work.
+# 30m0s" after 1800.077s. The figure is 3600s, which the licensed run used
+# too until its packages needed 5400s on GitLab 19.6.1
+# (E2E_DOCKER_ENTERPRISE_TIMEOUT): common grows with every scenario, and a
+# timeout is meant to stop a hang rather than to cap a suite that is doing its
+# work.
 #
 # Raising it has a second consequence: E2E_SWEEP_MIN_AGE, at
 # e2e-clean-orphans, must stay above this timeout plus the exit hooks'
@@ -693,13 +695,14 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 #
 # The default, 2h, outlasts every package of a run started with the default
 # timeouts above. Each package stamps its own start, and its tests end by its
-# timeout, E2E_GITLAB_TIMEOUT or E2E_DOCKER_ENTERPRISE_TIMEOUT (3600s each),
-# since the binary's own alarm at that moment is a fatal panic. The exit hooks
-# therefore run only after tests that ended in time, and then on the exit
-# sweep's 5m and the World teardown's 3m budgets, which bound how long the
+# timeout, E2E_GITLAB_TIMEOUT or E2E_DOCKER_ENTERPRISE_TIMEOUT (3600s and
+# 5400s), since the binary's own alarm at that moment is a fatal panic. The
+# exit hooks therefore run only after tests that ended in time, and then on the
+# exit sweep's 5m and the World teardown's 3m budgets, which bound how long the
 # package's fixtures are in use: its timeout plus 8m. go test's own backstop
 # only shortens that: it sends SIGQUIT max(1m, timeout/10) past the timeout,
-# 6m at 3600s, and kills the binary up to timeout/10 after that.
+# 6m at 3600s and 9m at 5400s, and kills the binary up to timeout/10 after
+# that.
 # TestSweepMinAge_MakefileDefaults_OutlastEveryPackage fails when a default
 # timeout plus the exit hooks' 8m reaches E2E_SWEEP_MIN_AGE, a timeout of 112
 # minutes or more at the 2h default. It cannot see a run started with a longer
