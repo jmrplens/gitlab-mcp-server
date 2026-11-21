@@ -42,6 +42,15 @@ func jsonRoute(t *testing.T, status int, body any) goldenRoute {
 // kgMR is the path of kg-fixtures' merge requests in the recorded scenarios.
 const kgMR = "/api/v4/projects/10/merge_requests"
 
+// kgProjectID is kg-fixtures' project id in the recorded scenarios.
+const kgProjectID = 10
+
+// listedMR is a merge request as GitLab lists it from kg-fixtures into main,
+// the only kind a run may take for the fixture's.
+func listedMR(iid int64, state string) map[string]any {
+	return map[string]any{"iid": iid, "state": state, "source_project_id": kgProjectID, "target_project_id": kgProjectID, "target_branch": "main"}
+}
+
 // setupCase runs setup against routes, with git standing in as fakeGit and
 // failing the subcommand failGit names, and returns the exit code and what
 // the run wrote to stderr.
@@ -75,8 +84,8 @@ func setupCase(t *testing.T, routes map[string]goldenRoute, failGit string, chan
 // branch, and a wait the run is cancelled during. A merge request refused
 // over a branch a failed run left stops the run without anything cloned.
 func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
-	opened := []map[string]any{{"iid": 1, "state": "opened"}}
-	closed := []map[string]any{{"iid": 1, "state": "closed"}}
+	opened := []map[string]any{listedMR(1, "opened")}
+	closed := []map[string]any{listedMR(1, "closed")}
 	mergeable := map[string]any{"iid": 1, "state": "opened", "detailed_merge_status": "mergeable"}
 	branch := "GET /api/v4/projects/10/repository/branches/feature%2Frestock-helper"
 	// notJSON is an answer GitLab gives with a 200 and a body no JSON reader
@@ -137,27 +146,87 @@ func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
 // TestPickMergeRequest_States_MergedThenOpenThenClosedNewestFirst checks the
 // merge request that decides a run: a merged one before an open one before a
 // closed one, the newest of each, and none for states that are none of them.
+// Only one from kg-fixtures itself into main counts, whatever its state: one
+// from a fork, into another project or into another branch is passed over.
 func TestPickMergeRequest_States_MergedThenOpenThenClosedNewestFirst(t *testing.T) {
+	own := func(iid int64, state string) mergeRequest {
+		return mergeRequest{IID: iid, State: state, SourceProjectID: kgProjectID, TargetProjectID: kgProjectID, TargetBranch: "main"}
+	}
+	fromFork, intoAnotherProject, intoAnotherBranch := own(9, "merged"), own(10, "opened"), own(11, "closed")
+	fromFork.SourceProjectID = 99
+	intoAnotherProject.TargetProjectID = 99
+	intoAnotherBranch.TargetBranch = "release"
 	cases := []struct {
 		name      string
 		requests  []mergeRequest
 		wantState string
 		wantIID   int64
 	}{
-		{name: "a merged one among others", requests: []mergeRequest{{IID: 3, State: "opened"}, {IID: 1, State: "merged"}, {IID: 4, State: "closed"}}, wantState: "merged", wantIID: 1},
-		{name: "the newest open one", requests: []mergeRequest{{IID: 2, State: "opened"}, {IID: 5, State: "opened"}, {IID: 7, State: "closed"}}, wantState: "opened", wantIID: 5},
-		{name: "the newest closed one", requests: []mergeRequest{{IID: 2, State: "closed"}, {IID: 6, State: "closed"}}, wantState: "closed", wantIID: 6},
-		{name: "the newest listed first", requests: []mergeRequest{{IID: 8, State: "opened"}, {IID: 3, State: "opened"}}, wantState: "opened", wantIID: 8},
-		{name: "only a locked one", requests: []mergeRequest{{IID: 2, State: "locked"}}},
+		{name: "a merged one among others", requests: []mergeRequest{own(3, "opened"), own(1, "merged"), own(4, "closed")}, wantState: "merged", wantIID: 1},
+		{name: "the newest open one", requests: []mergeRequest{own(2, "opened"), own(5, "opened"), own(7, "closed")}, wantState: "opened", wantIID: 5},
+		{name: "the newest closed one", requests: []mergeRequest{own(2, "closed"), own(6, "closed")}, wantState: "closed", wantIID: 6},
+		{name: "the newest listed first", requests: []mergeRequest{own(8, "opened"), own(3, "opened")}, wantState: "opened", wantIID: 8},
+		{name: "only a locked one", requests: []mergeRequest{own(2, "locked")}},
 		{name: "none", requests: nil},
+		{name: "only others", requests: []mergeRequest{fromFork, intoAnotherProject, intoAnotherBranch}},
+		{name: "the fixture's beside a merged one from a fork", requests: []mergeRequest{fromFork, own(2, "opened")}, wantState: "opened", wantIID: 2},
+		{name: "the fixture's beside newer others", requests: []mergeRequest{intoAnotherProject, own(2, "opened"), intoAnotherBranch}, wantState: "opened", wantIID: 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, iid := pickMergeRequest(tc.requests)
+			state, iid := pickMergeRequest(tc.requests, kgProjectID)
 			if state != tc.wantState || iid != tc.wantIID {
 				t.Errorf("picked %q !%d, want %q !%d", state, iid, tc.wantState, tc.wantIID)
 			}
 		})
+	}
+}
+
+// TestFixtureMergeRequest_OthersFromTheBranch_CountAsNone checks a merge
+// request from a fork, into another project or into another branch is never
+// merged, reopened or taken for the fixture's. The project is public, so
+// anyone can open one from a branch of the fixture branch's name, the list
+// filters by that name alone, and the run merges what it picks with the
+// operator's token. With only those listed, the run sends what it sends with
+// none listed: the recorded scenario of a branch a failed run left behind,
+// whose merge request is opened from it and merged.
+func TestFixtureMergeRequest_OthersFromTheBranch_CountAsNone(t *testing.T) {
+	var golden goldenSetup
+	for _, recorded := range readGoldens(t) {
+		if recorded.Scenario == "opens-the-mr-from-a-branch-left-behind" {
+			golden = recorded
+		}
+	}
+	if golden.Scenario == "" {
+		t.Fatal("no opens-the-mr-from-a-branch-left-behind golden under testdata/setup")
+	}
+	fromFork, intoAnotherProject, intoAnotherBranch := listedMR(5, "opened"), listedMR(4, "closed"), listedMR(3, "merged")
+	fromFork["source_project_id"] = 99
+	intoAnotherProject["target_project_id"] = 99
+	intoAnotherBranch["target_branch"] = "release"
+	golden.Routes = maps.Clone(golden.Routes)
+	golden.Routes["GET "+kgMR] = jsonRoute(t, 200, []map[string]any{fromFork, intoAnotherProject, intoAnotherBranch})
+	fake := newFakeGitLab(golden.Routes)
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+	git := &fakeGit{base: server.URL, fixture: kgFixture}
+
+	code, stdout, stderr := setupAgainst(t, golden, server, git.run)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	got := fake.requests()
+	if len(got) != len(golden.Requests) {
+		t.Fatalf("%d requests sent, want the %d of a run with none listed", len(got), len(golden.Requests))
+	}
+	for i, request := range got {
+		if !sameRequest(request, golden.Requests[i]) {
+			t.Errorf("request %d: %s sent, want %s", i+1, describe(request), describe(golden.Requests[i]))
+		}
+	}
+	if len(git.log) > 0 {
+		t.Errorf("git was asked for %q, want nothing: the fixture branch is there", git.log)
 	}
 }
 
