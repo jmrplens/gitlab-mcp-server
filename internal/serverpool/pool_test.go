@@ -3521,6 +3521,9 @@ func TestGetOrCreate_RejectsCredentialGitLabRefuses(t *testing.T) {
 			if size := pool.Size(); size != 0 {
 				t.Errorf("pool size = %d, want 0 — a refused credential must not occupy an entry", size)
 			}
+			if held := len(pool.probes); held != 0 {
+				t.Errorf("probe slots held after the refusal = %d, want 0", held)
+			}
 		})
 	}
 }
