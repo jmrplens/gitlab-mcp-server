@@ -276,6 +276,14 @@ The REST asymmetry this server's authorization rests on, that a wrong "yes" surf
 - A declared position a non-null chain carries onto the spine is judged as part of it, since denying it nulls the spine.
 - Anything else denied is **degraded**: the action is served, and the answer carries a note naming each part GitLab leaves empty, written as the GraphQL selection that reaches it (`vulnerability { issueLinks { nodes } }`), and the permission a declared one needs.
 
+**A field that declares nothing can still be checked, from 19.6.** GitLab 19.6 adds `parent_authorizes` to the directive: a type skipped with that reason names the permissions it hands to every field returning it, and `Types::BaseField#parent_authorizes_check` holds a field with no directive of its own to them. The join reads it the same way (`parentChecks` in `cmd/gen_action_grants/internal/join/graphql.go`), and it is the rule to keep in mind when a field the record shows undeclared turns out to require something:
+
+- It applies only to a field with no directive of its own. A field that declares permissions is checked by them alone, and one that skips by nothing, since GitLab reads the field's own `granular_scope_authorization` first.
+- The permissions are the returned type's, sorted: the item type of a connection (`nodes`) or of an edge (`node`), and for an interface or a union only when every possible type declares the same ones; possible types that disagree, or one that declares none, check nothing.
+- They are required at the boundaries the directives of the field's parent locate: every boundary type the parent's directives name, every boundary when they name none, and no check at all when the parent skips or declares nothing, which is GitLab's reading as well. A parent selected as an interface or a union adds one requirement per possible type that locates a boundary.
+
+The record carries the half GitLab's CI keeps exact too: `authorization_todo.txt` lists as `parent_authorizes:` the types skipped that way that declare no permissions although a checked type returns them, and `cmd/gen_api_live` holds the list to what the image's own `ParentAuthorizesCheck` computes. This is schema version 6 of the record, first taken at 19.6.1-ee.
+
 A not-found answer of an action that reads GraphQL, and an empty list from one whose answer is a GraphQL list, carry a note too, since either can be the grant rather than the data. See [Fine-grained Tokens](https://docs.jmrp.io/gitlab-mcp-server/operations/fine-grained-tokens/#what-an-empty-answer-can-mean) and [Fine-grained Permissions](https://docs.jmrp.io/gitlab-mcp-server/reference/fine-grained-permissions/), which prints the spine verdict of every action.
 
 ## Shared Utilities
