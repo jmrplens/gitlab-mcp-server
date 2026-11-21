@@ -224,7 +224,7 @@ func (p *provisioner) pushMergeRequestBranch(ctx context.Context) error {
 	defer os.RemoveAll(work)
 	clone := filepath.Join(work, "repository")
 	remote := p.gitlabURL + "/" + p.namespace + "/kg-fixtures.git"
-	if cloneErr := p.gitSteps(ctx, work, [][]string{{"-c", p.authHeader(), "clone", "--quiet", remote, clone}}); cloneErr != nil {
+	if cloneErr := p.gitSteps(ctx, work, [][]string{{"-c", p.authHeader(), "clone", gitQuiet, remote, clone}}); cloneErr != nil {
 		return cloneErr
 	}
 	if branchErr := p.gitSteps(ctx, clone, [][]string{
@@ -238,8 +238,8 @@ func (p *provisioner) pushMergeRequestBranch(ctx context.Context) error {
 	}
 	return p.gitSteps(ctx, clone, [][]string{
 		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "add", "-A"},
-		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "commit", "-m", "feat(fulfillment): add seed_stock helper for fixture test runs", "--quiet"},
-		{"push", "--quiet", "-u", "origin", mrBranch},
+		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "commit", "-m", "feat(fulfillment): add seed_stock helper for fixture test runs", gitQuiet},
+		{"push", gitQuiet, "-u", "origin", mrBranch},
 	})
 }
 

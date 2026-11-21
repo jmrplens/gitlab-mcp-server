@@ -58,6 +58,9 @@ const (
 	// maxTreePages is how many pages of a hundred entries a project's tree
 	// is read over at most.
 	maxTreePages = 100
+	// readmeFile is the README GitLab creates with a new project, which the
+	// fixture's own replaces.
+	readmeFile = "README.md"
 )
 
 // errRefused is a setting refused before it could do harm, which the process
@@ -290,10 +293,10 @@ func (p *provisioner) addMissingFiles(ctx context.Context, id int64, fixtureDir 
 	if err != nil {
 		return fmt.Errorf("    ✗ cannot compare the project's files with the fixture; not reconciling: %w", err)
 	}
-	onlyReadme := len(present) == 1 && present["README.md"]
+	onlyReadme := len(present) == 1 && present[readmeFile]
 	var actions []fileAction
 	for _, rel := range tracked {
-		replace := onlyReadme && rel == "README.md"
+		replace := onlyReadme && rel == readmeFile
 		if present[rel] && !replace {
 			continue
 		}
@@ -409,11 +412,11 @@ func (p *provisioner) pushFixture(ctx context.Context, fixtureDir, remote string
 	}
 	defer os.RemoveAll(work)
 	clone := filepath.Join(work, "repository")
-	steps := [][]string{{"-c", p.authHeader(), "clone", "--quiet", remote, clone}}
+	steps := [][]string{{"-c", p.authHeader(), "clone", gitQuiet, remote, clone}}
 	if cloneErr := p.gitSteps(ctx, work, steps); cloneErr != nil {
 		return cloneErr
 	}
-	if removeErr := os.Remove(filepath.Join(clone, "README.md")); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+	if removeErr := os.Remove(filepath.Join(clone, readmeFile)); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 		return removeErr
 	}
 	if copyErr := p.copyTrackedFiles(ctx, fixtureDir, clone); copyErr != nil {
@@ -422,8 +425,8 @@ func (p *provisioner) pushFixture(ctx context.Context, fixtureDir, remote string
 	return p.gitSteps(ctx, clone, [][]string{
 		{"config", "--local", "http.extraHeader", "PRIVATE-TOKEN: " + p.token},
 		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "add", "-A"},
-		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "commit", "-m", "Initial fixture content", "--quiet"},
-		{"push", "--quiet", "-u", "origin", "main"},
+		{"-c", "user.email=" + botEmail, "-c", "user.name=" + botName, "commit", "-m", "Initial fixture content", gitQuiet},
+		{"push", gitQuiet, "-u", "origin", "main"},
 	})
 }
 
@@ -460,12 +463,12 @@ func (p *provisioner) pushMirror(ctx context.Context, upstream, remote string) e
 	}
 	defer os.RemoveAll(work)
 	mirror := filepath.Join(work, "mirror.git")
-	if cloneErr := p.gitSteps(ctx, work, [][]string{{"clone", "--quiet", "--mirror", upstream, mirror}}); cloneErr != nil {
+	if cloneErr := p.gitSteps(ctx, work, [][]string{{"clone", gitQuiet, "--mirror", upstream, mirror}}); cloneErr != nil {
 		return cloneErr
 	}
 	return p.gitSteps(ctx, mirror, [][]string{
 		{"config", "--local", "http.extraHeader", "PRIVATE-TOKEN: " + p.token},
-		{"push", "--quiet", "--force", remote, "refs/heads/*:refs/heads/*", "refs/tags/*:refs/tags/*"},
+		{"push", gitQuiet, "--force", remote, "refs/heads/*:refs/heads/*", "refs/tags/*:refs/tags/*"},
 	})
 }
 

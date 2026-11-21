@@ -111,6 +111,16 @@ func TestRunGit_AFailure_NamesTheSubcommandAndNotTheConfiguration(t *testing.T) 
 	}
 }
 
+// TestRunGit_NoGitOnThePath_SaysSo checks a run that finds no git fails
+// saying so, before it runs anything.
+func TestRunGit_NoGitOnThePath_SaysSo(t *testing.T) {
+	t.Setenv("PATH", "")
+	_, err := runGit(t.Context(), t.TempDir(), "status")
+	if err == nil || !strings.HasPrefix(err.Error(), "find git:") {
+		t.Errorf("err = %v, want it to say git could not be found", err)
+	}
+}
+
 // TestGitVerb_Args_SkipOptionsAndTheirValues checks the subcommand is found
 // past -c and -C and their values, and that a command line of options alone
 // names none.
