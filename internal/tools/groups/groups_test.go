@@ -4281,6 +4281,10 @@ func TestGet_PublishesEachFlagOnItsOwn(t *testing.T) {
 		{key: "only_allow_merge_if_all_discussions_are_resolved", want: DetailOutput{ID: 61, OnlyAllowMergeIfAllDiscussionsAreResolved: true}},
 		{key: "service_access_tokens_expiration_enforced", want: DetailOutput{ID: 61, ServiceAccessTokensExpirationEnforced: new(true)}},
 		{key: "auto_ban_user_on_excessive_projects_download", want: DetailOutput{ID: 61, AutoBanUserOnExcessiveProjectsDownload: new(true)}},
+		{key: "duo_code_review_depth_allowed", want: DetailOutput{ID: 61, DuoCodeReviewDepthAllowed: new(true)}},
+		{key: "require_two_factor_authentication_from_ancestor", want: DetailOutput{ID: 61, RequireTwoFactorAuthenticationFromAncestor: new(true)}},
+		{key: "duo_remote_flows_enabled", want: DetailOutput{ID: 61, DuoRemoteFlowsEnabled: new(true)}},
+		{key: "lock_duo_remote_flows_enabled", want: DetailOutput{ID: 61, LockDuoRemoteFlowsEnabled: new(true)}},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
 			out := getDistinctGroup(t, `{"id":61,"`+tc.key+`":true}`)
@@ -4288,6 +4292,23 @@ func TestGet_PublishesEachFlagOnItsOwn(t *testing.T) {
 				t.Errorf("Get() published %+v, want %+v", out, tc.want)
 			}
 		})
+	}
+}
+
+// TestList_CodeReviewDefaultDepth_IsReadOffTheCapture verifies the one string
+// setting 19.6 adds to every group row, which client-go's Group does not
+// model, is published from its own key, and absent from a row without it.
+func TestList_CodeReviewDefaultDepth_IsReadOffTheCapture(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"duo_code_review_default_depth":"standard"},{"id":2}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Groups) != 2 || !reflect.DeepEqual(out.Groups[0].DuoCodeReviewDefaultDepth, new("standard")) ||
+		out.Groups[1].DuoCodeReviewDefaultDepth != nil {
+		t.Errorf("groups = %+v, want the depth on the first row alone", out.Groups)
 	}
 }
 

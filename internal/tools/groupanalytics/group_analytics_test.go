@@ -96,6 +96,72 @@ func runCountHandlerCases(t *testing.T, handler countHandler) {
 	}
 }
 
+// TestCountHandlers_ACountTooLargeToCalculate_SaysSo verifies the too_large
+// key 19.6 sends beside a null count is published by each of the three
+// handlers, and is absent from an answer that counted, so a 0 the SDK reads
+// off the null is never the whole answer.
+func TestCountHandlers_ACountTooLargeToCalculate_SaysSo(t *testing.T) {
+	calls := map[string]func(context.Context, *gitlabclient.Client) (*bool, error){
+		"issues_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetIssuesCount(ctx, c, IssuesCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+		"merge_requests_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetMRCount(ctx, c, MRCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+		"new_members_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetMembersCount(ctx, c, MembersCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+	}
+	for key, call := range calls {
+		for _, tc := range []struct {
+			name string
+			body string
+			want bool
+		}{
+			{"too large", `{"` + key + `":null,"too_large":true}`, true},
+			{"counted", `{"` + key + `":3}`, false},
+		} {
+			t.Run(key+"/"+tc.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+				}))
+				got, err := call(t.Context(), client)
+				if err != nil {
+					t.Fatalf("handler error = %v", err)
+				}
+				if (got != nil && *got) != tc.want || (got == nil) == tc.want {
+					t.Errorf("too_large = %v, want present and true: %v", got, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestCountHandlers_ATooLargeTheTypeCannotHold_IsReported verifies each count
+// handler reports a too_large in a shape the extra cannot hold.
+func TestCountHandlers_ATooLargeTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"too_large":"yes"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "issues", Call: func() error {
+			_, err := GetIssuesCount(t.Context(), client, IssuesCountInput{GroupPath: "g"})
+			return err
+		}},
+		{Name: "merge requests", Call: func() error {
+			_, err := GetMRCount(t.Context(), client, MRCountInput{GroupPath: "g"})
+			return err
+		}},
+		{Name: "members", Call: func() error {
+			_, err := GetMembersCount(t.Context(), client, MembersCountInput{GroupPath: "g"})
+			return err
+		}},
+	})
+}
+
 func countBody(key string, count int64) string {
 	return fmt.Sprintf(`{"%s":%d}`, key, count)
 }

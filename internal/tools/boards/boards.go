@@ -59,6 +59,10 @@ type BoardListOutput struct {
 	// on every list where those limits are available, null on a list with no
 	// limit.
 	LimitMetric string `json:"limit_metric,omitempty" tier:"premium"`
+	// Status is the work item status a status list is for, which
+	// ee/lib/ee/api/entities/list.rb sends from 19.6 on such a list only,
+	// read from the captured response (ADR-0021).
+	Status *toolutil.WorkItemStatusOutput `json:"status,omitempty" tier:"premium"`
 }
 
 // ListBoardsOutput represents a paginated list of boards.
@@ -97,16 +101,18 @@ func convertBoard(b *gl.IssueBoard, extra toolutil.BoardExtra) BoardOutput {
 		HideClosedList:  b.HideClosedList,
 		Group:           extra.Group,
 	}
-	for _, l := range b.Lists {
-		out.Lists = append(out.Lists, convertBoardList(l))
+	for i, l := range b.Lists {
+		out.Lists = append(out.Lists, convertBoardList(l, toolutil.BoardListExtraAt(extra.Lists, i)))
 	}
 	return out
 }
 
 // convertBoardList maps a GitLab board list into the MCP output shape,
-// surfacing the full label/assignee/milestone/iteration sub-objects.
-func convertBoardList(l *gl.BoardList) BoardListOutput {
+// surfacing the full label/assignee/milestone/iteration sub-objects, and the
+// status read off the captured answer beside the SDK's decode.
+func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListOutput {
 	return BoardListOutput{
+		Status:         extra.Status,
 		ID:             l.ID,
 		Label:          labelOutput(l.Label),
 		Assignee:       boardListAssigneeOutput(l.Assignee),
@@ -411,14 +417,19 @@ func ListBoardLists(ctx context.Context, client *gitlabclient.Client, input List
 	opts := &gl.GetIssueBoardListsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, toolutil.KeysetPaginationInput{})
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().Boards.GetIssueBoardLists(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardListsOutput{}, boardRefusal("board_list_list", err, boardsAccessHint,
 			"verify project_id and board_id with project.board_list")
 	}
+	extras, err := toolutil.CapturedBoardLists(captured, len(lists))
+	if err != nil {
+		return ListBoardListsOutput{}, toolutil.WrapErr("board_list_list", err)
+	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, l := range lists {
-		out.Lists = append(out.Lists, convertBoardList(l))
+	for i, l := range lists {
+		out.Lists = append(out.Lists, convertBoardList(l, extras[i]))
 	}
 	return out, nil
 }
@@ -441,12 +452,13 @@ func GetBoardList(ctx context.Context, client *gitlabclient.Client, input GetBoa
 	if input.ListID == 0 {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("board_list_get", toolutil.ErrFieldRequired("list_id"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().Boards.GetIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, boardRefusal("board_list_get", err, boardsAccessHint,
 			"verify board_id and list_id with project.board_list_list")
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("board_list_get", list, captured)
 }
 
 // CreateBoardListInput represents input for creating a board list. The
@@ -483,12 +495,24 @@ func CreateBoardList(ctx context.Context, client *gitlabclient.Client, input Cre
 	if input.IterationID != 0 {
 		opts.IterationID = new(input.IterationID)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().Boards.CreateIssueBoardList(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0
 		return BoardListOutput{}, createBoardListError(err, licensedType)
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("board_list_create", list, captured)
+}
+
+// boardListOutput finishes a handler that answers with one board list: it
+// reads the status off the captured answer and pairs it with what the SDK
+// decoded.
+func boardListOutput(op string, list *gl.BoardList, captured *gitlabclient.ResponseCapture) (BoardListOutput, error) {
+	extra, err := toolutil.CapturedBoardList(captured)
+	if err != nil {
+		return BoardListOutput{}, toolutil.WrapErr(op, err)
+	}
+	return convertBoardList(list, extra), nil
 }
 
 // createBoardListError wraps GitLab's refusal of a column creation with the
@@ -538,12 +562,13 @@ func UpdateBoardList(ctx context.Context, client *gitlabclient.Client, input Upd
 	opts := &gl.UpdateIssueBoardListOptions{
 		Position: new(input.Position),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().Boards.UpdateIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, boardRefusal("board_list_update", err, boardsManageHint,
 			"verify board_id and list_id with project.board_list_list. Position is 0-based and must be within the current list count")
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("board_list_update", list, captured)
 }
 
 // DeleteBoardListInput represents input for deleting a board list.

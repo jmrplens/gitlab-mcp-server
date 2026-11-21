@@ -302,7 +302,7 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == testDigestPath {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success","predicate_kind":"slsa_provenance","predicate_type":"https://slsa.dev/provenance/v0.2","subject_digest":"sha256:abc123","created_at":"2026-01-01T00:00:00Z"},
+				{"id":1,"iid":1,"project_id":10,"build_id":100,"status":"success","predicate_kind":"slsa_provenance","predicate_type":"https://slsa.dev/provenance/v0.2","subject_digest":"sha256:abc123","signing_method":"sigstore","created_at":"2026-01-01T00:00:00Z"},
 				{"id":2,"iid":2,"project_id":10,"build_id":101,"status":"success","predicate_kind":"slsa_provenance","subject_digest":"sha256:abc123","created_at":"2026-02-01T00:00:00Z","expire_at":"2026-02-01T00:00:00Z"}
 			]`)
 			return
@@ -329,6 +329,26 @@ func TestList_Success(t *testing.T) {
 	if out.Attestations[1].ExpireAt == "" {
 		t.Error("expected expire_at to be set for second attestation")
 	}
+	// signing_method, which client-go's Attestation does not model, is read
+	// off the captured answer, attestation by attestation.
+	if got := []string{out.Attestations[0].SigningMethod, out.Attestations[1].SigningMethod}; got[0] != "sigstore" || got[1] != "" {
+		t.Errorf("signing methods = %q, want [sigstore \"\"]", got)
+	}
+}
+
+// TestList_ASigningMethodTheTypeCannotHold_IsReported verifies the list
+// reports a signing_method in a shape the extra cannot hold rather than
+// publishing the attestations without it.
+func TestList_ASigningMethodTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"signing_method":7}]`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: "10", SubjectDigest: testDigest})
+			return err
+		}},
+	})
 }
 
 // testDigest is a digest in the form GitLab documents for the route: the 64

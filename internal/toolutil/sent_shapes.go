@@ -42,6 +42,9 @@ type RunnerExtra struct {
 	CreatedBy          *UserBasicOutput `json:"created_by"`
 	JobExecutionStatus string           `json:"job_execution_status"`
 	TokenExpiresAt     *time.Time       `json:"token_expires_at"`
+	// UUID is the runner's UUID, which lib/api/entities/ci/runner_with_uuid.rb
+	// sends from 19.6 on the runner lists and on one runner (runners.md).
+	UUID string `json:"uuid"`
 }
 
 // CapturedRunner reads, off the captured answer to a request for one
@@ -591,10 +594,68 @@ type BasicGroupDetailsOutput struct {
 // condition and leaves null on a board that belongs to a project, and the
 // weight the board is scoped to as GitLab sent it: null for a board with no
 // weight scope, which client-go's IssueBoard decodes as int64 and so reads as a
-// board scoped to weight 0.
+// board scoped to weight 0. Lists is what each of the board's lists carries
+// that client-go's BoardList does not, in the order GitLab sent them.
 type BoardExtra struct {
 	Group  *BasicGroupDetailsOutput `json:"group"`
 	Weight *int64                   `json:"weight"`
+	Lists  []BoardListExtra         `json:"lists"`
+}
+
+// WorkItemStatusOutput is a work item status as
+// ee/lib/api/entities/work_items/status.rb renders it. Every key is exposed
+// with expose_nil, so a null description, which a default status always has,
+// is an empty string here.
+type WorkItemStatusOutput struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	IconName    string `json:"icon_name"`
+	Color       string `json:"color"`
+	Position    int64  `json:"position"`
+	Description string `json:"description,omitempty"`
+	Category    string `json:"category"`
+}
+
+// BoardListExtra is what ee/lib/ee/api/entities/list.rb sends on a board list
+// that client-go's BoardList does not model: from 19.6 the work item status a
+// status list is for, sent only on such a list (boards.md).
+type BoardListExtra struct {
+	Status *WorkItemStatusOutput `json:"status"`
+}
+
+// CapturedBoardList reads it off the captured answer to a request for one
+// board list.
+func CapturedBoardList(capture *gitlabclient.ResponseCapture) (BoardListExtra, error) {
+	return capturedOne[BoardListExtra](capture)
+}
+
+// CapturedBoardLists reads the same off a list answer, one extra per board
+// list in order, the count held to what the SDK decoded.
+func CapturedBoardLists(capture *gitlabclient.ResponseCapture, decoded int) ([]BoardListExtra, error) {
+	return capturedList[BoardListExtra](capture, decoded, "board lists")
+}
+
+// AttestationExtra is what lib/api/entities/supply_chain/attestation.rb sends
+// that client-go's Attestation does not model: from 19.6 how the attestation
+// was signed, sigstore or local_ca (attestations.md).
+type AttestationExtra struct {
+	SigningMethod string `json:"signing_method"`
+}
+
+// CapturedAttestations reads it off a list answer, one extra per attestation
+// in order, the count held to what the SDK decoded.
+func CapturedAttestations(capture *gitlabclient.ResponseCapture, decoded int) ([]AttestationExtra, error) {
+	return capturedList[AttestationExtra](capture, decoded, "attestations")
+}
+
+// BoardListExtraAt is the extra of a board's list i, or none when the
+// captured board carried fewer lists than the SDK decoded, which a board
+// answer cannot do and so reads as a list without the keys.
+func BoardListExtraAt(lists []BoardListExtra, i int) BoardListExtra {
+	if i < len(lists) {
+		return lists[i]
+	}
+	return BoardListExtra{}
 }
 
 // CapturedBoard reads it off the captured answer to a request for one board.
@@ -616,7 +677,8 @@ func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]Board
 // It is a shape of its own rather than [BoardExtra] because GroupIssueBoard
 // models the board's group, which IssueBoard lacks.
 type GroupBoardExtra struct {
-	Weight *int64 `json:"weight"`
+	Weight *int64           `json:"weight"`
+	Lists  []BoardListExtra `json:"lists"`
 }
 
 // CapturedGroupBoard reads it off the captured answer to a request for one
@@ -1225,6 +1287,12 @@ type GroupExtra struct {
 	BuiltInProjectTemplatesEnabled         *bool                          `json:"built_in_project_templates_enabled"`
 	LockBuiltInProjectTemplatesEnabled     *bool                          `json:"lock_built_in_project_templates_enabled"`
 	DuoNamespaceAccessRules                []DuoNamespaceAccessRuleOutput `json:"duo_namespace_access_rules"`
+	// DuoCodeReviewDepthAllowed and DuoCodeReviewDefaultDepth are the Code
+	// Review Flow depth settings ee/lib/ee/api/entities/group.rb sends from
+	// 19.6 to a caller who may administer the group, while the beta's flag
+	// is on (groups.md).
+	DuoCodeReviewDepthAllowed *bool   `json:"duo_code_review_depth_allowed"`
+	DuoCodeReviewDefaultDepth *string `json:"duo_code_review_default_depth"`
 }
 
 // GroupDetailExtra is [GroupExtra] plus what only lib/api/entities/group_detail.rb
@@ -1249,6 +1317,13 @@ type GroupDetailExtra struct {
 	UniqueProjectDownloadLimitAllowlist    []string          `json:"unique_project_download_limit_allowlist"`
 	UniqueProjectDownloadLimitAlertlist    []int64           `json:"unique_project_download_limit_alertlist"`
 	AutoBanUserOnExcessiveProjectsDownload *bool             `json:"auto_ban_user_on_excessive_projects_download"`
+	// RequireTwoFactorAuthenticationFromAncestor is sent on every group from
+	// 19.6, and DuoRemoteFlowsEnabled with its lock from 19.6 to a caller who
+	// may administer a group licensed for ai_workflows (groups.md); an older
+	// answer carries none, which reads as absent rather than off.
+	RequireTwoFactorAuthenticationFromAncestor *bool `json:"require_two_factor_authentication_from_ancestor"`
+	DuoRemoteFlowsEnabled                      *bool `json:"duo_remote_flows_enabled"`
+	LockDuoRemoteFlowsEnabled                  *bool `json:"lock_duo_remote_flows_enabled"`
 }
 
 // CapturedGroup reads, off the captured answer to a request for one group,
@@ -1374,6 +1449,14 @@ type ProjectExtra struct {
 	// duo_code_review_decisions feature flag is on for the project and its
 	// Duo code review is available (Ultimate, projects.md).
 	DuoCodeReviewDecisionsEnabled *bool `json:"duo_code_review_decisions_enabled"`
+	// DuoCodeReviewDepthAllowed and DuoCodeReviewDefaultDepth are the Code
+	// Review Flow depth settings, sent from 19.6 as a beta behind a feature
+	// flag, and DuoScheduledAutomationsEnabled is whether Duo scheduled
+	// automations are on, sent from 19.6 on a project licensed for
+	// ai_workflows (projects.md).
+	DuoCodeReviewDepthAllowed      *bool   `json:"duo_code_review_depth_allowed"`
+	DuoCodeReviewDefaultDepth      *string `json:"duo_code_review_default_depth"`
+	DuoScheduledAutomationsEnabled *bool   `json:"duo_scheduled_automations_enabled"`
 }
 
 // CapturedProject reads, off the captured answer to a request that renders the

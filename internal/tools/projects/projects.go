@@ -508,6 +508,12 @@ type Output struct {
 	// request or ask for changes after reviewing it, sent from 19.5 while the
 	// duo_code_review_decisions feature flag is on for the project.
 	DuoCodeReviewDecisionsEnabled *bool `json:"duo_code_review_decisions_enabled,omitempty" tier:"ultimate"`
+	// The Code Review Flow depth settings, sent from 19.6 as a beta behind a
+	// feature flag, and whether Duo scheduled automations are on, sent from
+	// 19.6 on a project licensed for ai_workflows.
+	DuoCodeReviewDepthAllowed      *bool   `json:"duo_code_review_depth_allowed,omitempty" tier:"premium"`
+	DuoCodeReviewDefaultDepth      *string `json:"duo_code_review_default_depth,omitempty" tier:"premium"`
+	DuoScheduledAutomationsEnabled *bool   `json:"duo_scheduled_automations_enabled,omitempty" tier:"premium"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -977,6 +983,9 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		SPPRepositoryPipelineAccess:            extra.SPPRepositoryPipelineAccess,
 		CISkipBranchPipelinesForMRs:            extra.CISkipBranchPipelinesForMRs,
 		DuoCodeReviewDecisionsEnabled:          extra.DuoCodeReviewDecisionsEnabled,
+		DuoCodeReviewDepthAllowed:              extra.DuoCodeReviewDepthAllowed,
+		DuoCodeReviewDefaultDepth:              extra.DuoCodeReviewDefaultDepth,
+		DuoScheduledAutomationsEnabled:         extra.DuoScheduledAutomationsEnabled,
 	}
 	if p.MarkedForDeletionOn != nil {
 		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)

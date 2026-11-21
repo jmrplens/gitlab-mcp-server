@@ -140,6 +140,9 @@ type Output struct {
 	ReadVirtualRegistry         *bool `json:"read_virtual_registry,omitempty"`
 	UpdateSecAIWorkflowSettings *bool `json:"update_sec_ai_workflow_settings,omitempty"`
 	UpdateSecurityScanProfiles  *bool `json:"update_security_scan_profiles,omitempty"`
+	ArchiveSubgroup             *bool `json:"archive_subgroup,omitempty"`
+	PullContainerImage          *bool `json:"pull_container_image,omitempty"`
+	PushContainerImage          *bool `json:"push_container_image,omitempty"`
 }
 
 // ListOutput holds the list response of a group's roles.
@@ -195,10 +198,10 @@ func toOutput(r *gl.MemberRole, extra roleExtra) Output {
 	return out
 }
 
-// withCapturedPermissions places the twenty-five permissions the capture read
+// withCapturedPermissions places the twenty-eight permissions the capture read
 // onto the output.
 //
-// It is a function of its own rather than twenty-five more lines in the
+// It is a function of its own rather than twenty-eight more lines in the
 // literal above because the two halves answer different questions: everything
 // in the literal comes from the SDK's decode, and everything here from the
 // bytes beside it.
@@ -228,6 +231,9 @@ func withCapturedPermissions(out Output, extra roleExtra) Output {
 	out.ReadVirtualRegistry = extra.ReadVirtualRegistry
 	out.UpdateSecAIWorkflowSettings = extra.UpdateSecAIWorkflowSettings
 	out.UpdateSecurityScanProfiles = extra.UpdateSecurityScanProfiles
+	out.ArchiveSubgroup = extra.ArchiveSubgroup
+	out.PullContainerImage = extra.PullContainerImage
+	out.PushContainerImage = extra.PushContainerImage
 	return out
 }
 

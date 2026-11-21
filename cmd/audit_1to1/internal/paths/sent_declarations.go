@@ -92,6 +92,10 @@ const (
 	// each declaration to the route's params and the package's recorded
 	// requests rather than trusting its match.
 	categoryOptionNeverRequested = "entity-option-this-package-never-requests"
+	// categoryTrackedForPublication is a key GitLab added that this server
+	// does not publish yet and an issue tracks publishing: the declaration
+	// names the issue, and the change that publishes the key removes it.
+	categoryTrackedForPublication = "tracked-for-publication"
 	// categoryEntityPublishedElsewhere is an entity the package does surface,
 	// on another type or under a shape of this server's own, so the field
 	// names the comparison looks for are not the names the caller reads.
@@ -502,8 +506,26 @@ const (
 // gl.Group, against every route client-go answers with that struct.
 const reasonApprovalGroupSDKRoute = "mrapprovals.GroupOutput pairs with gl.Group through groupOutput, so readSDKRoutes holds it against the group routes GroupsService answers with that struct (GET /groups, GET /groups/:id, POST /groups and the rest). No handler in internal/tools/mrapprovals calls any of them: the type is filled from the groups nested in an approval rule (ee/lib/api/entities/merge_request_approval_rule.rb, through gl.MergeRequestApprovalRule) and, under group, in the approver_groups of the approval state an Enterprise instance answers the approvals GET with (ee/lib/api/entities/approval_state.rb). It keeps the documented reference subset of those groups, and group.get returns a group whole."
 
-// todoEntity is the entity the two create_todo routes are read on.
-const todoEntity = "API::Entities::Todo"
+// reasonMetadataPlanTracked answers the plan key of the metadata entity until
+// the change that publishes it.
+const reasonMetadataPlanTracked = "lib/api/entities/metadata.rb exposes plan from 19.6 (doc/api/metadata.md): the " +
+	"instance's subscription plan, null on an instance with none. client-go's Metadata does not model it, and " +
+	"issue 1492 publishes it from the captured response on admin.metadata_get, server.status and " +
+	"server.health_check in the change after this one, which removes this declaration."
+
+// reasonGroupReleaseWarningsNeverPassed answers the warnings key on the group
+// release list.
+const reasonGroupReleaseWarningsNeverPassed = "lib/api/entities/release.rb exposes warnings only when the " +
+	"presenter is handed a warnings option, which POST /projects/:id/releases alone passes (lib/api/releases.rb, " +
+	"behind the release_evidence_size_limit feature flag); GET /groups/:id/releases presents its releases " +
+	"without it (lib/api/group_releases.rb), so a group release list never carries the key. releases.Output " +
+	"publishes it on the create."
+
+// The entities the two create_todo routes and the approve are read on.
+const (
+	todoEntity                  = "API::Entities::Todo"
+	mergeRequestApprovalsEntity = "API::Entities::MergeRequestApprovals"
+)
 
 // reasonTodoGroupOnProjectRoutes answers the group of the to-do the two
 // create_todo routes present.
@@ -730,6 +752,16 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// keyed by the entity the finding was read on, so the groupmembers pair
 	// answers that package's member output and its billable member output
 	// together: neither route set declares either option.
+	// The plan an instance reports on GET /metadata from 19.6, which the
+	// metadata and health packages both read. Published by issue 1492's
+	// publish-plan change, which removes these two declarations.
+	{Package: toolsDir + "/metadata", Entity: "API::Entities::Metadata", Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
+	{Package: toolsDir + "/health", Entity: "API::Entities::Metadata", Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
+
+	// The release warnings only POST /projects/:id/releases passes
+	// (lib/api/releases.rb), which the group release list never sends.
+	{Package: toolsDir + "/groupreleases", Entity: "API::Entities::Release", Field: "warnings", Category: categoryOptionNeverPassed, Reason: reasonGroupReleaseWarningsNeverPassed},
+
 	{Package: accessRequestsPkg, Entity: accessRequesterEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
 	{Package: accessRequestsPkg, Entity: accessRequesterEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 	{Package: groupMembersPkg, Entity: memberEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
@@ -752,10 +784,30 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// The Enterprise approval state the approve answers with, which
 	// mergerequests.ApproveOutput publishes through the embed of
 	// mrapprovals.EnterpriseApprovalState, another package's type the type
-	// grain does not flatten. A splat over the entity because every key the
-	// embed carries is there for that one reason; the keys ApproveOutput
-	// declares itself are still compared one by one.
-	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: "API::Entities::MergeRequestApprovals", Field: declaredSegment, Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	// grain does not flatten. Named key by key, the twenty the embed carries,
+	// so a key 19.7 adds to the state reads as left out rather than answered
+	// by a splat, and the keys ApproveOutput declares itself are compared as
+	// always.
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "id", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "iid", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "project_id", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "title", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "description", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "state", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "created_at", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "updated_at", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "merge_status", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "approvals_required", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "approvals_left", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "require_password_to_approve", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "suggested_approvers", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "approvers", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "approver_groups", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "approval_rules_left", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "has_approval_rules", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "merge_request_approvers_available", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "multiple_approval_rules_available", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
+	{Package: mergeRequestsPkg, Type: "ApproveOutput", Entity: mergeRequestApprovalsEntity, Field: "invalid_approvers_rules", Category: categoryEntityPublishedElsewhere, Reason: reasonApprovalStateEmbedded},
 
 	// The two entities client-go's own return types put in front of the merge
 	// request output, answered with a splat because every key the entity has is
@@ -842,6 +894,14 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 		Category: categoryEntityPublishedElsewhere,
 		Reason: "GET /projects/:id answers with Project plus permissions and cicd_catalog_enabled, and projects.Output " +
 			"publishes both. BasicProjectDetails carries neither, which is what BasicOutput models.",
+	},
+	{
+		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::ProjectWithAccess", Field: declaredSegment,
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "From 19.6 the record reads API::Entities::ProjectWithAccess, the Project plus the caller's permissions " +
+			"that Projects::WithAccessAndCatalogSetting extends, on the routes client-go's Project reaches, so its " +
+			"permissions key is held against BasicOutput as well. projects.Output publishes it; BasicProjectDetails, " +
+			"which is what BasicOutput models, carries no permissions.",
 	},
 
 	// EpicIssue on the issue types. The union carries it because client-go's
@@ -1444,18 +1504,19 @@ func declaredConfirmations() []sentDeclaration {
 			"archived", "auto_ban_user_on_excessive_projects_download", "auto_devops_enabled",
 			"auto_duo_code_review_enabled", "avatar_url", "built_in_project_templates_enabled", "created_at",
 			"crm_enabled", "default_branch", "default_branch_protection", "default_branch_protection_defaults",
-			"duo_code_review_decisions_enabled", "duo_core_features_enabled", "duo_features_enabled",
-			"duo_namespace_access_rules", "emails_disabled",
+			"duo_code_review_decisions_enabled", "duo_code_review_default_depth", "duo_code_review_depth_allowed",
+			"duo_core_features_enabled", "duo_features_enabled",
+			"duo_namespace_access_rules", "duo_remote_flows_enabled", "emails_disabled",
 			"emails_enabled", "experiment_features_enabled", "extra_shared_runners_minutes_limit",
 			"file_template_project_id", "ip_restriction_ranges", "ldap_access", "ldap_cn", "ldap_group_links",
 			"lfs_enabled", "lock_built_in_project_templates_enabled", "lock_duo_features_enabled",
-			"lock_math_rendering_limits_enabled", "lock_require_sha_for_merge",
+			"lock_duo_remote_flows_enabled", "lock_math_rendering_limits_enabled", "lock_require_sha_for_merge",
 			"lock_resource_access_token_notify_inherited", "marked_for_deletion_on",
 			"math_rendering_limits_enabled", "max_artifacts_size", "membership_lock", "mentions_disabled",
 			"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_pipeline_succeeds",
 			"organization_id", "parent_id", "prevent_forking_outside_group", "prevent_sharing_groups_outside_hierarchy",
 			"project_creation_level", "repository_storage", "request_access_enabled", "require_sha_for_merge",
-			"require_two_factor_authentication",
+			"require_two_factor_authentication", "require_two_factor_authentication_from_ancestor",
 			"resource_access_token_notify_inherited", "saml_group_links", "service_access_tokens_expiration_enforced",
 			"share_with_group_lock", "shared_runners_minutes_limit", "shared_runners_setting",
 			"show_diff_preview_in_email", "subgroup_creation_level", "two_factor_grace_period",
@@ -1530,8 +1591,9 @@ func declaredCompactRows() []sentDeclaration {
 			"ci_skip_branch_pipelines_for_mrs", "compliance_frameworks", "container_expiration_policy",
 			"container_registry_access_level", "container_registry_enabled", "container_registry_image_prefix",
 			"creator_id", "custom_attributes", "description_html", "duo_code_review_decisions_enabled",
+			"duo_code_review_default_depth", "duo_code_review_depth_allowed",
 			"duo_dependency_bump_breaking_changes_enabled", "duo_foundational_flows_enabled", "duo_remote_flows_enabled",
-			"duo_sast_fp_detection_enabled",
+			"duo_sast_fp_detection_enabled", "duo_scheduled_automations_enabled",
 			"duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled", "emails_disabled", "emails_enabled",
 			"empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
 			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",
@@ -1572,9 +1634,11 @@ func declaredCompactRows() []sentDeclaration {
 			"ci_restrict_pipeline_cancellation_role", "ci_separated_caches", "ci_skip_branch_pipelines_for_mrs",
 			"cicd_catalog_enabled", "compliance_frameworks", "container_expiration_policy", "container_registry_access_level",
 			"container_registry_enabled", "container_registry_image_prefix", "created_at", "creator_id", "description_html",
-			"duo_code_review_decisions_enabled", "duo_dependency_bump_breaking_changes_enabled",
+			"duo_code_review_decisions_enabled", "duo_code_review_default_depth", "duo_code_review_depth_allowed",
+			"duo_dependency_bump_breaking_changes_enabled",
 			"duo_foundational_flows_enabled", "duo_remote_flows_enabled",
-			"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_secret_detection_fp_enabled",
+			"duo_sast_fp_detection_enabled", "duo_sast_vr_workflow_enabled", "duo_scheduled_automations_enabled",
+			"duo_secret_detection_fp_enabled",
 			"emails_disabled", "emails_enabled", "empty_repo", "enforce_auth_checks_on_uploads", "environments_access_level",
 			"external_authorization_classification_label", "feature_flags_access_level", "forked_from_project",
 			"forking_access_level", "forks_count", "group_runners_enabled", "import_error", "import_status", "import_type",

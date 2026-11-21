@@ -8,6 +8,7 @@ package applications
 
 import (
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -103,6 +104,48 @@ func TestCreate(t *testing.T) {
 	if out.Scopes == nil || len(out.Scopes) != 2 {
 		t.Errorf("Scopes = %v, want [\"api\", \"read_user\"]", out.Scopes)
 	}
+}
+
+// TestCreate_GranularScopesAndWarnings_AreReadOffTheCapture verifies the two
+// keys 19.6 adds to a create answer, which client-go's Application does not
+// model, are read off the captured response: each granular scope with the
+// project or group it names, and the warnings GitLab raised.
+func TestCreate_GranularScopesAndWarnings_AreReadOffTheCapture(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"application_name":"New App","scopes":["api"],`+
+			`"granular_scopes":[{"access":"selected_memberships","permissions":["read_job"],"project_id":3,"group_id":null},`+
+			`{"access":"selected_memberships","permissions":["read_project"],"project_id":null,"group_id":5}],`+
+			`"warnings":["Tokens cannot use the MCP server without a user-level scope granting execute_mcp_tool."]}`)
+	}))
+	out, err := Create(t.Context(), client, CreateInput{Name: "New App", RedirectURI: "http://example.com", Scopes: "api"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	wantScopes := []toolutil.TokenGranularScopeOutput{
+		{Access: "selected_memberships", Permissions: []string{"read_job"}, ProjectID: 3},
+		{Access: "selected_memberships", Permissions: []string{"read_project"}, GroupID: 5},
+	}
+	if !reflect.DeepEqual(out.GranularScopes, wantScopes) {
+		t.Errorf("granular_scopes = %+v, want %+v", out.GranularScopes, wantScopes)
+	}
+	wantWarnings := []string{"Tokens cannot use the MCP server without a user-level scope granting execute_mcp_tool."}
+	if !reflect.DeepEqual(out.Warnings, wantWarnings) {
+		t.Errorf("warnings = %q, want %q", out.Warnings, wantWarnings)
+	}
+}
+
+// TestCreate_AWarningTheTypeCannotHold_IsReported verifies the create reports
+// captured warnings in a shape the extra cannot hold.
+func TestCreate_AWarningTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"warnings":"one"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{Name: "x", RedirectURI: "y", Scopes: "api"})
+			return err
+		}},
+	})
 }
 
 // TestCreate_Error verifies that Create returns a wrapped error when the GitLab API responds with an error status.

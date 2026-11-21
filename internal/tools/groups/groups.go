@@ -114,6 +114,10 @@ type Output struct {
 	// self-managed instance never sends either whatever its license.
 	WebBasedCommitSigningEnabled *bool `json:"web_based_commit_signing_enabled,omitempty" tier:"premium"`
 	AllowPersonalSnippets        *bool `json:"allow_personal_snippets,omitempty" tier:"premium"`
+	// The Code Review Flow depth settings, sent from 19.6 as a beta behind a
+	// feature flag to a caller who may administer the group (groups.md).
+	DuoCodeReviewDepthAllowed *bool   `json:"duo_code_review_depth_allowed,omitempty" tier:"premium"`
+	DuoCodeReviewDefaultDepth *string `json:"duo_code_review_default_depth,omitempty" tier:"premium"`
 }
 
 // DetailOutput is a group as every route that answers with one group renders
@@ -157,6 +161,12 @@ type DetailOutput struct {
 	UniqueProjectDownloadLimitAllowlist    []string                   `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"`
 	UniqueProjectDownloadLimitAlertlist    []int64                    `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"`
 	AutoBanUserOnExcessiveProjectsDownload *bool                      `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"`
+	// Sent from 19.6: whether an ancestor group requires two-factor
+	// authentication of every member, on every group, and the Duo remote
+	// flows setting with its lock to a caller who may administer the group.
+	RequireTwoFactorAuthenticationFromAncestor *bool `json:"require_two_factor_authentication_from_ancestor,omitempty"`
+	DuoRemoteFlowsEnabled                      *bool `json:"duo_remote_flows_enabled,omitempty" tier:"premium"`
+	LockDuoRemoteFlowsEnabled                  *bool `json:"lock_duo_remote_flows_enabled,omitempty" tier:"premium"`
 }
 
 // StatisticsOutput mirrors gl.Statistics (the statistics object, returned when
@@ -422,6 +432,8 @@ func ToOutput(g *gl.Group, extra toolutil.GroupExtra) Output {
 	out.DuoNamespaceAccessRules = extra.DuoNamespaceAccessRules
 	out.WebBasedCommitSigningEnabled = extra.WebBasedCommitSigningEnabled
 	out.AllowPersonalSnippets = extra.AllowPersonalSnippets
+	out.DuoCodeReviewDepthAllowed = extra.DuoCodeReviewDepthAllowed
+	out.DuoCodeReviewDefaultDepth = extra.DuoCodeReviewDefaultDepth
 	return out
 }
 
@@ -493,6 +505,9 @@ func ToDetailOutput(g *gl.Group, extra toolutil.GroupDetailExtra) DetailOutput {
 	out.UniqueProjectDownloadLimitAllowlist = extra.UniqueProjectDownloadLimitAllowlist
 	out.UniqueProjectDownloadLimitAlertlist = extra.UniqueProjectDownloadLimitAlertlist
 	out.AutoBanUserOnExcessiveProjectsDownload = extra.AutoBanUserOnExcessiveProjectsDownload
+	out.RequireTwoFactorAuthenticationFromAncestor = extra.RequireTwoFactorAuthenticationFromAncestor
+	out.DuoRemoteFlowsEnabled = extra.DuoRemoteFlowsEnabled
+	out.LockDuoRemoteFlowsEnabled = extra.LockDuoRemoteFlowsEnabled
 	return out
 }
 

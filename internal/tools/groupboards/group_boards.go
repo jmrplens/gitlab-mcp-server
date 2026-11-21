@@ -56,6 +56,10 @@ type BoardListOutput struct {
 	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty" tier:"premium"`
 	Milestone      *MilestoneOutput         `json:"milestone,omitempty" tier:"premium"`
 	Position       int64                    `json:"position"`
+	// Status is the work item status a status list is for, which
+	// ee/lib/ee/api/entities/list.rb sends from 19.6 on such a list only,
+	// read from the captured response (ADR-0021).
+	Status *toolutil.WorkItemStatusOutput `json:"status,omitempty" tier:"premium"`
 }
 
 // ListGroupBoardsOutput represents a paginated list of group boards.
@@ -91,15 +95,17 @@ func convertGroupBoard(b *gl.GroupIssueBoard, extra toolutil.GroupBoardExtra) Gr
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
 	}
-	for _, l := range b.Lists {
-		out.Lists = append(out.Lists, convertBoardList(l))
+	for i, l := range b.Lists {
+		out.Lists = append(out.Lists, convertBoardList(l, toolutil.BoardListExtraAt(extra.Lists, i)))
 	}
 	return out
 }
 
-// convertBoardList maps a GitLab board list into group board MCP output.
-func convertBoardList(l *gl.BoardList) BoardListOutput {
+// convertBoardList maps a GitLab board list into group board MCP output, with
+// the status read off the captured answer beside the SDK's decode.
+func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListOutput {
 	return BoardListOutput{
+		Status:         extra.Status,
 		ID:             l.ID,
 		Assignee:       boardListAssigneeOutput(l.Assignee),
 		Iteration:      iterationOutput(l.Iteration),
@@ -385,14 +391,19 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_list", err, http.StatusNotFound,
 			"board_id not found on this group. Use group.group_board_list to discover board IDs")
 	}
+	extras, err := toolutil.CapturedBoardLists(captured, len(lists))
+	if err != nil {
+		return ListBoardListsOutput{}, toolutil.WrapErr("group_board_list_list", err)
+	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, l := range lists {
-		out.Lists = append(out.Lists, convertBoardList(l))
+	for i, l := range lists {
+		out.Lists = append(out.Lists, convertBoardList(l, extras[i]))
 	}
 	return out, nil
 }
@@ -415,12 +426,24 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	if input.ListID == 0 {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_get", toolutil.ErrFieldRequired("list_id"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
 			"list_id not found on this board. Use group.group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("group_board_list_get", list, captured)
+}
+
+// boardListOutput finishes a handler that answers with one board list: it
+// reads the status off the captured answer and pairs it with what the SDK
+// decoded.
+func boardListOutput(op string, list *gl.BoardList, captured *gitlabclient.ResponseCapture) (BoardListOutput, error) {
+	extra, err := toolutil.CapturedBoardList(captured)
+	if err != nil {
+		return BoardListOutput{}, toolutil.WrapErr(op, err)
+	}
+	return convertBoardList(list, extra), nil
 }
 
 // CreateGroupBoardListInput represents input for creating a group board list:
@@ -476,12 +499,13 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.IterationID != 0 {
 		opts.IterationID = new(input.IterationID)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0
 		return BoardListOutput{}, createGroupBoardListError(err, licensedType)
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("group_board_list_create", list, captured)
 }
 
 const (
@@ -563,6 +587,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(
 		string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx),
 	)
@@ -570,7 +595,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 		return BoardListOutput{}, groupBoardRefusal("group_board_list_update", err, groupBoardListsHint,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	return convertBoardList(list), nil
+	return boardListOutput("group_board_list_update", list, captured)
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.

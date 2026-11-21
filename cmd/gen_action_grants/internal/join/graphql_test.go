@@ -30,6 +30,7 @@ func parentRecord() *apilive.GraphQLAuthz {
 				apilive.Directive{Permissions: []string{"read_group"}, BoundaryType: "project"},
 			),
 			"Skipped":   enforced(apilive.Directive{SkipReason: "not_a_resource"}),
+			"Unbounded": enforced(apilive.Directive{Permissions: []string{"read_unbounded"}}),
 			"Bare":      enforced(),
 			"Note":      skipped("read_note", "read_issue"),
 			"Silent":    skipped(),
@@ -90,6 +91,10 @@ func TestParentChecks_ReadWhatGitLab196ChecksOnAFieldReturningAParentAuthorizedT
 		{name: "a skip that declares no permissions checks nothing", owner: "Project", returned: "Silent"},
 		{name: "a type that is not skipped is not the parent's to check", owner: "Project", returned: "Project"},
 		{name: "a connection without items checks nothing", owner: "Project", returned: "EmptyConnection"},
+		{
+			name: "a parent whose directives name no boundary type is checked at every boundary", owner: "Unbounded", returned: "Note",
+			want: []requirement{{perms: []string{"read_issue", "read_note"}, any: finegrained.AllBoundaries}},
+		},
 		{name: "a parent that skips locates no boundary", owner: "Skipped", returned: "Note"},
 		{name: "a parent that declares nothing locates no boundary", owner: "Bare", returned: "Note"},
 		{

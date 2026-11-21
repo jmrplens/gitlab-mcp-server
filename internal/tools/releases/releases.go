@@ -65,6 +65,12 @@ type Output struct {
 	Assets          *toolutil.AssetsOutput      `json:"assets,omitempty"`
 	Evidences       []*toolutil.EvidenceOutput  `json:"evidences,omitempty"`
 	Links           *toolutil.LinksOutput       `json:"_links,omitempty"`
+	// Warnings is what POST /projects/:id/releases adds from 19.6 while the
+	// release_evidence_size_limit feature flag is on: that the release's
+	// evidence would exceed the size limit even without its issues. No other
+	// route sends it, and client-go's Release does not model it, so it is
+	// read from the captured response (ADR-0021).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // UpdateInput defines parameters for updating a release.
@@ -172,11 +178,20 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.TagMessage = new(input.TagMessage)
 	}
 	opts.Assets = assetsOptions(input.Assets)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	r, _, err := client.GL().Releases.CreateRelease(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, createError(err)
 	}
-	return ToOutput(r), nil
+	var extra struct {
+		Warnings []string `json:"warnings"`
+	}
+	if decodeErr := captured.Decode(&extra); decodeErr != nil {
+		return Output{}, toolutil.WrapErr("release_create", decodeErr)
+	}
+	out := ToOutput(r)
+	out.Warnings = extra.Warnings
+	return out, nil
 }
 
 // createError gives a refused release create the hint that fits it. GitLab

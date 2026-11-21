@@ -36,6 +36,19 @@ type ApplicationItem struct {
 	CallbackURL     string   `json:"callback_url"`
 	Confidential    bool     `json:"confidential"`
 	Scopes          []string `json:"scopes,omitempty"`
+	// GranularScopes and Warnings are what POST /applications adds from 19.6
+	// that client-go's Application does not model, read from the captured
+	// response (ADR-0021): the granular scopes the application declares,
+	// while the granular_oauth_tokens feature flag is on for the caller, and
+	// the warnings GitLab raised about them. No other route sends either.
+	GranularScopes []toolutil.TokenGranularScopeOutput `json:"granular_scopes,omitempty"`
+	Warnings       []string                            `json:"warnings,omitempty"`
+}
+
+// createdExtra is what the create answer carries beside client-go's decode.
+type createdExtra struct {
+	GranularScopes []toolutil.TokenGranularScopeOutput `json:"granular_scopes"`
+	Warnings       []string                            `json:"warnings"`
 }
 
 // ListOutput is the output for listing applications.
@@ -99,12 +112,20 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Confidential: input.Confidential,
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	app, _, err := client.GL().Applications.CreateApplication(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_application", err, http.StatusBadRequest, "verify redirect_uri is a valid URL and scopes are valid. Requires administrator access")
 	}
+	var extra createdExtra
+	if decodeErr := captured.Decode(&extra); decodeErr != nil {
+		return CreateOutput{}, toolutil.WrapErr("create_application", decodeErr)
+	}
 
-	return CreateOutput{ApplicationItem: toItem(app)}, nil
+	item := toItem(app)
+	item.GranularScopes = extra.GranularScopes
+	item.Warnings = extra.Warnings
+	return CreateOutput{ApplicationItem: item}, nil
 }
 
 // ---------------------------------------------------------------------------
