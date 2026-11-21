@@ -922,16 +922,18 @@ func withoutContent(body any) any {
 func TestSetup_CommittedFiles_CarryWhatHEADHolds(t *testing.T) {
 	var checked int
 	for _, golden := range readGoldens(t) {
-		fake := newFakeGitLab(golden.Routes)
-		server := httptest.NewServer(fake)
-		git := &fakeGit{base: server.URL, fixture: kgFixture}
-		setupAgainst(t, golden, server, git.run)
-		server.Close()
-		for _, request := range fake.requests() {
-			if request.Method == http.MethodPost && strings.HasSuffix(request.Path, "/repository/commits") {
-				checked += checkCommittedFiles(t, golden.Scenario, request)
+		t.Run(golden.Scenario, func(t *testing.T) {
+			fake := newFakeGitLab(golden.Routes)
+			server := httptest.NewServer(fake)
+			t.Cleanup(server.Close)
+			git := &fakeGit{base: server.URL, fixture: kgFixture}
+			setupAgainst(t, golden, server, git.run)
+			for _, request := range fake.requests() {
+				if request.Method == http.MethodPost && strings.HasSuffix(request.Path, "/repository/commits") {
+					checked += checkCommittedFiles(t, golden.Scenario, request)
+				}
 			}
-		}
+		})
 	}
 	if checked == 0 {
 		t.Error("no recorded scenario commits a file, so nothing was checked")
