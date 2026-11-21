@@ -197,8 +197,9 @@ export E2E_COMMIT
 # directory.
 REQUEST_INVENTORY_SHARDS=dist/request-inventory
 
-# GitLab.com Orbit live-test fixtures. All overridable on the command line
-# or via .env. Defaults are designed for the canonical fixture group,
+# GitLab.com Orbit live-test fixtures. Each is read from the make command
+# line, then the environment, then .env, and only then is the default below
+# used (orbit_setting). Defaults are designed for the canonical fixture group,
 # jmrp-oss/orbit-fixtures: the subgroup rather than jmrp-oss itself, which
 # holds other projects the path-bounded queries must not count.
 ORBIT_FIXTURES_NAMESPACE ?= jmrp-oss/orbit-fixtures
@@ -211,6 +212,14 @@ ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 600
 # When set to "true", additionally mirror gitlab-org/cli for realistic
 # cross-entity CI/MR data. Adds ~5 min of mirror time on first run.
 ORBIT_FIXTURES_MIRROR ?= false
+# orbit_setting expands to the shell text that reads the Orbit fixture
+# setting $(1) inside a recipe that has sourced .env: make's own value when
+# the make command line or the environment set it, else what .env gave the
+# shell, else make's default. Every Orbit recipe sources .env after make has
+# expanded its text, so make's value alone would be the default whenever only
+# .env sets the setting, and the recipe would hand that on without a word
+# (issue 1535). The value goes inside double quotes in the recipe.
+orbit_setting = $(if $(filter command line environment,$(origin $(1))),$($(1)),$${$(1):-$($(1))})
 # The -timeout handed to go test by the licensed Docker run, test-e2e-ee. go
 # test applies it to each test binary on its own, so with the run naming two
 # packages, common and ee, each package gets the whole budget rather than the
@@ -741,7 +750,7 @@ e2e-clean-orphans:
 ## reconciles an existing project (its visibility and the fixture files it
 ## lacks) and leaves other existing resources alone, so re-running is safe.
 ##
-## Overridable variables (command line or .env):
+## Overridable variables (make command line, then environment, then .env):
 ##   ORBIT_FIXTURES_NAMESPACE      default: jmrp-oss/orbit-fixtures
 ##   ORBIT_FIXTURES_GITLAB_URL     default: https://gitlab.com
 ##   ORBIT_FIXTURES_INDEXER_TIMEOUT  default: 600s
@@ -786,20 +795,21 @@ orbit-ensure-token:
 ## Passes the resolved namespace and optional --mirror-cli through to
 ## the script. An existing project is reconciled (its visibility and the
 ## fixture files it lacks) and other existing resources are left alone.
-## ORBIT_FIXTURES_VISIBILITY is read from the make command line, then the
-## environment, then .env: the recipe sources .env after make has handed
-## the shell its value, so make's value is passed on explicitly, and an
-## empty one leaves the script its public default.
+## Every setting is read from the make command line, then the environment,
+## then .env (orbit_setting), and an empty ORBIT_FIXTURES_VISIBILITY leaves
+## the script its public default.
 orbit-setup-fixtures: orbit-ensure-token
 	@. ./.env && { \
+		namespace="$(call orbit_setting,ORBIT_FIXTURES_NAMESPACE)"; \
+		gitlab_url="$(call orbit_setting,ORBIT_FIXTURES_GITLAB_URL)"; \
 		mirror_flag=""; \
-		if [ "$(ORBIT_FIXTURES_MIRROR)" = "true" ]; then mirror_flag="--mirror-cli"; fi; \
+		if [ "$(call orbit_setting,ORBIT_FIXTURES_MIRROR)" = "true" ]; then mirror_flag="--mirror-cli"; fi; \
 		echo ""; \
-		echo "=== Provisioning Orbit fixtures in $(ORBIT_FIXTURES_NAMESPACE) on $(ORBIT_FIXTURES_GITLAB_URL) ==="; \
+		echo "=== Provisioning Orbit fixtures in $$namespace on $$gitlab_url ==="; \
 		export GITLAB_COM_TOKEN \
-			ORBIT_FIXTURES_VISIBILITY="$(if $(filter command line environment,$(origin ORBIT_FIXTURES_VISIBILITY)),$(ORBIT_FIXTURES_VISIBILITY),$${ORBIT_FIXTURES_VISIBILITY:-})" \
-			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE) \
-			ORBIT_FIXTURES_GITLAB_URL=$(ORBIT_FIXTURES_GITLAB_URL); \
+			ORBIT_FIXTURES_VISIBILITY="$(call orbit_setting,ORBIT_FIXTURES_VISIBILITY)" \
+			ORBIT_FIXTURES_NAMESPACE="$$namespace" \
+			ORBIT_FIXTURES_GITLAB_URL="$$gitlab_url"; \
 		./scripts/setup-orbit-fixtures.sh $$mirror_flag; \
 	}
 
@@ -814,15 +824,19 @@ orbit-setup-fixtures: orbit-ensure-token
 ## 2026-10-28 (issue 1516). A null index, GitLab's answer when Orbit is not
 ## served to the token there, is said and polled like any other state.
 ## Proceeds with a warning in the timeout case: the live test skips what it
-## cannot ask and is tolerant of partial indexing.
+## cannot ask and is tolerant of partial indexing. Every setting is read from
+## the make command line, then the environment, then .env (orbit_setting).
 orbit-wait-indexer: orbit-ensure-token
 	@. ./.env && { \
+		namespace="$(call orbit_setting,ORBIT_FIXTURES_NAMESPACE)"; \
+		gitlab_url="$(call orbit_setting,ORBIT_FIXTURES_GITLAB_URL)"; \
+		timeout="$(call orbit_setting,ORBIT_FIXTURES_INDEXER_TIMEOUT)"; \
 		echo ""; \
-		echo "=== Waiting for Orbit indexer to catch up (timeout: $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s) ==="; \
-		attempts=$$(( $(ORBIT_FIXTURES_INDEXER_TIMEOUT) / 15 )); \
-		query='{"query":"query OrbitWaitIndexer($$fullPath: ID!) { group(fullPath: $$fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }","variables":{"fullPath":"$(ORBIT_FIXTURES_NAMESPACE)"}}'; \
+		echo "=== Waiting for Orbit indexer to catch up (timeout: $${timeout}s) ==="; \
+		attempts=$$(( timeout / 15 )); \
+		query='{"query":"query OrbitWaitIndexer($$fullPath: ID!) { group(fullPath: $$fullPath) { orbit { indexing { state projects { indexed notIndexed } } } } }","variables":{"fullPath":"'"$$namespace"'"}}'; \
 		for i in $$(seq 1 $$attempts); do \
-			progress=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/graphql" -H "Authorization: Bearer $$GITLAB_COM_TOKEN" -H "Content-Type: application/json" -d "$$query" 2>/dev/null \
+			progress=$$(curl -sS "$$gitlab_url/api/graphql" -H "Authorization: Bearer $$GITLAB_COM_TOKEN" -H "Content-Type: application/json" -d "$$query" 2>/dev/null \
 				| python3 -I -c "import sys,json; d=json.load(sys.stdin); x=(((d.get('data') or {}).get('group') or {}).get('orbit') or {}).get('indexing'); p=(x or {}).get('projects') or {}; print((x or {}).get('state') or 'null', p.get('indexed') or 0, p.get('notIndexed') or 0)" 2>/dev/null || echo "? 0 0"); \
 			set -- $$progress; \
 			printf "  [%d/%d] state=%s indexed=%s not_indexed=%s\n" "$$i" "$$attempts" "$$1" "$$2" "$$3"; \
@@ -831,11 +845,11 @@ orbit-wait-indexer: orbit-ensure-token
 				exit 0; \
 			fi; \
 			if [ "$$1" = "null" ]; then \
-				echo "    GitLab answered the index null: Orbit is not served for $(ORBIT_FIXTURES_NAMESPACE) to this token" 1>&2; \
+				echo "    GitLab answered the index null: Orbit is not served for $$namespace to this token" 1>&2; \
 			fi; \
 			sleep 15; \
 		done; \
-		echo "  ⚠ indexer did not catch up within $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s" 1>&2; \
+		echo "  ⚠ indexer did not catch up within $${timeout}s" 1>&2; \
 		echo "    Proceeding anyway — live test assertions are tolerant of" 1>&2; \
 		echo "    partial indexing (row_count > 0 rather than strict equality)" 1>&2; \
 	}
@@ -854,7 +868,7 @@ orbit-run-live-tests: orbit-ensure-token
 		echo ""; \
 		echo "=== Running live tests (build tag: orbitlive) ==="; \
 		export GITLAB_COM_TOKEN \
-			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
+			ORBIT_FIXTURES_NAMESPACE="$(call orbit_setting,ORBIT_FIXTURES_NAMESPACE)"; \
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
@@ -882,7 +896,7 @@ gen-orbit-record: orbit-ensure-token
 		echo ""; \
 		echo "=== Recording the Orbit answers from GitLab.com ==="; \
 		export GITLAB_COM_TOKEN \
-			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
+			ORBIT_FIXTURES_NAMESPACE="$(call orbit_setting,ORBIT_FIXTURES_NAMESPACE)"; \
 		go run ./cmd/gen_orbit_record/ $(ORBIT_RECORD_FLAGS); \
 	}
 
