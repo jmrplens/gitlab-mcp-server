@@ -1,0 +1,942 @@
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
+// The markdown twin of a documentation page: the same words, without the
+// chrome.
+//
+// A rendered page is mostly navigation. The sidebar, the table of contents,
+// the search index and the syntax highlighting are the bulk of its bytes, and
+// none of them are the page. An agent that wants one page had two options:
+// parse 80 KB of HTML around it, or download the whole corpus. The twin is the
+// third: the page's own markdown, at the page's own path with `index.md`
+// appended, announced from the page with `<link rel="alternate">`. The edge in
+// front of the site answers `Accept: text/markdown` with a redirect to it, but
+// only when the file exists, so a page without its twin is a page served to an
+// agent as HTML.
+//
+// MDX components are reduced, not dropped. An <Aside> becomes a blockquote
+// with its title, a <TabItem> keeps its label, a <LinkCard> becomes a link
+// carrying its description, <FAQ /> becomes the questions it renders from the
+// frontmatter. A component this file does not know throws, so a page that
+// starts using one fails the build here instead of quietly losing a section
+// the HTML still shows. The same goes for an expression it cannot evaluate and
+// for an import it cannot resolve.
+//
+// Code is opaque. Fenced blocks and code spans are masked before anything
+// else runs, so `<NAME>`, `<GitLab's message>`, `{project_id}` or an
+// `import ... from` line in a sample is text, never a component, an
+// expression or an import, and the link rewriting never touches a path in a
+// command.
+import { readFileSync } from "node:fs";
+import { dirname, join, posix } from "node:path";
+
+/** The origin every canonical URL of the site names. */
+export const ORIGIN = "https://docs.jmrp.io";
+
+/** The path the site is served under, as the MDX sources write it. */
+export const BASE = "/gitlab-mcp-server";
+
+/**
+ * Where a relative asset target resolves for a reader of the twin. A page
+ * served at /gitlab-mcp-server/about/index.md cannot carry a path relative to
+ * its source file, which names a file in the repository, not one on the site,
+ * so the twin names that file's bytes on GitHub.
+ */
+export const SOURCE_ROOT =
+	"https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main";
+
+/** Every component this file reduces, named in the failure for one it does not. */
+export const COMPONENTS = [
+	"Aside",
+	"Card",
+	"CardGrid",
+	"ChartPair",
+	"Code",
+	"FAQ",
+	"Fact",
+	"Facts",
+	"Home",
+	"LinkCard",
+	"Steps",
+	"TabItem",
+	"Tabs",
+];
+
+// Starlight's default titles for an untitled aside or directive, in the two
+// locales the site publishes, so an untitled note and an untitled warning stay
+// distinguishable in the twin as they are on the page.
+const ASIDE_TITLES = {
+	en: { note: "Note", tip: "Tip", caution: "Caution", danger: "Danger" },
+	es: {
+		note: "Nota",
+		tip: "Consejo",
+		caution: "Precaución",
+		danger: "Peligro",
+	},
+};
+
+// The heading FAQ.astro gives the section when the page names none.
+const FAQ_TITLES = {
+	en: "Frequently asked questions",
+	es: "Preguntas frecuentes",
+};
+
+/** The absolute URL of a page route: "" is the English home, "es" the Spanish. */
+export function pageUrl(route) {
+	return route ? `${ORIGIN}${BASE}/${route}/` : `${ORIGIN}${BASE}/`;
+}
+
+/** The locale a route is served in. */
+export function localeOf(route) {
+	return route === "es" || route.startsWith("es/") ? "es" : "en";
+}
+
+/**
+ * The route of a content collection entry id: "about" for "about.mdx" or
+ * "about", "" for "index", "reference/tools" for "reference/tools/index".
+ */
+export function routeOf(id) {
+	const bare = id.replace(/\.mdx?$/, "");
+	return bare === "index" ? "" : bare.replace(/\/index$/, "");
+}
+
+// --- Masking ---------------------------------------------------------------
+//
+// A masked character is moved into Supplementary Private Use Area-A, where no
+// page writes anything, so no pattern below can match it, and moved back at
+// the end. Leading indentation stays unmasked because the reduction dedents
+// and indents blocks, and a fence nested in a tab moves with its tab.
+
+const MASK_BASE = 0xf0000;
+// A line inside a fence that holds nothing. Kept apart from an empty line so
+// the blank-line collapse does not shorten a code sample.
+const EMPTY_LINE = String.fromCodePoint(MASK_BASE + 0xfffd);
+
+/** @param {string} text @returns {string} the text, masked */
+function mask(text) {
+	let out = "";
+	for (const char of text) {
+		const code = char.codePointAt(0) ?? 0;
+		out +=
+			char === "\n" || code > 0xffff
+				? char
+				: String.fromCodePoint(MASK_BASE + code);
+	}
+	return out;
+}
+
+/** @param {string} text @returns {string} the text with every mask lifted */
+function unmask(text) {
+	return text
+		.split("\n")
+		.map((line) => (line.trim() === EMPTY_LINE ? "" : line))
+		.join("\n")
+		.replace(/[\u{f0000}-\u{ffffd}]/gu, (char) =>
+			String.fromCodePoint((char.codePointAt(0) ?? MASK_BASE) - MASK_BASE),
+		);
+}
+
+/** Masks a line after its indentation; an empty one becomes EMPTY_LINE. */
+function maskLine(line) {
+	if (!line.trim()) return EMPTY_LINE;
+	const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+	return indent + mask(line.slice(indent.length));
+}
+
+// A code span: a run of backticks closed by a run of the same length, on one
+// line or wrapped onto the next, but not across a blank line, which ends the
+// paragraph. A run nothing closes is literal text.
+const CODE_SPAN = /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)/g;
+
+/**
+ * Masks every fenced block, fence lines included, and every code span.
+ *
+ * @param {string} text MDX body
+ * @returns {string} the body with its code opaque
+ */
+export function maskCode(text) {
+	const out = [];
+	let prose = [];
+	/** @type {{ char: string, length: number } | null} */
+	let fence = null;
+	const flush = () => {
+		if (prose.length > 0) {
+			out.push(prose.join("\n").replace(CODE_SPAN, (span) => mask(span)));
+		}
+		prose = [];
+	};
+	for (const line of text.split("\n")) {
+		const marker = /^[ \t]*(`{3,}|~{3,})/.exec(line);
+		if (fence) {
+			out.push(maskLine(line));
+			if (
+				marker &&
+				marker[1][0] === fence.char &&
+				marker[1].length >= fence.length &&
+				!line.slice(marker[0].length).trim()
+			) {
+				fence = null;
+			}
+			continue;
+		}
+		if (marker) {
+			flush();
+			out.push(maskLine(line));
+			fence = { char: marker[1][0], length: marker[1].length };
+			continue;
+		}
+		prose.push(line);
+	}
+	flush();
+	return out.join("\n");
+}
+
+/**
+ * A fenced block for code the reduction itself places (a <Code> component, a
+ * command on the landing), already masked like the page's own fences. The
+ * fence is longer than any run of backticks in the code, so the code cannot
+ * close it.
+ *
+ * @param {string} code
+ * @param {string} [lang]
+ * @param {string} [meta] the rest of the info string, such as a title
+ * @returns {string} masked markdown
+ */
+function fenced(code, lang = "", meta = "") {
+	const longest = Math.max(
+		0,
+		...[...code.matchAll(/`+/g)].map((run) => run[0].length),
+	);
+	const ticks = "`".repeat(Math.max(3, longest + 1));
+	const info = [lang, meta].filter(Boolean).join(" ");
+	return [`${ticks}${info}`, ...code.replace(/\n+$/, "").split("\n"), ticks]
+		.map(maskLine)
+		.join("\n");
+}
+
+/** Inline code the reduction places, masked like the page's own spans. */
+const span = (code) => {
+	const ticks = code.includes("`") ? "``" : "`";
+	const pad = code.startsWith("`") || code.endsWith("`") ? " " : "";
+	return mask(`${ticks}${pad}${code}${pad}${ticks}`);
+};
+
+// --- Layout helpers --------------------------------------------------------
+
+/** @param {string} line */
+const isBlank = (line) => !line.trim() || line.trim() === EMPTY_LINE;
+
+/**
+ * Removes the indentation a component's children carry because of the tag
+ * around them, keeping their indentation relative to each other. Left alone,
+ * the children of a <TabItem> indented one tab arrive as an indented code
+ * block rather than the prose they are.
+ */
+function dedent(text) {
+	const lines = text.split("\n");
+	const widths = lines
+		.filter((line) => !isBlank(line))
+		.map((line) => (/^[ \t]*/.exec(line) ?? [""])[0].length);
+	const shift = widths.length > 0 ? Math.min(...widths) : 0;
+	return lines
+		.map((line) => (isBlank(line) ? line.trim() : line.slice(shift)))
+		.join("\n");
+}
+
+/** Puts a block back at the indentation its opening tag sat at. */
+const indentBy = (text, indent) =>
+	indent
+		? text
+				.split("\n")
+				.map((line) => (line.trim() ? indent + line : line))
+				.join("\n")
+		: text;
+
+/** @param {string} text @returns {string} the text as a blockquote */
+const blockquote = (text) =>
+	text
+		.trim()
+		.split("\n")
+		.map((line) => (line.trim() ? `> ${line}` : ">"))
+		.join("\n");
+
+/** A list item whose body may span several blocks. */
+const listItem = (lead, body) => {
+	const trimmed = body.trim();
+	if (!trimmed) return `- ${lead}`;
+	return `- ${lead}\n\n${indentBy(trimmed, "  ")}`;
+};
+
+/**
+ * Collapses the blank lines the reduction leaves behind, and keeps two
+ * blockquotes that follow each other apart: separated by one blank line they
+ * are one blockquote to a markdown parser, which is what two asides in a row
+ * reduce to, and an empty HTML comment separates them without adding a word.
+ */
+const tidy = (text) =>
+	text
+		.replace(/[ \t]+$/gm, "")
+		.replace(/\n{3,}/g, "\n\n")
+		.replace(/(^>.*)\n\n(?=>)/gm, "$1\n\n<!-- -->\n\n");
+
+// --- Inline HTML -------------------------------------------------------------
+
+/**
+ * The few inline elements the landing's copy writes as HTML, as markdown.
+ * Anything else throws: a tag nobody taught this file would reach the twin as
+ * markup, or vanish.
+ *
+ * @param {string} html
+ * @param {string} where named in a failure
+ * @returns {string} masked-aware markdown
+ */
+export function inlineHtml(html, where) {
+	const out = html
+		.replace(/<code>([\s\S]*?)<\/code>/g, (_, code) => span(decode(code)))
+		.replace(/<strong>([\s\S]*?)<\/strong>/g, "**$1**")
+		.replace(/<em>([\s\S]*?)<\/em>/g, "_$1_")
+		.replace(/<a href="([^"]*)">([\s\S]*?)<\/a>/g, "[$2]($1)");
+	const left = /<\/?[a-zA-Z][^>]*>/.exec(out);
+	if (left) {
+		throw new Error(
+			`${where}: no markdown for the markup ${left[0]}. Teach inlineHtml in src/lib/page-markdown.mjs.`,
+		);
+	}
+	return decode(out);
+}
+
+/** @param {string} text @returns {string} the text with its entities read */
+const decode = (text) =>
+	text
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, "&");
+
+// --- Imports and expressions -------------------------------------------------
+
+/**
+ * Reads a page's import block: which names are components, and what the rest
+ * hold. A JSON module holds its parsed value, a `?raw` import its text, the
+ * landing's copy module the object the caller passes in. Any other import
+ * throws, because a name nothing resolves is a name an expression or an
+ * attribute would print as source.
+ *
+ * @param {string} text MDX body, code masked
+ * @param {{ file: string, root: string, home?: Record<string, unknown> }} context
+ * @returns {{ body: string, bindings: Map<string, unknown> }}
+ */
+function readImports(text, context) {
+	/** @type {Map<string, unknown>} */
+	const bindings = new Map();
+	const source = join(context.root, context.file);
+	const body = text.replace(
+		/^import\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?[ \t]*$/gm,
+		(_, clause, specifier) => {
+			const names = clause.trim();
+			if (
+				specifier === "@astrojs/starlight/components" ||
+				specifier.endsWith(".astro")
+			) {
+				return "";
+			}
+			if (/(^|\/)data\/home$/.test(specifier)) {
+				for (const name of names.replace(/[{}]/g, "").split(",")) {
+					const key = name.trim();
+					if (!key) continue;
+					if (!context.home || !(key in context.home)) {
+						throw new Error(
+							`${context.file}: imports ${key} from ${specifier}, which the twin was not given.`,
+						);
+					}
+					bindings.set(key, context.home[key]);
+				}
+				return "";
+			}
+			if (names.startsWith("{")) {
+				throw new Error(
+					`${context.file}: named import from ${specifier} has no reduction. ` +
+						"Teach readImports in src/lib/page-markdown.mjs.",
+				);
+			}
+			const path = join(dirname(source), specifier.replace(/\?raw$/, ""));
+			if (specifier.endsWith("?raw")) {
+				bindings.set(names, readFileSync(path, "utf8"));
+			} else if (specifier.endsWith(".json")) {
+				bindings.set(names, JSON.parse(readFileSync(path, "utf8")));
+			} else {
+				throw new Error(
+					`${context.file}: import from ${specifier} has no reduction. ` +
+						"Teach readImports in src/lib/page-markdown.mjs.",
+				);
+			}
+			return "";
+		},
+	);
+	const left = /^import\s.*$/m.exec(body);
+	if (left) {
+		throw new Error(
+			`${context.file}: cannot read the import ${JSON.stringify(left[0])}. ` +
+				"Teach readImports in src/lib/page-markdown.mjs.",
+		);
+	}
+	return { body, bindings };
+}
+
+/**
+ * Evaluates one MDX expression of the shapes the pages write: a data path
+ * (`stats.meta.base`), the same with `.toLocaleString("es-ES")`, a number or
+ * string literal, and the four arithmetic operators between them. Anything
+ * else throws rather than being printed as source.
+ *
+ * @param {string} expression the text between the braces
+ * @param {Map<string, unknown>} bindings
+ * @param {string} file named in a failure
+ * @returns {unknown}
+ */
+export function evaluate(expression, bindings, file) {
+	const tokens = expression.match(
+		/\s+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\d+(?:\.\d+)?|[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\("[^"]*"\))?|[-+*/]|./g,
+	);
+	const fail = (why) => {
+		throw new Error(
+			`${file}: the expression {${expression}} ${why}, so the markdown twin would publish it as written. ` +
+				"Teach evaluate in src/lib/page-markdown.mjs.",
+		);
+	};
+	const parts = (tokens ?? []).filter((token) => token.trim());
+	/** @param {string} token */
+	const term = (token) => {
+		if (/^\d/.test(token)) return Number(token);
+		if (/^["']/.test(token)) return JSON.parse(`"${token.slice(1, -1)}"`);
+		const call = /^(.*)\.toLocaleString\("([^"]*)"\)$/.exec(token);
+		const path = (call ? call[1] : token).split(".");
+		if (!bindings.has(path[0]))
+			fail(`names ${path[0]}, which the page does not import`);
+		/** @type {unknown} */
+		let value = bindings.get(path[0]);
+		for (const key of path.slice(1)) {
+			value =
+				value && typeof value === "object"
+					? /** @type {Record<string, unknown>} */ (value)[key]
+					: undefined;
+		}
+		if (value === undefined || value === null) fail("has no value");
+		if (call) {
+			if (typeof value !== "number")
+				fail("formats something that is not a number");
+			return value.toLocaleString(call[2]);
+		}
+		return value;
+	};
+	if (parts.length === 0 || parts.length % 2 === 0) fail("is not one");
+	let value = term(parts[0]);
+	for (let i = 1; i < parts.length; i += 2) {
+		const op = parts[i];
+		const right = term(parts[i + 1]);
+		if (!/^[-+*/]$/.test(op)) fail(`uses ${op}`);
+		if (typeof value !== "number" || typeof right !== "number") {
+			if (op === "+") value = `${value}${right}`;
+			else fail("does arithmetic on something that is not a number");
+		} else if (op === "+") value += right;
+		else if (op === "-") value -= right;
+		else if (op === "*") value *= right;
+		else value /= right;
+	}
+	return value;
+}
+
+/**
+ * Replaces every expression left in the prose with its value. Braces in code
+ * are masked by now, so a brace here is one MDX evaluates, unless escaped.
+ */
+function resolveExpressions(text, bindings, file) {
+	let out = "";
+	let rest = text;
+	for (;;) {
+		const at = rest.search(/(?<!\\)\{/);
+		if (at === -1) return out + rest;
+		let depth = 0;
+		let end = -1;
+		for (let i = at; i < rest.length; i += 1) {
+			if (rest[i] === "{") depth += 1;
+			else if (rest[i] === "}") {
+				depth -= 1;
+				if (depth === 0) {
+					end = i;
+					break;
+				}
+			}
+		}
+		if (end === -1) throw new Error(`${file}: an expression is never closed`);
+		const expression = rest.slice(at + 1, end).trim();
+		const value = evaluate(expression, bindings, file);
+		// An attribute may take an object (<Home content={en} />); prose
+		// cannot, and MDX would print it as "[object Object]".
+		if (typeof value === "object") {
+			throw new Error(
+				`${file}: the expression {${expression}} is an object, not text`,
+			);
+		}
+		out += rest.slice(0, at) + String(value);
+		rest = rest.slice(end + 1);
+	}
+}
+
+// --- Components -----------------------------------------------------------
+
+// A component tag, opening, closing or self-closing, across newlines: several
+// <LinkCard> tags spread their attributes over four lines.
+const TAG =
+	/<(\/?)([A-Z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*?)(\/?)>/;
+
+/**
+ * The attributes of a tag: a quoted value as its text, an expression as the
+ * value it evaluates to. A bare attribute is `true`.
+ */
+function parseAttributes(raw, bindings, file) {
+	/** @type {Record<string, unknown>} */
+	const attributes = {};
+	for (const match of raw.matchAll(
+		/([A-Za-z][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}))?/g,
+	)) {
+		const [, name, double, single, expression] = match;
+		attributes[name] =
+			expression !== undefined
+				? evaluate(expression.trim(), bindings, file)
+				: (double ?? single ?? true);
+	}
+	return attributes;
+}
+
+/** @param {unknown} value @returns {string} */
+const text = (value) => (typeof value === "string" ? value : "");
+
+/**
+ * Resolves `{{dotted.path}}` tokens in an FAQ answer from stats.json, the way
+ * src/utils/faq.ts does for the rendered section: numbers formatted en-US on
+ * every page, an unknown path left as written.
+ */
+function resolveStatTokens(answer, stats) {
+	return answer.replace(/\{\{([\w.]+)\}\}/g, (whole, path) => {
+		/** @type {unknown} */
+		let value = stats;
+		for (const key of path.split(".")) {
+			value =
+				value && typeof value === "object"
+					? /** @type {Record<string, unknown>} */ (value)[key]
+					: undefined;
+		}
+		if (value === undefined || value === null) return whole;
+		return typeof value === "number"
+			? value.toLocaleString("en-US")
+			: String(value);
+	});
+}
+
+/**
+ * Renders one component that wraps content.
+ *
+ * @param {string} name
+ * @param {Record<string, unknown>} attributes
+ * @param {string} children the already reduced children
+ * @param {Context} context
+ * @returns {string}
+ */
+function renderWrapper(name, attributes, children, context) {
+	switch (name) {
+		case "Aside": {
+			const type = text(attributes.type) || "note";
+			const title =
+				text(attributes.title) ||
+				ASIDE_TITLES[context.locale][
+					/** @type {keyof typeof ASIDE_TITLES.en} */ (type)
+				] ||
+				type;
+			return `\n\n${blockquote(`**${title}**\n\n${children.trim()}`)}\n\n`;
+		}
+		// A tab strip is a set of alternatives, and that is what it stays: one
+		// list item per tab, its label leading it, so each body stays attached
+		// to its own label rather than merging with the next.
+		case "TabItem":
+			return `\n\n${listItem(`**${text(attributes.label)}**`, children)}\n\n`;
+		// A card's paragraphs are dedented one by one: the pages indent them
+		// unevenly, which MDX ignores because it has no indented code blocks,
+		// while a markdown reader of the twin would take a paragraph five
+		// spaces in for code.
+		case "Card": {
+			const body = children
+				.split(/\n(?:[ \t]*\n)+/)
+				.map((block) => dedent(block).trim())
+				.join("\n\n");
+			return `\n\n${listItem(`**${text(attributes.title)}**`, body)}\n\n`;
+		}
+		// One declaration of a spec sheet: its label, then the prose that argues
+		// it, which is already markdown.
+		case "Fact": {
+			const label = attributes.kind
+				? context.labels[`gm.fact.${text(attributes.kind)}`]
+				: text(attributes.label);
+			if (!label) {
+				throw new Error(
+					`${context.file}: <Fact> with no label for kind=${JSON.stringify(attributes.kind)}`,
+				);
+			}
+			const body = children.trim();
+			const single =
+				!body.includes("\n\n") && !/^\s*(?:[-*+] |\d+\. |>|\|)/m.test(body);
+			return single
+				? `\n\n- **${label}**: ${body.replace(/\s*\n\s*/g, " ")}\n\n`
+				: `\n\n${listItem(`**${label}**`, body)}\n\n`;
+		}
+		// Pure layout around content that is already markdown: an ordered list
+		// for <Steps>, a grid of cards, the sheet that holds the facts.
+		case "Tabs":
+		case "Steps":
+		case "CardGrid":
+		case "Facts":
+			return `\n\n${children.trim()}\n\n`;
+		default:
+			throw new Error(
+				`${context.file}: no markdown reduction for <${name}>. ` +
+					`Teach src/lib/page-markdown.mjs, which knows ${COMPONENTS.join(", ")}.`,
+			);
+	}
+}
+
+/**
+ * Renders one self-closing component.
+ *
+ * @param {string} name
+ * @param {Record<string, unknown>} attributes
+ * @param {Context} context
+ * @returns {string}
+ */
+function renderSelfClosing(name, attributes, context) {
+	switch (name) {
+		case "LinkCard": {
+			const title = text(attributes.title) || text(attributes.href);
+			const description = text(attributes.description);
+			return `\n- [${title}](${text(attributes.href)})${description ? `: ${description}` : ""}\n`;
+		}
+		// The section FAQ.astro renders from the page's `faq:` frontmatter, under
+		// the same headings.
+		case "FAQ": {
+			const items = context.faq ?? [];
+			if (items.length === 0) return "";
+			const title = text(attributes.title) || FAQ_TITLES[context.locale];
+			const entries = items.map(
+				({ q, a }) => `### ${q}\n\n${resolveStatTokens(a, context.stats)}`,
+			);
+			// The answers come from the frontmatter, outside the masked body, so
+			// their code spans are masked here before the passes that follow.
+			return maskCode(`\n\n## ${title}\n\n${entries.join("\n\n")}\n\n`);
+		}
+		// A benchmark figure is generated as a light and a dark SVG; the light one
+		// carries the alternative text, and the dark one repeats it.
+		case "ChartPair": {
+			const figure = `${BASE}/benchmarks/${text(attributes.lang)}/${text(attributes.name)}.light.svg`;
+			return `\n\n![${text(attributes.alt)}](${figure})\n\n`;
+		}
+		case "Code": {
+			if (typeof attributes.code !== "string") {
+				throw new Error(`${context.file}: <Code> without a code string`);
+			}
+			const title = text(attributes.title);
+			return `\n\n${fenced(attributes.code, text(attributes.lang), title ? `title="${title}"` : "")}\n\n`;
+		}
+		case "Home": {
+			if (!context.renderHome) {
+				throw new Error(`${context.file}: <Home> without a landing renderer`);
+			}
+			return maskCode(
+				`\n\n${context.renderHome(attributes.content, context)}\n\n`,
+			);
+		}
+		default:
+			throw new Error(
+				`${context.file}: no markdown reduction for <${name} />. ` +
+					`Teach src/lib/page-markdown.mjs, which knows ${COMPONENTS.join(", ")}.`,
+			);
+	}
+}
+
+/**
+ * @typedef {object} Context
+ * @property {string} file source path, named in any failure
+ * @property {"en" | "es"} locale
+ * @property {Record<string, string>} labels the locale's `gm.*` strings
+ * @property {Map<string, unknown>} bindings what the page's imports hold
+ * @property {{ q: string, a: string }[]} [faq] the page's FAQ frontmatter
+ * @property {unknown} stats src/data/stats.json, for FAQ answers
+ * @property {(content: unknown, context: Context) => string} [renderHome]
+ */
+
+/**
+ * Reduces MDX to markdown, resolving components as it goes.
+ *
+ * @param {string} source code already masked
+ * @param {Context} context
+ * @returns {string}
+ */
+function reduce(source, context) {
+	let out = "";
+	let rest = source;
+	for (;;) {
+		const match = TAG.exec(rest);
+		if (!match) return out + rest;
+		const [whole, closing, name, raw, selfClosing] = match;
+		out += rest.slice(0, match.index);
+		rest = rest.slice(match.index + whole.length);
+		if (closing) {
+			throw new Error(`${context.file}: </${name}> without an opening tag`);
+		}
+		const attributes = parseAttributes(raw, context.bindings, context.file);
+		const indent = (/(?:^|\n)([ \t]*)$/.exec(out) ?? ["", ""])[1];
+		if (selfClosing) {
+			out += indentBy(renderSelfClosing(name, attributes, context), indent);
+			continue;
+		}
+		// Scan to the matching close, counting nested tags of the same name so a
+		// tab set inside a tab closes the inner one first.
+		const scanner = new RegExp(`<${name}(?=[\\s/>])|</${name}>`, "g");
+		let depth = 1;
+		let end = -1;
+		let after = -1;
+		for (let inner = scanner.exec(rest); inner; inner = scanner.exec(rest)) {
+			depth += inner[0].startsWith("</") ? -1 : 1;
+			if (depth === 0) {
+				end = inner.index;
+				after = scanner.lastIndex;
+				break;
+			}
+		}
+		if (end === -1) {
+			throw new Error(`${context.file}: <${name}> is never closed`);
+		}
+		const children = rest.slice(0, end);
+		rest = rest.slice(after);
+		out += indentBy(
+			renderWrapper(
+				name,
+				attributes,
+				dedent(reduce(children, context)),
+				context,
+			),
+			indent,
+		);
+	}
+}
+
+/**
+ * Starlight's container directives (`:::note[Title]` ... `:::`), as the same
+ * blockquote an <Aside> reduces to.
+ */
+function reduceDirectives(text, locale, file) {
+	const lines = text.split("\n");
+	const out = [];
+	for (let i = 0; i < lines.length; i += 1) {
+		const open =
+			/^([ \t]*):::(note|tip|caution|danger)(?:\[(.*)\])?[ \t]*$/.exec(
+				lines[i],
+			);
+		if (!open) {
+			out.push(lines[i]);
+			continue;
+		}
+		const [, indent, type, title] = open;
+		const close = lines.findIndex(
+			(line, j) => j > i && new RegExp(`^${indent}:::[ \\t]*$`).test(line),
+		);
+		if (close === -1) throw new Error(`${file}: :::${type} is never closed`);
+		const body = dedent(lines.slice(i + 1, close).join("\n"));
+		const heading = title || ASIDE_TITLES[locale][type];
+		out.push(
+			"",
+			indentBy(blockquote(`**${heading}**\n\n${body.trim()}`), indent),
+			"",
+		);
+		i = close;
+	}
+	return out.join("\n");
+}
+
+// --- Link targets ---------------------------------------------------------
+
+/**
+ * On a Spanish page, a site link that does not name a locale is rewritten to
+ * the Spanish page, which is what remarkLocaleLinks in astro.config.mjs does
+ * to the HTML: markdown links (not images) and every `href` attribute.
+ */
+function localizeLinks(text) {
+	const prefix = `${BASE}/`;
+	const esPrefix = `${BASE}/es/`;
+	const localize = (target) =>
+		target.startsWith(prefix) && !target.startsWith(esPrefix)
+			? `${esPrefix}${target.slice(prefix.length)}`
+			: target;
+	return text
+		.replace(/\]\(([^)\s]+)/g, (whole, target, offset) =>
+			isImage(text, offset) ? whole : `](${localize(target)}`,
+		)
+		.replace(/\bhref="([^"]*)"/g, (_, target) => `href="${localize(target)}"`);
+}
+
+/** Whether the `](` at an offset closes an image's alternative text. */
+function isImage(text, offset) {
+	let depth = 0;
+	for (let i = offset; i >= 0; i -= 1) {
+		if (text[i] === "]") depth += 1;
+		else if (text[i] === "[") {
+			depth -= 1;
+			if (depth === 0) return text[i - 1] === "!";
+		}
+	}
+	return false;
+}
+
+const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Every link and image target, `href` and `src` made absolute. The twins are
+ * read as text, often after being copied off the site, and text keeps no host
+ * to resolve `/gitlab-mcp-server/about/` against, nor a page to resolve
+ * `#heading` against. A site-rooted target gets the origin, a fragment the
+ * page it was written on, a relative target its file in the repository. Any
+ * other target throws, because it resolves nowhere a reader can follow.
+ */
+function absoluteTargets(text, { file, route }) {
+	const dir = posix.dirname(`site/${file}`);
+	const absolute = (target) => {
+		if (SCHEME.test(target)) return target;
+		if (target.startsWith("#")) return `${pageUrl(route)}${target}`;
+		if (target.startsWith(`${BASE}/`) || target === BASE) {
+			return `${ORIGIN}${target}`;
+		}
+		// A relative target is an asset beside the source file, so it names a
+		// file with an extension; a relative page link would resolve to a
+		// directory of the repository rather than to the page, and throws.
+		if (
+			(target.startsWith("./") || target.startsWith("../")) &&
+			/\.[A-Za-z0-9]+(?:[?#].*)?$/.test(target)
+		) {
+			const source = posix.join(dir, target);
+			if (!source.startsWith("../")) return `${SOURCE_ROOT}/${source}`;
+		}
+		throw new Error(
+			`${file}: the link target "${target}" points nowhere a reader of the markdown twin can follow. ` +
+				`Write it site-rooted (${BASE}/...), as a fragment, or relative to a file in the repository.`,
+		);
+	};
+	return text
+		.replace(
+			/\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g,
+			(_, target, title) => `](${absolute(target)}${title})`,
+		)
+		.replace(
+			/\b(href|src)="([^"]*)"/g,
+			(_, name, target) => `${name}="${absolute(target)}"`,
+		);
+}
+
+// --- Entry points -----------------------------------------------------------
+
+/**
+ * The body of a page as markdown: imports read and dropped, components and
+ * expressions resolved, links made absolute.
+ *
+ * @param {object} page
+ * @param {string} page.body MDX body, without frontmatter
+ * @param {string} page.file source path relative to the site directory
+ * @param {string} page.route the page's route
+ * @param {string} page.root the site directory
+ * @param {string} page.release the published release, for the version token
+ * @param {Record<string, string>} page.labels the locale's `gm.*` strings
+ * @param {unknown} page.stats src/data/stats.json
+ * @param {{ q: string, a: string }[]} [page.faq]
+ * @param {Record<string, unknown>} [page.home] the landing's copy, by name
+ * @param {(content: unknown, context: Context) => string} [page.renderHome]
+ * @returns {string}
+ */
+export function reduceBody(page) {
+	const locale = localeOf(page.route);
+	const withRelease = page.body.replaceAll("%%VERSION%%", page.release);
+	const { body, bindings } = readImports(maskCode(withRelease), {
+		file: page.file,
+		root: page.root,
+		home: page.home,
+	});
+	/** @type {Context} */
+	const context = {
+		file: page.file,
+		locale,
+		labels: page.labels,
+		bindings,
+		faq: page.faq,
+		stats: page.stats,
+		renderHome: page.renderHome,
+	};
+	const withoutComments = body.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+	let markdown = reduceDirectives(
+		reduce(withoutComments, context),
+		locale,
+		page.file,
+	);
+	markdown = resolveExpressions(markdown, bindings, page.file).replace(
+		/\\([{}])/g,
+		"$1",
+	);
+	if (locale === "es") markdown = localizeLinks(markdown);
+	markdown = absoluteTargets(markdown, { file: page.file, route: page.route });
+	const residual = /<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
+	if (residual) {
+		throw new Error(
+			`${page.file}: <${residual[1]}> survived the reduction. Teach src/lib/page-markdown.mjs.`,
+		);
+	}
+	const reduced = unmask(tidy(markdown)).trim();
+	if (!reduced) throw new Error(`${page.file}: nothing left after reduction`);
+	return reduced;
+}
+
+/**
+ * The markdown twin of one page, in the format the sibling sites publish: the
+ * title, the description, the canonical URL, optionally the date the page last
+ * changed (the edge turns it into Last-Modified, reading the header up to the
+ * first line that is exactly `---`), then the body.
+ *
+ * @param {Parameters<typeof reduceBody>[0] & { title: string, description: string, updated?: string, lead?: string }} page
+ * @returns {string}
+ */
+export function renderTwin(page) {
+	if (!page.description) {
+		throw new Error(
+			`${page.file}: no frontmatter description to use as the lead`,
+		);
+	}
+	const header = [
+		`# ${page.title}`,
+		"",
+		page.description,
+		"",
+		`Source: ${pageUrl(page.route)}`,
+	];
+	if (page.updated) header.push(`Updated: ${page.updated}`);
+	const parts = [header.join("\n")];
+	// The splash pages' hero, which Starlight renders from the frontmatter
+	// above the body. Its links are written as the page means them, so they
+	// are made absolute but not localized.
+	if (page.lead) {
+		parts.push(
+			unmask(
+				absoluteTargets(maskCode(page.lead.trim()), {
+					file: page.file,
+					route: page.route,
+				}),
+			),
+		);
+	}
+	parts.push(reduceBody(page));
+	return `${parts.join("\n\n")}\n`;
+}
