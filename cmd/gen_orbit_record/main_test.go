@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -874,8 +873,6 @@ type orbitSetting struct {
 // value per layer that no other layer shares, so what a stand-in is handed
 // names the layer it came from. ORBIT_FIXTURES_MIRROR alternates, since it
 // is a switch: on in .env, off in the environment, on on the command line.
-// ORBIT_FIXTURES_INDEXER_TIMEOUT is seen as the number of polls, one per 15
-// seconds.
 var orbitSettings = []orbitSetting{
 	{name: "ORBIT_FIXTURES_NAMESPACE", byDefault: defaultNamespace, dotEnv: "dotenv-group", environment: "environment-group", commandLine: "command-line-group"},
 	{name: "ORBIT_FIXTURES_GITLAB_URL", byDefault: "https://gitlab.com", dotEnv: "https://dotenv.example.test", environment: "https://environment.example.test", commandLine: "https://command-line.example.test"},
@@ -972,46 +969,29 @@ func (set orbitLayers) apply() (environ, commandLine []string, dotEnv string, wa
 
 // orbitRecipe is what rendering and running an Orbit recipe needs: make, the
 // shell make runs a recipe line with, the repository the Makefile sits in,
-// and a directory holding the stand-ins found on the PATH.
+// and a directory holding the stand-in go found on the PATH.
 type orbitRecipe struct {
 	makeBin, shell, root, stubs string
 }
 
-// orbitStandIns are the programs an Orbit recipe starts from the PATH,
-// written as shell scripts that append what they were handed to
-// $ORBIT_STUB_LOG, one NAME=value line per setting. curl answers the indexer
-// wait with a namespace already indexed, so the wait ends on its first poll,
-// having printed the number of polls its timeout allows. The setup script is
-// not among them: a recipe starts it by a path relative to the directory it
-// runs in, so it is written there.
-var orbitStandIns = map[string]string{
-	"go": `#!/bin/sh
+// orbitGoStandIn stands in for go, which every Orbit recipe starts: go run
+// ./cmd/orbit_fixtures/ setup or wait-indexer, go test of the live suite, go
+// run ./cmd/gen_orbit_record/. It appends to $ORBIT_STUB_LOG, one NAME=value
+// line each, the settings the command it stands in for reads: the namespace
+// always, the instance, the mirror flag and the visibility for setup, and the
+// instance and the timeout for the wait.
+const orbitGoStandIn = `#!/bin/sh
 printf 'ORBIT_FIXTURES_NAMESPACE=%s\n' "$ORBIT_FIXTURES_NAMESPACE" >> "$ORBIT_STUB_LOG"
-`,
-	"curl": `#!/bin/sh
-url= body=
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) body=$2; shift 2 ;;
-    -H) shift 2 ;;
-    http*) url=$1; shift ;;
-    *) shift ;;
-  esac
-done
-printf 'ORBIT_FIXTURES_GITLAB_URL=%s\n' "${url%/api/graphql}" >> "$ORBIT_STUB_LOG"
-namespace=${body##*\"fullPath\":\"}
-printf 'ORBIT_FIXTURES_NAMESPACE=%s\n' "${namespace%%\"*}" >> "$ORBIT_STUB_LOG"
-printf '%s' '{"data":{"group":{"orbit":{"indexing":{"state":"READY","projects":{"indexed":2,"notIndexed":0}}}}}}'
-`,
-}
-
-// orbitSetupStandIn stands in for scripts/setup-orbit-fixtures.sh, which
-// reads the settings from its environment and the mirror as a flag.
-const orbitSetupStandIn = `#!/bin/sh
 mirror=false
-[ "$1" = "--mirror-cli" ] && mirror=true
-printf 'ORBIT_FIXTURES_NAMESPACE=%s\nORBIT_FIXTURES_GITLAB_URL=%s\nORBIT_FIXTURES_MIRROR=%s\nORBIT_FIXTURES_VISIBILITY=%s\n' \
-  "$ORBIT_FIXTURES_NAMESPACE" "$ORBIT_FIXTURES_GITLAB_URL" "$mirror" "$ORBIT_FIXTURES_VISIBILITY" >> "$ORBIT_STUB_LOG"
+for arg; do [ "$arg" = "-mirror-cli" ] && mirror=true; done
+case " $* " in
+  *" setup "*)
+    printf 'ORBIT_FIXTURES_GITLAB_URL=%s\nORBIT_FIXTURES_MIRROR=%s\nORBIT_FIXTURES_VISIBILITY=%s\n' \
+      "$ORBIT_FIXTURES_GITLAB_URL" "$mirror" "$ORBIT_FIXTURES_VISIBILITY" >> "$ORBIT_STUB_LOG" ;;
+  *" wait-indexer "*)
+    printf 'ORBIT_FIXTURES_GITLAB_URL=%s\nORBIT_FIXTURES_INDEXER_TIMEOUT=%s\n' \
+      "$ORBIT_FIXTURES_GITLAB_URL" "$ORBIT_FIXTURES_INDEXER_TIMEOUT" >> "$ORBIT_STUB_LOG" ;;
+esac
 `
 
 // newOrbitRecipe finds the tools the recipes need, skipping the test where
@@ -1029,19 +1009,13 @@ func newOrbitRecipe(t *testing.T) orbitRecipe {
 	if recipe.shell, err = exec.LookPath("sh"); err != nil {
 		t.Skipf("sh is not installed here, so the rendered recipes cannot be run: %v", err)
 	}
-	// The indexer wait reads the GraphQL answer with python3.
-	if _, err = exec.LookPath("python3"); err != nil {
-		t.Skipf("python3 is not installed here, so the indexer wait cannot be run: %v", err)
-	}
 	if recipe.root, err = filepath.Abs(filepath.Join("..", "..")); err != nil {
 		t.Fatalf("resolving the repository root: %v", err)
 	}
 	recipe.stubs = t.TempDir()
-	for name, body := range orbitStandIns {
-		//#nosec G306 -- a stand-in is a script the rendered recipe must execute
-		if err = os.WriteFile(filepath.Join(recipe.stubs, name), []byte(body), 0o700); err != nil {
-			t.Fatalf("writing the stand-in %s: %v", name, err)
-		}
+	//#nosec G306 -- the stand-in is a script the rendered recipe must execute
+	if err = os.WriteFile(filepath.Join(recipe.stubs, "go"), []byte(orbitGoStandIn), 0o700); err != nil {
+		t.Fatalf("writing the stand-in go: %v", err)
 	}
 	return recipe
 }
@@ -1063,20 +1037,13 @@ func (r orbitRecipe) render(t *testing.T, target string, environ, commandLine []
 }
 
 // run runs a rendered recipe the way make would, in a directory of its own
-// holding dotEnv as .env and the setup stand-in, with the stand-ins first on
-// the PATH, and returns the last value each setting was reported with.
+// holding dotEnv as .env, with the stand-in go first on the PATH, and returns
+// the last value each setting was reported with.
 func (r orbitRecipe) run(t *testing.T, recipe string, environ []string, dotEnv string) map[string]string {
 	t.Helper()
 	work := t.TempDir()
 	if err := os.WriteFile(filepath.Join(work, ".env"), []byte(dotEnv), 0o600); err != nil {
 		t.Fatalf("writing .env: %v", err)
-	}
-	if err := os.Mkdir(filepath.Join(work, "scripts"), 0o700); err != nil {
-		t.Fatalf("creating the scripts directory: %v", err)
-	}
-	//#nosec G306 -- the stand-in is a script the rendered recipe must execute
-	if err := os.WriteFile(filepath.Join(work, "scripts", "setup-orbit-fixtures.sh"), []byte(orbitSetupStandIn), 0o700); err != nil {
-		t.Fatalf("writing the setup stand-in: %v", err)
 	}
 	log := filepath.Join(work, "stand-ins.log")
 	// make starts a shell of its own for every recipe line, so a variable one
@@ -1104,15 +1071,6 @@ func (r orbitRecipe) run(t *testing.T, recipe string, environ []string, dotEnv s
 	for line := range strings.Lines(string(reported)) {
 		name, value, _ := strings.Cut(strings.TrimSuffix(line, "\n"), "=")
 		seen[name] = value
-	}
-	// The indexer wait reports its timeout as the number of polls it allows,
-	// one every 15 seconds.
-	if _, polls, found := strings.Cut(string(out), "[1/"); found {
-		if count, _, ok := strings.Cut(polls, "]"); ok {
-			if n, convErr := strconv.Atoi(count); convErr == nil {
-				seen["ORBIT_FIXTURES_INDEXER_TIMEOUT"] = strconv.Itoa(n * 15)
-			}
-		}
 	}
 	return seen
 }
