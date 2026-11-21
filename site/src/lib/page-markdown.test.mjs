@@ -389,7 +389,10 @@ describe("landing", () => {
 				promptsTitle: "Ask",
 				promptsNote: "Ask it.",
 				promptHeaders: ["Say", "Does"],
-				prompts: [["a | b", "c"]],
+				prompts: [
+					["a | b", "c"],
+					["x \\| y", "z"],
+				],
 			},
 			surfaces: {
 				title: "Surfaces",
@@ -432,6 +435,9 @@ describe("landing", () => {
 		assert.match(out, /^- \*\*2,500\*\* \[c\]\(\/c\/\)$/m);
 		assert.match(out, /^Costs 2,500; 1,200 minimal\.$/m);
 		assert.match(out, /^\| a \\\| b \| c \|$/m);
+		// A backslash of the copy is a character, escaped before the pipe, so
+		// it neither escapes the pipe's escape nor splits the cell.
+		assert.match(out, /^\| x \\\\\\\| y \| z \|$/m);
 		assert.ok(
 			out.includes(
 				`| **Meta**: per domain | 34${String.fromCharCode(0x2013)}52 | Often. |`,
