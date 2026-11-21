@@ -982,14 +982,19 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, known *gitlabclient.Tok
 		client.SetTier(p.cfg.Tier)
 	}
 
-	if verifyErr := p.verifyUnderProbeBound(client); verifyErr != nil {
+	releaseProbe, verifyErr := p.verifyUnderProbeBound(client)
+	if verifyErr != nil {
 		return nil, verifyErr
 	}
+	// entryConfig gives the slot back once the token is described, before the
+	// tier is detected. The deferred call is for every way out before that,
+	// a panic included, and does nothing after it: the release is idempotent.
+	defer releaseProbe()
 
 	// The handle every line about this entry names it by, the fine-grained
 	// authority lines entryConfig writes before the entry exists among them.
 	handle := CredentialHash(token)
-	entryCfg, probe, err := p.entryConfig(client, gitlabURL, known, handle)
+	entryCfg, probe, err := p.entryConfig(client, gitlabURL, known, handle, releaseProbe)
 	if err != nil {
 		return nil, err
 	}
@@ -1648,7 +1653,10 @@ func verifyCredential(base context.Context, client *gitlabclient.Client) error {
 
 // maxConcurrentCredentialProbes is how many credential probes the pool runs at
 // once: admission's, through [verifyCredential], and the confirmations of 401s
-// that named no cause, through [ServerPool.confirmUnexplainedRefusal].
+// that named no cause, through [ServerPool.confirmUnexplainedRefusal]. A build
+// keeps the slot its probe took through the token's own description, which
+// carries a fine-grained token's grant from GitLab 19.5, so those reads count
+// against the same ceiling (issue 1863).
 //
 // The singleflight group collapses concurrent requests for the same credential,
 // so it bounds nothing here: every distinct token is a distinct key, and a
@@ -1737,19 +1745,39 @@ func (p *ServerPool) acquireProbeSlot() (func(), error) {
 }
 
 // verifyUnderProbeBound runs [verifyCredential] holding one of the pool's probe
-// slots.
+// slots, and when GitLab did not refuse the credential returns the slot still
+// held, with the function that gives it back.
 //
-// The release is deferred rather than called after the probe returns: a panic
-// escaping the client would otherwise retire a slot permanently, and a ceiling
-// that only ever shrinks ends up refusing every new credential on a server that
-// is otherwise healthy.
-func (p *ServerPool) verifyUnderProbeBound(client *gitlabclient.Client) error {
+// The slot outlives the probe because the build's next request, the token's
+// own description ([gitlabclient.DetectToken]), is as much an unauthenticated
+// flood's lever as the probe is: every newly minted token is a new key, and
+// from GitLab 19.5 the answer carries a fine-grained token's grant, decoded
+// under RQB-011's bounds of up to 1 MiB. Holding the same slot through it
+// bounds those reads across the builds of distinct credentials at the slot
+// count (issue 1863) and adds no wait, a classic token's included: the build
+// already holds the slot, so it only keeps it one round trip longer. The
+// caller gives it back once the token is described ([ServerPool.entryConfig]).
+//
+// The slot is given back here by a deferred call whenever no slot is handed
+// on: a panic escaping the client would otherwise retire a slot permanently,
+// and a ceiling that only ever shrinks ends up refusing every new credential on
+// a server that is otherwise healthy.
+func (p *ServerPool) verifyUnderProbeBound(client *gitlabclient.Client) (func(), error) {
 	release, err := p.acquireProbeSlot()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer release()
-	return verifyCredential(p.lifetime(), client)
+	handedOn := false
+	defer func() {
+		if !handedOn {
+			release()
+		}
+	}()
+	if verifyErr := verifyCredential(p.lifetime(), client); verifyErr != nil {
+		return nil, verifyErr
+	}
+	handedOn = true
+	return release, nil
 }
 
 // credentialCheckTimeout bounds the GET /user probe, in verifyCredential and in
@@ -1784,15 +1812,20 @@ type entryProbe struct {
 // attaches what a fine-grained token may be shown to the entry's client. It
 // returns what was learned about the token and the tier ([entryProbe]), and
 // fails when the token's own description names scopes below the admission
-// minimum ([ErrCredentialBelowMinimum]) or when the fine-grained reads found
-// no probe slot free ([ErrCredentialProbeBusy]).
+// minimum ([ErrCredentialBelowMinimum]) or when the fine-grained reads after
+// the tier found no probe slot free ([ErrCredentialProbeBusy]).
 //
 // The token is asked about before the tier, so a token refused for its scopes
 // costs no tier request and leaves no warning about a tier nobody will be
-// served. The handle is the credential's [CredentialHash], which the lines
-// about a fine-grained token's authority name it by, as every later line
-// about its entry does.
-func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts, handle string) (*config.ServerConfig, entryProbe, error) {
+// served. It is asked holding the probe slot the credential probe took
+// ([ServerPool.verifyUnderProbeBound], POL-006), which releaseProbe gives back
+// once the token is described and before the tier is detected, since holding
+// it through the tier's namespace paging would keep it for no reason. A token
+// the caller described, as the OAuth verifier does, is asked nothing and gives
+// the slot back at the same point. The handle is the credential's
+// [CredentialHash], which the lines about a fine-grained token's authority
+// name it by, as every later line about its entry does.
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, known *gitlabclient.TokenFacts, handle string, releaseProbe func()) (*config.ServerConfig, entryProbe, error) {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
@@ -1821,6 +1854,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 			facts = detected
 		}
 	}
+	releaseProbe()
 	// A token whose own description names no scope that reaches the API, a
 	// read_user one among them, is refused here, under --ignore-scopes too:
 	// that flag skips the scope filter and the read_api narrowing, never the
@@ -1869,10 +1903,12 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 // self answer the token was described with did not carry the grant, the grant
 // by id (issue 1400), are made holding one of
 // the pool's credential probe slots (POL-006), taken only around them, after
-// the tier and the token were detected, and given back at once: every new
-// minted token is a new key, so these reads are as much an unauthenticated
-// flood's lever as the credential probe is, while holding the slot through the
-// tier's namespace paging would keep it for no reason. No slot free within the
+// the tier was detected, and given back at once: every new minted token is a
+// new key, so these reads are as much an unauthenticated flood's lever as the
+// credential probe and the self read are, while holding the slot through the
+// tier's namespace paging would keep it for no reason. The self read, which
+// carries the grant from GitLab 19.5, was made under the slot the credential
+// probe took ([ServerPool.verifyUnderProbeBound]). No slot free within the
 // probe wait is [ErrCredentialProbeBusy], the 503 that row already answers.
 // A token that may not read its grant reads nothing and takes no slot.
 //

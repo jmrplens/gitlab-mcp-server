@@ -776,10 +776,22 @@ func admitDecisions() []Decision {
 			// Issue 1782: the re-detection of a provisional tier (AUT-010)
 			// takes a slot without waiting, as a confirmation of a 401 does,
 			// and asks on the next tick when none is free.
+			//
+			// Issue 1863: a build keeps the slot its probe took through the
+			// token's own description, which carries a fine-grained token's
+			// grant from GitLab 19.5, and gives it back before the tier is
+			// detected, so those reads are bounded across the builds of
+			// distinct credentials at this ceiling and no build waits for a
+			// second slot to make them. A fine-grained token's version read,
+			// and its grant by id when the description did not carry it, take
+			// a slot again after the tier (AUT-008).
 			Sites: []Site{
 				alias(pkgPool, "maxConcurrentCredentialProbes", "CredentialProbes"),
 				alias(pkgPool, "credentialProbeQueueTimeout", "CredentialProbeWait"),
 				enforce(pkgPool, "New"),
+				enforce(pkgPool, "ServerPool.verifyUnderProbeBound"),
+				enforce(pkgPool, "ServerPool.entryConfig"),
+				enforce(pkgPool, "ServerPool.readUnderProbeSlot"),
 				enforce(pkgPool, "ServerPool.redetectDueTiers"),
 				gateClassify,
 			},
