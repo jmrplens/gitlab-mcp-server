@@ -219,7 +219,10 @@ de creación de tokens, sin una petición a GitLab. Dos tipos de llamada se deja
 aunque el listado deje fuera su acción, para que GitLab las juzgue: una lectura que
 GitLab serviría en un proyecto o grupo público sea cual sea la concesión y, en la
 instancia de versión previa de [más abajo](#gitlabcom-y-otras-versiones), cada llamada
-que no se retiene a todo token de grano fino.
+que no se retiene a todo token de grano fino. Desde GitLab 19.6, GitLab sirve esa
+lectura pública como una petición anónima, así que una ruta que exige un usuario con
+sesión, como los enlaces de un issue, la rechaza con el permiso que le falta a la
+concesión, y la respuesta cita ese rechazo.
 
 La concesión se lee una vez al empezar la sesión y otra en cada revalidación: cada 15
 minutos por defecto en modo HTTP (`--revalidate-interval`), y con un temporizador del

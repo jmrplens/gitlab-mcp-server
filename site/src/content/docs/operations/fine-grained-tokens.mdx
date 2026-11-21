@@ -211,7 +211,10 @@ the permission it needs, in the words the token creation page uses, without a re
 to GitLab. Two kinds of call are let through even though the listing leaves them out,
 so GitLab judges them: a read GitLab would serve on a public project or group whatever
 the grant, and, on the prerelease instance [below](#gitlabcom-and-other-releases),
-every call that is not withheld from all fine-grained tokens.
+every call that is not withheld from all fine-grained tokens. From GitLab 19.6 GitLab
+serves such a public read as an anonymous request, so a route that requires a signed-in
+user, such as an issue's links, refuses it with the permission the grant lacks, and the
+answer quotes that refusal.
 
 The grant is read once when the session starts and again on every revalidation: every
 15 minutes by default in HTTP mode (`--revalidate-interval`), and on a timer of the
