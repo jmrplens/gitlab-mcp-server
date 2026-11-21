@@ -145,7 +145,9 @@ to open the merge request is opened as it is, since a new commit pushed over
 it is not a fast-forward and GitLab refuses it. Only a merge request from
 `kg-fixtures` itself into `main` counts: the project is public, so a fork
 can open one from a branch of the same name, and the script merges what it
-picks with the operator's token. The merge
+picks with the operator's token. Every page of the list is read before it
+chooses, since merge requests from forks can push the fixture's own off
+the first page. The merge
 is asked for once GitLab has finished checking the merge request
 (`detailed_merge_status`), read every two seconds for at most 60 reads, and
 a run whose merge GitLab refuses or answers with the merge request still

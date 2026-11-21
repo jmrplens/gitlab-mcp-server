@@ -702,18 +702,33 @@ JSON
 # repaired. Only a merge request from kg-fixtures itself into main counts: the
 # project is public, anyone can open one from a fork branch of the same name,
 # the list filters by branch name alone, and what is picked here is merged
-# with the operator's token.
-api_request GET "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all"
+# with the operator's token. Every page is read before choosing: GitLab answers
+# twenty at a time unless asked for more, and merge requests from forks can push
+# the fixture's own off the first page, which would then be opened again.
+mr_page=1
+mr_pages=""
 fixture_mr=""
-if [ "$API_STATUS" = "200" ]; then
-  fixture_mr=$(printf '%s' "$API_BODY" | KG_ID="$KG_ID" python3 -c 'import json,os,sys
-kg = int(os.environ["KG_ID"])
+while :; do
+  api_request GET "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all&per_page=100&page=$mr_page"
+  [ "$API_STATUS" = "200" ] || { mr_pages=""; break; }
+  mr_count=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
 try:
     listed = json.load(sys.stdin)
+    print(len(listed) if isinstance(listed, list) else "ERR")
 except Exception:
-    sys.exit()
-if not isinstance(listed, list):
-    sys.exit()
+    print("ERR")')
+  [ "$mr_count" != "ERR" ] || { mr_pages=""; break; }
+  mr_pages+="$API_BODY"$'\n'
+  [ "$mr_count" -lt 100 ] && break
+  mr_page=$((mr_page + 1))
+done
+if [ -n "$mr_pages" ]; then
+  fixture_mr=$(printf '%s' "$mr_pages" | KG_ID="$KG_ID" python3 -c 'import json,os,sys
+kg = int(os.environ["KG_ID"])
+listed = []
+for line in sys.stdin:
+    if line.strip():
+        listed.extend(json.loads(line))
 found = {}
 for mr in listed:
     if not isinstance(mr, dict) or not isinstance(mr.get("iid"), int):
