@@ -49,10 +49,9 @@ const seedStock = "\n\ndef seed_stock(sku: str, quantity: int) -> None:\n    \"\
 // failed after pushing it left it there.
 func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 	fmt.Fprintf(p.out, "    → squash-merged MR (%s → main)\n", mrBranch)
-	listed := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/merge_requests?source_branch=%s&state=all", p.kgID, mrBranch), nil)
-	var requests []mergeRequest
-	if listed.status != 200 || !listed.decode(&requests) || requests == nil {
-		return fmt.Errorf("    ✗ cannot list the merge requests from %s (HTTP %d): %s", mrBranch, listed.status, listed)
+	requests, err := p.branchMergeRequests(ctx)
+	if err != nil {
+		return err
 	}
 	state, iid := pickMergeRequest(requests, p.kgID)
 	switch state {
@@ -76,6 +75,28 @@ func (p *provisioner) fixtureMergeRequest(ctx context.Context) error {
 		fmt.Fprintf(p.out, "    → branch %s is there without a merge request: opening one from it\n", mrBranch)
 	}
 	return p.openAndMerge(ctx, !exists)
+}
+
+// branchMergeRequests is every merge request from the fixture branch, in any
+// state, read a hundred at a time over every page: GitLab answers twenty
+// unless asked for more, and merge requests from forks can push the fixture's
+// own off the first page, so a choice made from it alone would open and merge
+// another one. A page GitLab does not answer with a list stops the run, and so
+// does a list that runs past maxListPages full pages.
+func (p *provisioner) branchMergeRequests(ctx context.Context) ([]mergeRequest, error) {
+	var requests []mergeRequest
+	for index := range maxListPages {
+		listed := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/merge_requests?source_branch=%s&state=all&per_page=100&page=%d", p.kgID, mrBranch, index+1), nil)
+		var page []mergeRequest
+		if listed.status != 200 || !listed.decode(&page) || page == nil {
+			return nil, fmt.Errorf("    ✗ cannot list the merge requests from %s (HTTP %d): %s", mrBranch, listed.status, listed)
+		}
+		requests = append(requests, page...)
+		if len(page) < 100 {
+			return requests, nil
+		}
+	}
+	return nil, fmt.Errorf("    ✗ the merge requests from %s run past %d pages", mrBranch, maxListPages)
 }
 
 // branchExists reports whether the fixture branch is on GitLab, and fails

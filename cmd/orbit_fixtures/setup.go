@@ -55,9 +55,10 @@ const (
 	// project: the fixture's own history, never this repository's.
 	botEmail = "orbit-fixtures@local"
 	botName  = "Orbit Fixtures Bot"
-	// maxTreePages is how many pages of a hundred entries a project's tree
-	// is read over at most.
-	maxTreePages = 100
+	// maxListPages is how many pages of a hundred entries a paged read, a
+	// project's tree or the merge requests from the fixture branch, is read
+	// over at most.
+	maxListPages = 100
 	// readmeFile is the README GitLab creates with a new project, which the
 	// fixture's own replaces.
 	readmeFile = "README.md"
@@ -335,12 +336,12 @@ func (p *provisioner) addMissingFiles(ctx context.Context, id int64, fixtureDir 
 // repositoryFiles is the set of paths branch main of the project holds, read
 // over every page of the recursive tree: a fixture path past the first page
 // would otherwise be created again on every run. A directory does not stand
-// in for a file of the same name. A tree that runs past maxTreePages full
+// in for a file of the same name. A tree that runs past maxListPages full
 // pages stops the run rather than paging on for ever: no fixture comes near
 // it, and a project that does is not one this command made.
 func (p *provisioner) repositoryFiles(ctx context.Context, id int64) (map[string]bool, error) {
 	present := map[string]bool{}
-	for index := range maxTreePages {
+	for index := range maxListPages {
 		page := index + 1
 		got := p.api.do(ctx, "GET", fmt.Sprintf("/projects/%d/repository/tree?ref=main&recursive=true&per_page=100&page=%d", id, page), nil)
 		if got.status != 200 {
@@ -362,7 +363,7 @@ func (p *provisioner) repositoryFiles(ctx context.Context, id int64) (map[string
 			return present, nil
 		}
 	}
-	return nil, fmt.Errorf("    ✗ the project's file list runs past %d pages; not reconciling", maxTreePages)
+	return nil, fmt.Errorf("    ✗ the project's file list runs past %d pages; not reconciling", maxListPages)
 }
 
 // create makes the project and pushes its content: the fixture files HEAD
