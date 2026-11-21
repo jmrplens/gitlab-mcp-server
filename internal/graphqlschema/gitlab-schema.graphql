@@ -723,6 +723,35 @@ input AiAdditionalContextInput {
   metadata: JSON
 }
 
+type AiAgentIdentity {
+  agentType: AiExternalAgentType!
+  createdAt: Time!
+  id: AiExternalAgentsAgentIdentityID!
+  lastSyncedAt: Time
+  project: Project
+  revokedAt: Time
+  sessionCount: Int!
+  status: AiAgentIdentityStatus!
+  user: UserCore
+}
+
+type AiAgentIdentityConnection {
+  edges: [AiAgentIdentityEdge]
+  nodes: [AiAgentIdentity]
+  pageInfo: PageInfo!
+}
+
+type AiAgentIdentityEdge {
+  cursor: String!
+  node: AiAgentIdentity
+}
+
+enum AiAgentIdentityStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+}
+
 input AiAgenticChatInput {
   additionalContext: [AiAdditionalContextInput!]
   content: String!
@@ -920,6 +949,7 @@ type AiCatalogFlow implements AiCatalogItem {
   name: String!
   project: Project
   public: Boolean!
+  schedulable: Boolean!
   softDeleted: Boolean
   softDeletedAt: Time
   starCount: Int!
@@ -999,6 +1029,7 @@ type AiCatalogFlowVersion implements AiCatalogItemVersion {
 
 enum AiCatalogGroupItemEnabledBy {
   INHERITANCE
+  NONE
   PROJECT_DIRECT
 }
 
@@ -1455,6 +1486,7 @@ type AiCatalogThirdPartyFlow implements AiCatalogItem {
   name: String!
   project: Project
   public: Boolean!
+  schedulable: Boolean!
   softDeleted: Boolean
   softDeletedAt: Time
   starCount: Int!
@@ -1620,6 +1652,7 @@ enum AiConversationsThreadsConversationType {
 }
 
 enum AiCreditsDenialReason {
+  NAMESPACE_MISSING
   USAGE_BILLING_FORBIDDEN
 }
 
@@ -1699,6 +1732,15 @@ input AiExplainVulnerabilityInput {
   resourceId: AiModelID!
 }
 
+enum AiExternalAgentType {
+  CLAUDE_CODE
+  CODEX
+  CURSOR
+  OPENCODE
+}
+
+scalar AiExternalAgentsAgentIdentityID
+
 enum AiFeatureProviders {
   DISABLED
   SELF_HOSTED
@@ -1774,7 +1816,6 @@ enum AiFeatures {
   DUO_CHAT_TROUBLESHOOT_JOB
   DUO_CHAT_WRITE_TESTS
   DUO_DEVELOPER
-  FEATURE_DISCOVERY_SEARCH
   GENERATE_COMMIT_MESSAGE
   GLAB_ASK_GIT_COMMAND
   RECOMMEND_REVIEWERS_ASSIGN
@@ -1782,7 +1823,7 @@ enum AiFeatures {
   RESOLVE_VULNERABILITY
   REVIEW_MERGE_REQUEST
   REVIEW_MERGE_REQUEST_DAP
-  REVIEW_MERGE_REQUEST_DAP_DEEP
+  REVIEW_MERGE_REQUEST_DAP_STANDARD
   RISK_CLASSIFICATION
   SAST_VULNERABILITY_FP_DETECTION
   SAST_VULNERABILITY_RESOLUTION
@@ -1890,6 +1931,7 @@ input AiFlowTriggerCreateInput {
 type AiFlowTriggerCreatePayload {
   aiFlowTrigger: AiFlowTriggerType
   clientMutationId: String
+  errorReason: AiFlowTriggerErrorReason
   errors: [String!]!
 }
 
@@ -1908,6 +1950,10 @@ type AiFlowTriggerDeletePayload {
   errors: [String!]!
 }
 
+enum AiFlowTriggerErrorReason {
+  INSUFFICIENT_SERVICE_ACCOUNT_ACCESS
+}
+
 enum AiFlowTriggerEventType {
   ASSIGN
   ASSIGN_REVIEWER
@@ -1918,6 +1964,7 @@ enum AiFlowTriggerEventType {
   MERGE_REQUEST_READY
   PIPELINE_HOOKS
   SCHEDULED
+  SECURITY_POLICY
   WORK_ITEM
 }
 
@@ -2032,6 +2079,7 @@ input AiFlowTriggerUpdateInput {
 type AiFlowTriggerUpdatePayload {
   aiFlowTrigger: AiFlowTriggerType
   clientMutationId: String
+  errorReason: AiFlowTriggerErrorReason
   errors: [String!]!
 }
 
@@ -2157,7 +2205,7 @@ type AiGovernanceSession {
 }
 
 type AiGovernanceSessionConnection {
-  count(limit: Int): Int!
+  count(limit: Int = 1000): Int!
   edges: [AiGovernanceSessionEdge]
   nodes: [AiGovernanceSession]
   pageInfo: PageInfo!
@@ -2355,9 +2403,6 @@ type AiMetrics {
   codeContributorsCount: Int
   codeReview: codeReviewMetrics
   codeSuggestions(ideNames: [String!], languages: [String!]): codeSuggestionMetrics
-  codeSuggestionsAcceptedCount: Int
-  codeSuggestionsContributorsCount: Int
-  codeSuggestionsShownCount: Int
   duoChatContributorsCount: Int
   duoUsedCount: Int
   mcp: mcpMetrics
@@ -2380,6 +2425,7 @@ type AiModelSelectionAllowListModel {
   modelProvider: String
   name: String!
   ref: String!
+  requiresPaidCredits: Boolean
 }
 
 type AiModelSelectionAllowListModelConnection {
@@ -2415,7 +2461,7 @@ enum AiModelSelectionFeatures {
   RESOLVE_VULNERABILITY
   REVIEW_MERGE_REQUEST
   REVIEW_MERGE_REQUEST_DAP
-  REVIEW_MERGE_REQUEST_DAP_DEEP
+  REVIEW_MERGE_REQUEST_DAP_STANDARD
   RISK_CLASSIFICATION
   SAST_VULNERABILITY_FP_DETECTION
   SAST_VULNERABILITY_RESOLUTION
@@ -2476,6 +2522,7 @@ type AiModelSelectionNamespaceUpdatePayload {
 
 type AiModelSelectionOfferedModel {
   costIndicator: String
+  effortLevels: [String!]
   modelDescription: String
   modelProvider: String
   name: String!
@@ -2719,6 +2766,7 @@ enum AiUsageEventType {
   AGENT_PLATFORM_SESSION_CREATED
   AGENT_PLATFORM_SESSION_DROPPED
   AGENT_PLATFORM_SESSION_FINISHED
+  AGENT_PLATFORM_SESSION_INPUT_REQUIRED
   AGENT_PLATFORM_SESSION_RESUMED
   AGENT_PLATFORM_SESSION_STARTED
   AGENT_PLATFORM_SESSION_STOPPED
@@ -2770,6 +2818,25 @@ enum AiUsageEventType {
   WRITE_TESTS
 }
 
+type AiUserMemory {
+  content: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+input AiUserMemoryUpdateInput {
+  clientMutationId: String
+  content: String
+  namespaceId: NamespaceID
+  organizationId: OrganizationsOrganizationID
+}
+
+type AiUserMemoryUpdatePayload {
+  clientMutationId: String
+  errors: [String!]!
+  userMemory: AiUserMemory
+}
+
 type AiUserMetrics {
   agentPlatform: agentPlatformUserMetrics
   aiCatalog: aiCatalogUserMetrics
@@ -2816,6 +2883,8 @@ enum AiUserMetricsSort {
   AGENT_PLATFORM_SESSION_DROPPED_DESC
   AGENT_PLATFORM_SESSION_FINISHED_ASC
   AGENT_PLATFORM_SESSION_FINISHED_DESC
+  AGENT_PLATFORM_SESSION_INPUT_REQUIRED_ASC
+  AGENT_PLATFORM_SESSION_INPUT_REQUIRED_DESC
   AGENT_PLATFORM_SESSION_RESUMED_ASC
   AGENT_PLATFORM_SESSION_RESUMED_DESC
   AGENT_PLATFORM_SESSION_STARTED_ASC
@@ -2954,42 +3023,6 @@ enum AiUserMetricsSort {
   WRITE_TESTS_DESC
   WRITE_TESTS_TOTAL_COUNT_ASC
   WRITE_TESTS_TOTAL_COUNT_DESC
-}
-
-type AiVectorizableFileUploadRegistry {
-  aiVectorizableFileUploadId: ID!
-  checksumMismatch: Boolean
-  createdAt: Time
-  dataManagementDetailsPath: String
-  forceToRedownload: Boolean
-  id: ID!
-  lastSyncFailure: String
-  lastSyncedAt: Time
-  missingOnPrimary: Boolean
-  modelRecordId: Int
-  retryAt: Time
-  retryCount: Int
-  state: RegistryState
-  verificationChecksum: String
-  verificationChecksumMismatched: String
-  verificationFailure: String
-  verificationRetryAt: Time
-  verificationRetryCount: Int
-  verificationStartedAt: Time
-  verificationState: VerificationStateEnum
-  verifiedAt: Time
-}
-
-type AiVectorizableFileUploadRegistryConnection {
-  count(limit: Int = 1000): Int!
-  edges: [AiVectorizableFileUploadRegistryEdge]
-  nodes: [AiVectorizableFileUploadRegistry]
-  pageInfo: PageInfo!
-}
-
-type AiVectorizableFileUploadRegistryEdge {
-  cursor: String!
-  node: AiVectorizableFileUploadRegistry
 }
 
 type AiXrayReport {
@@ -3306,12 +3339,14 @@ type AmazonS3ConfigurationTypeEdge {
 }
 
 type Analytics {
+  agentPlatformCreditsSyncedAt(descendantsScope: AggregationScopeInput): Time
   agentPlatformSessions(createdEventAtFrom: Time, createdEventAtTo: Time, descendantsScope: AggregationScopeInput, flowType: [String!], flowTypeNot: [String!], projectId: [String!], projectIdNot: [String!], userId: [String!], userIdNot: [String!]): AgentPlatformSessionsAggregationScope
   contributions(authorId: [String!], authorIdNot: [String!], createdAtFrom: Time, createdAtTo: Time, descendantsScope: AggregationScopeInput): ContributionsAggregationScope
   deployments(createdAtFrom: Time, createdAtTo: Time, descendantsScope: AggregationScopeInput, environmentId: [String!], environmentIdNot: [String!], finishedAtFrom: Time, finishedAtTo: Time, ref: [String!], refNot: [String!], status: [String!], statusNot: [String!], userId: [String!], userIdNot: [String!]): DeploymentsAggregationScope
   duoCodeSuggestions(descendantsScope: AggregationScopeInput, ideName: [String!], ideNameNot: [String!], language: [String!], languageNot: [String!], timestampFrom: Time, timestampTo: Time, userId: [String!], userIdNot: [String!]): DuoCodeSuggestionsAggregationScope
+  duoToolCalls(descendantsScope: AggregationScopeInput, event: [String!], flowType: [String!], flowTypeNot: [String!], groupId: [String!], timestampFrom: Time, timestampTo: Time, toolAccess: [String!], toolAccessNot: [String!], toolName: [String!], toolNameNot: [String!], userId: [String!], userIdNot: [String!]): DuoToolCallsAggregationScope
   duoUsageEvents(descendantsScope: AggregationScopeInput, event: [String!], eventNot: [String!], feature: [String!], featureNot: [String!], flowType: [String!], flowTypeNot: [String!], groupId: [String!], timestampFrom: Time, timestampTo: Time, userId: [String!], userIdNot: [String!]): DuoUsageEventsAggregationScope
-  duoWorkflows(activeDaysFrom: Int, activeDaysTo: Int, createdAtFrom: Time, createdAtTo: Time, descendantsScope: AggregationScopeInput, dropReason: [String!], dropReasonNot: [String!], flowTypesUsedFrom: Int, flowTypesUsedTo: Int, groupId: [String!], modelUsed: [String!], modelUsedNot: [String!], projectId: [String!], projectIdNot: [String!], status: [String!], statusNot: [String!], userId: [String!], userIdNot: [String!], workflowDefinition: [String!], workflowDefinitionNot: [String!]): DuoWorkflowsAggregationScope
+  duoWorkflows(activeDaysFrom: Int, activeDaysTo: Int, createdAtFrom: Time, createdAtTo: Time, descendantsScope: AggregationScopeInput, dropReason: [String!], dropReasonNot: [String!], flowTypesUsedFrom: Int, flowTypesUsedTo: Int, groupId: [String!], modelUsed: [String!], modelUsedNot: [String!], projectId: [String!], projectIdNot: [String!], sourceType: [String!], sourceTypeNot: [String!], status: [String!], statusNot: [String!], userId: [String!], userIdNot: [String!], workflowDefinition: [String!], workflowDefinitionNot: [String!]): DuoWorkflowsAggregationScope
   mergeRequests(authorHuman: [Boolean!], authorId: [String!], authorIdNot: [String!], createdAtFrom: Time, createdAtTo: Time, createdByDuo: [Boolean!], descendantsScope: AggregationScopeInput, metricMergedAtFrom: Time, metricMergedAtTo: Time, stateId: [String!], stateIdNot: [String!], targetBranch: [String!], targetBranchNot: [String!]): MergeRequestsAggregationScope
   pipelines(descendantsScope: AggregationScopeInput, finishedAtFrom: Time, finishedAtTo: Time, ref: [String!], refNot: [String!], source: [String!], sourceNot: [String!], startedAtFrom: Time, startedAtTo: Time, status: [String!], statusNot: [String!], userId: [String!], userIdNot: [String!]): PipelinesAggregationScope
 }
@@ -3438,6 +3473,17 @@ type AnthropicComplianceIntegrationCreatePayload {
   errors: [String!]!
 }
 
+input AnthropicComplianceIntegrationDeleteInput {
+  clientMutationId: String
+  groupPath: ID!
+}
+
+type AnthropicComplianceIntegrationDeletePayload {
+  clientMutationId: String
+  errorReason: AnthropicComplianceIntegrationErrorReason
+  errors: [String!]!
+}
+
 enum AnthropicComplianceIntegrationDisabledReason {
   INVALID_KEY
   LOCAL_SESSIONS_UNAVAILABLE
@@ -3448,8 +3494,23 @@ enum AnthropicComplianceIntegrationErrorReason {
   BLANK_KEY
   INVALID_INTEGRATION
   INVALID_KEY
+  NOT_FOUND
   RATE_LIMITED
   VERIFICATION_FAILED
+}
+
+input AnthropicComplianceIntegrationUpdateInput {
+  apiKey: String
+  clientMutationId: String
+  enabled: Boolean
+  groupPath: ID!
+}
+
+type AnthropicComplianceIntegrationUpdatePayload {
+  anthropicComplianceIntegration: AnthropicComplianceIntegration
+  clientMutationId: String
+  errorReason: AnthropicComplianceIntegrationErrorReason
+  errors: [String!]!
 }
 
 type ApiFuzzingCiConfiguration {
@@ -3683,6 +3744,11 @@ type ArtifactRegistryArtifactDeletePayload {
   repository: ArtifactRegistryRepository
 }
 
+type ArtifactRegistryAssignedRole {
+  key: String!
+  name: String!
+}
+
 input ArtifactRegistryContainerTagDeleteInput {
   clientMutationId: String
   imageId: ID!
@@ -3694,6 +3760,13 @@ type ArtifactRegistryContainerTagDeletePayload {
   clientMutationId: String
   errors: [String!]!
   repository: ArtifactRegistryRepository
+}
+
+type ArtifactRegistryCurrentUserAccess {
+  canReadInheritedRoles: Boolean!
+  inheritedRole: ArtifactRegistryRole
+  remainsAdmin: Boolean!
+  retainsAccess: Boolean!
 }
 
 input ArtifactRegistryDisableInput {
@@ -3797,6 +3870,7 @@ type ArtifactRegistryManifestDetails {
   osVariant: String
   parentDigests: [String!]
   parentsCount: Int
+  payload: String
   referrers(after: String, before: String, first: Int, last: Int): ArtifactRegistryManifestConnection
   referrersCount: Int
   size: BigInt!
@@ -3820,6 +3894,19 @@ type ArtifactRegistryManifestPlatform {
 enum ArtifactRegistryManifestSort {
   CREATED_AT_ASC
   CREATED_AT_DESC
+}
+
+input ArtifactRegistryManifestsBulkDeleteInput {
+  clientMutationId: String
+  ids: [String!]!
+  imageId: ID!
+  name: String!
+}
+
+type ArtifactRegistryManifestsBulkDeletePayload {
+  clientMutationId: String
+  errors: [String!]!
+  repository: ArtifactRegistryRepository
 }
 
 type ArtifactRegistryMavenPackage {
@@ -3852,11 +3939,15 @@ type ArtifactRegistryMavenVersionFile {
 type ArtifactRegistryNamespacePermissions {
   createRepository: Boolean!
   createRepositoryUpstream: Boolean!
+  createRoleAssignment: Boolean!
   deleteRepository: Boolean!
   deleteRepositoryUpstream: Boolean!
+  deleteRoleAssignment: Boolean!
   readRepository: Boolean!
+  readRoleAssignment: Boolean!
   updateRepository: Boolean!
   updateRepositoryUpstream: Boolean!
+  updateRoleAssignment: Boolean!
 }
 
 type ArtifactRegistryNamespaceStatistics {
@@ -4027,8 +4118,10 @@ type ArtifactRegistryRepositoryDeletePayload {
 
 type ArtifactRegistryRepositoryDetails {
   artifactsCount: BigInt!
+  assignableUsers(after: String, before: String, first: Int, last: Int, search: String!): OrganizationUserConnection
   createdAt: Time
   createdBy: UserCore
+  currentUserAccess: ArtifactRegistryCurrentUserAccess
   description: String
   downloadsCount: BigInt!
   format: ArtifactRegistryRepositoryFormat!
@@ -4072,13 +4165,17 @@ enum ArtifactRegistryRepositoryKind {
 type ArtifactRegistryRepositoryPermissions {
   createArtifact: Boolean!
   createRepositoryUpstream: Boolean!
+  createRoleAssignment: Boolean!
   deleteArtifact: Boolean!
   deleteRepository: Boolean!
   deleteRepositoryUpstream: Boolean!
+  deleteRoleAssignment: Boolean!
   readArtifact: Boolean!
   readRepository: Boolean!
+  readRoleAssignment: Boolean!
   updateRepository: Boolean!
   updateRepositoryUpstream: Boolean!
+  updateRoleAssignment: Boolean!
 }
 
 enum ArtifactRegistryRepositorySort {
@@ -4141,11 +4238,13 @@ enum ArtifactRegistryRole {
 }
 
 type ArtifactRegistryRoleAssignment {
+  assignedRole: ArtifactRegistryAssignedRole
   assignee: UserCore
   createdAt: Time
   grantedBy: UserCore
   resourceId: String!
   role: ArtifactRegistryRole
+  userPermissions: ArtifactRegistryRoleAssignmentPermissions!
 }
 
 type ArtifactRegistryRoleAssignmentConnection {
@@ -4163,6 +4262,12 @@ input ArtifactRegistryRoleAssignmentInput {
   assigneeId: UserID!
   resourceId: String!
   role: ArtifactRegistryRole!
+}
+
+type ArtifactRegistryRoleAssignmentPermissions {
+  leave: Boolean!
+  removeMember: Boolean!
+  updateRole: Boolean!
 }
 
 input ArtifactRegistryRoleBulkGrantInput {
@@ -4339,6 +4444,19 @@ enum ArtifactRegistryVersionSort {
 
 type ArtifactRegistryVersionStatistics {
   filesCount: BigInt
+}
+
+input ArtifactRegistryVersionsBulkDeleteInput {
+  clientMutationId: String
+  ids: [ID!]!
+  name: String!
+  packageId: ID!
+}
+
+type ArtifactRegistryVersionsBulkDeletePayload {
+  clientMutationId: String
+  errors: [String!]!
+  repository: ArtifactRegistryRepository
 }
 
 type AscpComponent {
@@ -4760,6 +4878,29 @@ type AuditEventsInstanceAmazonS3ConfigurationUpdatePayload {
   instanceAmazonS3Configuration: InstanceAmazonS3ConfigurationType
 }
 
+input AuditEventsInstanceDestinationDenylistEventsAddInput {
+  clientMutationId: String
+  destinationId: AuditEventsInstanceExternalStreamingDestinationID!
+  eventTypeFilters: [String!]!
+}
+
+type AuditEventsInstanceDestinationDenylistEventsAddPayload {
+  clientMutationId: String
+  errors: [String!]!
+  eventTypeFilters: [String!]
+}
+
+input AuditEventsInstanceDestinationDenylistEventsDeleteInput {
+  clientMutationId: String
+  destinationId: AuditEventsInstanceExternalStreamingDestinationID!
+  eventTypeFilters: [String!]!
+}
+
+type AuditEventsInstanceDestinationDenylistEventsDeletePayload {
+  clientMutationId: String
+  errors: [String!]!
+}
+
 input AuditEventsInstanceDestinationEventsAddInput {
   clientMutationId: String
   destinationId: AuditEventsInstanceExternalStreamingDestinationID!
@@ -4985,8 +5126,10 @@ type AuditEventsStreamingInstanceHeadersUpdatePayload {
 scalar AuthzLdapAdminRoleLinkID
 
 type AutoRemediationConfiguration {
+  batchUpdates: Boolean
   cooldown: Int
   enabled: Boolean
+  maxUpdatesPerBatch: Int
   openMergeRequestsLimit: Int
   runnerTags: [String!]
   severityLevel: VulnerabilitySeverity
@@ -5313,7 +5456,7 @@ type BoardEpic implements CurrentUserTodos & Eventable & NoteableInterface & Tod
   commenters(after: String, before: String, first: Int, last: Int): UserCoreConnection!
   confidential: Boolean
   createdAt: Time
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   defaultProjectForIssueCreation: Project
   descendantCounts: EpicDescendantCount
   descendantWeightSum: EpicDescendantWeights
@@ -5674,8 +5817,10 @@ type BranchRuleUpdatePayload {
 }
 
 input BudgetCapUserOverrideInput {
-  cap: Float!
-  enabled: Boolean!
+  cap: Float
+  dailyCap: Float
+  dailyEnabled: Boolean = true
+  enabled: Boolean = true
   userId: UserID
   username: String
 }
@@ -5803,6 +5948,10 @@ type BurnupChartDailyTotals {
   date: ISO8601Date!
   scopeCount: Int!
   scopeWeight: Int!
+}
+
+type BusinessLogicConfiguration {
+  postReviewThreads: Boolean
 }
 
 input CancelVulnerabilityWorkflowInput {
@@ -7317,6 +7466,7 @@ type CiJob implements CiJobInterface {
   id: JobID
   inputs: [CiInputsField!]
   inputsSpec: [CiInputsSpec!]
+  jobDescription: String
   kind: CiJobKind!
   manualJob: Boolean
   manualVariables(after: String, before: String, first: Int, last: Int): CiManualVariableConnection
@@ -7454,6 +7604,7 @@ enum CiJobFailureReason {
   FAILED_OUTDATED_DEPLOYMENT_JOB
   FORWARD_DEPLOYMENT_FAILURE
   ID_TOKEN_BURNED_PROJECT_PATH
+  ID_TOKEN_TARGET_AUDIENCE_NOT_ALLOWED
   INSUFFICIENT_BRIDGE_PERMISSIONS
   INSUFFICIENT_UPSTREAM_PERMISSIONS
   INVALID_BRIDGE_TRIGGER
@@ -8060,6 +8211,7 @@ type CiRunner {
   tokenRotationDeadline: Time
   upgradeStatus: CiRunnerUpgradeStatus
   userPermissions: RunnerPermissions!
+  uuid: String!
 }
 
 enum CiRunnerAccessLevel {
@@ -9992,6 +10144,7 @@ type CorpusCreatePayload {
 }
 
 type CountableVulnerability implements NoteableInterface & Todoable {
+  aiExplanationAvailable: Boolean
   aiResolutionAvailable: Boolean
   aiResolutionEnabled: Boolean
   aiWorkflows(after: String, before: String, first: Int, last: Int): VulnerabilityTriggeredWorkflowConnection
@@ -10238,9 +10391,9 @@ type CreateContainerProtectionRepositoryRulePayload {
 
 input CreateCustomDashboardInput {
   clientMutationId: String
-  config: CustomDashboardConfigInput!
+  config: JSON!
   description: String
-  name: String!
+  name: String
   namespaceId: NamespaceID
   organizationId: OrganizationsOrganizationID
 }
@@ -10538,6 +10691,7 @@ type CurrentUser implements Todoable & User {
   achievementCounts(after: String, before: String, first: Int, last: Int): UserAchievementCountConnection
   active: Boolean
   admin: Boolean!
+  aiUserMemory(namespaceId: NamespaceID, organizationId: OrganizationsOrganizationID): AiUserMemory
   assignedMergeRequests(after: String, approvedBy: [String!], approver: [String!], authorUsername: String, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   assigneeOrReviewerMergeRequests(after: String, approvedBy: [String!], approver: [String!], assignedReviewStates: [MergeRequestReviewState!], before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerReviewStates: [MergeRequestReviewState!], search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
   authoredMergeRequests(after: String, approvedBy: [String!], approver: [String!], assigneeUsername: String, assigneeUsernames: [String!], assigneeWildcardId: AssigneeWildcardId, before: String, blobPath: String, closedAfter: Time, closedBefore: Time, createdAfter: Time, createdBefore: Time, deployedAfter: Time, deployedBefore: Time, deploymentId: String, draft: Boolean, environmentName: String, first: Int, groupId: GroupID, ignoredReviewerUsername: String, iids: [String!], in: [IssuableSearchableField!], includeArchived: Boolean = false, includeAssigned: Boolean = false, labelName: [String], labels: [String!], last: Int, mergedAfter: Time, mergedBefore: Time, mergedBy: String, milestoneTitle: String, milestoneWildcardId: MilestoneWildcardId, myReactionEmoji: String, not: MergeRequestsResolverNegatedParams, or: UnionedMergeRequestFilterInput, projectId: ProjectID, projectPath: String, releaseTag: String, reviewState: MergeRequestReviewState, reviewStates: [MergeRequestReviewState!], reviewerUsername: String, reviewerWildcardId: ReviewerWildcardId, search: String, sort: MergeRequestSort = created_desc, sourceBranches: [String!], state: MergeRequestState, subscribed: SubscriptionStatus, targetBranches: [String!], updatedAfter: Time, updatedBefore: Time): MergeRequestConnection
@@ -10616,7 +10770,7 @@ type CurrentUser implements Todoable & User {
 }
 
 interface CurrentUserTodos {
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
 }
 
 type CustomAttribute {
@@ -10641,87 +10795,6 @@ type CustomDashboard implements CustomDashboardInterface {
   updatedBy: UserCore
 }
 
-input CustomDashboardConfigInput {
-  description: String
-  filters: CustomDashboardFiltersInput
-  gridHeight: CustomDashboardGridHeight
-  panels: [CustomDashboardPanelInput!]!
-  status: CustomDashboardStatus
-  title: String!
-}
-
-input CustomDashboardDateRangeFilterInput {
-  defaultOption: CustomDashboardDateRangeOption
-  enabled: Boolean
-  numberOfDaysLimit: Float
-  options: [CustomDashboardDateRangeOption!]
-}
-
-enum CustomDashboardDateRangeOption {
-  CUSTOM
-  DAYS_180
-  DAYS_30
-  DAYS_365
-  DAYS_60
-  DAYS_7
-  DAYS_90
-  TODAY
-}
-
-input CustomDashboardFilterInput {
-  enabled: Boolean
-}
-
-input CustomDashboardFilteredSearchFilterInput {
-  enabled: Boolean
-  options: [CustomDashboardFilteredSearchFilterOptionInput!]
-}
-
-input CustomDashboardFilteredSearchFilterOptionInput {
-  maxSuggestions: Float
-  operator: CustomDashboardFilteredSearchOperator
-  token: CustomDashboardFilteredSearchToken!
-  unique: Boolean
-}
-
-enum CustomDashboardFilteredSearchOperator {
-  IS
-  IS_NOT
-  IS_NOT_OR
-}
-
-enum CustomDashboardFilteredSearchToken {
-  ASSIGNEE
-  AUTHOR
-  LABEL
-  MILESTONE
-  SOURCE_BRANCH
-  TARGET_BRANCH
-}
-
-input CustomDashboardFiltersInput {
-  dateRange: CustomDashboardDateRangeFilterInput
-  excludeAnonymousUsers: CustomDashboardFilterInput
-  filteredSearch: CustomDashboardFilteredSearchFilterInput
-  projects: CustomDashboardFilterInput
-}
-
-input CustomDashboardGridAttributesInput {
-  height: Int!
-  maxHeight: Int
-  maxWidth: Int
-  minHeight: Int
-  minWidth: Int
-  width: Int!
-  xPos: Int
-  yPos: Int
-}
-
-enum CustomDashboardGridHeight {
-  COMPACT
-  DEFAULT
-}
-
 interface CustomDashboardInterface {
   config: JSON!
   createdAt: Time
@@ -10743,47 +10816,10 @@ type CustomDashboardInterfaceEdge {
   node: CustomDashboardInterface
 }
 
-input CustomDashboardPanelInput {
-  gridAttributes: CustomDashboardGridAttributesInput!
-  options: CustomDashboardPanelOptionsInput
-  queryOverrides: CustomDashboardQueryOverridesInput
-  title: String!
-  tooltip: CustomDashboardTooltipInput
-  visualizationConfig: JSON!
-}
-
-input CustomDashboardPanelOptionsInput {
-  decimalPlaces: Int
-}
-
-input CustomDashboardQueryFiltersInput {
-  excludeMetrics: [String!]
-  include: [String!]
-  includeMetrics: [String!]
-  labels: [String!]
-  projectTopics: [String!]
-}
-
-input CustomDashboardQueryOverridesInput {
-  filters: CustomDashboardQueryFiltersInput
-  namespace: String
-  timeDimensions: JSON
-}
-
 enum CustomDashboardScope {
   ALL
   GITLAB
   USER
-}
-
-enum CustomDashboardStatus {
-  BETA
-  EXPERIMENT
-}
-
-input CustomDashboardTooltipInput {
-  description: String!
-  descriptionLink: String
 }
 
 type CustomEmoji {
@@ -11203,6 +11239,56 @@ enum DailyUsageSort {
   CREDITS_USED_DESC
   DATE_ASC
   DATE_DESC
+}
+
+type DapFactoryAutoReview {
+  available: Boolean!
+  decisionsEnabled: Boolean!
+  enabled: Boolean!
+  locked: Boolean!
+}
+
+type DapFactoryConfiguration {
+  autoReview: DapFactoryAutoReview!
+  content: String
+  defaultBranch: String
+  errors: [DapFactoryValidationMessage!]!
+  exists: Boolean!
+  lastCommitId: String
+  lastSync: DapFactorySyncResult
+  path: String!
+  warnings: [DapFactoryValidationMessage!]!
+}
+
+type DapFactorySyncResult {
+  adoptedStages: [String!]!
+  commitSha: String
+  createdStages: [String!]!
+  deletedStages: [String!]!
+  errors: [DapFactoryValidationMessage!]!
+  failedStages: [DapFactoryValidationMessage!]!
+  status: DapFactorySyncStatus!
+  syncedAt: Time
+  updatedStages: [String!]!
+}
+
+enum DapFactorySyncStatus {
+  FAILED
+  INVALID
+  PARTIAL
+  SYNCED
+}
+
+type DapFactoryValidationMessage {
+  code: String!
+  message: String!
+  path: String
+}
+
+type DapFactoryValidationResult {
+  errors: [DapFactoryValidationMessage!]!
+  valid: Boolean!
+  warnings: [DapFactoryValidationMessage!]!
 }
 
 input DastOnDemandScanCreateInput {
@@ -11904,6 +11990,13 @@ type DependencyFirewallActivitySummary {
   warningRules: Int!
 }
 
+type DependencyFirewallPackageVersionEntry {
+  name: String!
+  reason: String
+  referenceLink: String
+  version: String!
+}
+
 type DependencyFirewallPolicyAttributesType {
   source: SecurityPolicySource!
 }
@@ -11915,6 +12008,7 @@ type DependencyFirewallRuleActivity {
   id: SecurityDependencyFirewallPolicyRuleID!
   lastModified: DependencyFirewallRuleLastModified
   mode: PolicyEnforcementType
+  packageVersionEntries: [DependencyFirewallPackageVersionEntry!]
   policyName: String
   ruleType: DependencyFirewallRuleType
   scope: PolicyScope
@@ -12216,6 +12310,7 @@ type DependencyProxySetting {
 
 type DependencyScanningConfiguration {
   additionalCaCertBundle: String
+  analyzerImageVersion: String
   apiScanDownloadDelay: Int
   apiTimeout: Int
   disabledResolutionJobs: [SecurityScanProfileDependencyResolutionJob!]
@@ -12426,7 +12521,7 @@ scalar DescriptionVersionID
 
 type Design implements CurrentUserTodos & DesignFields & NoteableInterface & Todoable {
   commenters(after: String, before: String, first: Int, last: Int): UserCoreConnection!
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   description: String
   descriptionHtml: String
   diffRefs: DiffRefs!
@@ -13177,8 +13272,8 @@ enum DuoAvailability {
   NEVER_ON
 }
 
-enum DuoCodeReviewDepth {
-  DEEP
+enum DuoCodeReviewLevel {
+  LITE
   STANDARD
 }
 
@@ -13236,6 +13331,7 @@ type DuoMessage {
   componentName: String
   content: String!
   correlationId: String
+  kind: DuoMessageKind
   messageId: ID
   messageSubType: String
   messageType: String!
@@ -13259,6 +13355,14 @@ type DuoMessageEdge {
   node: DuoMessage
 }
 
+enum DuoMessageKind {
+  PROMPT
+  RESPONSE
+  STEP
+  TOOL
+  UNKNOWN
+}
+
 type DuoSettings {
   aiGatewayTimeoutSeconds: Int
   aiGatewayUrl: String
@@ -13275,6 +13379,7 @@ type DuoSettings {
   requireSandbox: Boolean
   selfHostedDuoAgentPlatformServiceSecure: Boolean
   updatedAt: Time!
+  webSearchEnabled: Boolean
 }
 
 input DuoSettingsUpdateInput {
@@ -13293,12 +13398,49 @@ input DuoSettingsUpdateInput {
   minimumAccessLevelManage: AccessLevelEnum
   requireSandbox: Boolean
   selfHostedDuoAgentPlatformServiceSecure: Boolean
+  webSearchEnabled: Boolean
 }
 
 type DuoSettingsUpdatePayload {
   clientMutationId: String
   duoSettings: DuoSettings!
   errors: [String!]!
+}
+
+type DuoToolCallsAggregationResponse {
+  dimensions: DuoToolCallsAggregationResponseDimensions
+  readOnlySessionsCount: Int
+  sessionsCount: Int
+  successRate: Float
+  totalCount: Int
+  usersCount: Int
+  writeSessionsCount: Int
+}
+
+type DuoToolCallsAggregationResponseConnection {
+  count: Int!
+  edges: [DuoToolCallsAggregationResponseEdge]
+  nodes: [DuoToolCallsAggregationResponse]
+  pageInfo: PageInfo!
+}
+
+type DuoToolCallsAggregationResponseDimensions {
+  event: String
+  flowType: String
+  group(depth: Int): Group
+  timestamp(granularity: String, origin: Time): Date
+  toolAccess: String
+  toolName: String
+  user: UserCore
+}
+
+type DuoToolCallsAggregationResponseEdge {
+  cursor: String!
+  node: DuoToolCallsAggregationResponse
+}
+
+type DuoToolCallsAggregationScope {
+  aggregated(after: String, before: String, first: Int, last: Int, orderBy: [AggregationOrder!]): DuoToolCallsAggregationResponseConnection
 }
 
 type DuoUsageEventsAggregationResponse {
@@ -13357,7 +13499,11 @@ type DuoWorkflow implements Todoable {
   archived: Boolean
   auditEvents(after: String, before: String, first: Int, last: Int): AiAuditEventConnection
   createdAt: Time!
+  dropReason: DuoWorkflowDropReason
   environment: WorkflowEnvironment
+  failureCategory: DuoWorkflowFailureCategory
+  failureCause: String
+  fileAttachmentsAllowed: Boolean
   firstCheckpoint(checkpointNs: String): DuoWorkflowEvent
   flowMetadataId: String
   flowMetadataSchemaVersion: String
@@ -13385,14 +13531,18 @@ type DuoWorkflow implements Todoable {
   projectId: ProjectID
   resourceIid: Int
   resourceWebUrl: String
+  restartedAs: DuoWorkflow
   sourceLink: String
   sourceType: DuoWorkflowSourceType
   stalled: Boolean
   status: DuoWorkflowStatus
   statusGroup: DuoWorkflowStatusGroup
   statusName: String
+  subagents: [DuoWorkflowSubagent!]
   summary: String
   title: String
+  toolAccessPolicies(projectId: ProjectID): JSON
+  toolAccessPolicy(projectId: ProjectID): DuoWorkflowToolAccessPolicy
   toolCallApprovalMatch(toolCallArgs: String!, toolName: String!): DuoWorkflowToolCallApprovalMatch!
   toolCallApprovals: JSON
   toolCallApproved(toolCallArgs: String!, toolName: String!): Boolean!
@@ -13402,6 +13552,7 @@ type DuoWorkflow implements Todoable {
   userId: UserID!
   userPermissions: DuoWorkflowPermissions
   webPath: String
+  webSearchAllowed: Boolean
   webSearchEnabled: Boolean
   webUrl: String
   workItem: WorkItem
@@ -13447,6 +13598,20 @@ type DuoWorkflowConnection {
   pageInfo: PageInfo!
 }
 
+enum DuoWorkflowDropReason {
+  API_REPORTED
+  COMPUTE_MINUTES_USED_UP
+  COULD_NOT_PREPARE_SESSION
+  JOB_FAILED
+  NO_ACTIVITY
+  NO_STATUS_REPORTED
+  PRECONDITIONS_NOT_MET
+  START_FAILED
+  TOKEN_REJECTED
+  TOOL_RULES_UNAVAILABLE
+  WORKLOAD_NOT_CREATED
+}
+
 type DuoWorkflowEdge {
   cursor: String!
   node: DuoWorkflow
@@ -13477,7 +13642,8 @@ type DuoWorkflowEvent {
   errors: [String!]
   executionStatus: String!
   lastDuoMessage: DuoMessage
-  messages(after: String, before: String, first: Int, last: Int): DuoMessageConnection
+  latestTodoDuoMessage: DuoMessage
+  messages(after: String, before: String, first: Int, includePendingRequests: Boolean = false, kinds: [DuoMessageKind!], last: Int): DuoMessageConnection
   metadata: JsonString
   parentTs: String
   threadTs: String
@@ -13495,6 +13661,18 @@ type DuoWorkflowEventConnection {
 type DuoWorkflowEventEdge {
   cursor: String!
   node: DuoWorkflowEvent
+}
+
+enum DuoWorkflowFailureCategory {
+  STOPPED_PART_WAY
+  TRANSIENT
+  UNKNOWN
+  USER_FIXABLE
+}
+
+type DuoWorkflowFirstPartyToolPermission {
+  name: String!
+  permission: AiToolPermission!
 }
 
 type DuoWorkflowMergeRequestLink {
@@ -13588,7 +13766,7 @@ type DuoWorkflowSessionArtifact {
 }
 
 type DuoWorkflowSessionArtifactConnection {
-  count(limit: Int): Int!
+  count(limit: Int = 1000): Int!
   edges: [DuoWorkflowSessionArtifactEdge]
   nodes: [DuoWorkflowSessionArtifact]
   pageInfo: PageInfo!
@@ -13618,7 +13796,9 @@ enum DuoWorkflowSourceType {
   MERGE_REQUEST_DEPENDENCY_BUMP
   MERGE_REQUEST_FIX_PIPELINE
   MERGE_REQUEST_RESOLVE_DISCUSSION
+  MOBILE_CHAT
   SLACK
+  VULNERABILITY_LEAKED_TOKEN_ROTATION
   WEB_CHAT
   WORK_ITEM_PLAN_TO_MERGE_REQUEST
   WORK_ITEM_TO_MERGE_REQUEST
@@ -13645,6 +13825,21 @@ enum DuoWorkflowStatusGroup {
   COMPLETED
   FAILED
   PAUSED
+}
+
+type DuoWorkflowSubagent {
+  description: String!
+  name: String!
+  tools: [String!]!
+}
+
+type DuoWorkflowToolAccessPolicy {
+  allow: [String!]!
+  ask: [String!]!
+  ceiling: Boolean
+  deny: [String!]!
+  firstPartyTools: [DuoWorkflowFirstPartyToolPermission!]
+  promote: [String!]
 }
 
 type DuoWorkflowToolCallApprovalMatch {
@@ -13774,6 +13969,7 @@ type DuoWorkflowsAggregationResponseDimensions {
   model: DuoWorkflowsModelMetadata
   modelUsed: String
   project: Project
+  sourceType: String
   status: String
   user: UserCore
   userTier(thresholds: [Int!]): String
@@ -14096,7 +14292,7 @@ type Epic implements CurrentUserTodos & Eventable & NoteableInterface & Todoable
   commenters(after: String, before: String, first: Int, last: Int): UserCoreConnection!
   confidential: Boolean
   createdAt: Time
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   defaultProjectForIssueCreation: Project
   descendantCounts: EpicDescendantCount
   descendantWeightSum: EpicDescendantWeights
@@ -14305,7 +14501,7 @@ type EpicIssue implements CurrentUserTodos & NoteableInterface & Todoable {
   confidential: Boolean!
   createNoteEmail: String
   createdAt: Time!
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   customerRelationsContacts(after: String, before: String, first: Int, last: Int): CustomerRelationsContactConnection
   description: String
   descriptionHtml: String
@@ -14886,8 +15082,6 @@ scalar GeoAbuseReportUploadRegistryID
 
 scalar GeoAchievementUploadRegistryID
 
-scalar GeoAiVectorizableFileUploadRegistryID
-
 scalar GeoAlertManagementMetricImageUploadRegistryID
 
 scalar GeoAppearanceUploadRegistryID
@@ -14929,7 +15123,6 @@ scalar GeoMergeRequestDiffRegistryID
 type GeoNode {
   abuseReportUploadRegistries(after: String, before: String, first: Int, ids: [GeoAbuseReportUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): AbuseReportUploadRegistryConnection
   achievementUploadRegistries(after: String, before: String, first: Int, ids: [GeoAchievementUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): AchievementUploadRegistryConnection
-  aiVectorizableFileUploadRegistries(after: String, before: String, first: Int, ids: [GeoAiVectorizableFileUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): AiVectorizableFileUploadRegistryConnection
   alertManagementMetricImageUploadRegistries(after: String, before: String, first: Int, ids: [GeoAlertManagementMetricImageUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): AlertManagementMetricImageUploadRegistryConnection
   appearanceUploadRegistries(after: String, before: String, first: Int, ids: [GeoAppearanceUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): AppearanceUploadRegistryConnection
   bulkImportExportUploadUploadRegistries(after: String, before: String, first: Int, ids: [GeoBulkImportExportUploadUploadRegistryID!], keyword: String, last: Int, replicationState: ReplicationStateEnum, sort: GeoRegistrySort, verificationState: VerificationStateEnum): BulkImportExportUploadUploadRegistryConnection
@@ -15055,7 +15248,6 @@ enum GeoRegistryAction {
 enum GeoRegistryClass {
   ABUSE_REPORT_UPLOAD_REGISTRY
   ACHIEVEMENT_UPLOAD_REGISTRY
-  AI_VECTORIZABLE_FILE_UPLOAD_REGISTRY
   ALERT_MANAGEMENT_METRIC_IMAGE_UPLOAD_REGISTRY
   APPEARANCE_UPLOAD_REGISTRY
   BULK_IMPORT_EXPORT_UPLOAD_UPLOAD_REGISTRY
@@ -15133,6 +15325,10 @@ type GitlabInstanceFeatureFlag {
   name: String!
 }
 
+type GitlabSubscription {
+  active: Boolean!
+}
+
 input GitlabSubscriptionActivateInput {
   activationCode: String!
   clientMutationId: String
@@ -15149,6 +15345,8 @@ type GitlabSubscriptionBudgetCapUserOverride {
   cap: Float!
   capEnabled: Boolean!
   createdAt: Time
+  dailyCap: Float
+  dailyCapEnabled: Boolean
   updatedAt: Time
   user: UserCore
 }
@@ -15165,6 +15363,8 @@ type GitlabSubscriptionBudgetCapUserOverrideEdge {
 }
 
 type GitlabSubscriptionBudgetCaps {
+  dailyCap: Float
+  dailyCapEnabled: Boolean
   flatUserCap: Float
   flatUserCapEnabled: Boolean
   subscriptionCap: Float
@@ -15246,6 +15446,8 @@ type GitlabSubscriptionUsage {
 }
 
 enum GitlabSubscriptionUsageBlockedCapType {
+  DAILY_FLAT_USER_CAP
+  DAILY_USER_OVERRIDE_CAP
   FLAT_USER_CAP
   USER_OVERRIDE_CAP
 }
@@ -15285,11 +15487,11 @@ type GitlabSubscriptionUsageUser {
   avatarUrl: String
   blockedStatus: GitlabSubscriptionUsageBlockedStatus
   entityType: String
-  events(after: String, before: String, first: Int, flowTypes: [String], last: Int): GitlabSubscriptionUsageUserEventConnection
+  events(after: String, before: String, first: Int, flowTypes: [String], includeNonBillable: Boolean = false, last: Int): GitlabSubscriptionUsageUserEventConnection
   id: UserID!
   name: String!
   usage: GitlabSubscriptionUsageUserUsage
-  usedFlowTypes: [GitlabSubscriptionUsageFlowTypeInfo!]
+  usedFlowTypes(includeNonBillable: Boolean = false): [GitlabSubscriptionUsageFlowTypeInfo!]
   username: String!
 }
 
@@ -15305,12 +15507,14 @@ type GitlabSubscriptionUsageUserEdge {
 }
 
 type GitlabSubscriptionUsageUserEvent {
+  billable: Boolean
   creditsUsed: Float
   eventType: String
   flowType: String
   location: GitlabSubscriptionUsageEventLocation
   locationId: GlobalID
   sessionLink: String
+  skipReason: String
   timestamp: ISO8601DateTime
 }
 
@@ -15623,6 +15827,7 @@ type GovernPolicy {
   triggerType: String!
   updatedAt: Time
   version: Int
+  violationDetails: [GovernPolicyViolationDetail!]
 }
 
 type GovernPolicyConnection {
@@ -15676,6 +15881,7 @@ type GovernPolicyEvaluation {
   mode: GovernPolicyEvaluationMode!
   policyId: Int!
   policyVersion: Int!
+  project: Project
   projectId: Int
   triggerType: GovernPolicyEvaluationTriggerType!
   userId: Int
@@ -15747,6 +15953,11 @@ type GovernPolicyViolation {
   id: GovernPolicyViolationID!
 }
 
+type GovernPolicyViolationDetail {
+  expected: JSON
+  path: String!
+}
+
 scalar GovernPolicyViolationID
 
 type GpgSignature implements CommitSignature {
@@ -15782,6 +15993,7 @@ type Group implements GroupInterface & Todoable {
   additionalPurchasedStorageSize: Float
   adminEditPath: String
   adminShowPath: String
+  aiAgentIdentities(after: String, agentTypes: [AiExternalAgentType!], before: String, first: Int, last: Int, status: AiAgentIdentityStatus, userId: UserID): AiAgentIdentityConnection
   aiAuditEventsStorageEnabled: Boolean
   aiCatalogItems(after: String, before: String, enabledBy: [AiCatalogGroupItemEnabledBy!], first: Int, itemTypes: [AiCatalogItemType!], last: Int, search: String, sort: AiCatalogItemsSort): AiCatalogItemConnection!
   aiDomainSettings(after: String, before: String, domainSettingType: AiDomainSettingType!, first: Int, last: Int, search: String): StringConnection
@@ -15881,6 +16093,7 @@ type Group implements GroupInterface & Todoable {
   flowMetrics: GroupValueStreamAnalyticsFlowMetrics
   fullName: String
   fullPath: ID!
+  gitlabSubscription: GitlabSubscription
   gitlabSubscriptionsPreviewBillableUserChange(addGroupId: Int, addUserEmails: [String!], addUserIds: [Int!], memberRoleId: Int, role: GitlabSubscriptionsUserRole!): PreviewBillableUserChange
   googleCloudLoggingConfigurations(after: String, before: String, first: Int, last: Int): GoogleCloudLoggingConfigurationTypeConnection
   groupMembers(accessLevels: [AccessLevelEnum!], after: String, before: String, enterprise: Boolean, first: Int, ids: [ID!], last: Int, relations: [GroupMemberRelation!] = [DIRECT, INHERITED], search: String, sort: MemberSort): GroupMemberConnection
@@ -15988,7 +16201,8 @@ type Group implements GroupInterface & Todoable {
   totalRepositorySize: Float
   totalRepositorySizeExcess: Float
   transferInProgress: Boolean!
-  triageAndRemediationCoverageCounters(triggerType: ScanProfileTriggerType!): TriageAndRemediationCoverageCounters
+  triageAndRemediationCoverageCounters(triggerType: ScanProfileTriggerType): TriageAndRemediationCoverageCounters
+  triageAndRemediationFlowStatuses: [TriageAndRemediationTriggerFlowStatus!]
   twoFactorGracePeriod: Int
   updatedAt: Time
   userPermissions: GroupPermissions!
@@ -16002,14 +16216,14 @@ type Group implements GroupInterface & Todoable {
   virtualRegistriesPackagesMavenUpstreams(after: String, before: String, first: Int, last: Int, upstreamName: String = null): MavenUpstreamConnection
   virtualRegistriesSetting: VirtualRegistriesSetting
   visibility: String
-  vulnerabilities(after: String, before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
+  vulnerabilities(after: String, authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
   vulnerabilitiesCountByDay(after: String, before: String, endDate: ISO8601Date!, first: Int, last: Int, startDate: ISO8601Date!): VulnerabilitiesCountByDayConnection
   vulnerabilityGrades(includeSubgroups: Boolean = false, letterGrade: VulnerabilityGrade): [VulnerableProjectsByGrade!]
   vulnerabilityIdentifierSearch(name: String!): [String!]
   vulnerabilityManagementPolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): VulnerabilityManagementPolicyConnection
   vulnerabilityNamespaceStatistic: VulnerabilityNamespaceStatisticType
   vulnerabilityScanners(after: String, before: String, first: Int, last: Int): VulnerabilityScannerConnection
-  vulnerabilitySeveritiesCount(capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
+  vulnerabilitySeveritiesCount(authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
   webBasedCommitSigningEnabled: Boolean!
   webPath: String!
   webUrl: String!
@@ -16416,7 +16630,7 @@ type GroupSavedReplyUpdatePayload {
 type GroupSecret {
   createdAt: Time
   description: String
-  environment: String!
+  environment: String
   group: Group!
   metadataVersion: Int
   name: String!
@@ -17343,7 +17557,7 @@ type InstanceSecurityDashboard {
   projects(after: String, before: String, first: Int, last: Int, search: String): ProjectConnection!
   vulnerabilityGrades(letterGrade: VulnerabilityGrade): [VulnerableProjectsByGrade!]!
   vulnerabilityScanners(after: String, before: String, first: Int, last: Int): VulnerabilityScannerConnection
-  vulnerabilitySeveritiesCount(capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
+  vulnerabilitySeveritiesCount(authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
 }
 
 type IntegerExpression implements ExpressionInterface {
@@ -17531,7 +17745,7 @@ type Issue implements CurrentUserTodos & NoteableInterface & Todoable {
   confidential: Boolean!
   createNoteEmail: String
   createdAt: Time!
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   customerRelationsContacts(after: String, before: String, first: Int, last: Int): CustomerRelationsContactConnection
   description: String
   descriptionHtml: String
@@ -19462,6 +19676,8 @@ enum MemberRolePermission {
   MANAGE_MERGE_REQUEST_SETTINGS
   MANAGE_PROJECT_ACCESS_TOKENS
   MANAGE_SECURITY_POLICY_LINK
+  PULL_CONTAINER_IMAGE
+  PUSH_CONTAINER_IMAGE
   READ_ADMIN_CICD
   READ_ADMIN_GROUPS
   READ_ADMIN_MONITORING
@@ -19511,6 +19727,8 @@ enum MemberRoleStandardPermission {
   MANAGE_MERGE_REQUEST_SETTINGS
   MANAGE_PROJECT_ACCESS_TOKENS
   MANAGE_SECURITY_POLICY_LINK
+  PULL_CONTAINER_IMAGE
+  PUSH_CONTAINER_IMAGE
   READ_AGENT_ARTIFACTS
   READ_CODE
   READ_COMPLIANCE_DASHBOARD
@@ -19641,7 +19859,7 @@ type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
   conflictStatus: MergeRequestConflictStatus
   conflicts: Boolean!
   createdAt: Time!
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   defaultMergeCommitMessage: String
   defaultSquashCommitMessage: String
   description: String
@@ -19651,7 +19869,7 @@ type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
   diffRefs: DiffRefs
   diffStats(path: String): [DiffStats!]
   diffStatsSummary: DiffStatsSummary
-  diffs(after: String, expanded: Boolean = false, first: Int): DiffConnection
+  diffs(after: String, expanded: Boolean = false, first: Int, path: String): DiffConnection
   discussionLocked: Boolean!
   discussions(after: String, before: String, first: Int, last: Int): DiscussionConnection!
   discussionsWithActivity(after: String, filter: NotesFilterType = ALL_NOTES, first: Int, sort: WorkItemDiscussionsSort = CREATED_ASC): DiscussionConnection!
@@ -19704,6 +19922,7 @@ type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
   policyBypassStatuses: [PolicyBypassStatus!]
   policyViolations: PolicyViolationDetails
   preparedAt: Time
+  preparing: Boolean!
   project: Project!
   projectId: Int!
   rebaseCommitSha: String
@@ -19725,6 +19944,7 @@ type MergeRequest implements CurrentUserTodos & NoteableInterface & Todoable {
   sourceProject: Project
   sourceProjectId: Int
   squash: Boolean!
+  squashCommitMessage: String
   squashOnMerge: Boolean!
   squashReadOnly: Boolean!
   stack: [MergeRequest!]
@@ -19943,10 +20163,27 @@ type MergeRequestConflict {
   theirPath: String
 }
 
+input MergeRequestConflictFileResolutionInput {
+  content: String
+  ourPath: String!
+  sections: [MergeRequestConflictSectionResolutionInput!]
+  theirPath: String!
+}
+
 type MergeRequestConflictSection {
   ourLines: [String!]!
   sectionId: String!
   theirLines: [String!]!
+}
+
+input MergeRequestConflictSectionResolutionInput {
+  resolution: MergeRequestConflictSide!
+  sectionId: String!
+}
+
+enum MergeRequestConflictSide {
+  OURS
+  THEIRS
 }
 
 enum MergeRequestConflictStatus {
@@ -20217,6 +20454,20 @@ type MergeRequestRequestChangesPayload {
   mergeRequest: MergeRequest
 }
 
+input MergeRequestResolveConflictsInput {
+  clientMutationId: String
+  commitMessage: String
+  files: [MergeRequestConflictFileResolutionInput!]!
+  iid: String!
+  projectPath: ID!
+}
+
+type MergeRequestResolveConflictsPayload {
+  clientMutationId: String
+  errors: [String!]!
+  mergeRequest: MergeRequest
+}
+
 type MergeRequestResourceLabelEvent {
   action: ResourceLabelEventAction!
   createdAt: Time!
@@ -20337,7 +20588,7 @@ type MergeRequestReviewerEdge {
 
 input MergeRequestReviewerRereviewInput {
   clientMutationId: String
-  duoCodeReviewDepth: DuoCodeReviewDepth
+  duoCodeReviewLevel: DuoCodeReviewLevel
   iid: String!
   projectPath: ID!
   userId: UserID!
@@ -21401,9 +21652,12 @@ type Mutation {
   aiSelfHostedModelCreate(input: AiSelfHostedModelCreateInput!): AiSelfHostedModelCreatePayload
   aiSelfHostedModelDelete(input: AiSelfHostedModelDeleteInput!): AiSelfHostedModelDeletePayload
   aiSelfHostedModelUpdate(input: AiSelfHostedModelUpdateInput!): AiSelfHostedModelUpdatePayload
+  aiUserMemoryUpdate(input: AiUserMemoryUpdateInput!): AiUserMemoryUpdatePayload
   alertSetAssignees(input: AlertSetAssigneesInput!): AlertSetAssigneesPayload
   alertTodoCreate(input: AlertTodoCreateInput!): AlertTodoCreatePayload
   anthropicComplianceIntegrationCreate(input: AnthropicComplianceIntegrationCreateInput!): AnthropicComplianceIntegrationCreatePayload
+  anthropicComplianceIntegrationDelete(input: AnthropicComplianceIntegrationDeleteInput!): AnthropicComplianceIntegrationDeletePayload
+  anthropicComplianceIntegrationUpdate(input: AnthropicComplianceIntegrationUpdateInput!): AnthropicComplianceIntegrationUpdatePayload
   approvalProjectRuleDelete(input: approvalProjectRuleDeleteInput!): approvalProjectRuleDeletePayload
   approvalProjectRuleUpdate(input: approvalProjectRuleUpdateInput!): approvalProjectRuleUpdatePayload
   approveDeployment(input: ApproveDeploymentInput!): ApproveDeploymentPayload
@@ -21414,6 +21668,7 @@ type Mutation {
   artifactRegistryDisable(input: ArtifactRegistryDisableInput!): ArtifactRegistryDisablePayload
   artifactRegistryEnable(input: ArtifactRegistryEnableInput!): ArtifactRegistryEnablePayload
   artifactRegistryManifestDelete(input: ArtifactRegistryManifestDeleteInput!): ArtifactRegistryManifestDeletePayload
+  artifactRegistryManifestsBulkDelete(input: ArtifactRegistryManifestsBulkDeleteInput!): ArtifactRegistryManifestsBulkDeletePayload
   artifactRegistryNpmDistTagDelete(input: ArtifactRegistryNpmDistTagDeleteInput!): ArtifactRegistryNpmDistTagDeletePayload
   artifactRegistryRepositoryArtifactsDelete(input: ArtifactRegistryRepositoryArtifactsDeleteInput!): ArtifactRegistryRepositoryArtifactsDeletePayload
   artifactRegistryRepositoryCreate(input: ArtifactRegistryRepositoryCreateInput!): ArtifactRegistryRepositoryCreatePayload
@@ -21427,6 +21682,7 @@ type Mutation {
   artifactRegistryUpstreamRepositoryDissociate(input: ArtifactRegistryUpstreamRepositoryDissociateInput!): ArtifactRegistryUpstreamRepositoryDissociatePayload
   artifactRegistryUpstreamTestConnection(input: ArtifactRegistryUpstreamTestConnectionInput!): ArtifactRegistryUpstreamTestConnectionPayload
   artifactRegistryVersionDelete(input: ArtifactRegistryVersionDeleteInput!): ArtifactRegistryVersionDeletePayload
+  artifactRegistryVersionsBulkDelete(input: ArtifactRegistryVersionsBulkDeleteInput!): ArtifactRegistryVersionsBulkDeletePayload
   ascpComponentCreate(input: AscpComponentCreateInput!): AscpComponentCreatePayload
   ascpScanCreate(input: AscpScanCreateInput!): AscpScanCreatePayload
   ascpSecurityContextCreate(input: AscpSecurityContextCreateInput!): AscpSecurityContextCreatePayload
@@ -21442,6 +21698,8 @@ type Mutation {
   auditEventsInstanceAmazonS3ConfigurationCreate(input: AuditEventsInstanceAmazonS3ConfigurationCreateInput!): AuditEventsInstanceAmazonS3ConfigurationCreatePayload
   auditEventsInstanceAmazonS3ConfigurationDelete(input: AuditEventsInstanceAmazonS3ConfigurationDeleteInput!): AuditEventsInstanceAmazonS3ConfigurationDeletePayload
   auditEventsInstanceAmazonS3ConfigurationUpdate(input: AuditEventsInstanceAmazonS3ConfigurationUpdateInput!): AuditEventsInstanceAmazonS3ConfigurationUpdatePayload
+  auditEventsInstanceDestinationDenylistEventsAdd(input: AuditEventsInstanceDestinationDenylistEventsAddInput!): AuditEventsInstanceDestinationDenylistEventsAddPayload
+  auditEventsInstanceDestinationDenylistEventsDelete(input: AuditEventsInstanceDestinationDenylistEventsDeleteInput!): AuditEventsInstanceDestinationDenylistEventsDeletePayload
   auditEventsInstanceDestinationEventsAdd(input: AuditEventsInstanceDestinationEventsAddInput!): AuditEventsInstanceDestinationEventsAddPayload
   auditEventsInstanceDestinationEventsDelete(input: AuditEventsInstanceDestinationEventsDeleteInput!): AuditEventsInstanceDestinationEventsDeletePayload
   auditEventsInstanceDestinationNamespaceFilterCreate(input: AuditEventsInstanceDestinationNamespaceFilterCreateInput!): AuditEventsInstanceDestinationNamespaceFilterCreatePayload
@@ -21755,6 +22013,7 @@ type Mutation {
   mergeRequestDestroyRequestedChanges(input: MergeRequestDestroyRequestedChangesInput!): MergeRequestDestroyRequestedChangesPayload
   mergeRequestDestroyWorkItemRelations(input: MergeRequestDestroyWorkItemRelationsInput!): MergeRequestDestroyWorkItemRelationsPayload
   mergeRequestRequestChanges(input: MergeRequestRequestChangesInput!): MergeRequestRequestChangesPayload
+  mergeRequestResolveConflicts(input: MergeRequestResolveConflictsInput!): MergeRequestResolveConflictsPayload
   mergeRequestResyncSecurityPolicies(input: MergeRequestResyncSecurityPoliciesInput!): MergeRequestResyncSecurityPoliciesPayload
   mergeRequestReviewerRereview(input: MergeRequestReviewerRereviewInput!): MergeRequestReviewerRereviewPayload
   mergeRequestSavedViewCreate(input: MergeRequestSavedViewCreateInput!): MergeRequestSavedViewCreatePayload
@@ -21835,6 +22094,7 @@ type Mutation {
   projectSavedReplyDestroy(input: ProjectSavedReplyDestroyInput!): ProjectSavedReplyDestroyPayload
   projectSavedReplyUpdate(input: ProjectSavedReplyUpdateInput!): ProjectSavedReplyUpdatePayload
   projectSecretCreate(input: ProjectSecretCreateInput!): ProjectSecretCreatePayload
+  projectSecretCreateFromLeakedToken(input: ProjectSecretCreateFromLeakedTokenInput!): ProjectSecretCreateFromLeakedTokenPayload
   projectSecretDelete(input: ProjectSecretDeleteInput!): ProjectSecretDeletePayload
   projectSecretUpdate(input: ProjectSecretUpdateInput!): ProjectSecretUpdatePayload
   projectSecretsManagerDeprovision(input: ProjectSecretsManagerDeprovisionInput!): ProjectSecretsManagerDeprovisionPayload
@@ -21894,6 +22154,7 @@ type Mutation {
   secretsManagerInstanceStartTrial(input: SecretsManagerInstanceStartTrialInput!): SecretsManagerInstanceStartTrialPayload
   secretsManagerRefreshEntitlement(input: SecretsManagerRefreshEntitlementInput!): SecretsManagerRefreshEntitlementPayload
   secretsManagerStartTrial(input: SecretsManagerStartTrialInput!): SecretsManagerStartTrialPayload
+  securityAiFlowFeedbackCreate(input: SecurityAiFlowFeedbackCreateInput!): SecurityAiFlowFeedbackCreatePayload
   securityAttributeCreate(input: SecurityAttributeCreateInput!): SecurityAttributeCreatePayload
   securityAttributeDestroy(input: SecurityAttributeDestroyInput!): SecurityAttributeDestroyPayload
   securityAttributeProjectUpdate(input: SecurityAttributeProjectUpdateInput!): SecurityAttributeProjectUpdatePayload
@@ -21901,12 +22162,14 @@ type Mutation {
   securityCategoryCreate(input: SecurityCategoryCreateInput!): SecurityCategoryCreatePayload
   securityCategoryDestroy(input: SecurityCategoryDestroyInput!): SecurityCategoryDestroyPayload
   securityCategoryUpdate(input: SecurityCategoryUpdateInput!): SecurityCategoryUpdatePayload
+  securityFindingConfirm(input: SecurityFindingConfirmInput!): SecurityFindingConfirmPayload
   securityFindingCreateIssue(input: SecurityFindingCreateIssueInput!): SecurityFindingCreateIssuePayload
   securityFindingCreateMergeRequest(input: SecurityFindingCreateMergeRequestInput!): SecurityFindingCreateMergeRequestPayload
   securityFindingCreateVulnerability(input: SecurityFindingCreateVulnerabilityInput!): SecurityFindingCreateVulnerabilityPayload
   securityFindingDismiss(input: SecurityFindingDismissInput!): SecurityFindingDismissPayload
   securityFindingExternalIssueLinkCreate(input: SecurityFindingExternalIssueLinkCreateInput!): SecurityFindingExternalIssueLinkCreatePayload
   securityFindingJiraIssueFormUrlCreate(input: SecurityFindingJiraIssueFormUrlCreateInput!): SecurityFindingJiraIssueFormUrlCreatePayload
+  securityFindingResolve(input: SecurityFindingResolveInput!): SecurityFindingResolvePayload
   securityFindingRevertToDetected(input: SecurityFindingRevertToDetectedInput!): SecurityFindingRevertToDetectedPayload
   securityFindingSeverityOverride(input: SecurityFindingSeverityOverrideInput!): SecurityFindingSeverityOverridePayload
   securityPolicyProjectAssign(input: SecurityPolicyProjectAssignInput!): SecurityPolicyProjectAssignPayload
@@ -21921,6 +22184,7 @@ type Mutation {
   securityScanProfileDetach(input: SecurityScanProfileDetachInput!): SecurityScanProfileDetachPayload
   securityScanProfileUpdate(input: SecurityScanProfileUpdateInput!): SecurityScanProfileUpdatePayload
   securityTrainingUpdate(input: SecurityTrainingUpdateInput!): SecurityTrainingUpdatePayload
+  securityUpdateTrackedContextQuota(input: SecurityUpdateTrackedContextQuotaInput!): SecurityUpdateTrackedContextQuotaPayload
   setContainerScanningForRegistry(input: SetContainerScanningForRegistryInput!): SetContainerScanningForRegistryPayload
   setCvsForContainerScanning(input: SetCvsForContainerScanningInput!): SetCvsForContainerScanningPayload
   setCvsForDependencyScanning(input: SetCvsForDependencyScanningInput!): SetCvsForDependencyScanningPayload
@@ -22007,6 +22271,7 @@ type Mutation {
   userAddOnAssignmentCreate(input: UserAddOnAssignmentCreateInput!): UserAddOnAssignmentCreatePayload
   userAddOnAssignmentRemove(input: UserAddOnAssignmentRemoveInput!): UserAddOnAssignmentRemovePayload
   userCalloutCreate(input: UserCalloutCreateInput!): UserCalloutCreatePayload
+  userCalloutDelete(input: UserCalloutDeleteInput!): UserCalloutDeletePayload
   userCustomAttributeSet(input: UserCustomAttributeSetInput!): UserCustomAttributeSetPayload
   userGroupCalloutCreate(input: UserGroupCalloutCreateInput!): UserGroupCalloutCreatePayload
   userPreferencesUpdate(input: UserPreferencesUpdateInput!): UserPreferencesUpdatePayload
@@ -22050,10 +22315,10 @@ type Mutation {
   workItemDelete(input: WorkItemDeleteInput!): WorkItemDeletePayload
   workItemEnableAiPlanning(input: WorkItemEnableAiPlanningInput!): WorkItemEnableAiPlanningPayload
   workItemExport(input: WorkItemExportInput!): WorkItemExportPayload
-  workItemGenerateReadinessScore(input: WorkItemGenerateReadinessScoreInput!): WorkItemGenerateReadinessScorePayload
   workItemGenerateWorkplan(input: WorkItemGenerateWorkplanInput!): WorkItemGenerateWorkplanPayload
   workItemHierarchyAddChildrenItems(input: WorkItemHierarchyAddChildrenItemsInput!): WorkItemHierarchyAddChildrenItemsPayload
   workItemRemoveLinkedItems(input: WorkItemRemoveLinkedItemsInput!): WorkItemRemoveLinkedItemsPayload
+  workItemResolveWorkplanQuestions(input: WorkItemResolveWorkplanQuestionsInput!): WorkItemResolveWorkplanQuestionsPayload
   workItemResumeWorkplan(input: WorkItemResumeWorkplanInput!): WorkItemResumeWorkplanPayload
   workItemSavedViewCreate(input: WorkItemSavedViewCreateInput!): WorkItemSavedViewCreatePayload
   workItemSavedViewDelete(input: WorkItemSavedViewDeleteInput!): WorkItemSavedViewDeletePayload
@@ -23102,9 +23367,11 @@ type OrbitSchemaNodeEdge {
 
 type OrbitSchemaProperty {
   dataType: String!
+  defaultColumn: Boolean
   enumValues: [String!]!
   name: String!
   nullable: Boolean!
+  textSearchable: Boolean
 }
 
 type OrbitSchemaPropertyConnection {
@@ -23925,6 +24192,7 @@ enum PackageTypeEnum {
   PYPI
   RPM
   RUBYGEMS
+  SWIFT
   TERRAFORM_MODULE
 }
 
@@ -23939,6 +24207,7 @@ enum PackagesCleanupKeepDuplicatedPackageFilesEnum {
 }
 
 type PackagesCleanupPolicy {
+  deleteGenericPackagesNotDownloadedInDays: Int
   keepNDuplicatedPackageFiles: PackagesCleanupKeepDuplicatedPackageFilesEnum!
   nextRunAt: Time
 }
@@ -25373,6 +25642,7 @@ enum PolicyViolationErrorType {
   PIPELINE_FAILED
   SCAN_NOT_SUCCEEDED
   SCAN_REMOVED
+  SCAN_RESULTS_UNAVAILABLE
   TARGET_PIPELINE_MISSING
   TARGET_SCAN_MISSING
   UNKNOWN
@@ -25439,8 +25709,9 @@ type Project implements ProjectInterface & Todoable {
   adminEditPath: String
   adminShowPath: String
   agentConfigurations(after: String, before: String, first: Int, last: Int): AgentConfigurationConnection
+  aiAgentIdentities(after: String, agentTypes: [AiExternalAgentType!], before: String, first: Int, last: Int, status: AiAgentIdentityStatus, userId: UserID): AiAgentIdentityConnection
   aiCatalogItem(id: AiCatalogItemID!, showSoftDeleted: Boolean = false): AiCatalogItem
-  aiCatalogItemConsumerForItem(id: AiCatalogItemID!): AiCatalogItemConsumer
+  aiCatalogItemConsumerForItem(id: AiCatalogItemID!, includeInherited: Boolean = true): AiCatalogItemConsumer
   aiCatalogItems(after: String, allAvailable: Boolean, before: String, enabled: Boolean, first: Int, itemTypes: [AiCatalogItemType!], last: Int, search: String, sort: AiCatalogItemsSort): AiCatalogItemConnection!
   aiFlowTriggers(active: Boolean, after: String, before: String, eventType: AiFlowTriggerEventType, first: Int, ids: [AiFlowTriggerID!] = null, kind: AiFlowTriggerKind, last: Int, lastRunStatus: AiFlowTriggerLastRunStatus, search: String, sort: AiFlowTriggerSort = CREATED_DESC): AiFlowTriggerTypeConnection
   aiGovernanceMetrics(agentClass: AiGovernanceAgentClass = ALL, timeframe: AiGovernanceMetricsTimeframe = LAST_7_DAYS): AiGovernanceMetrics
@@ -25512,6 +25783,8 @@ type Project implements ProjectInterface & Todoable {
   customAttributes: [CustomAttribute!]
   customizableDashboardVisualizations(after: String, before: String, first: Int, last: Int, slug: String): CustomizableDashboardVisualizationConnection
   customizableDashboards(after: String, before: String, category: CustomizableDashboardCategory = ANALYTICS, first: Int, last: Int, slug: String): CustomizableDashboardConnection
+  dapFactoryConfiguration: DapFactoryConfiguration
+  dapFactoryConfigurationValidation(content: String!): DapFactoryValidationResult
   dastProfile(hasDastProfileSchedule: Boolean, id: DastProfileID!): DastProfile
   dastProfiles(after: String, before: String, first: Int, hasDastProfileSchedule: Boolean, last: Int): DastProfileConnection
   dastScannerProfiles(after: String, before: String, first: Int, last: Int): DastScannerProfileConnection
@@ -25542,7 +25815,7 @@ type Project implements ProjectInterface & Todoable {
   duoWorkflowSessionArtifacts(after: String, agentClass: AiGovernanceAgentClass, before: String, first: Int, last: Int, not: DuoWorkflowSessionArtifactNegatedFilterInput, triggeredByUserId: UserID, workflowCreatedAfter: Time, workflowCreatedBefore: Time, workflowDefinition: String, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowSessionArtifactConnection
   duoWorkflowStatusCheck: DuoWorkflowEnablement
   duoWorkflowUsableRunnerType: String
-  duoWorkflowWorkflows(after: String, before: String, environment: WorkflowEnvironment, excludeSourceTypes: [DuoWorkflowSourceType!], excludeTypes: [String!], first: Int, ids: [AiDuoWorkflowsWorkflowID!], last: Int, projectId: ProjectID, projectPath: ID, search: String, sort: DuoWorkflowsWorkflowSort = created_desc, statusGroup: DuoWorkflowStatusGroup, statuses: [DuoWorkflowStatus!], type: String, updatedAfter: ISO8601DateTime, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowConnection
+  duoWorkflowWorkflows(after: String, before: String, environment: WorkflowEnvironment, excludeCreatedInteractiveCliSessions: Boolean = false, excludeSourceTypes: [DuoWorkflowSourceType!], excludeTypes: [String!], first: Int, ids: [AiDuoWorkflowsWorkflowID!], last: Int, mergeRequestIid: String, projectId: ProjectID, projectPath: ID, search: String, sort: DuoWorkflowsWorkflowSort = created_desc, statusGroup: DuoWorkflowStatusGroup, statuses: [DuoWorkflowStatus!], type: String, updatedAfter: ISO8601DateTime, workItemIid: String, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowConnection
   editPath: String!
   environment(name: String, search: String, states: [String!], type: String): Environment
   environments(after: String, before: String, first: Int, last: Int, name: String, search: String, states: [String!], type: String): EnvironmentConnection
@@ -25617,6 +25890,7 @@ type Project implements ProjectInterface & Todoable {
   nameWithNamespace: String!
   namespace: Namespace
   nestedEnvironments(after: String, before: String, first: Int, last: Int, name: String, search: String, states: [String!], type: String): NestedEnvironmentConnection
+  newMergeRequestPipelines(after: String, before: String, first: Int, ids: [ID!], last: Int, ref: String, refType: RefType, scope: PipelineScopeEnum, sha: String, source: String, sourceBranch: String!, status: PipelineStatusEnum, targetBranch: String, targetProjectPath: ID, updatedAfter: Time, updatedBefore: Time, username: String): PipelineConnection
   observabilityLogsLinks(after: String, before: String, fingerprint: String, first: Int, last: Int, serviceName: String, severityNumber: Int, timestamp: ISO8601DateTime, traceIdentifier: String): ObservabilityLogConnection
   observabilityMetricsLinks(after: String, before: String, first: Int, last: Int, name: String, type: OpenTelemetryMetricType): ObservabilityMetricConnection
   observabilityTracesLinks(after: String, before: String, first: Int, last: Int, traceIdentifier: String): ObservabilityTraceConnection
@@ -25634,7 +25908,7 @@ type Project implements ProjectInterface & Todoable {
   pagesForceHttps: Boolean!
   pagesUseUniqueDomain: Boolean!
   path: String!
-  pathLocks(after: String, before: String, first: Int, last: Int): PathLockConnection
+  pathLocks(after: String, before: String, first: Int, last: Int, path: String): PathLockConnection
   pendingMemberApprovals(after: String, before: String, first: Int, last: Int): MemberApprovalConnection
   permanentDeletionDate: String
   pipeline(id: CiPipelineID, iid: ID, sha: String): Pipeline
@@ -25730,14 +26004,14 @@ type Project implements ProjectInterface & Todoable {
   valueStreams(after: String, before: String, first: Int, id: ID, last: Int): ValueStreamConnection
   visibility: String
   visibleForks(after: String, before: String, first: Int, last: Int, minimumAccessLevel: AccessLevelEnum): ProjectConnection
-  vulnerabilities(after: String, before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
+  vulnerabilities(after: String, authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
   vulnerabilitiesCountByDay(after: String, before: String, endDate: ISO8601Date!, first: Int, last: Int, startDate: ISO8601Date!): VulnerabilitiesCountByDayConnection
   vulnerabilityArchives: [VulnerabilityArchive!]
   vulnerabilityIdentifierSearch(name: String!): [String!]
   vulnerabilityImages(after: String, before: String, first: Int, last: Int): VulnerabilityContainerImageConnection
   vulnerabilityManagementPolicies(after: String, before: String, deduplicatePolicies: Boolean = false, first: Int, includeUnscoped: Boolean = true, last: Int, relationship: SecurityPolicyRelationType = DIRECT): VulnerabilityManagementPolicyConnection
   vulnerabilityScanners(after: String, before: String, first: Int, last: Int): VulnerabilityScannerConnection
-  vulnerabilitySeveritiesCount(capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
+  vulnerabilitySeveritiesCount(authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], capped: Boolean = false, clusterAgentId: [ClustersAgentID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilitySeveritiesCount
   vulnerabilityStatistic: VulnerabilityStatisticType
   vulnerabilityWorkflowExecution(executionId: String, workflow: VulnerabilityDuoWorkflow!): VulnerabilityWorkflowExecution
   webBasedCommitSigningEnabled: Boolean!
@@ -26180,7 +26454,6 @@ type ProjectPermissions {
   forkProject: Boolean!
   generateDescription: Boolean!
   importIssues: Boolean!
-  manageAiFlowTriggers: Boolean!
   moveDesign: Boolean!
   pushCode: Boolean!
   pushToDeleteProtectedBranch: Boolean!
@@ -26316,10 +26589,10 @@ type ProjectSavedReplyUpdatePayload {
 }
 
 type ProjectSecret {
-  branch: String!
+  branch: String
   createdAt: Time
   description: String
-  environment: String!
+  environment: String
   metadataVersion: Int
   name: String!
   project: Project!
@@ -26331,6 +26604,20 @@ type ProjectSecretConnection {
   edges: [ProjectSecretEdge]
   nodes: [ProjectSecret]
   pageInfo: PageInfo!
+}
+
+input ProjectSecretCreateFromLeakedTokenInput {
+  clientMutationId: String
+  description: String
+  name: String!
+  vulnerabilityId: VulnerabilityID!
+}
+
+type ProjectSecretCreateFromLeakedTokenPayload {
+  clientMutationId: String
+  errors: [String!]!
+  projectSecret: ProjectSecret
+  reason: SecretsManagerWriteDenialReason
 }
 
 input ProjectSecretCreateInput {
@@ -27155,7 +27442,7 @@ type Query {
   aiModelSelectionNamespaceSettings(after: String, before: String, first: Int, groupId: GroupID!, last: Int): AiModelSelectionNamespaceFeatureSettingConnection
   aiSelfHostedModels(after: String, before: String, first: Int, id: AiSelfHostedModelID, last: Int): AiSelfHostedModelConnection
   aiSlashCommands(url: String!): [SlashCommand!]
-  aiToolRules(actionType: AiToolActionType, after: String, before: String, first: Int, fullPath: ID!, last: Int, projectPath: ID, search: String): AiToolRuleConnection
+  aiToolRules(actionType: AiToolActionType, after: String, before: String, first: Int, fullPath: ID!, last: Int, projectPath: ID, search: String, source: AiToolSource): AiToolRuleConnection
   aiUsageData: AiInstanceUsageData
   artifactRegistryRoleAssignments(after: String, assigneeIds: [UserID!] = [], first: Int, resourceIds: [String!] = [], roles: [ArtifactRegistryRole!] = []): ArtifactRegistryRoleAssignmentConnection
   auditEventDefinitions(after: String, before: String, first: Int, last: Int): AuditEventDefinitionConnection!
@@ -27193,7 +27480,7 @@ type Query {
   duoWorkflowBranches(threadTs: String!, workflowId: AiDuoWorkflowsWorkflowID!): [DuoWorkflowBranch!]
   duoWorkflowEvents(after: String, before: String, first: Int, last: Int, workflowId: AiDuoWorkflowsWorkflowID!): DuoWorkflowEventConnection!
   duoWorkflowRecentSessionProjects: [Project!]
-  duoWorkflowWorkflows(after: String, before: String, environment: WorkflowEnvironment, excludeSourceTypes: [DuoWorkflowSourceType!], excludeTypes: [String!], first: Int, ids: [AiDuoWorkflowsWorkflowID!], last: Int, projectId: ProjectID, projectPath: ID, search: String, sort: DuoWorkflowsWorkflowSort = created_desc, statusGroup: DuoWorkflowStatusGroup, statuses: [DuoWorkflowStatus!], type: String, updatedAfter: ISO8601DateTime, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowConnection!
+  duoWorkflowWorkflows(after: String, before: String, environment: WorkflowEnvironment, excludeCreatedInteractiveCliSessions: Boolean = false, excludeSourceTypes: [DuoWorkflowSourceType!], excludeTypes: [String!], first: Int, ids: [AiDuoWorkflowsWorkflowID!], last: Int, mergeRequestIid: String, projectId: ProjectID, projectPath: ID, search: String, sort: DuoWorkflowsWorkflowSort = created_desc, statusGroup: DuoWorkflowStatusGroup, statuses: [DuoWorkflowStatus!], type: String, updatedAfter: ISO8601DateTime, workItemIid: String, workflowId: AiDuoWorkflowsWorkflowID): DuoWorkflowConnection!
   echo(text: String!): String!
   epicBoardList(epicFilters: EpicFilters, id: BoardsEpicListID!): EpicList
   featureFlagEnabled(name: String!): Boolean!
@@ -27235,7 +27522,7 @@ type Query {
   mlModel(id: MlModelID!): MlModel
   namespace(fullPath: ID!): Namespace
   namespaceSecretsManagerEnrollment(namespacePath: ID!): SecretsManagerEnrollment
-  namespaceSecurityProjects(after: String, attributeFilters: [AttributeFilterInput!], before: String, first: Int, hasFailedOrWarning: Boolean, hasScanners: Boolean, hasStale: Boolean, includeSubgroups: Boolean = false, last: Int, namespaceId: NamespaceID!, search: String, securityAnalyzerFilters: [AnalyzerFilterInput!], sortBy: SortableAnalyzerType, triggerType: ScanProfileTriggerType, vulnerabilityCountFilters: [VulnerabilityCountFilterInput!]): ProjectConnection
+  namespaceSecurityProjects(after: String, attributeFilters: [AttributeFilterInput!], before: String, first: Int, hasFailedOrWarning: Boolean, hasScanners: Boolean, hasStale: Boolean, hasTriageCoverage: Boolean, includeSubgroups: Boolean = false, last: Int, namespaceId: NamespaceID!, search: String, securityAnalyzerFilters: [AnalyzerFilterInput!], sortBy: SortableAnalyzerType, triggerType: ScanProfileTriggerType, vulnerabilityCountFilters: [VulnerabilityCountFilterInput!]): ProjectConnection
   note(id: NoteID!): Note
   openbaoHealth: Boolean!
   orbit: Orbit
@@ -27274,12 +27561,12 @@ type Query {
   standardRole(accessLevel: [MemberAccessLevel!]): StandardRole
   standardRoles(accessLevel: [MemberAccessLevel!], after: String, before: String, first: Int, last: Int): StandardRoleConnection
   subscriptionFutureEntries(after: String, before: String, first: Int, last: Int): SubscriptionFutureEntryConnection
-  subscriptionUsage(endDate: ISO8601Date, flowTypes: [String!], namespacePath: ID, startDate: ISO8601Date): GitlabSubscriptionUsage
+  subscriptionUsage(endDate: ISO8601Date, flowTypes: [String!], namespacePath: ID, organizationId: OrganizationsOrganizationID, startDate: ISO8601Date): GitlabSubscriptionUsage
   syntheticNote(noteableId: NoteableID!, sha: String!): Note
   timelogs(after: String, before: String, endDate: Time, endTime: Time, first: Int, groupId: GroupID, last: Int, projectId: ProjectID, sort: TimelogSort = SPENT_AT_ASC, startDate: Time, startTime: Time, username: String): TimelogConnection
   todo(id: TodoID!): Todo
   topics(after: String, before: String, first: Int, last: Int, organizationId: OrganizationsOrganizationID, search: String): TopicConnection
-  trialUsage(namespacePath: ID): GitlabTrialUsage
+  trialUsage(namespacePath: ID, organizationId: OrganizationsOrganizationID): GitlabTrialUsage
   usageTrendsMeasurements(after: String, before: String, first: Int, identifier: MeasurementIdentifier!, last: Int, recordedAfter: Time, recordedBefore: Time): UsageTrendsMeasurementConnection
   user(id: UserID, username: String): UserCore
   users(active: Boolean, admins: Boolean = false, after: String, before: String, first: Int, groupId: GroupID, humans: Boolean, ids: [ID!], last: Int, search: String, sort: Sort = created_desc, userTypes: [UserType!], usernames: [String!]): UserCoreConnection
@@ -27287,7 +27574,7 @@ type Query {
   virtualRegistriesContainerUpstream(id: VirtualRegistriesContainerUpstreamID!): ContainerUpstreamDetails
   virtualRegistriesPackagesMavenRegistry(id: VirtualRegistriesPackagesMavenRegistryID!): MavenRegistryDetails
   virtualRegistriesPackagesMavenUpstream(id: VirtualRegistriesPackagesMavenUpstreamID!): MavenUpstreamDetails
-  vulnerabilities(after: String, before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
+  vulnerabilities(after: String, authentication: [VulnerabilityAuthenticationFilter!], authorization: [VulnerabilityAuthorizationFilter!], before: String, clusterAgentId: [ClustersAgentID!], clusterId: [ClustersClusterID!], dismissalReason: [VulnerabilityDismissalReason!], dueDateAfter: Date, dueDateBefore: Date, dueDateWildcard: VulnerabilityDueDateWildcardId, falsePositive: Boolean, first: Int, hasAiResolution: Boolean, hasIssues: Boolean, hasMergeRequest: Boolean, hasRemediations: Boolean, hasResolution: Boolean, identifierName: String, image: [String!], last: Int, malware: Boolean, owaspTopTen: [VulnerabilityOwaspTop10!], owaspTopTen2021: [VulnerabilityOwasp2021Top10!], owaspTopTen2025: [VulnerabilityOwasp2025Top10!], policyAutoDismissed: Boolean, policyViolations: [PolicyViolations!], projectId: [ID!], reachability: ReachabilityType, reportType: [VulnerabilityReportType!], scanner: [String!], scannerId: [VulnerabilitiesScannerID!], securityAttributesFilters: [AttributeFilterInput!], securityBoundary: [VulnerabilitySecurityBoundaryFilter!], sensitiveData: [VulnerabilitySensitiveDataFilter!], severity: [VulnerabilitySeverity!], sort: VulnerabilitySort = severity_desc, state: [VulnerabilityState!], trackedRefIds: [SecurityProjectTrackedContextID!], trackedRefsScope: SecurityTrackedRefScope, validityCheck: [VulnerabilityFindingTokenStatusState!]): VulnerabilityConnection
   vulnerabilitiesCountByDay(after: String, before: String, endDate: ISO8601Date!, first: Int, last: Int, startDate: ISO8601Date!): VulnerabilitiesCountByDayConnection
   vulnerability(id: VulnerabilityID!): Vulnerability
   wikiPage(namespaceId: NamespaceID, projectId: ProjectID, slug: String): WikiPage
@@ -27401,7 +27688,7 @@ type RefreshVulnerabilityFindingTokenStatusPayload {
   findingTokenStatus: VulnerabilityFindingTokenStatus
 }
 
-union Registrable = AbuseReportUploadRegistry | AchievementUploadRegistry | AiVectorizableFileUploadRegistry | AlertManagementMetricImageUploadRegistry | AppearanceUploadRegistry | BulkImportExportUploadUploadRegistry | CiSecureFileRegistry | ContainerRepositoryRegistry | DependencyListExportPartUploadRegistry | DependencyListExportUploadRegistry | DependencyProxyBlobRegistry | DependencyProxyManifestRegistry | DesignManagementActionUploadRegistry | DesignManagementRepositoryRegistry | GroupUploadRegistry | GroupWikiRepositoryRegistry | ImportExportUploadUploadRegistry | IssuableMetricImageUploadRegistry | JobArtifactRegistry | LfsObjectRegistry | MergeRequestDiffRegistry | OrganizationDetailUploadRegistry | PackageFileRegistry | PackagesDebianProjectComponentFileRegistry | PackagesHelmMetadataCacheRegistry | PackagesNugetSymbolRegistry | PagesDeploymentRegistry | PersonalSnippetUploadRegistry | PipelineArtifactRegistry | ProjectImportExportRelationExportUploadUploadRegistry | ProjectRepositoryRegistry | ProjectTopicUploadRegistry | ProjectUploadRegistry | ProjectWikiRepositoryRegistry | SnippetRepositoryRegistry | TerraformStateVersionRegistry | UploadRegistry | UserPermissionExportUploadUploadRegistry | UserUploadRegistry | VulnerabilityArchiveExportUploadRegistry | VulnerabilityExportPartUploadRegistry | VulnerabilityExportUploadRegistry | VulnerabilityRemediationUploadRegistry
+union Registrable = AbuseReportUploadRegistry | AchievementUploadRegistry | AlertManagementMetricImageUploadRegistry | AppearanceUploadRegistry | BulkImportExportUploadUploadRegistry | CiSecureFileRegistry | ContainerRepositoryRegistry | DependencyListExportPartUploadRegistry | DependencyListExportUploadRegistry | DependencyProxyBlobRegistry | DependencyProxyManifestRegistry | DesignManagementActionUploadRegistry | DesignManagementRepositoryRegistry | GroupUploadRegistry | GroupWikiRepositoryRegistry | ImportExportUploadUploadRegistry | IssuableMetricImageUploadRegistry | JobArtifactRegistry | LfsObjectRegistry | MergeRequestDiffRegistry | OrganizationDetailUploadRegistry | PackageFileRegistry | PackagesDebianProjectComponentFileRegistry | PackagesHelmMetadataCacheRegistry | PackagesNugetSymbolRegistry | PagesDeploymentRegistry | PersonalSnippetUploadRegistry | PipelineArtifactRegistry | ProjectImportExportRelationExportUploadUploadRegistry | ProjectRepositoryRegistry | ProjectTopicUploadRegistry | ProjectUploadRegistry | ProjectWikiRepositoryRegistry | SnippetRepositoryRegistry | TerraformStateVersionRegistry | UploadRegistry | UserPermissionExportUploadUploadRegistry | UserUploadRegistry | VulnerabilityArchiveExportUploadRegistry | VulnerabilityExportPartUploadRegistry | VulnerabilityExportUploadRegistry | VulnerabilityRemediationUploadRegistry
 
 interface RegistryInterface {
   description: String
@@ -27561,6 +27848,7 @@ type ReleaseCreatePayload {
   clientMutationId: String
   errors: [String!]!
   release: Release
+  warnings: [String!]
 }
 
 input ReleaseDeleteInput {
@@ -27703,6 +27991,7 @@ type Repository {
   commitCount: Int!
   commits(after: String, author: String, committedAfter: Time, committedBefore: Time, first: Int, firstParent: Boolean, order: CommitOrder, path: String, query: UntrustedRegexp, ref: String!): CommitConnection
   diskPath: String
+  divergedFromUpstream(ref: String!): Boolean
   empty: Boolean!
   exists: Boolean!
   lastCommit(path: String, ref: String, refType: RefType): Commit
@@ -27716,6 +28005,7 @@ type Repository {
 
 type RepositoryBlob {
   archived: Boolean
+  auxiliaryViewer: BlobViewer
   base64EncodedBlob: String
   blame(fromLine: Int = 1, ignoreRevs: Boolean = false, toLine: Int = 1): Blame
   blamePath: String
@@ -28423,7 +28713,7 @@ enum ScanModeEnum {
   PARTIAL
 }
 
-union ScanProfileConfiguration = AutoRemediationConfiguration | DependencyScanningConfiguration | SastConfiguration | SastFalsePositiveConfiguration | SastVulnerabilityResolutionConfiguration | SecretDetectionConfiguration | SecretDetectionFalsePositiveConfiguration | VulnerabilityEnrichmentConfiguration
+union ScanProfileConfiguration = AutoRemediationConfiguration | BusinessLogicConfiguration | DependencyScanningConfiguration | SastConfiguration | SastFalsePositiveConfiguration | SastVulnerabilityResolutionConfiguration | SecretDetectionConfiguration | SecretDetectionFalsePositiveConfiguration | VulnerabilityEnrichmentConfiguration
 
 type ScanProfileProjectStatus {
   buildId: JobID
@@ -28634,6 +28924,7 @@ enum SecretsManagementAction {
   DELETE
   READ
   READ_VALUE
+  UPDATE
   WRITE
 }
 
@@ -28750,6 +29041,31 @@ enum SecretsManagerWriteDenialReason {
   SUBSCRIPTION_GRACE_PERIOD_EXPIRED
   TRIAL_EXPIRED
   TRIAL_REQUIRED
+}
+
+input SecurityAiFlowFeedbackCreateInput {
+  clientMutationId: String
+  reasons: [SecurityAiFlowFeedbackReason!]
+  sentiment: SecurityAiFlowFeedbackSentiment!
+  vulnerabilityId: VulnerabilityID!
+}
+
+type SecurityAiFlowFeedbackCreatePayload {
+  clientMutationId: String
+  errors: [String!]!
+}
+
+enum SecurityAiFlowFeedbackReason {
+  CONFIDENCE_MISCALIBRATED
+  EXPLANATION_INACCURATE
+  IGNORED_DATA_FLOW
+  OTHER
+  VERDICT_WRONG
+}
+
+enum SecurityAiFlowFeedbackSentiment {
+  AGREE
+  DISAGREE
 }
 
 scalar SecurityAscpComponentID
@@ -28962,6 +29278,19 @@ type SecurityFeature {
   type: String!
 }
 
+input SecurityFindingConfirmInput {
+  clientMutationId: String
+  comment: String
+  projectPath: ID!
+  uuid: String!
+}
+
+type SecurityFindingConfirmPayload {
+  clientMutationId: String
+  errors: [String!]!
+  securityFinding: PipelineSecurityReportFinding
+}
+
 input SecurityFindingCreateIssueInput {
   clientMutationId: String
   project: ProjectID!
@@ -29036,6 +29365,19 @@ type SecurityFindingJiraIssueFormUrlCreatePayload {
   jiraIssueFormUrl: String
 }
 
+input SecurityFindingResolveInput {
+  clientMutationId: String
+  comment: String
+  projectPath: ID!
+  uuid: String!
+}
+
+type SecurityFindingResolvePayload {
+  clientMutationId: String
+  errors: [String!]!
+  securityFinding: PipelineSecurityReportFinding
+}
+
 input SecurityFindingRevertToDetectedInput {
   clientMutationId: String
   comment: String
@@ -29075,6 +29417,7 @@ type SecurityMetrics {
   vulnerabilitiesByIdentifier(severity: [VulnerabilitySeverity!]): [VulnerabilitiesByIdentifier!]
   vulnerabilitiesOverTime(after: String, before: String, endDate: ISO8601Date!, first: Int, last: Int, severity: [VulnerabilitySeverity!], startDate: ISO8601Date!): VulnerabilitiesOverTimeConnection
   vulnerabilitiesPerSeverity(endDate: ISO8601Date, startDate: ISO8601Date): VulnerabilitiesPerSeverity
+  vulnerabilitiesResolvedBySource(endDate: ISO8601Date!, startDate: ISO8601Date!): [VulnerabilitiesResolvedBySource!]
   vulnerabilityResolutionFunnel(endDate: ISO8601Date!, startDate: ISO8601Date!): VulnerabilityResolutionFunnel
 }
 
@@ -29302,8 +29645,10 @@ type SecurityScanProfileAttachPayload {
 }
 
 input SecurityScanProfileAutoRemediationInput {
+  batchUpdates: Boolean
   cooldown: Int
   enabled: Boolean
+  maxUpdatesPerBatch: Int
   openMergeRequestsLimit: Int
   runnerTags: [String!]
   severityLevel: VulnerabilitySeverity
@@ -29353,6 +29698,7 @@ enum SecurityScanProfileDependencyResolutionJob {
 
 input SecurityScanProfileDependencyScanningConfigurationInput {
   additionalCaCertBundle: String
+  analyzerImageVersion: String
   apiScanDownloadDelay: Int
   apiTimeout: Int
   disabledResolutionJobs: [SecurityScanProfileDependencyResolutionJob!]
@@ -29503,8 +29849,29 @@ enum SecurityScanProfileUpgradePolicy {
 }
 
 type SecurityScanProfileVariable {
+  description: String
   envVar: String
   key: String!
+  label: String
+  max: Int
+  min: Int
+  options: [SecurityScanProfileVariableOption!]
+  placeholder: String
+  valueType: SecurityScanProfileVariableValueType
+}
+
+type SecurityScanProfileVariableOption {
+  text: String
+  value: String!
+}
+
+enum SecurityScanProfileVariableValueType {
+  BOOLEAN
+  ENUM
+  INTEGER
+  MULTI_SELECT
+  STRING
+  STRING_LIST
 }
 
 input SecurityScanProfileVulnerabilityEnrichmentInput {
@@ -29602,6 +29969,18 @@ type SecurityTrainingUrl {
   name: String
   status: TrainingUrlRequestStatus
   url: String
+}
+
+input SecurityUpdateTrackedContextQuotaInput {
+  clientMutationId: String
+  organizationId: OrganizationsOrganizationID!
+  quota: Int!
+}
+
+type SecurityUpdateTrackedContextQuotaPayload {
+  clientMutationId: String
+  errors: [String!]!
+  quotaInfo: SecurityTrackedContextQuota
 }
 
 type SentryDetailedError {
@@ -30074,6 +30453,7 @@ type SnippetPermissions {
   adminSnippet: Boolean!
   awardEmoji: Boolean!
   createNote: Boolean!
+  deleteSnippet: Boolean!
   readSnippet: Boolean!
   reportSnippet: Boolean!
   updateSnippet: Boolean!
@@ -30389,6 +30769,7 @@ scalar SuggestionID
 
 type SystemNoteMetadata {
   action: String
+  descriptionDiffAvailable: Boolean!
   descriptionVersion: DescriptionVersion
   id: SystemNoteMetadataID!
 }
@@ -30865,6 +31246,7 @@ enum TimeboxReportErrorReason {
   MISSING_DATES
   PRIORITY_ASC
   PRIORITY_DESC
+  TOO_MANY_DATA_POINTS
   TOO_MANY_EVENTS
   UNSUPPORTED
   UPDATED_ASC
@@ -30994,7 +31376,7 @@ type Timelog {
   issue: Issue
   mergeRequest: MergeRequest
   note: Note
-  project: Project!
+  project: Project
   spentAt: Time
   summary: String
   timeSpent: Int!
@@ -31044,6 +31426,7 @@ scalar TimelogID
 
 type TimelogPermissions {
   adminTimelog: Boolean!
+  deleteTimelog: Boolean!
 }
 
 enum TimelogSort {
@@ -31101,6 +31484,9 @@ enum TodoActionEnum {
   mentioned
   merge_train_removed
   okr_checkin_requested
+  orbit_access_granted
+  review_approved
+  review_changes_requested
   review_requested
   review_submitted
   ssh_key_expired
@@ -31393,6 +31779,7 @@ type TriageAndRemediationCoverage {
 type TriageAndRemediationCoverageCounters {
   autoCount: Int!
   enabledCount: Int!
+  flowMissingCount: Int!
 }
 
 enum TriageAndRemediationFlowStatus {
@@ -31401,6 +31788,12 @@ enum TriageAndRemediationFlowStatus {
   FLOW_UNAVAILABLE
   FOUNDATIONAL_FLOWS_DISABLED
   NOT_APPLICABLE
+}
+
+type TriageAndRemediationTriggerFlowStatus {
+  flowName: String
+  flowStatus: TriageAndRemediationFlowStatus!
+  triggerType: ScanProfileTriggerType!
 }
 
 type TrialUsage {
@@ -31643,7 +32036,7 @@ type UpdateContainerProtectionTagRulePayload {
 
 input UpdateCustomDashboardInput {
   clientMutationId: String
-  config: CustomDashboardConfigInput
+  config: JSON
   description: String
   id: AnalyticsCustomDashboardsDashboardID!
   name: String
@@ -31885,6 +32278,7 @@ type UpdateNotePayload {
 
 input UpdatePackagesCleanupPolicyInput {
   clientMutationId: String
+  deleteGenericPackagesNotDownloadedInDays: Int
   keepNDuplicatedPackageFiles: PackagesCleanupKeepDuplicatedPackageFilesEnum
   projectPath: ID!
 }
@@ -32064,13 +32458,18 @@ type UploadRegistryEdge {
 
 input UpsertFlatUserCapInput {
   clientMutationId: String
-  flatUserCap: Float!
-  flatUserCapEnabled: Boolean!
+  dailyCap: Float
+  dailyCapEnabled: Boolean
+  flatUserCap: Float
+  flatUserCapEnabled: Boolean
   namespacePath: String
+  organizationId: OrganizationsOrganizationID
 }
 
 type UpsertFlatUserCapPayload {
   clientMutationId: String
+  dailyCap: Float
+  dailyCapEnabled: Boolean
   errors: [String!]!
   flatUserCap: Float
   flatUserCapEnabled: Boolean
@@ -32079,6 +32478,7 @@ type UpsertFlatUserCapPayload {
 input UpsertUserBudgetCapOverridesInput {
   clientMutationId: String
   namespacePath: String
+  organizationId: OrganizationsOrganizationID
   overrides: [BudgetCapUserOverrideInput!]!
 }
 
@@ -32346,6 +32746,17 @@ type UserCalloutCreatePayload {
   userCallout: UserCallout!
 }
 
+input UserCalloutDeleteInput {
+  clientMutationId: String
+  featureName: String!
+}
+
+type UserCalloutDeletePayload {
+  clientMutationId: String
+  errors: [String!]!
+  userCallout: UserCallout
+}
+
 type UserCalloutEdge {
   cursor: String!
   node: UserCallout
@@ -32372,8 +32783,6 @@ enum UserCalloutFeatureNameEnum {
   FEATURE_LIBRARY_SHIMMER_SEEN
   FILE_TREE_BROWSER_POPOVER
   FOCUSED_VULNERABILITY_REPORTING
-  GEO_ENABLE_HASHED_STORAGE
-  GEO_MIGRATE_HASHED_STORAGE
   GKE_CLUSTER_INTEGRATION
   GOLD_TRIAL_BILLINGS
   INLINE_BLAME_POPOVER
@@ -32399,7 +32808,10 @@ enum UserCalloutFeatureNameEnum {
   REGISTRATION_ENABLED_CALLOUT
   SECRETS_MANAGER_NAV_BADGE
   SECURITY_CONFIGURATION_DEVOPS_ALERT
+  SECURITY_CONFIGURATION_NAV_INDICATOR
   SECURITY_CONFIGURATION_UPGRADE_BANNER
+  SECURITY_INVENTORY_CAPABILITIES_NEW_LABEL
+  SECURITY_INVENTORY_NAV_INDICATOR
   SECURITY_POLICY_PROTECTED_BRANCH_MODIFICATION
   SECURITY_SCANNER_PROFILES_ANNOUNCEMENT
   SINGLE_ORIGIN_FALLBACK_CALLOUT
@@ -32411,6 +32823,7 @@ enum UserCalloutFeatureNameEnum {
   TAILORED_NAVIGATION_ONBOARDING
   THREAT_MONITORING_INFO
   TRANSITION_TO_JIHU_CALLOUT
+  TRIAGE_AND_REMEDIATION_TAB_NEW_LABEL
   TRIAL_STATUS_REMINDER_D14
   TRIAL_STATUS_REMINDER_D3
   ULTIMATE_TRIAL
@@ -32587,6 +33000,7 @@ enum UserGroupCalloutFeatureName {
   ALL_SEATS_USED_ALERT
   APPROACHING_SEAT_COUNT_THRESHOLD
   BILLING_RETRIAL_CARD
+  BLSA_MYTHOS_ACCESS_SPOTLIGHT
   CI_MINUTES_LIMIT_ALERT_DANGER_STAGE
   CI_MINUTES_LIMIT_ALERT_EXCEEDED_STAGE
   CI_MINUTES_LIMIT_ALERT_WARNING_STAGE
@@ -32597,14 +33011,18 @@ enum UserGroupCalloutFeatureName {
   EXPIRED_TRIAL_STATUS_WIDGET
   EXPLORE_PREMIUM_REQUEST_PAINTED_DOOR
   FREE_GROUP_LIMITED_ALERT
+  GITLAB_CREDITS_EXPIRED_ALERT
+  GITLAB_CREDITS_EXPIRING_ALERT
   NAMESPACE_OVER_STORAGE_USERS_COMBINED_ALERT
   NAMESPACE_STORAGE_LIMIT_ALERT_ALERT_THRESHOLD
   NAMESPACE_STORAGE_LIMIT_ALERT_ERROR_THRESHOLD
   NAMESPACE_STORAGE_LIMIT_ALERT_WARNING_THRESHOLD
   NAMESPACE_STORAGE_PRE_ENFORCEMENT_BANNER
   NAMESPACE_USER_CAP_REACHED_ALERT
+  ORBIT_TURNED_ON_ALERT
   ORGANIZATIONS_AVAILABLE_ALERT
   OVERAGE_SEAT_COUNT_THRESHOLD
+  POST_TRIAL_USAGE_CARD
   PREVIEW_USAGE_QUOTA_FREE_PLAN_ALERT
   PREVIEW_USER_OVER_LIMIT_FREE_PLAN_ALERT
   PROJECT_REPOSITORY_LIMIT_ALERT_WARNING_THRESHOLD
@@ -32811,6 +33229,7 @@ enum UserType {
   GHOST
   HUMAN
   IMPORT_USER
+  ORBIT_BOT
   PLACEHOLDER
   PROJECT_BOT
   SECURITY_BOT
@@ -33294,11 +33713,17 @@ type VulnerabilitiesRemoveAllFromProjectPayload {
   projects: [Project!]!
 }
 
+type VulnerabilitiesResolvedBySource {
+  count: Int!
+  source: VulnerabilityResolutionSource!
+}
+
 scalar VulnerabilitiesScannerID
 
 scalar VulnerabilitiesStateTransitionID
 
 type Vulnerability implements NoteableInterface & Todoable {
+  aiExplanationAvailable: Boolean
   aiResolutionAvailable: Boolean
   aiResolutionEnabled: Boolean
   aiWorkflows(after: String, before: String, first: Int, last: Int): VulnerabilityTriggeredWorkflowConnection
@@ -33416,6 +33841,18 @@ type VulnerabilityArchiveExportUploadRegistryConnection {
 type VulnerabilityArchiveExportUploadRegistryEdge {
   cursor: String!
   node: VulnerabilityArchiveExportUploadRegistry
+}
+
+enum VulnerabilityAuthenticationFilter {
+  NOT_REQUIRED
+  REQUIRED
+  UNKNOWN
+}
+
+enum VulnerabilityAuthorizationFilter {
+  ELEVATED
+  STANDARD
+  UNKNOWN
 }
 
 input VulnerabilityAutoRemediationInput {
@@ -33668,6 +34105,11 @@ enum VulnerabilityDismissalReason {
   USED_IN_TESTS
 }
 
+enum VulnerabilityDueDateWildcardId {
+  ANY
+  NONE
+}
+
 enum VulnerabilityDuoWorkflow {
   RESOLVE_SAST_VULNERABILITY_V1
   SAST_FP_DETECTION_V1
@@ -33870,7 +34312,16 @@ type VulnerabilityFlagEdge {
 type VulnerabilityFunnelStep {
   canEnable: Boolean
   count: Int
+  key: VulnerabilityFunnelStepKey!
   status: VulnerabilityFunnelStepStatus!
+}
+
+enum VulnerabilityFunnelStepKey {
+  DETECTED
+  MERGE_REQUESTS_CREATED
+  MERGE_REQUESTS_MERGED
+  RESOLVED
+  TRUE_POSITIVES
 }
 
 enum VulnerabilityFunnelStepStatus {
@@ -34117,6 +34568,7 @@ type VulnerabilityPermissions {
   adminVulnerabilityExternalIssueLink: Boolean!
   adminVulnerabilityIssueLink: Boolean!
   confirmVulnerability: Boolean!
+  createSecurityAiFlowFeedback: Boolean!
   createVulnerabilityExport: Boolean!
   createVulnerabilityFeedback: Boolean!
   destroyVulnerabilityFeedback: Boolean!
@@ -34206,10 +34658,21 @@ type VulnerabilityRequestResponseHeader {
 }
 
 type VulnerabilityResolutionFunnel {
+  byReportType: [VulnerabilityResolutionFunnelByReportType!]!
   createdMergeRequests: VulnerabilityFunnelStep!
   detectedVulnerabilities: VulnerabilityFunnelStep!
   mergedMergeRequests: VulnerabilityFunnelStep!
   truePositives: VulnerabilityFunnelStep!
+}
+
+type VulnerabilityResolutionFunnelByReportType {
+  reportType: VulnerabilityReportType!
+  steps: [VulnerabilityFunnelStep!]!
+}
+
+enum VulnerabilityResolutionSource {
+  AI
+  HUMAN
 }
 
 input VulnerabilityResolveInput {
@@ -34246,6 +34709,7 @@ type VulnerabilityRevertToDetectedPayload {
 type VulnerabilityScanner {
   externalId: String
   id: ID
+  isGitlabSbomScanner: Boolean
   name: String
   reportType: VulnerabilityReportType
   reportTypeHumanized: String
@@ -34273,6 +34737,22 @@ input VulnerabilityScannerInput {
 
 input VulnerabilityScannerVendorInput {
   name: String!
+}
+
+enum VulnerabilitySecurityBoundaryFilter {
+  INTERNAL_ONLY
+  ISOLATED
+  NETWORK_ACCESS
+  PARTNER_BOUNDARY
+  TRUSTED_SERVICE
+  UNKNOWN
+  USER_INPUT
+}
+
+enum VulnerabilitySensitiveDataFilter {
+  NOT_SENSITIVE
+  SENSITIVE
+  UNKNOWN
 }
 
 type VulnerabilitySeveritiesCount {
@@ -34557,6 +35037,7 @@ type WikiPage implements NoteableInterface & Todoable {
   subscribed: Boolean!
   title: String!
   userPermissions: WikiPagePermissions!
+  versions(after: String, first: Int): WikiPageVersionConnection
   webUrl: String
 }
 
@@ -34592,7 +35073,27 @@ type WikiPageSubscribePayload {
   wikiPage: WikiPage
 }
 
+type WikiPageVersion {
+  authorName: String
+  authoredDate: Time
+  message: String
+  sha: String!
+}
+
+type WikiPageVersionConnection {
+  count(limit: Int): Int!
+  edges: [WikiPageVersionEdge]
+  nodes: [WikiPageVersion]
+  pageInfo: PageInfo!
+}
+
+type WikiPageVersionEdge {
+  cursor: String!
+  node: WikiPageVersion
+}
+
 type WorkItem implements Todoable {
+  agentPresence: DuoWorkflowAgentPresence
   archived: Boolean!
   author: UserCore
   availableQuickActions: [QuickActionCommand!]
@@ -34613,6 +35114,7 @@ type WorkItem implements Todoable {
   iid: String!
   imported: Boolean!
   lockVersion: Int!
+  movedToId: WorkItemID
   movedToWorkItemUrl: String
   name: String
   namespace: Namespace
@@ -34673,6 +35175,7 @@ type WorkItemAgentPlanQuestion {
   answered: Boolean!
   discussionId: DiscussionID!
   noteId: NoteID!
+  userPermissions: NotePermissions!
 }
 
 type WorkItemAgentPlanQuestionConnection {
@@ -34684,6 +35187,14 @@ type WorkItemAgentPlanQuestionConnection {
 type WorkItemAgentPlanQuestionEdge {
   cursor: String!
   node: WorkItemAgentPlanQuestion
+}
+
+enum WorkItemAgentPlanReadinessScoreStatus {
+  CANCELED
+  EVALUATED
+  EVALUATING
+  FAILED
+  NOT_EVALUATED
 }
 
 enum WorkItemAvailabilityAction {
@@ -34780,6 +35291,7 @@ type WorkItemConnection {
   edges: [WorkItemEdge]
   nodes: [WorkItem]
   pageInfo: PageInfo!
+  timeLimitedCount(limit: Int): Int
 }
 
 input WorkItemConvertInput {
@@ -35026,7 +35538,7 @@ type WorkItemDescriptionTemplate {
   category: String
   content: String
   name: String
-  projectId: Int
+  projectId: BigInt
 }
 
 type WorkItemDescriptionTemplateConnection {
@@ -35038,7 +35550,7 @@ type WorkItemDescriptionTemplateConnection {
 input WorkItemDescriptionTemplateContentInput {
   fromNamespace: String
   name: String!
-  projectId: Int!
+  projectId: BigInt!
 }
 
 type WorkItemDescriptionTemplateEdge {
@@ -35159,17 +35671,6 @@ type WorkItemFeatures {
   verificationStatus: WorkItemWidgetVerificationStatus
   vulnerabilities: WorkItemWidgetVulnerabilities
   weight: WorkItemWidgetWeight
-}
-
-input WorkItemGenerateReadinessScoreInput {
-  clientMutationId: String
-  id: WorkItemID!
-}
-
-type WorkItemGenerateReadinessScorePayload {
-  clientMutationId: String
-  errors: [String!]!
-  workflow: DuoWorkflow
 }
 
 input WorkItemGenerateWorkplanInput {
@@ -35329,6 +35830,17 @@ type WorkItemRemoveLinkedItemsPayload {
 input WorkItemResolveDiscussionsInput {
   discussionId: String
   noteableId: NoteableID!
+}
+
+input WorkItemResolveWorkplanQuestionsInput {
+  clientMutationId: String
+  id: WorkItemID!
+}
+
+type WorkItemResolveWorkplanQuestionsPayload {
+  clientMutationId: String
+  errors: [String!]!
+  workItem: WorkItem
 }
 
 input WorkItemResumeWorkplanInput {
@@ -35849,12 +36361,16 @@ type WorkItemWidgetAgentPlan implements WorkItemWidget {
   content: String
   contentHtml: String
   generationStatus: WorkItemAgentPlanGenerationStatus
+  hasContent: Boolean!
+  latestWorkflowId: AiDuoWorkflowsWorkflowID
   openQuestionsCount: Int
   questions(after: String, before: String, first: Int, last: Int): WorkItemAgentPlanQuestionConnection
   readinessScore: Int
   readinessScoreFeedback: String
   readinessScoreFeedbackHtml: String
+  readinessScoreStatus: WorkItemAgentPlanReadinessScoreStatus
   type: WorkItemWidgetType
+  updatedAt: Time
 }
 
 input WorkItemWidgetAgentPlanInput {
@@ -35864,6 +36380,10 @@ input WorkItemWidgetAgentPlanInput {
 }
 
 type WorkItemWidgetAiSession implements WorkItemWidget {
+  agentPresence: DuoWorkflowAgentPresence
+  agentPresenceHumanStatus: String
+  agentPresenceStatus: DuoWorkflowStatus
+  canReadDuoWorkflows: Boolean
   duoWorkflows(after: String, before: String, first: Int, last: Int): DuoWorkflowConnection
   type: WorkItemWidgetType
 }
@@ -35918,7 +36438,7 @@ input WorkItemWidgetCrmContactsUpdateInput {
 }
 
 type WorkItemWidgetCurrentUserTodos implements CurrentUserTodos & WorkItemWidget {
-  currentUserTodos(after: String, before: String, first: Int, last: Int, state: TodoStateEnum): TodoConnection!
+  currentUserTodos(after: String, before: String, first: Int, last: Int, noteId: NoteID, state: TodoStateEnum): TodoConnection!
   type: WorkItemWidgetType
 }
 
@@ -36625,6 +37145,7 @@ type agentPlatformUserMetrics {
   agentPlatformSessionCreatedEventCount: Int
   agentPlatformSessionDroppedEventCount: Int
   agentPlatformSessionFinishedEventCount: Int
+  agentPlatformSessionInputRequiredEventCount: Int
   agentPlatformSessionResumedEventCount: Int
   agentPlatformSessionStartedEventCount: Int
   agentPlatformSessionStoppedEventCount: Int
