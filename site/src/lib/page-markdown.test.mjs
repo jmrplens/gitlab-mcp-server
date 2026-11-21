@@ -348,6 +348,45 @@ describe("links", () => {
 		);
 	});
 
+	test("a reference definition's destination becomes absolute like an inline one", () => {
+		const body = [
+			"[A][a], ![B][b] and [C][c].",
+			"",
+			'[a]: /gitlab-mcp-server/about/ "About"',
+			"[b]: <./img.png>",
+			"  [c]: #heading",
+			"",
+			"> [d]: /gitlab-mcp-server/x/",
+			"",
+			"[^1]: A footnote, not a link.",
+		].join("\n");
+		const out = reduce(body);
+		assert.match(
+			out,
+			/^\[a\]: https:\/\/docs\.jmrp\.io\/gitlab-mcp-server\/about\/ "About"$/m,
+		);
+		assert.match(
+			out,
+			/^\[b\]: <https:\/\/raw\.githubusercontent\.com\/jmrplens\/gitlab-mcp-server\/main\/site\/src\/content\/docs\/img\.png>$/m,
+		);
+		assert.match(
+			out,
+			/^ {2}\[c\]: https:\/\/docs\.jmrp\.io\/gitlab-mcp-server\/guide\/#heading$/m,
+		);
+		assert.match(
+			out,
+			/^> \[d\]: https:\/\/docs\.jmrp\.io\/gitlab-mcp-server\/x\/$/m,
+		);
+		assert.match(out, /^\[\^1\]: A footnote, not a link\.$/m);
+		// remarkLocaleLinks rewrites links, not definitions, so the page keeps
+		// an English destination there and so does its twin.
+		assert.match(
+			reduce("[A][a]\n\n[a]: /gitlab-mcp-server/about/", { route: "es/guide" }),
+			/^\[a\]: https:\/\/docs\.jmrp\.io\/gitlab-mcp-server\/about\/$/m,
+		);
+		assert.throws(() => reduce("[A][a]\n\n[a]: ../about/"), /points nowhere/);
+	});
+
 	test("a target that resolves nowhere fails", () => {
 		assert.throws(() => reduce("[A](/elsewhere/)"), /points nowhere/);
 		assert.throws(() => reduce("[A](../about/)"), /points nowhere/);
