@@ -739,14 +739,17 @@ fixture_mr=""
 while :; do
   api_request GET "/projects/$KG_ID/merge_requests?source_branch=feature/restock-helper&state=all&per_page=100&page=$mr_page"
   [ "$API_STATUS" = "200" ] || { mr_pages=""; break; }
-  mr_count=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
+  # The page is kept re-encoded on one line, after its count: the pages are
+  # read back a line each, and JSON may spread one list over many lines.
+  mr_read=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
 try:
     listed = json.load(sys.stdin)
-    print(len(listed) if isinstance(listed, list) else "ERR")
+    print(len(listed), json.dumps(listed)) if isinstance(listed, list) else print("ERR")
 except Exception:
     print("ERR")')
-  [ "$mr_count" != "ERR" ] || { mr_pages=""; break; }
-  mr_pages+="$API_BODY"$'\n'
+  [ "$mr_read" != "ERR" ] || { mr_pages=""; break; }
+  mr_count=${mr_read%% *}
+  mr_pages+="${mr_read#* }"$'\n'
   [ "$mr_count" -lt 100 ] && break
   mr_page=$((mr_page + 1))
 done
