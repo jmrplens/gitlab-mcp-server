@@ -146,8 +146,9 @@ private group: a non-public visibility is refused outright under
 names it by its path, in any case, or by a numeric group id, since the
 group GitLab resolves is checked again before anything is written.
 `make orbit-setup-fixtures`
-and `make test-e2e-gitlab-com` hand the setting on from their command
-line, else the environment, else `.env`.
+and `make test-e2e-gitlab-com` hand this setting and the others on from
+their command line, else the environment, else `.env` (see the
+orchestrator below).
 
 ### What the script creates
 
@@ -368,6 +369,8 @@ ORBIT_FIXTURES_NAMESPACE=acme-research \
 ## Orchestrator: `make test-e2e-gitlab-com`
 
 The `make test-e2e-gitlab-com` target chains its sub-targets in order. The first three must succeed (in order) before the live tests run; `orbit-wait-indexer` proceeds with a warning if the indexer does not catch up in time, so the live tests are the source of truth for end-to-end readiness. A `sequenceDiagram` is the right tool here because the five Orbit sub-targets share a single `.env`-driven state, the make process is the actor that runs them, and the diagram clarifies that `orbit-ensure-token` is a prerequisite of every other Orbit step (it is listed as a dependency of the four that follow it, even though it only appears once in the visible top-level chain).
+
+The four sub-targets that read a fixture setting (`orbit-setup-fixtures`, `orbit-wait-indexer`, `orbit-run-live-tests` and `gen-orbit-record`) take each of `ORBIT_FIXTURES_NAMESPACE`, `ORBIT_FIXTURES_GITLAB_URL`, `ORBIT_FIXTURES_MIRROR`, `ORBIT_FIXTURES_INDEXER_TIMEOUT` and `ORBIT_FIXTURES_VISIBILITY` from the make command line, then the environment, then `.env`, and only then from the Makefile's default. Each recipe sources `.env` after make has written its text, so the `orbit_setting` function of the `Makefile` writes the shell expression that makes that choice; before issue 1535 a setting `.env` alone gave was replaced by the default, and the setup, the indexer wait, the live suite and the recording all went to `jmrp-oss/orbit-fixtures` without a word. `TestOrbitTargets_FixtureSettings_CommandLineThenEnvironmentThenDotEnv` in `cmd/gen_orbit_record` renders each recipe with `make -n` and runs it against stand-ins to hold that order.
 
 ```mermaid
 sequenceDiagram

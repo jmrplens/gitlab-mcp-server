@@ -13,7 +13,11 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -855,4 +859,300 @@ func TestFirstNonEmpty_TakesTheFirstThatIsSet(t *testing.T) {
 	if got := firstNonEmpty("", ""); got != "" {
 		t.Errorf("firstNonEmpty of nothing = %q", got)
 	}
+}
+
+// orbitSetting is one fixture setting of the Orbit make targets and the value
+// each layer of a case gives it: the Makefile's default, .env, the
+// environment and the make command line. An empty default is a setting the
+// Makefile leaves to the program it starts.
+type orbitSetting struct {
+	name                                        string
+	byDefault, dotEnv, environment, commandLine string
+}
+
+// orbitSettings are the five settings the Orbit targets read, each with a
+// value per layer that no other layer shares, so what a stand-in is handed
+// names the layer it came from. ORBIT_FIXTURES_MIRROR alternates, since it
+// is a switch: on in .env, off in the environment, on on the command line.
+// ORBIT_FIXTURES_INDEXER_TIMEOUT is seen as the number of polls, one per 15
+// seconds.
+var orbitSettings = []orbitSetting{
+	{name: "ORBIT_FIXTURES_NAMESPACE", byDefault: defaultNamespace, dotEnv: "dotenv-group", environment: "environment-group", commandLine: "command-line-group"},
+	{name: "ORBIT_FIXTURES_GITLAB_URL", byDefault: "https://gitlab.com", dotEnv: "https://dotenv.example.test", environment: "https://environment.example.test", commandLine: "https://command-line.example.test"},
+	{name: "ORBIT_FIXTURES_MIRROR", byDefault: "false", dotEnv: "true", environment: "false", commandLine: "true"},
+	{name: "ORBIT_FIXTURES_INDEXER_TIMEOUT", byDefault: "600", dotEnv: "30", environment: "45", commandLine: "60"},
+	{name: "ORBIT_FIXTURES_VISIBILITY", dotEnv: "private", environment: "internal", commandLine: "public"},
+}
+
+// TestOrbitTargets_FixtureSettings_CommandLineThenEnvironmentThenDotEnv
+// renders each of the four Orbit make targets that read the fixture settings
+// and runs it against stand-ins for what it starts, holding every setting it
+// hands on to the order the Makefile documents: the make command line, then
+// the environment, then .env, and only then the default.
+//
+// Each recipe sourced .env and then used make's own value, which is the
+// default whenever the setting is not on the command line or in the
+// environment, because the Makefile does not include .env: with .env naming
+// a namespace of a contributor's own, the setup, the indexer wait, the live
+// suite and the recorder all went to the default namespace without a word
+// (issue 1535). The recipes are rendered with make -n rather than read as
+// text, so what is judged is the command make would run; each of its lines
+// runs in a shell of its own, as make runs it, so a line sees .env only if it
+// sources it itself; and each target runs in a directory of its own, so the
+// .env it sources is the one the case writes and never the repository's.
+// Every stand-in records what it was handed and does
+// nothing else: no GitLab is reached.
+func TestOrbitTargets_FixtureSettings_CommandLineThenEnvironmentThenDotEnv(t *testing.T) {
+	recipe := newOrbitRecipe(t)
+
+	cases := []struct {
+		name string
+		set  orbitLayers
+	}{
+		{name: "set nowhere"},
+		{name: "set in .env alone", set: orbitLayers{dotEnv: true}},
+		{name: "set in the environment and in .env", set: orbitLayers{dotEnv: true, environment: true}},
+		{name: "set on the command line, in the environment and in .env", set: orbitLayers{dotEnv: true, environment: true, commandLine: true}},
+	}
+	// targets are the four targets and the settings each hands on, as the
+	// stand-ins report them.
+	targets := []struct {
+		target   string
+		settings []string
+	}{
+		{target: "orbit-setup-fixtures", settings: []string{"ORBIT_FIXTURES_NAMESPACE", "ORBIT_FIXTURES_GITLAB_URL", "ORBIT_FIXTURES_MIRROR", "ORBIT_FIXTURES_VISIBILITY"}},
+		{target: "orbit-wait-indexer", settings: []string{"ORBIT_FIXTURES_NAMESPACE", "ORBIT_FIXTURES_GITLAB_URL", "ORBIT_FIXTURES_INDEXER_TIMEOUT"}},
+		{target: "orbit-run-live-tests", settings: []string{"ORBIT_FIXTURES_NAMESPACE"}},
+		{target: "gen-orbit-record", settings: []string{"ORBIT_FIXTURES_NAMESPACE"}},
+	}
+	for _, testCase := range cases {
+		for _, target := range targets {
+			t.Run(testCase.name+"/"+target.target, func(t *testing.T) {
+				environ, commandLine, dotEnv, want := testCase.set.apply()
+				seen := recipe.run(t, recipe.render(t, target.target, environ, commandLine), environ, dotEnv)
+				for _, name := range target.settings {
+					if got, ok := seen[name]; !ok || got != want[name] {
+						t.Errorf("%s was handed %s=%q (reported: %t), want %q; the stand-ins reported %v", target.target, name, got, ok, want[name], seen)
+					}
+				}
+			})
+		}
+	}
+}
+
+// orbitLayers says which layers of a case set every Orbit setting: .env, the
+// environment and the make command line.
+type orbitLayers struct{ dotEnv, environment, commandLine bool }
+
+// apply returns what the layers set: the environment make runs in, the
+// variables on its command line, the .env the recipe sources (always holding
+// the token orbit-ensure-token asks for), and the value each setting should
+// be handed, the highest layer's or the default.
+func (set orbitLayers) apply() (environ, commandLine []string, dotEnv string, want map[string]string) {
+	dotEnv = "GITLAB_COM_TOKEN=glpat-stand-in\n"
+	want = map[string]string{}
+	environ = orbitRecipeEnviron()
+	for _, setting := range orbitSettings {
+		want[setting.name] = setting.byDefault
+		if set.dotEnv {
+			dotEnv += setting.name + "=" + setting.dotEnv + "\n"
+			want[setting.name] = setting.dotEnv
+		}
+		if set.environment {
+			environ = append(environ, setting.name+"="+setting.environment)
+			want[setting.name] = setting.environment
+		}
+		if set.commandLine {
+			commandLine = append(commandLine, setting.name+"="+setting.commandLine)
+			want[setting.name] = setting.commandLine
+		}
+	}
+	return environ, commandLine, dotEnv, want
+}
+
+// orbitRecipe is what rendering and running an Orbit recipe needs: make, the
+// shell make runs a recipe line with, the repository the Makefile sits in,
+// and a directory holding the stand-ins found on the PATH.
+type orbitRecipe struct {
+	makeBin, shell, root, stubs string
+}
+
+// orbitStandIns are the programs an Orbit recipe starts from the PATH,
+// written as shell scripts that append what they were handed to
+// $ORBIT_STUB_LOG, one NAME=value line per setting. curl answers the indexer
+// wait with a namespace already indexed, so the wait ends on its first poll,
+// having printed the number of polls its timeout allows. The setup script is
+// not among them: a recipe starts it by a path relative to the directory it
+// runs in, so it is written there.
+var orbitStandIns = map[string]string{
+	"go": `#!/bin/sh
+printf 'ORBIT_FIXTURES_NAMESPACE=%s\n' "$ORBIT_FIXTURES_NAMESPACE" >> "$ORBIT_STUB_LOG"
+`,
+	"curl": `#!/bin/sh
+url= body=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -d) body=$2; shift 2 ;;
+    -H) shift 2 ;;
+    http*) url=$1; shift ;;
+    *) shift ;;
+  esac
+done
+printf 'ORBIT_FIXTURES_GITLAB_URL=%s\n' "${url%/api/graphql}" >> "$ORBIT_STUB_LOG"
+namespace=${body##*\"fullPath\":\"}
+printf 'ORBIT_FIXTURES_NAMESPACE=%s\n' "${namespace%%\"*}" >> "$ORBIT_STUB_LOG"
+printf '%s' '{"data":{"group":{"orbit":{"indexing":{"state":"READY","projects":{"indexed":2,"notIndexed":0}}}}}}'
+`,
+}
+
+// orbitSetupStandIn stands in for scripts/setup-orbit-fixtures.sh, which
+// reads the settings from its environment and the mirror as a flag.
+const orbitSetupStandIn = `#!/bin/sh
+mirror=false
+[ "$1" = "--mirror-cli" ] && mirror=true
+printf 'ORBIT_FIXTURES_NAMESPACE=%s\nORBIT_FIXTURES_GITLAB_URL=%s\nORBIT_FIXTURES_MIRROR=%s\nORBIT_FIXTURES_VISIBILITY=%s\n' \
+  "$ORBIT_FIXTURES_NAMESPACE" "$ORBIT_FIXTURES_GITLAB_URL" "$mirror" "$ORBIT_FIXTURES_VISIBILITY" >> "$ORBIT_STUB_LOG"
+`
+
+// newOrbitRecipe finds the tools the recipes need, skipping the test where
+// one is missing, and writes the stand-ins.
+func newOrbitRecipe(t *testing.T) orbitRecipe {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the recipes are shell and the stand-ins shell scripts, which Windows does not start as programs")
+	}
+	var recipe orbitRecipe
+	var err error
+	if recipe.makeBin, err = exec.LookPath("make"); err != nil {
+		t.Skipf("make is not installed here, so the recipes cannot be rendered: %v", err)
+	}
+	if recipe.shell, err = exec.LookPath("sh"); err != nil {
+		t.Skipf("sh is not installed here, so the rendered recipes cannot be run: %v", err)
+	}
+	// The indexer wait reads the GraphQL answer with python3.
+	if _, err = exec.LookPath("python3"); err != nil {
+		t.Skipf("python3 is not installed here, so the indexer wait cannot be run: %v", err)
+	}
+	if recipe.root, err = filepath.Abs(filepath.Join("..", "..")); err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	recipe.stubs = t.TempDir()
+	for name, body := range orbitStandIns {
+		//#nosec G306 -- a stand-in is a script the rendered recipe must execute
+		if err = os.WriteFile(filepath.Join(recipe.stubs, name), []byte(body), 0o700); err != nil {
+			t.Fatalf("writing the stand-in %s: %v", name, err)
+		}
+	}
+	return recipe
+}
+
+// render asks make for the recipe of target it would run under environ, with
+// commandLine as variables on its command line.
+func (r orbitRecipe) render(t *testing.T, target string, environ, commandLine []string) string {
+	t.Helper()
+	args := append([]string{"-n", "-s", "--no-print-directory", target}, commandLine...)
+	//#nosec G204 -- make from the PATH, with this file's own arguments and a case's values
+	render := exec.CommandContext(t.Context(), r.makeBin, args...)
+	render.Dir = r.root
+	render.Env = environ
+	recipe, err := render.Output()
+	if err != nil {
+		t.Fatalf("make -n %s: %v", target, err)
+	}
+	return string(recipe)
+}
+
+// run runs a rendered recipe the way make would, in a directory of its own
+// holding dotEnv as .env and the setup stand-in, with the stand-ins first on
+// the PATH, and returns the last value each setting was reported with.
+func (r orbitRecipe) run(t *testing.T, recipe string, environ []string, dotEnv string) map[string]string {
+	t.Helper()
+	work := t.TempDir()
+	if err := os.WriteFile(filepath.Join(work, ".env"), []byte(dotEnv), 0o600); err != nil {
+		t.Fatalf("writing .env: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(work, "scripts"), 0o700); err != nil {
+		t.Fatalf("creating the scripts directory: %v", err)
+	}
+	//#nosec G306 -- the stand-in is a script the rendered recipe must execute
+	if err := os.WriteFile(filepath.Join(work, "scripts", "setup-orbit-fixtures.sh"), []byte(orbitSetupStandIn), 0o700); err != nil {
+		t.Fatalf("writing the setup stand-in: %v", err)
+	}
+	log := filepath.Join(work, "stand-ins.log")
+	// make starts a shell of its own for every recipe line, so a variable one
+	// line sets, those it sources from .env among them, never reaches the
+	// next: each line runs in a shell of its own here as well, and a target
+	// that stopped sourcing .env would be handed none of its values.
+	var out []byte
+	for _, line := range recipeLines(recipe) {
+		//#nosec G204 -- the line is what make rendered from this repository's own Makefile
+		run := exec.CommandContext(t.Context(), r.shell, "-c", line)
+		run.Dir = work
+		// The last PATH wins, which puts the stand-ins first.
+		run.Env = append(slices.Clone(environ), "ORBIT_STUB_LOG="+log, "PATH="+r.stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+		lineOut, err := run.CombinedOutput()
+		out = append(out, lineOut...)
+		if err != nil {
+			t.Fatalf("running the rendered recipe line %q: %v\n%s", line, err, out)
+		}
+	}
+	reported, err := os.ReadFile(log) //#nosec G304 -- a file of the test's own temporary directory
+	if err != nil {
+		t.Fatalf("no stand-in was started: %v\n%s", err, out)
+	}
+	seen := map[string]string{}
+	for line := range strings.Lines(string(reported)) {
+		name, value, _ := strings.Cut(strings.TrimSuffix(line, "\n"), "=")
+		seen[name] = value
+	}
+	// The indexer wait reports its timeout as the number of polls it allows,
+	// one every 15 seconds.
+	if _, polls, found := strings.Cut(string(out), "[1/"); found {
+		if count, _, ok := strings.Cut(polls, "]"); ok {
+			if n, convErr := strconv.Atoi(count); convErr == nil {
+				seen["ORBIT_FIXTURES_INDEXER_TIMEOUT"] = strconv.Itoa(n * 15)
+			}
+		}
+	}
+	return seen
+}
+
+// recipeLines splits what make -n printed into the recipe lines make would
+// hand a shell one at a time: a line ending in a backslash goes on into the
+// next, as it does in the Makefile.
+func recipeLines(rendered string) []string {
+	var lines []string
+	var current strings.Builder
+	for line := range strings.Lines(rendered) {
+		line = strings.TrimSuffix(line, "\n")
+		current.WriteString(line)
+		if strings.HasSuffix(line, `\`) {
+			current.WriteString("\n")
+			continue
+		}
+		if strings.TrimSpace(current.String()) != "" {
+			lines = append(lines, current.String())
+		}
+		current.Reset()
+	}
+	if strings.TrimSpace(current.String()) != "" {
+		lines = append(lines, current.String())
+	}
+	return lines
+}
+
+// orbitRecipeEnviron is this process's environment with nothing in it that
+// would decide a setting or the make invocation on the test's behalf: none of
+// the settings, no token, and none of the variables a parent make hands a
+// child, since a variable given on a parent's command line reaches a child
+// make through MAKEFLAGS as a command-line variable of its own.
+func orbitRecipeEnviron() []string {
+	dropped := []string{"GITLAB_COM_TOKEN", "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS", "MAKELEVEL", "MAKEOVERRIDES", "ORBIT_RECORD_FLAGS"}
+	for _, setting := range orbitSettings {
+		dropped = append(dropped, setting.name)
+	}
+	return slices.DeleteFunc(os.Environ(), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.Contains(dropped, name)
+	})
 }
