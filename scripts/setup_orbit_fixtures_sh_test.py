@@ -944,6 +944,39 @@ class SetupOrbitFixturesTest(unittest.TestCase):
         self.assertEqual(self.requests("PUT"), [])
         self.assertIn("MR !2 is merged", result.stdout)
 
+    # GitLab answers a list a page at a time, twenty by default, so merge
+    # requests from forks can push the fixture's own off the first page.
+    # Choosing from that page alone would open and merge another one.
+
+    def test_the_fixture_merge_request_on_a_later_page_is_found(self):
+        self.use_stand_in_git()
+        forks = [dict(FROM_FIXTURE, iid=100 + n, state="opened", source_project_id=99) for n in range(100)]
+        routes = self.merge_routes(forks, ("GET " + MR + "@2", [dict(FROM_FIXTURE, iid=2, state="merged")]))
+        result = self.run_script(routes)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+        self.assertIn("MR !2 is merged", result.stdout)
+        with open(self.log + ".query") as f:
+            listed = [line.split(" ", 1)[1].strip() for line in f if line.startswith(MR + " ")]
+        self.assertEqual(
+            listed,
+            [
+                "source_branch=feature/restock-helper&state=all&per_page=100&page=1",
+                "source_branch=feature/restock-helper&state=all&per_page=100&page=2",
+            ],
+        )
+
+    def test_an_unreadable_later_page_of_merge_requests_stops_the_run(self):
+        self.use_stand_in_git()
+        forks = [dict(FROM_FIXTURE, iid=100 + n, state="opened", source_project_id=99) for n in range(100)]
+        routes = self.merge_routes(forks, ("GET " + MR + "@2", (500, {"message": "boom"})))
+        result = self.run_script(routes)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("cannot list the merge requests", result.stderr)
+        self.assertEqual(self.requests("PUT"), [])
+        self.assertNotIn(MR, [r["path"] for r in self.requests("POST")])
+
 
 if __name__ == "__main__":
     unittest.main()
