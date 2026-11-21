@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +53,19 @@ func listedMR(iid int64, state string) map[string]any {
 	return map[string]any{"iid": iid, "state": state, "source_project_id": kgProjectID, "target_project_id": kgProjectID, "target_branch": "main"}
 }
 
+// fullPageFromForks is a full page of a hundred merge requests from a fork,
+// opened from a branch of the fixture branch's name, the kind that can push
+// the fixture's own off the first page of the list.
+func fullPageFromForks() []map[string]any {
+	page := make([]map[string]any, 0, 100)
+	for n := range 100 {
+		request := listedMR(int64(100+n), "opened")
+		request["source_project_id"] = 99
+		page = append(page, request)
+	}
+	return page
+}
+
 // setupCase runs setup against routes, with git standing in as fakeGit and
 // failing the subcommand failGit names, and returns the exit code and what
 // the run wrote to stderr.
@@ -77,7 +92,8 @@ func setupCase(t *testing.T, routes map[string]goldenRoute, failGit string, chan
 
 // TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun checks each answer
 // that leaves the fixture merge request unmerged stops the run with GitLab's
-// answer: an unreadable list, merge request or branch, a list answered null,
+// answer: an unreadable list, later page of it, merge request or branch, a
+// list that never ends, a list answered null,
 // a refused reopen or one answered with the merge request still closed or with
 // no JSON, a merge answered with the merge request still open, a new merge
 // request answered without an iid or with no JSON, a git that cannot push the
@@ -116,6 +132,8 @@ func TestFixtureMergeRequest_WhatGitLabRefuses_StopsTheRun(t *testing.T) {
 		{name: "a reopen answered with no JSON", routes: map[string]any{"GET " + kgMR: closed, branch: map[string]any{"name": "x"}, "PUT " + kgMR + "/1": notJSON}, want: "could not reopen MR !1 (HTTP 200): <html>"},
 		{name: "a new merge request answered with no JSON", routes: map[string]any{"GET " + kgMR: []any{}, "POST " + kgMR: notJSON}, want: "could not open the fixture MR (HTTP 200): <html>"},
 		{name: "a branch left behind whose merge request is refused", routes: map[string]any{"GET " + kgMR: []any{}, branch: map[string]any{"name": "x"}, "POST " + kgMR: "409"}, failGit: "clone", want: "could not open the fixture MR (HTTP 409)"},
+		{name: "an unreadable later page of the list", routes: map[string]any{"GET " + kgMR: fullPageFromForks(), "GET " + kgMR + "@2": "500"}, want: "cannot list the merge requests from feature/restock-helper (HTTP 500)"},
+		{name: "a list that never ends", routes: map[string]any{"GET " + kgMR: fullPageFromForks()}, want: "the merge requests from feature/restock-helper run past 100 pages"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -227,6 +245,44 @@ func TestFixtureMergeRequest_OthersFromTheBranch_CountAsNone(t *testing.T) {
 	}
 	if len(git.log) > 0 {
 		t.Errorf("git was asked for %q, want nothing: the fixture branch is there", git.log)
+	}
+}
+
+// TestFixtureMergeRequest_OnALaterPage_IsFound checks the list of merge
+// requests from the fixture branch is read a hundred at a time over every
+// page before one is chosen. GitLab answers twenty unless asked for more, and
+// merge requests from forks can push the fixture's own off the first page, so
+// a choice made from that page alone would open and merge another one.
+func TestFixtureMergeRequest_OnALaterPage_IsFound(t *testing.T) {
+	routes := inLineRoutes(t)
+	routes["GET "+kgMR] = jsonRoute(t, 200, fullPageFromForks())
+	routes["GET "+kgMR+"@2"] = jsonRoute(t, 200, []map[string]any{listedMR(2, "merged")})
+	server, fake := serveRoutes(t, routes)
+	git := &fakeGit{base: server.URL, fixture: kgFixture}
+
+	code, stdout, stderr := setupAgainst(t, goldenSetup{Flag: "--skip-mirror"}, server, git.run)
+
+	if code != 0 || !strings.Contains(stdout, "MR !2 is merged") {
+		t.Fatalf("exit code %d, want 0 and MR !2 merged\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	var listed []string
+	for _, request := range fake.requests() {
+		switch {
+		case request.Method == http.MethodGet && request.Path == kgMR:
+			listed = append(listed, request.Query)
+		case request.Method != http.MethodGet && strings.HasPrefix(request.Path, kgMR):
+			t.Errorf("%s sent, want nothing opened, reopened or merged", describe(request))
+		}
+	}
+	want := []string{
+		"source_branch=feature/restock-helper&state=all&per_page=100&page=1",
+		"source_branch=feature/restock-helper&state=all&per_page=100&page=2",
+	}
+	if !slices.Equal(listed, want) {
+		t.Errorf("the list was read as %q, want %q", listed, want)
+	}
+	if len(git.log) > 0 {
+		t.Errorf("git was asked for %q, want nothing", git.log)
 	}
 }
 
