@@ -21,8 +21,9 @@ import (
 // TestRunMain_Subcommands_DispatchOrRefuse checks what the command line
 // decides before any request: no subcommand or an unknown one is a usage
 // error, help, -h, -help and --help print the usage, a bad setup flag or a stray argument is a
-// usage error, setup -h prints its flags, and a timeout that is not a whole
-// number of seconds refuses the wait.
+// usage error, setup -h prints its flags, a timeout that is not a whole
+// number of seconds refuses the wait, and so does any flag or argument after
+// wait-indexer but -h, which prints the usage instead of waiting.
 func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 	noEnv := func(string) string { return "" }
 	deadURL := netfixture.DeadEndpoint(t)
@@ -31,6 +32,9 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 			return deadURL
 		}
 		return ""
+	}
+	waitable := func(key string) string {
+		return map[string]string{"GITLAB_COM_TOKEN": standInToken, "ORBIT_FIXTURES_INDEXER_TIMEOUT": "0", "ORBIT_FIXTURES_GITLAB_URL": deadURL}[key]
 	}
 	cases := []struct {
 		name       string
@@ -81,6 +85,12 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 				return deadInstance(key)
 			},
 		},
+		// The wait takes no flag and no argument. With a token and a timeout
+		// that allows no read, a wait that went on anyway would end at once
+		// without the usage and with another exit code.
+		{name: "an unknown wait-indexer flag", args: []string{"wait-indexer", "-timeout", "5"}, env: waitable, want: 2, wantStderr: "flag provided but not defined: -timeout"},
+		{name: "a stray wait-indexer argument", args: []string{"wait-indexer", "acme"}, env: waitable, want: 2, wantStderr: `wait-indexer: unknown argument "acme"`},
+		{name: "wait-indexer help", args: []string{"wait-indexer", "--help"}, env: waitable, want: 0, wantStderr: "usage: orbit_fixtures setup"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
