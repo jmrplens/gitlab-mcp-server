@@ -116,18 +116,6 @@ auditConfig:
     # this exception once http-cache-semantics publishes a fixed release or
     # astro stops using it.
     - GHSA-ch52-4w7c-c8xp
-    # picomatch ReDoS through a repeated extglob in the pattern, such as +(*)
-    # (GHSA-fc5q-39xc-vjpf). The advisory lists every release up to 4.0.7, the
-    # newest, and names no fixed one, so there is no version to override to.
-    # Build and development tooling only: astro, @astrojs/internal-helpers,
-    # vite, tinyglobby, starlight-links-validator and unstorage (through
-    # anymatch, on the 2.x line) compile patterns written in this site's
-    # configuration or in their own code, none of them an extglob, and the
-    # published site is static files that run no picomatch. The same
-    # justification sets it aside in site/osv-scanner.toml, whose entry is
-    # reviewed by its ignoreUntil date. Remove this exception once picomatch
-    # publishes a fixed release and the lockfile takes it.
-    - GHSA-fc5q-39xc-vjpf
 
 peerDependencyRules:
   allowedVersions:
