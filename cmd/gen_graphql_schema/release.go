@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,6 +47,12 @@ const (
 	dumpArtifactPath = "raw/tmp/tests/graphql/gitlab_schema.graphql"
 	// dumpJob is the job that writes it.
 	dumpJob = "graphql-schema-dump"
+	// defaultJobBase is where one job's artifacts are read by the job's ID,
+	// which -job asks for when the tag's latest successful job of that name
+	// cannot be named by the ref: a tag pipeline that failed elsewhere leaves
+	// the tag with no successful pipeline, and the jobs/artifacts address of
+	// the ref answers 404 although its graphql-schema-dump job passed.
+	defaultJobBase = "https://gitlab.com/gitlab-org/gitlab/-/jobs"
 	// maxDumpBytes bounds the dump, downloaded or read from -from. The 19.5.0
 	// dump is 3.8 MiB, so this is room for growth and not a limit any release
 	// comes near; it exists so an answer or a file that is not a schema at all
@@ -60,6 +67,12 @@ const (
 // GitLab cuts for it is that version behind a v.
 func releaseDumpURL(base, version string) string {
 	return base + "/" + url.PathEscape("v"+version) + "/" + dumpArtifactPath + "?job=" + dumpJob
+}
+
+// jobDumpURL names the schema dump one graphql-schema-dump job kept, by the
+// job's ID.
+func jobDumpURL(base, job string) string {
+	return base + "/" + url.PathEscape(job) + "/artifacts/" + dumpArtifactPath
 }
 
 // supportedRelease reads the release the REST record was taken from, which is
@@ -161,6 +174,9 @@ func readDump(cfg genRun, version string, out io.Writer) (dump []byte, origin st
 	ctx, cancel := context.WithTimeout(context.Background(), graphqlintrospect.FetchTimeout)
 	defer cancel()
 	location := releaseDumpURL(cfg.dumpBase, version)
+	if cfg.job != "" {
+		location = jobDumpURL(cfg.jobBase, cfg.job)
+	}
 	fmt.Fprintf(out, prefix+" downloading the schema of GitLab %s from %s\n", version, location)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, location, http.NoBody)
 	if err != nil {
@@ -413,11 +429,36 @@ var (
 	// record while the file it was handed went unread, which reads as that
 	// file having been checked.
 	errCheckFrom = errors.New("-from names a dump to pin and -check judges only the committed pin, which never reads it: pin the dump without -check, then run the check")
+	// errJobFlags refuses -job without -release, or with -check, for the
+	// reasons the two -from refusals give.
+	errJobFlags = errors.New("-job names the graphql-schema-dump job whose dump to pin, which only a release generation (-release without -check) reads")
+	// errFromAndJob refuses naming the dump both ways.
+	errFromAndJob = errors.New("-from and -job both name the dump to pin: name one")
+	// errJobNotAnID refuses a -job that is not a GitLab job ID.
+	errJobNotAnID = errors.New("-job takes the numeric ID of a GitLab job")
 )
 
 // fromFlagProblem is the refusal a -from value earns on this command line, nil
 // when it is empty or names a dump a release generation will read.
 func fromFlagProblem(from string, release, check bool) error {
+	return sourceFlagProblem(from, "", release, check)
+}
+
+// sourceFlagProblem is fromFlagProblem with -job beside -from: a job is read
+// only by a release generation, like a file, it is a GitLab job ID, which is
+// digits, and the two name the dump two ways, so naming both is refused
+// rather than one of them silently winning.
+func sourceFlagProblem(from, job string, release, check bool) error {
+	if job != "" {
+		switch {
+		case !release || check:
+			return errJobFlags
+		case from != "":
+			return errFromAndJob
+		case strings.Trim(job, "0123456789") != "":
+			return fmt.Errorf("%w: %q", errJobNotAnID, job)
+		}
+	}
 	switch {
 	case from == "":
 		return nil

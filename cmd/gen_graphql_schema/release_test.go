@@ -161,6 +161,76 @@ func TestRunRelease_FromTheReleaseTag_DownloadsTheDumpAndNamesTheJob(t *testing.
 	}
 }
 
+// TestRunRelease_FromAJob_DownloadsThatJobsDumpAndRecordsItsURL verifies -job:
+// the request names that job's artifact by its ID rather than the tag's latest
+// successful job, and the pin records the job's URL as its origin, not as a
+// file, so a release whose tag pipeline failed elsewhere is pinned with the
+// same provenance as one whose did not.
+func TestRunRelease_FromAJob_DownloadsThatJobsDumpAndRecordsItsURL(t *testing.T) {
+	var mu sync.Mutex
+	var asked []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked = append(asked, r.URL.RequestURI())
+		mu.Unlock()
+		_, _ = w.Write([]byte(wholeSDL))
+	}))
+	t.Cleanup(server.Close)
+	dir := t.TempDir()
+
+	status, out, errOut := runCommand(t, genRun{
+		release: true, dir: dir, apiLiveDir: recordDir(t, fixtureRelease, fixtureRevision), job: "18210278050",
+		client: server.Client(), dumpBase: server.URL + "/artifacts", jobBase: server.URL + "/jobs", now: fixedClock,
+	})
+	if status != 0 {
+		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
+	}
+	const wantRequest = "/jobs/18210278050/artifacts/raw/tmp/tests/graphql/gitlab_schema.graphql"
+	mu.Lock()
+	defer mu.Unlock()
+	if len(asked) != 1 || asked[0] != wantRequest {
+		t.Errorf("the generator asked %v, want %s alone", asked, wantRequest)
+	}
+	if !strings.Contains(out, server.URL+wantRequest) {
+		t.Errorf("stdout does not name the job it downloads:\n%s", out)
+	}
+	_, _, source, err := readReleaseArtifacts(dir)
+	if err != nil {
+		t.Fatalf("readReleaseArtifacts() error = %v", err)
+	}
+	if source.Origin != server.URL+wantRequest || source.FromFile {
+		t.Errorf("the record names %q (from a file: %v), want the job's URL", source.Origin, source.FromFile)
+	}
+	if source.GitLabVersion != fixtureRelease {
+		t.Errorf("the record pins %q, want the REST record's %q", source.GitLabVersion, fixtureRelease)
+	}
+}
+
+// TestSourceFlagProblem_TheJobFlag_IsReadOnlyByAReleaseGeneration verifies the
+// -job rule: refused without -release, with -check, beside -from, and when it
+// is not a job ID, and accepted alone on a release generation.
+func TestSourceFlagProblem_TheJobFlag_IsReadOnlyByAReleaseGeneration(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		from, job      string
+		release, check bool
+		want           error
+	}{
+		{name: "-job alone", job: "1", want: errJobFlags},
+		{name: "-job with -release and -check", job: "1", release: true, check: true, want: errJobFlags},
+		{name: "-job beside -from", job: "1", from: "dump.graphql", release: true, want: errFromAndJob},
+		{name: "-job that is not an ID", job: "18210278050/x", release: true, want: errJobNotAnID},
+		{name: "-job on a release generation", job: "18210278050", release: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := sourceFlagProblem(testCase.from, testCase.job, testCase.release, testCase.check); !errors.Is(got, testCase.want) {
+				t.Errorf("sourceFlagProblem(%q, %q, release %v, check %v) = %v, want %v",
+					testCase.from, testCase.job, testCase.release, testCase.check, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestRunRelease_GenerationFailures_ExitNonZeroAndSayWhy verifies every way a
 // release generation stops, each with the sentence that says why and nothing
 // written.
