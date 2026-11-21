@@ -223,7 +223,10 @@
       "body": [
         {
           "iid": 1,
-          "state": "merged"
+          "source_project_id": 10,
+          "state": "merged",
+          "target_branch": "main",
+          "target_project_id": 10
         }
       ],
       "status": 200
