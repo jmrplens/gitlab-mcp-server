@@ -36,11 +36,16 @@ type Output struct {
 	GitLabRevision   string     `json:"gitlab_revision,omitempty"`
 	GitLabEnterprise *bool      `json:"gitlab_enterprise,omitempty"`
 	GitLabKAS        *KASOutput `json:"gitlab_kas,omitempty"`
-	Authenticated    bool       `json:"authenticated"`
-	Username         string     `json:"username,omitempty"`
-	UserID           int64      `json:"user_id,omitempty"`
-	ResponseTimeMS   int64      `json:"response_time_ms"`
-	Error            string     `json:"error,omitempty"`
+	// GitLabPlan is the plan of the license the instance runs under, which
+	// GET /metadata sends from GitLab 19.6 and client-go's Metadata does not
+	// model, read from the captured response (ADR-0021); absent on GitLab.com,
+	// where GitLab sends null, and before 19.6.
+	GitLabPlan     *string `json:"gitlab_plan,omitempty"`
+	Authenticated  bool    `json:"authenticated"`
+	Username       string  `json:"username,omitempty"`
+	UserID         int64   `json:"user_id,omitempty"`
+	ResponseTimeMS int64   `json:"response_time_ms"`
+	Error          string  `json:"error,omitempty"`
 }
 
 // KASOutput is the kas object of lib/api/entities/metadata.rb: whether the
@@ -145,7 +150,8 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 
 	start := time.Now()
 
-	meta, _, err := client.GL().Metadata.GetMetadata(gl.WithContext(ctx))
+	metaCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	meta, _, err := client.GL().Metadata.GetMetadata(gl.WithContext(metaCtx))
 	out.ResponseTimeMS = time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -153,6 +159,13 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 		out.Error = withoutUserinfo(fmt.Sprintf("connectivity check failed: %v", err), base.User)
 		return out, nil
 	}
+	extra, err := toolutil.CapturedMetadata(captured)
+	if err != nil {
+		out.Status = "unhealthy"
+		out.Error = withoutUserinfo(fmt.Sprintf("connectivity check failed: %v", err), base.User)
+		return out, nil
+	}
+	out.GitLabPlan = extra.Plan
 
 	out.GitLabVersion = meta.Version
 	out.GitLabRevision = meta.Revision

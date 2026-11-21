@@ -448,7 +448,6 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 		categoryAssociationNullOnScope:   true,
 		categoryConfirmationOnly:         true,
 		categoryReadForItsOwnUse:         true,
-		categoryTrackedForPublication:    true,
 	}
 	for _, declaration := range declaredUnsurfaced {
 		t.Run(declaration.key(), func(t *testing.T) {

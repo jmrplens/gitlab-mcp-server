@@ -635,6 +635,20 @@ func CapturedBoardLists(capture *gitlabclient.ResponseCapture, decoded int) ([]B
 	return capturedList[BoardListExtra](capture, decoded, "board lists")
 }
 
+// MetadataExtra is what lib/api/entities/metadata.rb sends that client-go's
+// Metadata does not model: from GitLab 19.6 the plan of the license the
+// instance runs under, null where subscriptions are scoped to each namespace
+// rather than to the instance, as on GitLab.com (metadata.md). Both the
+// metadata action and the health check ask GET /metadata, so it is shared.
+type MetadataExtra struct {
+	Plan *string `json:"plan"`
+}
+
+// CapturedMetadata reads it off the captured answer to GET /metadata.
+func CapturedMetadata(capture *gitlabclient.ResponseCapture) (MetadataExtra, error) {
+	return capturedOne[MetadataExtra](capture)
+}
+
 // AttestationExtra is what lib/api/entities/supply_chain/attestation.rb sends
 // that client-go's Attestation does not model: from 19.6 how the attestation
 // was signed, sigstore or local_ca (attestations.md).

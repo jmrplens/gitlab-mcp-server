@@ -358,10 +358,10 @@ func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerMetadata, "gitlab_get_metadata")
-	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
+	options.Usage = "Read GitLab instance metadata such as version, revision and, from GitLab 19.6, the licensed plan. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.RelatedActions = []string{actionAdminSettingsGet, "admin.app_statistics_get", "server.health_check"}
-	options.IndividualTool.Description = "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics."
+	options.IndividualTool.Description = "Get GitLab instance metadata such as version, revision, KAS endpoints, enterprise edition flag, and the plan the instance is licensed for (GitLab 19.6 and later). Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics."
 	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
 }
 
