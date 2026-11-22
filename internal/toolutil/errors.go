@@ -1262,8 +1262,11 @@ func swapAnsweredGraphQLRefusal(text string, gqlErr *gl.GraphQLResponseError) st
 		return text
 	}
 	text = strings.ReplaceAll(text, raw, safe)
+	// boundedGraphQLMessages never withholds an empty message, since every
+	// list carries one, so no entry here needs the guard swapGitLabResponse
+	// gives the response's own message.
 	for _, message := range withheld {
-		if message != "" && strings.Contains(text, message) {
+		if strings.Contains(text, message) {
 			return safe
 		}
 	}
