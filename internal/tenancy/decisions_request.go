@@ -134,7 +134,26 @@ func requestDecisions() []Decision {
 			enforce(pkgToolutil, "maxGitLabMessageLen"),
 			// GitLab's reason for a failed transfer as a project or group
 			// transfer quotes it, the length GitLab stores it at.
-			enforce("internal/tools/waitpoll", "transferReasonMaxRunes")),
+			enforce("internal/tools/waitpoll", "transferReasonMaxRunes"),
+			// What the Orbit reads refuse before they send anything, each a
+			// decision of this server wherever its number comes from (issue
+			// 1209). GitLab.com's own 400s of 2026-10-29 give two: the 256
+			// bytes of the search of orbit.grep, in the refusal of a short
+			// one, and the one token orbit.context resolves, in the refusal
+			// of two.
+			enforce("internal/tools/orbit", "maxGrepSearchBytes"),
+			enforce("internal/tools/orbit", "maxContextTokens"),
+			// GitLab's source declares two that no captured answer refuses a
+			// call past (ee/lib/api/orbit/data.rb): the results of orbit.grep
+			// and those of one scope.
+			enforce("internal/tools/orbit", "maxGrepLimit"),
+			enforce("internal/tools/orbit", "maxGrepPerScope"),
+			// And two are ceilings of this server's own, twenty where GitLab
+			// lists ten scopes and served three commands: the scopes
+			// orbit.grep names and the command names orbit.command_list
+			// describes.
+			enforce("internal/tools/orbit", "maxGrepScopes"),
+			enforce("internal/tools/orbit", "maxCommandNames")),
 		// A fine-grained token's grant is the minter's to size: every project
 		// or group id becomes a scope of its own, each scope may name every
 		// assignable permission, so the body GitLab answers the grant read

@@ -26,9 +26,9 @@ const (
 // a query's raw answer.
 const responseFormatCommand = "get_response_format"
 
-// maxCommandNames bounds how many command names one [CommandList] call sends.
-// GitLab served three commands on 2026-10-29; a list longer than this names
-// commands that do not exist.
+// maxCommandNames bounds how many command names one [CommandList] call sends,
+// a ceiling of this server's own: GitLab served three commands on 2026-10-29,
+// and a list longer than this names commands that do not exist.
 const maxCommandNames = 20
 
 // CommandListInput selects the commands to describe and the shape of the
