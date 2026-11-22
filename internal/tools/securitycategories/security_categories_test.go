@@ -453,6 +453,136 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 	}
 }
 
+// The hints the three handlers give with a refusal, and the reason GitLab
+// gives for a mutation the caller may not run, which it answers with HTTP 200
+// and a top-level error.
+const (
+	createHint    = "verify namespace_id and that the token has permission on a Premium or Ultimate namespace"
+	updateHint    = "verify category_id and namespace_id; only editable custom categories can be updated"
+	deleteHint    = "verify category_id; deleting a category also deletes its associated security attributes"
+	gitLabRefusal = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+)
+
+// TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns pins, whole, the error
+// each handler returns for each way GitLab refuses its mutation: a refusal it
+// answers with a top-level error, and the payload's own errors list of a write
+// it ran and refused to keep.
+//
+// The create and the update send their mutations through client-go's
+// SecurityCategories service (issue 1784), whose errors read differently from
+// the ones the handlers built when they sent documents of their own, and
+// client-go hands their refusal over as one that also matches its not-found
+// sentinel, which must not read as a 404. The delete keeps its own document
+// until client-go's DestroySecurityCategory selects deletedAttributesGid, and
+// its texts are pinned so that move shows what it changes.
+func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
+	create := func(client *gitlabclient.Client) error {
+		_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+		return err
+	}
+	update := func(client *gitlabclient.Client) error {
+		name := "Business impact"
+		_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+		return err
+	}
+	remove := func(client *gitlabclient.Client) error {
+		_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 7})
+		return err
+	}
+	cases := []struct {
+		name     string
+		queryKey string
+		body     string
+		call     func(*gitlabclient.Client) error
+		want     string
+	}{
+		{
+			name: "create, refused", queryKey: "securityCategoryCreate", call: create,
+			body: `{"data":{"securityCategoryCreate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "create security category: unexpected error. Suggestion: " + createHint + ": mutation.securityCategoryCreate failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "create, the payload's errors", queryKey: "securityCategoryCreate", call: create,
+			body: `{"data":{"securityCategoryCreate":{"securityCategory":null,"errors":["Name has already been taken"]}}}`,
+			want: "create security category: unexpected error. Suggestion: " + createHint + ": securityCategoryCreate mutation errors: [Name has already been taken]",
+		},
+		{
+			name: "update, refused", queryKey: "securityCategoryUpdate", call: update,
+			body: `{"data":{"securityCategoryUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "update security category: unexpected error. Suggestion: " + updateHint + ": mutation.securityCategoryUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "update, the payload's errors", queryKey: "securityCategoryUpdate", call: update,
+			body: `{"data":{"securityCategoryUpdate":{"securityCategory":null,"errors":["Name has already been taken"]}}}`,
+			want: "update security category: unexpected error. Suggestion: " + updateHint + ": securityCategoryUpdate mutation errors: [Name has already been taken]",
+		},
+		{
+			name: "delete, refused", queryKey: "securityCategoryDestroy", call: remove,
+			body: `{"data":{"securityCategoryDestroy":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "delete security category: unexpected error. Suggestion: " + deleteHint + ": securityCategoryDestroy GraphQL errors: " + gitLabRefusal,
+		},
+		{
+			name: "delete, the payload's errors", queryKey: "securityCategoryDestroy", call: remove,
+			body: `{"data":{"securityCategoryDestroy":{"deletedAttributesGid":null,"errors":["Cannot delete a locked category"]}}}`,
+			want: "delete security category: unexpected error. Suggestion: " + deleteHint + ": securityCategoryDestroy mutation errors: Cannot delete a locked category",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+				tc.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+				},
+			})
+			err := tc.call(testutil.NewTestClient(t, handler))
+			if err == nil {
+				t.Fatalf("handler error = nil, want %q", tc.want)
+			}
+			if err.Error() != tc.want {
+				t.Errorf("handler error = %q, want %q", err.Error(), tc.want)
+			}
+			if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				t.Errorf("IsHTTPStatus(err, 404) = true for %q, a refusal GitLab answered with HTTP 200", err)
+			}
+		})
+	}
+}
+
+// TestHandlers_RequestCarriesTheCallersContext verifies that each handler's
+// mutation is sent with the caller's context, through client-go's
+// gl.WithContext: the context ends when the request reaches the mock, so only
+// a request that carried it returns context.Canceled promptly.
+func TestHandlers_RequestCarriesTheCallersContext(t *testing.T) {
+	name := "Business impact"
+	cases := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{name: "create", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Create(ctx, client, CreateInput{NamespaceID: 101, Name: name})
+			return err
+		}},
+		{name: "update", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Update(ctx, client, UpdateInput{CategoryID: 7, NamespaceID: 101, Name: &name})
+			return err
+		}},
+		{name: "delete", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Delete(ctx, client, DeleteInput{CategoryID: 7})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQLError(w, http.StatusOK, gitLabRefusal)
+			})
+			if err := tc.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Errorf("handler error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
 // TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation
 // payloads are treated as missing GitLab resources.
 //

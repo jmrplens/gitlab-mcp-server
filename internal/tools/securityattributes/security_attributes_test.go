@@ -406,6 +406,174 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 	})
 }
 
+// The hints the five handlers give with a refusal, as each refusal text below
+// carries them.
+const (
+	createHint        = "verify namespace_id and category_id; requires permission on a Premium or Ultimate namespace"
+	updateHint        = "verify attribute_id; only editable custom attributes can be updated"
+	deleteHint        = "verify attribute_id; only editable custom attributes can be deleted"
+	projectUpdateHint = "verify project_id and attribute IDs; requires permission on the project and Premium or Ultimate"
+	bulkUpdateHint    = "verify group_ids, project_ids, attribute_ids, and mode; requires Premium or Ultimate"
+)
+
+// gitLabRefusal is the reason GitLab gives for a mutation the caller may not
+// run, which it answers with HTTP 200 and a top-level error.
+const gitLabRefusal = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
+
+// TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns pins, whole, the error
+// each handler returns for each way GitLab refuses its mutation: a refusal it
+// answers with a top-level error, and the payload's own errors list of a write
+// it ran and refused to keep.
+//
+// The handlers send their mutations through client-go's SecurityAttributes
+// service (issue 1784), whose errors read differently from the ones the
+// handlers built when they sent documents of their own, so each text is held
+// here rather than one word of it. None of them is classified as a 404,
+// although client-go hands the update's refusal over as one that also matches
+// its not-found sentinel.
+func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
+	cases := []struct {
+		name     string
+		queryKey string
+		body     string
+		call     func(*gitlabclient.Client) error
+		want     string
+	}{
+		{
+			name: "create, refused", queryKey: "securityAttributeCreate", call: createHigh,
+			body: `{"data":{"securityAttributeCreate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "create security attributes: unexpected error. Suggestion: " + createHint + ": mutation.securityAttributeCreate failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "create, the payload's errors", queryKey: "securityAttributeCreate", call: createHigh,
+			body: `{"data":{"securityAttributeCreate":{"securityAttributes":[],"errors":["Name has already been taken"]}}}`,
+			want: "create security attributes: unexpected error. Suggestion: " + createHint + ": securityAttributeCreate mutation errors: [Name has already been taken]",
+		},
+		{
+			name: "update, refused", queryKey: "securityAttributeUpdate", call: renameHigh,
+			body: `{"data":{"securityAttributeUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "update security attribute: unexpected error. Suggestion: " + updateHint + ": mutation.securityAttributeUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "update, the payload's errors", queryKey: "securityAttributeUpdate", call: renameHigh,
+			body: `{"data":{"securityAttributeUpdate":{"securityAttribute":null,"errors":["Name has already been taken"]}}}`,
+			want: "update security attribute: unexpected error. Suggestion: " + updateHint + ": securityAttributeUpdate mutation errors: [Name has already been taken]",
+		},
+		{
+			name: "delete, refused", queryKey: "securityAttributeDestroy", call: deleteNine,
+			body: `{"data":{"securityAttributeDestroy":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "delete security attribute: unexpected error. Suggestion: " + deleteHint + ": mutation.securityAttributeDestroy failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "delete, the payload's errors", queryKey: "securityAttributeDestroy", call: deleteNine,
+			body: `{"data":{"securityAttributeDestroy":{"errors":["Cannot delete a locked attribute"]}}}`,
+			want: "delete security attribute: unexpected error. Suggestion: " + deleteHint + ": securityAttributeDestroy mutation errors: [Cannot delete a locked attribute]",
+		},
+		{
+			name: "project update, refused", queryKey: "securityAttributeProjectUpdate", call: addNineToProject,
+			body: `{"data":{"securityAttributeProjectUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "update project security attributes: unexpected error. Suggestion: " + projectUpdateHint + ": mutation.securityAttributeProjectUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "project update, the payload's errors", queryKey: "securityAttributeProjectUpdate", call: addNineToProject,
+			body: `{"data":{"securityAttributeProjectUpdate":{"addedCount":0,"removedCount":0,"errors":["Attribute not found"]}}}`,
+			want: "update project security attributes: unexpected error. Suggestion: " + projectUpdateHint + ": securityAttributeProjectUpdate mutation errors: [Attribute not found]",
+		},
+		{
+			name: "bulk update, refused", queryKey: "bulkUpdateSecurityAttributes", call: bulkAddNine,
+			body: `{"data":{"bulkUpdateSecurityAttributes":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
+			want: "bulk update security attributes: unexpected error. Suggestion: " + bulkUpdateHint + ": mutation.bulkUpdateSecurityAttributes failed (GraphQL errors: " + gitLabRefusal + ")",
+		},
+		{
+			name: "bulk update, the payload's errors", queryKey: "bulkUpdateSecurityAttributes", call: bulkAddNine,
+			body: `{"data":{"bulkUpdateSecurityAttributes":{"errors":["Too many items"]}}}`,
+			want: "bulk update security attributes: unexpected error. Suggestion: " + bulkUpdateHint + ": bulkUpdateSecurityAttributes mutation errors: [Too many items]",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				tc.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+				},
+			})
+			err := tc.call(testutil.NewTestClient(t, handler))
+			if err == nil {
+				t.Fatalf("handler error = nil, want %q", tc.want)
+			}
+			if err.Error() != tc.want {
+				t.Errorf("handler error = %q, want %q", err.Error(), tc.want)
+			}
+			if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+				t.Errorf("IsHTTPStatus(err, 404) = true for %q, a refusal GitLab answered with HTTP 200", err)
+			}
+		})
+	}
+}
+
+// TestHandlers_RequestCarriesTheCallersContext verifies that each handler's
+// mutation is sent with the caller's context, through client-go's
+// gl.WithContext: the context ends when the request reaches the mock, so only
+// a request that carried it returns context.Canceled promptly.
+func TestHandlers_RequestCarriesTheCallersContext(t *testing.T) {
+	name := "High"
+	cases := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{name: "create", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Create(ctx, client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+			return err
+		}},
+		{name: "update", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Update(ctx, client, UpdateInput{AttributeID: 9, Name: &name})
+			return err
+		}},
+		{name: "delete", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Delete(ctx, client, DeleteInput{AttributeID: 9})
+			return err
+		}},
+		{name: "project update", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := ProjectUpdate(ctx, client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+			return err
+		}},
+		{name: "bulk update", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := BulkUpdate(ctx, client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, client := testutil.CancelOnArrival(t, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQLError(w, http.StatusOK, gitLabRefusal)
+			})
+			if err := tc.call(ctx, client); !errors.Is(err, context.Canceled) {
+				t.Errorf("handler error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
+// deleteNine deletes the one attribute the refusal tests name.
+func deleteNine(client *gitlabclient.Client) error {
+	_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
+	return err
+}
+
+// addNineToProject adds the one attribute the refusal tests name to a
+// project.
+func addNineToProject(client *gitlabclient.Client) error {
+	_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+	return err
+}
+
+// bulkAddNine adds the one attribute the refusal tests name to a project, in
+// bulk.
+func bulkAddNine(client *gitlabclient.Client) error {
+	_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+	return err
+}
+
 // TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation
 // payloads are treated as missing GitLab resources.
 //
