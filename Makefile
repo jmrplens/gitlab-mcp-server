@@ -759,9 +759,9 @@ e2e-clean-orphans:
 ## provisions the kg-fixtures and security-fixtures projects in
 ## $(ORBIT_FIXTURES_NAMESPACE) (default: jmrp-oss/orbit-fixtures),
 ## polls the indexer until it has caught up, runs the orbitlive-tagged
-## live tests, and re-records what GitLab.com answers the six Orbit actions
-## (gen-orbit-record), which fails every run while the recorded key tree
-## differs from the one committed at HEAD. Idempotent: the setup
+## live tests, and re-records what GitLab.com answers the first six Orbit
+## actions (gen-orbit-record), which fails every run while the recorded key
+## tree differs from the one committed at HEAD. Idempotent: the setup
 ## (cmd/orbit_fixtures) reconciles an existing project (its visibility and the
 ## fixture files it lacks), merges or repairs the fixture merge request, and
 ## leaves other existing resources alone, so re-running is safe.
@@ -870,9 +870,9 @@ orbit-run-live-tests: orbit-ensure-token
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
-## gen-orbit-record: record what GitLab.com answers the requests the six Orbit
-## handlers build (GraphQL, the Orbit MCP endpoint and POST /orbit/query), and
-## write the key tree of every answer, never a value, to
+## gen-orbit-record: record what GitLab.com answers the requests the first six
+## Orbit handlers build (GraphQL, the Orbit MCP endpoint and POST /orbit/query;
+## the nine added after them are not recorded yet), and write the key tree of every answer, never a value, to
 ## docs/development/orbit-responses.json. Reads only, through a proxy on the
 ## loopback interface, with GITLAB_COM_TOKEN from .env and the fixture
 ## namespace $(ORBIT_FIXTURES_NAMESPACE), and refuses to record over a

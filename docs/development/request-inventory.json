@@ -14654,6 +14654,13 @@
       "kind": "graphql",
       "method": "POST",
       "path": "/graphql",
+      "operation": "query OrbitQueryTemplates orbit"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "graphql",
+      "method": "POST",
+      "path": "/graphql",
       "operation": "query OrbitSchema orbit",
       "variables": [
         "edgesAfter",
@@ -14667,6 +14674,33 @@
       "method": "POST",
       "path": "/graphql",
       "operation": "query OrbitServiceStatus orbit"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/context",
+      "body": [
+        "expand",
+        "response_format",
+        "tokens"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/grep",
+      "query": [
+        "full_path",
+        "limit",
+        "namespace_id",
+        "per_scope",
+        "project_id",
+        "response_format",
+        "scopes",
+        "search"
+      ]
     },
     {
       "package": "internal/tools/orbit",
@@ -14689,6 +14723,92 @@
         "query",
         "response_format"
       ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/query/context_for_job",
+      "body": [
+        "parameters",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/query/expand_neighbors",
+      "body": [
+        "parameters",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/query/no_such_query",
+      "body": [
+        "parameters",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/query/recent_merges",
+      "body": [
+        "parameters",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/orbit/query/top_mr_authors",
+      "body": [
+        "parameters",
+        "response_format"
+      ]
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills/no-such-skill"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills/orbit"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills/orbit/SKILL.md"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills/orbit/missing.md"
+    },
+    {
+      "package": "internal/tools/orbit",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/orbit/skills/orbit/references/100%25%20a%2520b.md"
     },
     {
       "package": "internal/tools/packages",

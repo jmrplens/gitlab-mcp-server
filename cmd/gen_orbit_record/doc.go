@@ -4,11 +4,13 @@
 // Command gen_orbit_record records what GitLab.com's Orbit routes answer and
 // commits the key tree of each answer to docs/development/orbit-responses.json.
 //
-// The six Orbit actions were outside every oracle the 1:1 audit reads: no
+// The first six Orbit actions were outside every oracle the 1:1 audit reads: no
 // self-managed GitLab serves Orbit, so the live API record has nothing to say
 // about them, and GitLab's generated OpenAPI document gives their routes no
 // response schema. A recorded answer is the one oracle that covers all six
 // output types, so this command makes one, through the handlers themselves.
+// The nine actions issues 1209, 1586 and 1587 added are not among its calls
+// yet.
 // It starts a recording proxy on the loopback interface, points a client of
 // this repository's own at it, calls each Orbit handler with the inputs the
 // record expects, and keeps what GitLab answered each request the handler

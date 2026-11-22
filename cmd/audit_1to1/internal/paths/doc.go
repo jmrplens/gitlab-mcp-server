@@ -274,9 +274,12 @@
 //     request list).
 //
 // The Orbit output types are asked both questions against another oracle,
-// because this record says nothing about them: no self-managed GitLab serves
-// Orbit, so its routes carry no response entity, and the type grain skipped
-// all six. [OrbitCheck] reads docs/development/orbit-responses.json, a
+// because this record says little about them: no self-managed GitLab serves
+// Orbit, and of its routes the record of 19.6 gives a response entity to four
+// alone (GET /orbit/grep, POST /orbit/context, GET /orbit/skills and
+// /orbit/skills/:name), which the package grain judges the package's outputs
+// against, while the type grain skipped the six outputs the first six actions
+// answer with. [OrbitCheck] reads docs/development/orbit-responses.json, a
 // recording cmd/gen_orbit_record makes through the handlers against
 // GitLab.com, whose every call names the output type its handler returned, and
 // walks that type to every depth against the recorded key tree. The recording

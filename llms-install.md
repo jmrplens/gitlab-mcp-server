@@ -8,7 +8,7 @@ is deterministic — no build from source is required.
 
 A single-binary MCP server (Go) exposing the GitLab REST API v4 and GraphQL
 as MCP tools: ~875 tools on Free/CE, ~1030 on Premium, ~1096 on self-managed
-Ultimate and ~1102 on GitLab.com Ultimate, with three selectable tool
+Ultimate and ~1111 on GitLab.com Ultimate, with three selectable tool
 surfaces, 45 MCP resources, and 37 prompts. It talks to GitLab.com or any
 self-managed GitLab instance over stdio.
 

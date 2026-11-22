@@ -840,22 +840,28 @@
 			},
 			"overview": {
 				"en": [
-					"Orbit is GitLab.com's experimental knowledge graph of code and project data. Its six actions are served only to a session connected to GitLab.com at Premium or Ultimate, and all of them read: `orbit.status` checks the service, `orbit.schema` describes the graph, `orbit.dsl` serves the query language, `orbit.query` runs a query, `orbit.tools` lists Orbit's own MCP tools, and `orbit.graph_status` reports the indexing of a namespace or a project. GitLab answers 404 while its `knowledge_graph` feature flag is off for the caller. The [Orbit page](/gitlab-mcp-server/tools/orbit/) explains the workflow."
+					"Orbit is GitLab.com's experimental knowledge graph of code and project data. Its fifteen actions are served only to a session connected to GitLab.com at Premium or Ultimate, and all of them read: `orbit.status` checks the service, `orbit.schema` describes the graph, `orbit.dsl` serves the query language, `orbit.query` runs a query and `orbit.named_query` one of GitLab's named queries, `orbit.grep` searches a group or project, `orbit.context` resolves one reference to its summary, `orbit.graph_status` reports the indexing of a namespace or a project, and `orbit.tools`, `orbit.command_list`, `orbit.response_format`, `orbit.query_templates` and the three skill reads describe what Orbit serves. GitLab.com serves a group's index and its queries only under the top-level group's Orbit access. The [Orbit page](/gitlab-mcp-server/tools/orbit/) explains the workflow."
 				],
 				"es": [
-					"Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus seis acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta, `orbit.tools` lista las herramientas MCP propias de Orbit y `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto. GitLab responde 404 mientras su feature flag `knowledge_graph` está desactivado para quien llama. La [página de Orbit](/gitlab-mcp-server/es/tools/orbit/) explica el flujo de trabajo."
+					"Orbit es el grafo de conocimiento experimental de GitLab.com sobre el código y los datos de los proyectos. Sus quince acciones solo se sirven a una sesión conectada a GitLab.com con Premium o Ultimate, y todas leen: `orbit.status` comprueba el servicio, `orbit.schema` describe el grafo, `orbit.dsl` sirve el lenguaje de consulta, `orbit.query` ejecuta una consulta y `orbit.named_query` una de las consultas con nombre de GitLab, `orbit.grep` busca en un grupo o proyecto, `orbit.context` resuelve una referencia a su resumen, `orbit.graph_status` informa de la indexación de un espacio de nombres o de un proyecto, y `orbit.tools`, `orbit.command_list`, `orbit.response_format`, `orbit.query_templates` y las tres lecturas de skills describen lo que sirve Orbit. GitLab.com solo sirve el índice de un grupo y sus consultas bajo el acceso a Orbit del grupo de nivel superior. La [página de Orbit](/gitlab-mcp-server/es/tools/orbit/) explica el flujo de trabajo."
 				]
 			},
 			"questions": {
 				"en": [
 					"Is Orbit available for this GitLab.com token?",
 					"Show the knowledge graph schema",
-					"Has gitlab-org/gitlab finished indexing?"
+					"Has gitlab-org/gitlab finished indexing?",
+					"Search gitlab-org/gitlab for merge requests about rate limits",
+					"Summarize this merge request with its changed files and failed jobs",
+					"Run the recent_merges query template"
 				],
 				"es": [
 					"¿Está disponible Orbit para este token de GitLab.com?",
 					"Muestra el esquema del grafo de conocimiento",
-					"¿Ha terminado de indexarse gitlab-org/gitlab?"
+					"¿Ha terminado de indexarse gitlab-org/gitlab?",
+					"Busca en gitlab-org/gitlab los merge requests sobre límites de peticiones",
+					"Resume este merge request con sus archivos cambiados y sus jobs fallidos",
+					"Ejecuta la plantilla de consulta recent_merges"
 				]
 			}
 		},

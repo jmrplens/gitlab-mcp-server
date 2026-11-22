@@ -8,7 +8,7 @@ faq:
   - q: "¿Qué permisos necesita un token de grano fino para que el servidor arranque?"
     a: "User: Read, Namespace: Read y Personal Access Token: Read en el ámbito del usuario, y Metadata: Read en el de la instancia. Sin Personal Access Token: Read o Metadata: Read el servidor arranca igualmente, pero no puede juzgar la concesión, así que retiene solo lo que ningún token de grano fino alcanza y deja el resto a GitLab. En modo HTTP, un token sin User: Read se rechaza en la puerta con 403."
   - q: "¿Por qué una acción dice que no está disponible para un token de grano fino?"
-    a: "En GitLab 19.6.1, 14 acciones de 1106 se rechazan o se vacían para todo token de grano fino sea cual sea su concesión, todas por GraphQL, porque pasan por tipos o mutaciones que no declaran ningún permiso de grano fino. Entre ellas están las del catálogo de CI/CD, las reglas de rama, los atributos de seguridad y los perfiles de análisis de seguridad. La respuesta nombra el tipo y la versión, y la salida es un token clásico."
+    a: "En GitLab 19.6.1, 14 acciones de 1115 se rechazan o se vacían para todo token de grano fino sea cual sea su concesión, todas por GraphQL, porque pasan por tipos o mutaciones que no declaran ningún permiso de grano fino. Entre ellas están las del catálogo de CI/CD, las reglas de rama, los atributos de seguridad y los perfiles de análisis de seguridad. La respuesta nombra el tipo y la versión, y la salida es un token clásico."
   - q: "Me falta un permiso. ¿Puedo añadírselo a mi token?"
     a: "No. GitLab fija la concesión de un token de grano fino al crearlo, y rotar un token le da al token nuevo la misma concesión, como documenta la [API de rotación](https://docs.gitlab.com/api/personal_access_tokens/#rotate-a-personal-access-token) de GitLab. Crea un token nuevo que conceda lo que nombra la respuesta."
 ---
@@ -316,7 +316,7 @@ endpoint self, al construirse y en cada revalidación aceptada, como hace el mod
 Parte de lo que ofrece este servidor pasa por tipos o mutaciones GraphQL de GitLab que
 no declaran ningún permiso de grano fino en GitLab 19.6.1, y GitLab los rechaza o los
 vacía para todo token de grano fino, sea cual sea su concesión. En 19.6.1 son 14
-acciones de 1106, todas por GraphQL, cada una de una de estas tres formas:
+acciones de 1115, todas por GraphQL, cada una de una de estas tres formas:
 
 | Cómo responde GitLab                                                                      | Acciones | Ejemplos                                                                                                         |
 | ----------------------------------------------------------------------------------------- | -------: | ---------------------------------------------------------------------------------------------------------------- |
@@ -446,6 +446,14 @@ así que la cuenta es para una sesión a la que se sirve de todos modos, como un
 tipo de token el servidor no pudo averiguar
 ([arriba](#cuando-el-servidor-no-sabe-qué-tipo-de-token-tiene)).
 
+Una ruta REST también responde así. GitLab comprueba dentro de la ruta de
+`orbit.context` qué puede leer el token, responde `not_found` para un objeto que no
+puede leer y omite las partes de un resumen que no puede leer, así que ni lo uno ni lo
+otro significa que no haya nada. La
+[página de Orbit](/gitlab-mcp-server/es/tools/orbit/#context-resolver-una-referencia)
+enumera los permisos, y ahí un `not_found` termina con un siguiente paso que lo dice en
+cualquier sesión.
+
 ### Una escritura respondida sin su objeto
 
 GitLab comprueba el permiso propio de una escritura antes de ejecutarla, y el objeto con
@@ -513,7 +521,10 @@ GitLab puede exigir tokens de grano fino a partir de una fecha, de dos formas:
   sus subgrupos y proyectos. Un token clásico se rechaza entonces allí con el mismo
   texto que recibe un token de grano fino ("Access denied: This operation requires a
   fine-grained personal access token with the following ... permissions"), así que un
-  token clásico también puede encontrarse ese rechazo. Fuera del grupo, los tokens
+  token clásico también puede encontrarse ese rechazo. Dos acciones de Orbit lo
+  responden a su manera, porque GitLab comprueba el token dentro de su ruta:
+  `orbit.context` responde `not_found` para un objeto de allí, y `orbit.grep` lista como
+  no disponible el ámbito `branches` de un proyecto de allí. Fuera del grupo, los tokens
   clásicos siguen funcionando.
 - **En una instancia autogestionada**, un administrador los exige para toda la
   instancia: los usuarios ya no pueden crear ni rotar tokens clásicos, y los existentes

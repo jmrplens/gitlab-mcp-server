@@ -4,11 +4,11 @@
 // Package orbit implements MCP tools for the GitLab Orbit Knowledge Graph on
 // GitLab.com.
 //
-// Six read-only handlers are exposed as individual tools (gitlab_orbit_*) and
-// a consolidated meta-tool (gitlab_orbit). GitLab.com removed five of the six
-// REST routes they read on 2026-10-27 and -28 (gitlab-org/gitlab!265633,
-// !264745, !265998 and !266009), so each now reads the source GitLab offers in
-// their place, a documented API where there is one:
+// Fifteen read-only handlers are exposed as individual tools (gitlab_orbit_*)
+// and a consolidated meta-tool (gitlab_orbit). GitLab.com removed five of the
+// six REST routes the first six read on 2026-10-27 and -28
+// (gitlab-org/gitlab!265633, !264745, !265998 and !266009), so each reads the
+// source GitLab offers in their place, a documented API where there is one:
 //
 //   - Status:      GraphQL Query.orbit.serviceStatus           (service health)
 //   - Schema:      GraphQL Query.orbit.schema                  (graph schema),
@@ -18,10 +18,22 @@
 //   - Query:       POST /api/v4/orbit/query                    (read-only graph query)
 //   - GraphStatus: GraphQL Group.orbit and Project.orbit      (indexing status)
 //
+// Nine more read what GitLab.com served beside them on 2026-10-29, built
+// offline from the answers captured that morning (issues 1209, 1586, 1587):
+//
+//   - QueryTemplates:      GraphQL Query.orbit.queryTemplates
+//   - QueryResponseFormat: get_response_format of POST /api/v4/orbit/mcp
+//   - CommandList:         list_commands of POST /api/v4/orbit/mcp
+//   - SkillList, SkillGet, SkillFile: GET /api/v4/orbit/skills and below
+//   - NamedQuery:          POST /api/v4/orbit/query/:name
+//   - EntityContext:       POST /api/v4/orbit/context
+//   - Grep:                GET /api/v4/orbit/grep
+//
 // The Orbit MCP endpoint is used only for what GitLab offers nowhere else: the
-// tool list, the command catalog that describes the query language, and the
-// schema as compact text. client-go's Orbit service still sends the removed
-// routes for all but the query, which is why only Query calls it.
+// tool list, the command catalog, the response format and the schema as
+// compact text. client-go's Orbit service still sends the removed routes for
+// all but the query and has no method for the routes the nine read, which is
+// why only Query calls it and the others build their request themselves.
 //
 // Since Orbit's general availability on 2026-10-29, GitLab.com serves a
 // namespace's index and its queries only for a top-level group with the

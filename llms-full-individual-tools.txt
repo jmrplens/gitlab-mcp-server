@@ -1,10 +1,10 @@
 # gitlab-mcp-server. Individual Tools Reference
 
-> Version 3.8.0 | up to 1102 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.8.0 | up to 1111 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Individual Tools
 
-When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1102 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1096.
+When `GITLAB_MCP_TOOL_SURFACE=individual`, up to 1111 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1096.
 Grouped by domain:
 
 ### access (8 tools)
@@ -10423,7 +10423,30 @@ Update the authenticated user's notification settings for a project. Returns: th
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### orbit (6 tools)
+### orbit (15 tools)
+
+#### gitlab_orbit_command_list
+
+List the commands GitLab's Orbit (Knowledge Graph) MCP endpoint runs, with the description and input schema of each and the action of this server that runs it: query_graph is orbit.query, get_graph_schema is orbit.schema and get_response_format is orbit.response_format.
+
+**Parameters:**
+
+- `command_names` (array of strings): Names of the Orbit commands to describe (query_graph, get_graph_schema, get_response_format). Empty describes every command.
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, raw.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_context
+
+Resolve one reference to a work item, merge request, job, pipeline, branch or commit through GitLab Orbit (Knowledge Graph) and read its summary, discussions, changed files and failed jobs' logs, and with expand the graph neighborhood of one of the first three, one billable query. A reference it cannot resolve is found false with the reason, not_found also for an object the user or token may not read: a fine-grained token needs, beside read_orbit, permission to read on the object's own project or group. Summary parts it may not read are left out, and a failed expansion carries its reason.
+
+**Parameters:**
+
+- `expand` (boolean): Attach the graph neighborhood of a work item, merge request or job, which GitLab reads with one graph query billed like orbit.query; false reads the summary alone
+- `response_format` (string): Response format: raw (structured JSON, the default) or llm (compact text). json is read as raw.
+- `tokens` (array of strings) (required): Exactly one reference to a GitLab object: Type[id] (WorkItem[1], Job[2]), a GID, an instance URL, path!iid (merge request), path#iid (work item), path&iid (epic) or path@ref (branch or commit). orbit.grep returns the token of a work item, merge request, commit or branch it finds
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_dsl
 
@@ -10448,6 +10471,35 @@ Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project,
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_orbit_grep
+
+Search what one group or project holds through GitLab Orbit (Knowledge Graph): work items, merge requests, code, commits, notes, milestones, users, projects, groups and branches, by namespace_id, project_id or full_path. Every hit but a file carries its token, which orbit.context reads for a work item, merge request, commit or branch, a note also the token of what it is on, and most carry the id orbit.query filters on.
+
+**Parameters:**
+
+- `full_path` (string): Full path of the group or project to search. Give exactly one of namespace_id, project_id and full_path
+- `limit` (integer): Most results to answer, 1 to 50. GitLab answers 20 when omitted
+- `namespace_id` (integer): ID of the group to search. Give exactly one of namespace_id, project_id and full_path
+- `per_scope` (integer): Most results of one scope, 1 to 10 and never above limit. When omitted, 5, or limit when that is lower
+- `project_id` (integer): ID of the project to search. Give exactly one of namespace_id, project_id and full_path
+- `response_format` (string): Response format: raw (structured JSON, the default) or llm (compact text). json is read as raw.
+- `scopes` (array of strings): What to search: work_items, merge_requests, blobs, commits, notes, milestones, users, projects, groups, branches, an alias (mr, issue, code, comment, branch) or a node name (MergeRequest, File). Every scope but branches when omitted. branches is a project's alone, for a user who can read its code, and a fine-grained access token needs read_branch there; otherwise it is answered unavailable, not_available_for_target
+- `search` (string) (required): What to search for, 2 to 256 bytes once trimmed
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_named_query
+
+Run one of GitLab Orbit's (Knowledge Graph) named queries by name: a template orbit.query_templates lists, which takes no parameters, or one of the queries that take node ids, an entity, a file path or search text, which the description of parameters lists with what each takes. The answer is the envelope orbit.query returns.
+
+**Parameters:**
+
+- `name` (string) (required): Named query to run: a template orbit.query_templates lists (recent_merges) or a query that takes parameters (context_for_job)
+- `parameters` (object): The named query's parameters by name, an object. A template takes none (empty or omitted). The others: context_for_issue, context_for_job, context_for_review, expand_merge_request and expand_work_item take node_ids (a list of ids) and limit, both required; expand_neighbors takes entity, node_ids and limit; definition_callees and definition_references take node_id, a string; file_definitions and file_definition_callers take project_id and file_path; list_nodes takes entity; search_nodes takes entity, field and text. Give an id of 2^53 or beyond, such as a definition's or a file's, as a decimal string: as a number it is refused.
+- `response_format` (string): Response format: raw (structured JSON, the default), llm (compact text) or gql (a graph pattern table). json is read as raw.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_orbit_query
 
 Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists. A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, and a refused query is corrected from the message GitLab answers with.
@@ -10456,6 +10508,22 @@ Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language or
 
 - `query` (string) (required): Orbit query as GQL text, the read-only openCypher 9 based language GitLab.com compiles (orbit.dsl describes it). One statement: MATCH pattern [WHERE predicates] RETURN projections [ORDER BY key [ASC or DESC]] [SKIP n] [LIMIT n]. Label every node and anchor at least one by its id or a literal property, as in MATCH (p:Project {full_path: 'gitlab-org/gitlab'}) RETURN p.id, p.full_path LIMIT 1; LIMIT is not a filter. A relationship type follows a colon, -[:IN_PROJECT]->, several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->, and a repeat is bounded, *1..3 at most. A shortest path, MATCH path = ANY SHORTEST (mr:MergeRequest {id: 1})-[:IN_PROJECT*1..3]->(p:Project {id: 2}) RETURN path, labels and anchors both ends and names its relationship types: GitLab.com refuses the wildcard -[*1..3]-> there. WHERE takes AND and NOT, never OR. count, sum, avg, min and max aggregate, and every other RETURN item groups; alias an aggregate and sort by the alias: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC. SKIP takes 0 to 10000 and LIMIT 1 to 1000. orbit.schema lists the entities, properties and relationship types a query names. The JSON query DSL GitLab.com read before is gone. GitLab refuses a query it cannot compile with a message naming the fault.
 - `response_format` (string): Response format: raw (structured JSON, the default here), llm (compact text) or gql (the result as a graph pattern table). json is read as raw.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_query_templates
+
+List the GitLab Orbit (Knowledge Graph) query templates GitLab.com renders for the token's user: the name, description and GQL text of each. The text binds the user's own id where a template asks about the user, so it is that user's alone. The named queries that take parameters are not listed.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_response_format
+
+Read the JSON Schema of the raw answer a GitLab Orbit (Knowledge Graph) query returns, with its version, or the same schema as compact text.
+
+**Parameters:**
+
+- `response_format` (string): Response format: raw or llm (json is read as raw). When omitted, raw.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -10471,6 +10539,33 @@ Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge 
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_orbit_skill_file
+
+Read one file of a deployed GitLab Orbit (Knowledge Graph) skill, by skill name and the file's path relative to the skill root, as GitLab.com serves it.
+
+**Parameters:**
+
+- `name` (string) (required): Skill name as orbit.skill_list lists it
+- `path` (string) (required): File path relative to the skill root, as orbit.skill_get lists it (SKILL.md, references/gql.md)
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_skill_get
+
+Inspect one deployed GitLab Orbit (Knowledge Graph) skill by name: its version, compatibility and the files it holds, with the path, digest and size of each. File content is read one file at a time.
+
+**Parameters:**
+
+- `name` (string) (required): Skill name as orbit.skill_list lists it: lowercase letters, digits and dashes, starting with a letter or digit (orbit, orbit-start)
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_orbit_skill_list
+
+List the GitLab Orbit (Knowledge Graph) skills GitLab.com has deployed: the name, version, compatibility and description of each.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_orbit_status
 
 Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.
@@ -10483,7 +10578,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_tools
 
-List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
+List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each: list_commands and invoke_command, whose commands orbit.command_list describes with the action of this server that runs each.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

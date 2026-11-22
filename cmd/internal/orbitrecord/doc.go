@@ -4,16 +4,19 @@
 // Package orbitrecord is the committed record of what GitLab.com's Orbit
 // routes answer, and the one reader of it.
 //
-// It exists because the six Orbit actions were outside every oracle the 1:1
-// audit reads. The live API record (cmd/internal/apilive) is taken from a
-// booted self-managed GitLab, and no self-managed instance serves Orbit; the
-// routes it does list carry no response entity, because
+// It exists because the six Orbit actions of its first recording were outside
+// every oracle the 1:1 audit reads. The live API record (cmd/internal/apilive)
+// is taken from a booted self-managed GitLab, and no self-managed instance
+// serves Orbit; of the routes it does list, the record of 19.6 gives an entity
+// to four (the search, the context and two skill routes, which later actions
+// read), and the query and the MCP endpoint carry none, because
 // ee/lib/api/orbit/data.rb presents hashes that
 // ee/lib/analytics/knowledge_graph/grpc_client.rb builds by hand from gRPC
 // messages. GitLab's generated OpenAPI document gives no 200 schema for them
-// either. A recorded answer is therefore the only oracle that covers every
-// Orbit output type, and this is that recording, reduced to what a comparison
-// needs and nothing a reader could mistake for data.
+// either. A recorded answer is therefore the only oracle that covers every one
+// of those six output types, and this is that recording, reduced to what a
+// comparison needs and nothing a reader could mistake for data. The nine
+// actions issues 1209, 1586 and 1587 added are not in it yet.
 //
 // What it keeps is a key tree per recorded call: every path a response
 // carried, each with the JSON kinds seen there, and never a value. A subtree
