@@ -24,9 +24,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -109,10 +110,10 @@ func writeTree(t *testing.T, root string, files map[string][]byte) {
 	t.Helper()
 	for name, data := range files {
 		file := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(file), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(file, data, 0o644); err != nil {
+		if err := os.WriteFile(file, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -123,10 +124,7 @@ func writeTree(t *testing.T, root string, files map[string][]byte) {
 func layOutStampTree(t *testing.T, record stampRecord, run stampRun) (string, map[string]string) {
 	t.Helper()
 	root := t.TempDir()
-	manifests := map[string]string{}
-	for path, text := range record.Inputs {
-		manifests[path] = text
-	}
+	manifests := maps.Clone(record.Inputs)
 	for _, path := range run.Remove {
 		delete(manifests, path)
 	}
@@ -174,35 +172,37 @@ func TestStamp_RecordedRuns_MatchTheScript(t *testing.T) {
 			if stderr.String() != run.Stderr {
 				t.Errorf("stderr differs from the script's:\n--- got\n%s\n--- want\n%s", stderr.String(), run.Stderr)
 			}
-			paths := make([]string, 0, len(before))
-			for path := range before {
-				paths = append(paths, path)
-			}
-			sort.Strings(paths)
-			for _, path := range paths {
-				got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
-				if err != nil {
-					t.Errorf("%s: %v", path, err)
-					continue
-				}
-				want := before[path]
-				if hash, changed := run.Changed[path]; changed {
-					want = record.resolve(t, record.Outputs[hash], path)
-				}
-				if string(got) != want {
-					t.Errorf("%s differs from what the script left:\n--- got\n%s\n--- want\n%s", path, got, want)
-				}
-			}
-			entries, err := os.ReadDir(root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				if strings.HasPrefix(entry.Name(), "tmp.") {
-					t.Errorf("the run left %s behind", entry.Name())
-				}
-			}
+			compareStampedManifests(t, record, run, root, before)
 		})
+	}
+}
+
+// compareStampedManifests holds every manifest a run started from to what
+// the script left, and the tree to holding no temporary file.
+func compareStampedManifests(t *testing.T, record stampRecord, run stampRun, root string, before map[string]string) {
+	t.Helper()
+	for _, path := range slices.Sorted(maps.Keys(before)) {
+		got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Errorf("%s: %v", path, err)
+			continue
+		}
+		want := before[path]
+		if hash, changed := run.Changed[path]; changed {
+			want = record.resolve(t, record.Outputs[hash], path)
+		}
+		if string(got) != want {
+			t.Errorf("%s differs from what the script left:\n--- got\n%s\n--- want\n%s", path, got, want)
+		}
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "tmp.") {
+			t.Errorf("the run left %s behind", entry.Name())
+		}
 	}
 }
 
@@ -236,5 +236,18 @@ func TestStamp_SecondRunWithTheSameInputs_WritesTheSameFiles(t *testing.T) {
 		if text != first[path] {
 			t.Errorf("%s moved on the second run", path)
 		}
+	}
+}
+
+// TestStamp_RefusesACommandLineItCannotUse holds the argument count to the
+// script's: two to four positionals, and a usage error otherwise.
+func TestStamp_RefusesACommandLineItCannotUse(t *testing.T) {
+	for _, args := range [][]string{{"dist/checksums.txt"}, {"a", "b", "c", "d", "e"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := runIn(t.TempDir(), append([]string{"stamp"}, args...), &stdout, &stderr, os.Getenv); code != 2 || !strings.Contains(stderr.String(), "stamp takes") {
+				t.Errorf("exit %d, stderr %q", code, stderr.String())
+			}
+		})
 	}
 }

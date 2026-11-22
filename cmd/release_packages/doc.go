@@ -208,6 +208,22 @@
 // waited for. A body in hand is never asked for twice, so a digest that does
 // not match fails on sight.
 //
+// # stamp and homebrew
+//
+// stamp is item 14 of issue 1114, scripts/update-server-json-sha.sh moved
+// into Go: it writes the release's version into server.json, plugin.json,
+// .plugin/plugin.json, mcpb/manifest.json and lhm.plugin.json, pins the
+// release URLs and the OCI image digest, sets the hashes checksums.txt
+// names, declares one mcpb entry per bundle given (refusing a set that does
+// not serve darwin, win32 and linux once each), and syncs the npm launcher,
+// each file written byte for byte as the script's jq wrote it. homebrew is
+// scripts/update-homebrew-tap.sh moved into Go: it renders the tap's formula
+// from the release's hashes and LICENSE, refuses one that would move the tap
+// back to an older release by sort -V's order, checks it with ruby -c, and
+// commits and pushes it through git, or shows the commit with --dry-run.
+// Both are held to a record of what the scripts did
+// (testdata/release_stamp.json).
+//
 // # The standard library and this module only
 //
 // The mcpb subcommand runs in release.yml's release job, which holds the
@@ -232,6 +248,8 @@
 //	go run ./cmd/release_packages/ validate-pypi --version 3.4.0
 //	go run ./cmd/release_packages/ validate-nuget --version 3.4.0
 //	go run ./cmd/release_packages/ verify-published 3.4.0 dist/checksums.txt --nuget-digests nupkg.sha256
+//	go run ./cmd/release_packages/ stamp dist/checksums.txt 3.4.0 dist/a.mcpb,dist/b.mcpb,dist/c.mcpb sha256:...
+//	go run ./cmd/release_packages/ homebrew dist/checksums.txt 3.4.0 homebrew-tap --dry-run
 //
 // Each runs from the repository root and exits 0 when everything passes, 1
 // when something does not or could not be checked, and 2 for arguments it

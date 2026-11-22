@@ -23,7 +23,7 @@
 #     completely.
 #   * npm/gitlab-mcp-server, the published launcher, has no entry on purpose.
 #     Its only dependencies are the per-platform packages, pinned to the exact
-#     release version by scripts/update-server-json-sha.sh; a Dependabot bump
+#     release version by `release_packages stamp`; a Dependabot bump
 #     there would fight the release stamp and desynchronise the launcher from
 #     the binaries it resolves.
 

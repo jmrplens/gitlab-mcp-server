@@ -16,7 +16,7 @@
  * prepared, and moves when the preparation starts (3.1.0: moved 2026-09-17,
  * tagged 2026-09-30), so a command built from it names a release nobody can
  * download yet. server.json's version is stamped by
- * scripts/update-server-json-sha.sh in the release workflow's last job, once
+ * `release_packages stamp` in the release workflow's last job, once
  * the release, its images and its npm, PyPI and NuGet packages are published,
  * and that commit reaches main with a deploy key, so it runs the workflows a
  * push runs and the Pages workflow redeploys the site on it.

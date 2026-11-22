@@ -26,6 +26,8 @@ const usage = `usage: release_packages mcpb VERSION [DIST]
        release_packages validate-nuget --version VERSION [--packages DIR] [--no-install]
        release_packages verify-published VERSION CHECKSUMS [--nuget-digests FILE] [--skip-npm] [--skip-pypi]
                         [--skip-nuget] [--retry-budget SECONDS] [--retry-delay SECONDS] [--nuget-deadline SECONDS]
+       release_packages stamp CHECKSUMS VERSION [MCPB_FILES] [OCI_DIGEST]
+       release_packages homebrew CHECKSUMS VERSION [TAP_DIR] [--dry-run]
 `
 
 // exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
@@ -80,6 +82,10 @@ func runIn(root string, args []string, stdout, stderr io.Writer, getenv func(str
 		return runValidateNuget(root, rest, stdout, stderr)
 	case "verify-published":
 		return runVerifyPublished(root, rest, stdout, stderr)
+	case "stamp":
+		return runStamp(root, rest, stdout, stderr)
+	case "homebrew":
+		return runHomebrew(root, rest, stdout, stderr, os.Environ())
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
