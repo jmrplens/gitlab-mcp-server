@@ -274,6 +274,7 @@ describe("code stays opaque", () => {
 			"[A](/gitlab-mcp-server/about/)",
 			"",
 			"```",
+			"> ```",
 			"> [in](../fence/)",
 			"```",
 		].join("\n");
@@ -283,6 +284,44 @@ describe("code stays opaque", () => {
 				"(/gitlab-mcp-server/about/)",
 				"(https://docs.jmrp.io/gitlab-mcp-server/about/)",
 			),
+		);
+	});
+
+	test("a quoted fence closes only at its own depth", () => {
+		const body = [
+			"> ~~~md",
+			"> > ~~~",
+			"> [in](../deeper/) <Tag>",
+			"> ~~~",
+		].join("\n");
+		assert.equal(reduce(body), body);
+	});
+
+	test("a quoted fence keeps its quote markers, so the next quote stays apart", () => {
+		const body = [
+			"> ~~~",
+			"> [in](../code/)",
+			"> ~~~",
+			"",
+			"> ```",
+			"",
+			"> After.",
+		].join("\n");
+		assert.equal(
+			reduce(body),
+			[
+				"> ~~~",
+				"> [in](../code/)",
+				"> ~~~",
+				"",
+				"<!-- -->",
+				"",
+				"> ```",
+				"",
+				"<!-- -->",
+				"",
+				"> After.",
+			].join("\n"),
 		);
 	});
 

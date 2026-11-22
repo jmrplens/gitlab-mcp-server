@@ -62,6 +62,7 @@ describe("unanchoredTargets", () => {
 			"> [D](/in/an/unclosed/quoted/fence/)",
 			"[E](/after/the/quote/)",
 			"```",
+			"> ```",
 			"> [F](/in/a/fence/)",
 			"```",
 		].join("\n");
