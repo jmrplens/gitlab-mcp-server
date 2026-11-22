@@ -48,12 +48,15 @@ export function unanchoredTargets(text) {
 		prose = [];
 	};
 	for (const line of text.split("\n")) {
-		const marker = /^[ \t]*(`{3,}|~{3,})/.exec(line);
+		const marker = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
 		if (fence !== null) {
+			// A closing fence carries nothing after its marker but spaces or
+			// tabs; a line such as ~~~text is code.
 			if (
 				marker &&
 				marker[1][0] === fence[0] &&
-				marker[1].length >= fence.length
+				marker[1].length >= fence.length &&
+				/^[ \t]*$/.test(marker[2])
 			) {
 				fence = null;
 			}
