@@ -306,6 +306,67 @@ const tidy = (text) =>
 		.replace(/\n{3,}/g, "\n\n")
 		.replace(/(^>.*)\n\n(?=>)/gm, "$1\n\n<!-- -->\n\n");
 
+// --- Tables ------------------------------------------------------------------
+
+// A pipe-table row behind the indentation and quote markers of the blocks it
+// sits in: its prefix, then the row from its opening pipe to its closing one.
+const TABLE_ROW = /^([ \t>]*)(\|.*\|)[ \t]*$/;
+
+/**
+ * Splits a table row into its cells at every pipe no backslash escapes. A
+ * pipe inside a code span is masked by now and splits nothing.
+ *
+ * @param {string} row from the opening pipe to the closing one
+ * @returns {string[]}
+ */
+function tableCells(row) {
+	const cells = [];
+	let cell = "";
+	for (let i = 1; i < row.length; i += 1) {
+		const char = row[i];
+		if (char === "\\" && i + 1 < row.length) {
+			cell += char + row[i + 1];
+			i += 1;
+		} else if (char === "|") {
+			cells.push(cell);
+			cell = "";
+		} else {
+			cell += char;
+		}
+	}
+	return cells;
+}
+
+/**
+ * Removes the padding the sources align their table columns with. The page
+ * keeps it because a person reads the source in an editor; a reader of the
+ * twin parses the table, and the padding was a third of the twins' bytes. A
+ * cell keeps one space on each side and a separator cell becomes `---`, its
+ * alignment colons kept. Code is masked by now, so a table in a sample is not
+ * a table here and keeps its spacing.
+ *
+ * @param {string} text masked markdown
+ * @returns {string}
+ */
+function collapseTables(text) {
+	return text
+		.split("\n")
+		.map((line) => {
+			const row = TABLE_ROW.exec(line);
+			if (!row) return line;
+			const cells = tableCells(row[2]).map((cell) => cell.trim());
+			const separator = cells.every((cell) => /^:?-+:?$/.test(cell));
+			const out = cells.map((cell) => {
+				if (separator) {
+					return ` ${cell.startsWith(":") ? ":" : ""}---${cell.endsWith(":") ? ":" : ""} `;
+				}
+				return cell ? ` ${cell} ` : " ";
+			});
+			return `${row[1]}|${out.join("|")}|`;
+		})
+		.join("\n");
+}
+
 // --- Inline HTML -------------------------------------------------------------
 
 /**
@@ -980,7 +1041,7 @@ function reduceMasked(page) {
 	// nothing reads syntax any more: `\{` and `\}` around an expression,
 	// `\<` and `\>` around a tag.
 	markdown = markdown.replace(/\\([{}<>])/g, "$1");
-	const reduced = unmask(tidy(markdown)).trim();
+	const reduced = unmask(tidy(collapseTables(markdown))).trim();
 	if (!reduced) throw new Error(`${page.file}: nothing left after reduction`);
 	return reduced;
 }

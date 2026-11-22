@@ -443,6 +443,57 @@ describe("expressions", () => {
 	});
 });
 
+describe("tables", () => {
+	// The source pads every cell to its column's width so the table reads in
+	// an editor; a reader of the twin parses it, and the padding was a third
+	// of the twins' bytes.
+	test("cells keep one space of padding and separators keep their alignment", () => {
+		const out = reduce(
+			[
+				"| Name     | Count | Where        |",
+				"| :------- | ----: | :----------: |",
+				"| `a | b`  |     2 | left \\| right |",
+				"| x        |       | **y**        |",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			[
+				"| Name | Count | Where |",
+				"| :--- | ---: | :---: |",
+				"| `a | b` | 2 | left \\| right |",
+				"| x | | **y** |",
+			].join("\n"),
+		);
+	});
+
+	test("a table in a list item or a quote keeps its indentation and markers", () => {
+		const out = reduce(
+			[
+				"- Item",
+				"",
+				"  | A    | B   |",
+				"  | ---- | --- |",
+				"  | one  | 2   |",
+				"",
+				"> | Q    |",
+				"> | ---- |",
+				"> | yes  |",
+			].join("\n"),
+		);
+		assert.match(
+			out,
+			/^ {2}\| A \| B \|\n {2}\| --- \| --- \|\n {2}\| one \| 2 \|$/m,
+		);
+		assert.match(out, /^> \| Q \|\n> \| --- \|\n> \| yes \|$/m);
+	});
+
+	test("a table in a code block stays as written", () => {
+		const block = "```text\n| Name     | Count |\n| -------- | ----- |\n```";
+		assert.equal(reduce(block), block);
+	});
+});
+
 describe("links", () => {
 	test("site, fragment and relative asset targets become absolute", () => {
 		const out = reduce(
