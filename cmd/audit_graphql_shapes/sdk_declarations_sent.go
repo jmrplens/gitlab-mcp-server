@@ -270,6 +270,22 @@ func workItemsSDKSent() []sentDeclaration {
 			"the user who closed the work item, which the issue tools publish from REST as closed_by. The pin of "+
 				"2026-10-29 is the first to carry it, so an earlier GitLab refuses a document naming it and client-go "+
 				"could select it only as a field ReturnedFields selects, never by default; no client-go change is open for it."),
+		recordedField(workItemsService, "WorkItem", "movedToId",
+			"the global ID of the work item this one was moved to, which GitLab 19.6 adds and the issue tools publish "+
+				"from REST as moved_to_id. The pin of 2026-11-21 is the first to carry it, so an earlier GitLab refuses a "+
+				"document naming it and client-go could select it only as a field ReturnedFields selects, never by "+
+				"default; no client-go change is open for it."),
+		recordedField(workItemsService, "WorkItemConnection", "timeLimitedCount",
+			"the number of work items in the connection, counted only within a time limit and null past it, which "+
+				"GitLab 19.6 adds beside count. The service's documents select neither, since a template lookup "+
+				"reads the hierarchy's children to name them rather than to count them, and an earlier GitLab "+
+				"refuses a document naming it; no client-go change is open for it."),
+		sentDeclaration{
+			Package: workItemsService, SchemaType: "WorkItem", Field: "agentPresence", Category: categoryAffordance,
+			Reason: "Whether a GitLab Duo agent session is attached to the work item and what it is doing, which GitLab " +
+				"19.6 adds for the web UI's agent indicator (DuoWorkflowAgentPresence); it describes a Duo session " +
+				"rather than the work item, and the template lookup has no use for it.",
+		},
 		experimentField(workItemsService, "WorkItem", "archived", "16.5", source),
 		experimentField(workItemsService, "WorkItem", "externalAuthor", "18.8", source),
 		experimentField(workItemsService, "WorkItem", "project", "15.3", source),
