@@ -531,9 +531,10 @@ function resolveExpressions(text, bindings, file) {
 // --- Components -----------------------------------------------------------
 
 // A component tag, opening, closing or self-closing, across newlines: several
-// <LinkCard> tags spread their attributes over four lines.
+// <LinkCard> tags spread their attributes over four lines. A `<` behind a
+// backslash is MDX's escape for the character, as in `\<NAME\>`, never a tag.
 const TAG =
-	/<(\/?)([A-Z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*?)(\/?)>/;
+	/(?<!\\)<(\/?)([A-Z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*?)(\/?)>/;
 
 /**
  * The attributes of a tag: a quoted value as its text, an expression as the
@@ -733,7 +734,10 @@ function reduce(source, context, flat = false) {
 		}
 		// Scan to the matching close, counting nested tags of the same name so a
 		// tab set inside a tab closes the inner one first.
-		const scanner = new RegExp(`<${name}(?=[\\s/>])|</${name}>`, "g");
+		const scanner = new RegExp(
+			`(?<!\\\\)(?:<${name}(?=[\\s/>])|</${name}>)`,
+			"g",
+		);
 		let depth = 1;
 		let end = -1;
 		let after = -1;
@@ -906,6 +910,30 @@ function absoluteTargets(text, { file, route }) {
  * @returns {string}
  */
 export function reduceBody(page) {
+	return unmaskedFailures(() => reduceMasked(page));
+}
+
+/**
+ * Runs a reduction step, lifting the mask from the message of any failure it
+ * throws: a message quotes the page, and a code span of the page is masked
+ * while the reduction runs, so it would otherwise read as private-use
+ * characters rather than the backticks the author wrote.
+ *
+ * @template T
+ * @param {() => T} step
+ * @returns {T}
+ */
+function unmaskedFailures(step) {
+	try {
+		return step();
+	} catch (error) {
+		if (error instanceof Error) error.message = unmask(error.message);
+		throw error;
+	}
+}
+
+/** @param {Parameters<typeof reduceBody>[0]} page */
+function reduceMasked(page) {
 	const locale = localeOf(page.route);
 	const withRelease = page.body.replaceAll("%%VERSION%%", page.release);
 	const { body, bindings } = readImports(maskCode(withRelease), {
@@ -929,18 +957,29 @@ export function reduceBody(page) {
 		locale,
 		page.file,
 	);
-	markdown = resolveExpressions(markdown, bindings, page.file).replace(
-		/\\([{}])/g,
-		"$1",
-	);
+	markdown = resolveExpressions(markdown, bindings, page.file);
 	if (locale === "es") markdown = localizeLinks(markdown);
 	markdown = absoluteTargets(markdown, { file: page.file, route: page.route });
-	const residual = /<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
+	const residual = /(?<!\\)<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
 	if (residual) {
 		throw new Error(
 			`${page.file}: <${residual[1]}> survived the reduction. Teach src/lib/page-markdown.mjs.`,
 		);
 	}
+	// A directive reduceDirectives does not know, such as `:::details`, would
+	// reach the twin as its raw fence lines. Code is masked by now, so a line
+	// opening with `:::` here is one Starlight reads as a directive.
+	const directive = /^[ \t]*:::.*$/m.exec(markdown);
+	if (directive) {
+		throw new Error(
+			`${page.file}: no markdown reduction for the directive ${JSON.stringify(directive[0].trim())}. ` +
+				"Teach reduceDirectives in src/lib/page-markdown.mjs.",
+		);
+	}
+	// MDX's escapes for characters it would otherwise read as syntax, now that
+	// nothing reads syntax any more: `\{` and `\}` around an expression,
+	// `\<` and `\>` around a tag.
+	markdown = markdown.replace(/\\([{}<>])/g, "$1");
 	const reduced = unmask(tidy(markdown)).trim();
 	if (!reduced) throw new Error(`${page.file}: nothing left after reduction`);
 	return reduced;
@@ -977,12 +1016,15 @@ export function renderTwin(page) {
 	// above the body. Its links are written as the page means them, so they
 	// are made absolute but not localized.
 	if (page.lead) {
+		const lead = page.lead.trim();
 		parts.push(
-			unmask(
-				absoluteTargets(maskCode(page.lead.trim()), {
-					file: page.file,
-					route: page.route,
-				}),
+			unmaskedFailures(() =>
+				unmask(
+					absoluteTargets(maskCode(lead), {
+						file: page.file,
+						route: page.route,
+					}),
+				),
 			),
 		);
 	}

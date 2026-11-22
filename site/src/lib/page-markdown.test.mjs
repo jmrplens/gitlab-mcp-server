@@ -135,6 +135,27 @@ describe("components", () => {
 		assert.doesNotMatch(out, /�/);
 	});
 
+	// A directive this file does not reduce would reach the twin as its raw
+	// `:::` lines. The failure names the line as the page wrote it: a code
+	// span in it is masked while the reduction runs, and is shown unmasked.
+	test("an unknown directive fails, naming its line as written", () => {
+		assert.throws(
+			() => reduce(":::details[Open `config.yaml`]\nHidden.\n:::"),
+			(error) =>
+				error instanceof Error &&
+				error.message.includes(":::details[Open `config.yaml`]") &&
+				!/[\u{f0000}-\u{ffffd}]/u.test(error.message),
+		);
+	});
+
+	test("a failure shows the page's code spans, never their masked form", () => {
+		assert.throws(
+			() => reduce("[A `b`](/elsewhere/) {stats.`x`}"),
+			(error) =>
+				error instanceof Error && !/[\u{f0000}-\u{ffffd}]/u.test(error.message),
+		);
+	});
+
 	test("a directive on a Spanish page takes the Spanish default title", () => {
 		assert.match(
 			reduce(":::note\nUna nota.\n:::", { route: "es/guide" }),
@@ -245,6 +266,20 @@ describe("components", () => {
 			},
 		);
 		assert.equal(out, "## Hello\n\n`<b>`");
+	});
+});
+
+describe("escapes", () => {
+	// MDX reads `\<NAME\>` as the text <NAME>, not a tag, and so does the twin.
+	test("an escaped angle bracket is text, not a tag", () => {
+		assert.equal(
+			reduce("Set GITLAB_MCP_\\<NAME\\> and \\<Aside\\>."),
+			"Set GITLAB_MCP_<NAME> and <Aside>.",
+		);
+	});
+
+	test("an escaped brace is text, not an expression", () => {
+		assert.equal(reduce("Write \\{id\\}."), "Write {id}.");
 	});
 });
 
