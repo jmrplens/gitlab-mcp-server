@@ -10,7 +10,10 @@
 
 /**
  * What disagrees among the dates of one page. A twin with no Updated line
- * states no date, so there is nothing to compare.
+ * states no date, so there is nothing to compare: that is the twin of a page
+ * that opts out with `lastUpdated: false`, or of a checkout with no history.
+ * A twin with one names a page Starlight dates, so the page's own date is
+ * required, not merely compared when present.
  *
  * @param {object} page
  * @param {string} page.twin the twin's dist-relative path, named in a problem
@@ -27,7 +30,11 @@ export function dateProblems({ twin, updated, lastmod, modified }) {
 			`/${twin} says Updated: ${updated}, the sitemap says <lastmod>${lastmod ?? "nothing"}</lastmod>`,
 		);
 	}
-	if (modified !== undefined && String(modified).slice(0, 10) !== updated) {
+	if (modified === undefined) {
+		problems.push(
+			`/${twin} says Updated: ${updated}, and the page's JSON-LD carries no dateModified`,
+		);
+	} else if (String(modified).slice(0, 10) !== updated) {
 		problems.push(
 			`/${twin} says Updated: ${updated}, the page's JSON-LD says dateModified ${modified}`,
 		);
