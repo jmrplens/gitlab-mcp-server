@@ -208,6 +208,19 @@ describe("components", () => {
 		);
 	});
 
+	// The body of a Spanish page formats its figures es-ES, so an answer on the
+	// same page does too: "1102", never "1,102" beside it.
+	test("FAQ figures follow the page's locale", () => {
+		const page = (route) =>
+			reduce("<FAQ />", {
+				route,
+				stats: { tools: { gitlab_com: 1102, enterprise: 12345 } },
+				faq: [{ q: "Q", a: "{{tools.gitlab_com}} and {{tools.enterprise}}." }],
+			});
+		assert.match(page("guide"), /^1,102 and 12,345\.$/m);
+		assert.match(page("es/guide"), /^1102 and 12\.345\.$/m);
+	});
+
 	test("FAQ on a page without questions renders nothing", () => {
 		assert.throws(() => reduce("<FAQ />"), /nothing left after reduction/);
 	});

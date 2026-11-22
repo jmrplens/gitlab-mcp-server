@@ -30,6 +30,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 
+import { resolveStatTokens } from "./stat-tokens.mjs";
+
 /** The origin every canonical URL of the site names. */
 export const ORIGIN = "https://docs.jmrp.io";
 
@@ -556,28 +558,6 @@ function parseAttributes(raw, bindings, file) {
 const text = (value) => (typeof value === "string" ? value : "");
 
 /**
- * Resolves `{{dotted.path}}` tokens in an FAQ answer from stats.json, the way
- * src/utils/faq.ts does for the rendered section: numbers formatted en-US on
- * every page, an unknown path left as written.
- */
-function resolveStatTokens(answer, stats) {
-	return answer.replace(/\{\{([\w.]+)\}\}/g, (whole, path) => {
-		/** @type {unknown} */
-		let value = stats;
-		for (const key of path.split(".")) {
-			value =
-				value && typeof value === "object"
-					? /** @type {Record<string, unknown>} */ (value)[key]
-					: undefined;
-		}
-		if (value === undefined || value === null) return whole;
-		return typeof value === "number"
-			? value.toLocaleString("en-US")
-			: String(value);
-	});
-}
-
-/**
  * Renders one component that wraps content.
  *
  * @param {string} name
@@ -668,8 +648,11 @@ function renderSelfClosing(name, attributes, context) {
 			const items = context.faq ?? [];
 			if (items.length === 0) return "";
 			const title = text(attributes.title) || FAQ_TITLES[context.locale];
+			// The figures are formatted as the page's own body formats them, and
+			// as the rendered section and the JSON-LD do (src/lib/stat-tokens.mjs).
 			const entries = items.map(
-				({ q, a }) => `### ${q}\n\n${resolveStatTokens(a, context.stats)}`,
+				({ q, a }) =>
+					`### ${q}\n\n${resolveStatTokens(a, context.stats, context.locale)}`,
 			);
 			// The answers come from the frontmatter, outside the masked body, so
 			// their code spans are masked here before the passes that follow.

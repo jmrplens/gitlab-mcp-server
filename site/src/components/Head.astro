@@ -189,7 +189,7 @@ const faq =
 				name: item.q,
 				// Same source as the rendered section, resolved to the plain text
 				// schema.org requires (stat tokens expanded, inline markers removed).
-				acceptedAnswer: { "@type": "Answer", text: faqPlainText(item.a) },
+				acceptedAnswer: { "@type": "Answer", text: faqPlainText(item.a, lang) },
 			})),
 		}
 		: null;
