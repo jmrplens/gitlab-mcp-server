@@ -153,7 +153,17 @@ func authorizeDecisions() []Decision {
 			// the meta surface or refused as unknown. The answer is the
 			// tier's, Ask the operator, and allows a detected tier may be
 			// wrong.
-			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782"},
+			// Issue 1491: from GitLab 19.6 the version answer carries the
+			// plan the instance is licensed for, told to every caller that
+			// may read the metadata, and it is the probe's first question.
+			// A recognized plan, free included, settles the tier and nothing
+			// else is asked, so a non-administrator on a licensed instance
+			// resolves the license's tier and free is an answer, not this
+			// row's exception; a null plan, subscriptions held per
+			// namespace, skips the license; an absent key, a value outside
+			// the four plans, a release before 19.6 and a version the token
+			// was refused ask the questions above as before.
+			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782", "issue 1491"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
 				{
@@ -174,6 +184,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "membershipContext"),
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgGitLab, "Client.ResolveTier"),
+				enforce(pkgGitLab, "Client.tierFromInstancePlan"),
 				enforce(pkgGitLab, "tierReadUnresolved"),
 				enforce(pkgServer, "warnStdioProvisionalTier"),
 				enforce(pkgTools, "TierWithheld"),

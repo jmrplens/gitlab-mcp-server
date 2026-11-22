@@ -327,7 +327,8 @@ func TestResolveTier_EveryStepUnanswered_NamesThemInOrder(t *testing.T) {
 // TestResolveTier_TouchesNothingOnTheClient checks the property the pool
 // relies on to ask a tier again under a registered catalog: the client keeps
 // the tier it had whatever the probe answers, and nothing is warned about or
-// asked beyond the probe's own steps, the edition included.
+// asked beyond the probe's own steps: the version read of its first step,
+// which carries the instance plan from 19.6, and never the edition.
 func TestResolveTier_TouchesNothingOnTheClient(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -353,8 +354,10 @@ func TestResolveTier_TouchesNothingOnTheClient(t *testing.T) {
 			if strings.Contains(logged.String(), `"level":"WARN"`) {
 				t.Errorf("ResolveTier warned:\n%s", logged)
 			}
-			if asked := tc.server.versionRequests(); asked != 0 {
-				t.Errorf("/version asked %d times, want none", asked)
+			// The one read is the probe's own first step, the instance plan
+			// from 19.6 (issue 1491); the edition is never asked beside it.
+			if asked := tc.server.versionRequests(); asked != 1 {
+				t.Errorf("/version asked %d times, want once", asked)
 			}
 		})
 	}

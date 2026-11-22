@@ -80,8 +80,20 @@ func (r *TierResolution) merge(name string, step tierStep) {
 // what that client's handlers read; [Client.DetectTier] is the call that
 // adopts the answer.
 //
-// It asks up to three questions, because no one of them answers for every
-// deployment:
+// From GitLab 19.6 it asks the instance first ([Client.tierFromInstancePlan],
+// issue 1491): the version answer carries the plan the instance is licensed
+// for, told to every caller that may read the metadata. A recognized plan,
+// free included, is the instance's own answer and nothing else is asked, so a
+// non-administrator on a licensed instance resolves the license's tier and an
+// unlicensed enterprise build resolves Free without the warning. A null plan
+// is GitLab saying subscriptions are held per namespace, where the license
+// answers nobody, so the license is not asked and the namespace and membership
+// steps answer. An absent key, a value outside the four plans, an instance
+// before 19.6 and a version the token was refused answer nothing, and the
+// questions below are asked as they always were.
+//
+// It then asks up to three questions, because no one of them answers for
+// every deployment:
 //
 //   - GET /license, which carries the instance's own plan and is **admin-only
 //     on self-managed**. It is the authoritative answer where it is available,
@@ -120,12 +132,18 @@ func (r *TierResolution) merge(name string, step tierStep) {
 // its process context, both of which end at shutdown. A caller with no base of
 // its own passes ctx, which then bounds the step as well.
 func (c *Client) ResolveTier(ctx, membershipBase context.Context) TierResolution {
-	license := c.tierFromLicense(ctx)
-	if license.answered {
-		return TierResolution{Tier: license.tier, Answered: true}
+	plan := c.tierFromInstancePlan(ctx)
+	if plan.kind == instancePlanRecognized {
+		return TierResolution{Tier: plan.tier, Answered: true}
 	}
 	var resolution TierResolution
-	resolution.merge(tierStepLicense, license)
+	if plan.kind != instancePlanPerNamespace {
+		license := c.tierFromLicense(ctx)
+		if license.answered {
+			return TierResolution{Tier: license.tier, Answered: true}
+		}
+		resolution.merge(tierStepLicense, license)
+	}
 	resolution.merge(tierStepNamespaces, c.tierFromNamespaces(ctx))
 	if resolution.Tier < edition.Ultimate && membershipTierApplies(c) {
 		memberCtx, cancel := membershipContext(membershipBase)

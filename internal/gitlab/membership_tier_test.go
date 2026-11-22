@@ -111,6 +111,9 @@ type fakeGitLabDotCom struct {
 	license     int
 	licensePlan string
 	licenseHang bool
+	// versionBody is what /version answers, GitLab.com's 19.5.0-pre answer
+	// without a plan when empty.
+	versionBody string
 	// namespacesStatus, when not zero, is the status /namespaces answers in
 	// place of the list; namespacesHang answers nothing until the request
 	// ends.
@@ -124,6 +127,7 @@ type fakeGitLabDotCom struct {
 	mu       sync.Mutex
 	asked    []map[string]any // the variables of every membership request
 	versions int              // the /version requests
+	licenses int              // the /license requests
 }
 
 // set changes what g answers from the next request on.
@@ -142,7 +146,15 @@ func (g *fakeGitLabDotCom) answers() fakeGitLabDotCom {
 		namespaces: g.namespaces, pages: g.pages,
 		license: g.license, licensePlan: g.licensePlan, licenseHang: g.licenseHang,
 		namespacesStatus: g.namespacesStatus, namespacesHang: g.namespacesHang,
+		versionBody: g.versionBody,
 	}
+}
+
+// licenseRequests is how many times /license was asked.
+func (g *fakeGitLabDotCom) licenseRequests() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.licenses
 }
 
 // versionRequests is how many times /version was asked.
@@ -167,8 +179,13 @@ func (g *fakeGitLabDotCom) serve(t *testing.T) http.HandlerFunc {
 		switch r.URL.Path {
 		case versionAPIPath:
 			g.set(func(g *fakeGitLabDotCom) { g.versions++ })
-			respondJSON(w, `{"version":"19.5.0-pre","enterprise":true}`)
+			body := now.versionBody
+			if body == "" {
+				body = `{"version":"19.5.0-pre","enterprise":true}`
+			}
+			respondJSON(w, body)
 		case "/api/v4/license":
+			g.set(func(g *fakeGitLabDotCom) { g.licenses++ })
 			switch {
 			case now.licenseHang:
 				hangUntilTheRequestEnds(r)

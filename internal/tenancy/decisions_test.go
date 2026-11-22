@@ -703,14 +703,16 @@ func TestDecisions_CodexUserAgentFallback_IsDecidedByIssue1043(t *testing.T) {
 // the tier pruned from a served action's schema with the tier it needs, and
 // issue 1782, which tells a step of the probe GitLab did not answer from one
 // it answered, so the Free an unanswered step leaves is provisional rather
-// than this exception.
+// than this exception, and issue 1491, which asks the instance plan first
+// from GitLab 19.6, so a free plan there is an answer rather than this
+// exception.
 func TestDecisions_TierFallback_IsINV008sRecordedException(t *testing.T) {
 	for _, tc := range []struct {
 		id      string
 		decided []string
 	}{
 		{"ADM-003", []string{"ADR-0018", "issue 952"}},
-		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782"}},
+		{"AUT-003", []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782", "issue 1491"}},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			d, ok := Lookup(tc.id)

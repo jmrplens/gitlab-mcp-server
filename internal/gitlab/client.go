@@ -107,6 +107,11 @@ type Client struct {
 	// what it reported is not; nil before any read answered. See
 	// [Client.Version].
 	version atomic.Pointer[string]
+	// plan is the instance plan the same read reported from GitLab 19.6 on,
+	// as [parseInstancePlan] keeps it; nil before any read answered. It is
+	// stored before version, so a reader that finds a version finds the plan
+	// of that read or a later one. See [Client.tierFromInstancePlan].
+	plan atomic.Pointer[instancePlan]
 	// versionRefusal is GitLab's sentence when it accepted this client's
 	// credential and refused it /api/v4/version for a fine-grained permission
 	// the token's grant lacks; nil otherwise. See [Client.VersionRefusal].
@@ -999,10 +1004,14 @@ func (c *Client) warnUnresolvedTier(ctx context.Context) {
 }
 
 // gitLabVersionInfo captures the subset of /api/v4/version needed for health
-// checks and GitLab edition detection.
+// checks, GitLab edition detection and, from GitLab 19.6, the instance plan
+// the tier probe asks first (issue 1491). Plan is raw, because an absent key
+// and null mean different things there and a *string would read both as nil;
+// [parseInstancePlan] reads it.
 type gitLabVersionInfo struct {
-	Version    string `json:"version"`
-	Enterprise *bool  `json:"enterprise"`
+	Version    string          `json:"version"`
+	Enterprise *bool           `json:"enterprise"`
+	Plan       json.RawMessage `json:"plan"`
 }
 
 // setAuthHeader applies this client's auth scheme to a raw request.
@@ -1023,7 +1032,8 @@ func (c *Client) setAuthHeader(req *http.Request) {
 // on every hop (ADR-0022).
 //
 // It records what it learns on the client: the version an answer reports
-// ([Client.Version]), and GitLab's sentence when it refuses the credential the
+// ([Client.Version]) and, from 19.6, the instance plan beside it
+// ([parseInstancePlan]), and GitLab's sentence when it refuses the credential the
 // endpoint for a fine-grained permission ([Client.VersionRefusal]), which it
 // returns as a *versionRefusedError.
 func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
@@ -1052,6 +1062,8 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	}
 
 	version := validVersion(versionInfo.Version)
+	plan := parseInstancePlan(versionInfo.Plan)
+	c.plan.Store(&plan)
 	c.version.Store(&version)
 	c.versionRefusal.Store(nil)
 	return &versionInfo, nil
