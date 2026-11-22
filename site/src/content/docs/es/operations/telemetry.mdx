@@ -78,13 +78,13 @@ telemetría funcionando con algo distinto de lo que querías; la cuarta,
 `telemetry disabled: it could not be started`, y el servidor sigue sirviendo
 sin telemetría.
 
-<Aside type="caution" title="`http://` no es el valor por defecto">
+:::caution[`http://` no es el valor por defecto]
 Los exportadores de Go apuntan por defecto a `https://localhost:4318`. Activar
 la telemetría sin endpoint intenta TLS contra un colector local en texto plano,
 y falla cada lote en las tres señales. Escribe el esquema:
 `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`. Escribir solo
 `localhost:4318` también da https.
-</Aside>
+:::
 
 <Aside type="caution" title="Las duraciones son milisegundos enteros">
 "Cualquier valor que represente un tiempo de espera DEBE ser un entero que
@@ -104,15 +104,15 @@ banderas que define *este* servidor aceptan duraciones de Go, lo que hace la
 inconsistencia más fácil de pisar, no más difícil.
 </Aside>
 
-<Aside type="caution" title="`http/json` se rechaza al arrancar">
+:::caution[`http/json` se rechaza al arrancar]
 Desde la v1.46.0 el exportador de trazas de Go lo implementa y los de métricas y
 logs no. Honrarlo daría a un mismo despliegue dos codificaciones a la vez, spans
 en JSON junto a métricas en protobuf, a partir de un único ajuste que parece
 seleccionar una sola cosa. Falla por su nombre en vez de degradar en silencio o
 de partir las señales en silencio.
-</Aside>
+:::
 
-<Aside type="caution" title="`OTEL_EXPORTER_OTLP_INSECURE=true` se impone a un endpoint `https` en trazas y métricas">
+:::caution[`OTEL_EXPORTER_OTLP_INSECURE=true` se impone a un endpoint `https` en trazas y métricas]
 La especificación dice que la variable "solo se aplica a OTLP/gRPC cuando el
 endpoint se indica sin el esquema http o https". Los exportadores de
 trazas y de métricas de Go no la leen así: su configuración desde el entorno
@@ -133,7 +133,7 @@ valor no vacío decide y solo `true` (con cualquier combinación de mayúsculas)
 significa texto plano, así que `INSECURE=1` las sube a TLS igual que `false`;
 el exportador de logs solo acepta `true` y `false` e ignora cualquier otro
 valor.
-</Aside>
+:::
 
 Este servidor emula esa desviación señal por señal en vez de leer el esquema de
 la URL, así que el [aviso de texto plano](#autenticarse-ante-tu-colector) nombra

@@ -1,0 +1,30 @@
+---
+// Copyright (c) 2026 José M. Requena Plens
+// SPDX-License-Identifier: MIT
+
+// The inline spans of an FAQ question or answer as elements: code, bold and
+// links, the rest as text. FAQ.astro renders both through it, so a question
+// that writes a flag as code shows code, as its answer does, rather than the
+// backticks.
+import type { FaqSpan } from "../utils/faq";
+
+interface Props {
+	spans: FaqSpan[];
+}
+
+const { spans } = Astro.props;
+---
+
+{
+	spans.map((span) =>
+		span.type === "code" ? (
+			<code>{span.value}</code>
+		) : span.type === "bold" ? (
+			<strong>{span.value}</strong>
+		) : span.type === "link" ? (
+			<a href={span.href}>{span.value}</a>
+		) : (
+			span.value
+		),
+	)
+}

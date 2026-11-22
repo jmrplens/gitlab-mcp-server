@@ -1007,6 +1007,22 @@ function reduceDirectives(text, locale, file) {
 	const lines = text.split("\n");
 	const out = [];
 	for (let i = 0; i < lines.length; i += 1) {
+		// `{...}` after the name and label sets attributes, such as an icon,
+		// which the twin has no form for. Refused here, by the directive's
+		// name: left in place, the braces would reach resolveExpressions and
+		// the failure would blame an expression the page never imported. Any
+		// directive, behind indentation or the `>` of a blockquote, as the
+		// check for an unknown one reads it.
+		const attributed = /^[ \t>]*(:::[\w-]+(?:\[.*\])?\{.*\})[ \t]*$/.exec(
+			lines[i],
+		);
+		if (attributed) {
+			throw new Error(
+				`${file}: the directive ${JSON.stringify(attributed[1])} sets attributes, ` +
+					"which the markdown twin has no form for. Drop the {...} block, " +
+					"or teach reduceDirectives in src/lib/page-markdown.mjs.",
+			);
+		}
 		const open =
 			/^([ \t]*):::(note|tip|caution|danger)(?:\[(.*)\])?[ \t]*$/.exec(
 				lines[i],

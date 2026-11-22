@@ -3,7 +3,7 @@
 
 // Shared FAQ helpers.
 //
-// A page's FAQ lives in one place — the `faq:` frontmatter array — and feeds two
+// A page's FAQ lives in one place, the `faq:` frontmatter array, and feeds two
 // consumers that must never disagree: the visible FAQ section (components/FAQ.astro)
 // and the FAQPage JSON-LD (components/Head.astro). Before this, each page carried
 // the questions twice, hand-written in both places, and they had already drifted:
@@ -15,9 +15,13 @@
 //     published numbers cannot fall behind the real catalog, and formatted in
 //     the page's locale as its body formats its own figures
 //     (src/lib/stat-tokens.mjs, which the markdown twin reads too);
-//   - inline `code` and **bold**, kept for the rendered section and stripped for
-//     the JSON-LD, which requires plain text.
+//   - inline `code`, **bold** and links, kept for the rendered section and
+//     stripped for the JSON-LD, which requires plain text
+//     (src/lib/faq-inline.mjs, which the twin check reads too).
+//
+// Questions take the same inline markup and no stat tokens.
 import stats from "../data/stats.json";
+import { inlineSpans, plainInline } from "../lib/faq-inline.mjs";
 import { resolveStatTokens as resolveTokens } from "../lib/stat-tokens.mjs";
 
 export interface FaqItem {
@@ -44,29 +48,17 @@ export function resolveStatTokens(text: string, lang: string): string {
 
 /** Splits an answer into inline spans for rendering on a page in `lang`. */
 export function parseFaqSpans(answer: string, lang: string): FaqSpan[] {
-	const resolved = resolveStatTokens(answer, lang);
-	const spans: FaqSpan[] = [];
-	// Inline code first: backticks bind tighter than emphasis in Markdown, so a
-	// `**literal**` inside code must not be treated as bold.
-	const pattern = /`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)]+)\)/g;
-	let last = 0;
-	for (let m = pattern.exec(resolved); m !== null; m = pattern.exec(resolved)) {
-		if (m.index > last) {
-			spans.push({ type: "text", value: resolved.slice(last, m.index) });
-		}
-		if (m[1] !== undefined) {
-			spans.push({ type: "code", value: m[1] });
-		} else if (m[2] !== undefined) {
-			spans.push({ type: "bold", value: m[2] });
-		} else {
-			spans.push({ type: "link", value: m[3] as string, href: m[4] as string });
-		}
-		last = m.index + m[0].length;
-	}
-	if (last < resolved.length) {
-		spans.push({ type: "text", value: resolved.slice(last) });
-	}
-	return spans;
+	return inlineSpans(resolveStatTokens(answer, lang));
+}
+
+/**
+ * Splits a question into inline spans for its heading. A question takes the
+ * same inline markup as an answer, so a flag written as code renders as code
+ * rather than between literal backticks; it takes no stat tokens, which the
+ * markdown twin does not resolve in a heading either.
+ */
+export function parseFaqQuestionSpans(question: string): FaqSpan[] {
+	return inlineSpans(question);
 }
 
 /**
@@ -75,14 +67,15 @@ export function parseFaqSpans(answer: string, lang: string): FaqSpan[] {
  * preserved.
  */
 export function faqPlainText(answer: string, lang: string): string {
-	return (
-		resolveStatTokens(answer, lang)
-			.replace(/`([^`]+)`/g, "$1")
-			.replace(/\*\*([^*]+)\*\*/g, "$1")
-			// Keep the link text, drop the URL: schema.org Answer.text is prose, and a
-			// bare Markdown target inside it reads as noise to an extractor.
-			.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-	);
+	return plainInline(resolveStatTokens(answer, lang));
+}
+
+/**
+ * Renders a question as the plain text required by schema.org Question.name:
+ * inline markers removed, content preserved.
+ */
+export function faqPlainQuestion(question: string): string {
+	return plainInline(question);
 }
 
 /** Slugifies a question into a stable heading anchor. */

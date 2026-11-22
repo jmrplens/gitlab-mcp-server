@@ -5,15 +5,16 @@
 // Renders a page's visible "Frequently asked questions" section from the same
 // `faq:` frontmatter that feeds the FAQPage JSON-LD in Head.astro.
 //
-// Single-sourcing the two is the point. When the questions were written twice —
-// once as prose in the body, once as hand-maintained JSON-LD in `head:` — they
+// Single-sourcing the two is the point. When the questions were written twice,
+// once as prose in the body and once as hand-maintained JSON-LD in `head:`, they
 // drifted: pages ended up advertising one set of questions to search engines and
 // showing a different set to readers.
 //
 // Headings stay real `<h2>`/`<h3>` elements so the page outline, the "On this
 // page" table of contents, and AI heading extraction all behave exactly as they
 // did with hand-written Markdown.
-import { parseFaqSpans, faqSlug, type FaqItem } from "../utils/faq";
+import { parseFaqSpans, parseFaqQuestionSpans, faqSlug, type FaqItem } from "../utils/faq";
+import FaqInline from "./FaqInline.astro";
 
 interface Props {
 	items?: FaqItem[];
@@ -39,19 +40,11 @@ const titleId = faqSlug(title);
 					{/* Namespaced: some pages also carry a body section whose
 					    heading repeats the question verbatim, and two elements
 					    sharing an id is invalid HTML and breaks anchor links. */}
-					<h3 id={`faq-${faqSlug(item.q)}`}>{item.q}</h3>
+					<h3 id={`faq-${faqSlug(item.q)}`}>
+						<FaqInline spans={parseFaqQuestionSpans(item.q)} />
+					</h3>
 					<p>
-						{parseFaqSpans(item.a, lang).map((span) =>
-							span.type === "code" ? (
-								<code>{span.value}</code>
-							) : span.type === "bold" ? (
-								<strong>{span.value}</strong>
-							) : span.type === "link" ? (
-								<a href={span.href}>{span.value}</a>
-							) : (
-								span.value
-							),
-						)}
+						<FaqInline spans={parseFaqSpans(item.a, lang)} />
 					</p>
 				</>
 			))}
