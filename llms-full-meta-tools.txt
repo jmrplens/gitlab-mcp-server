@@ -12311,7 +12311,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate license, namespace plan or, on GitLab.com, top-level group the token is a member of). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 18 tools require GITLAB_MCP_TIER=premium or GITLAB_MCP_TIER=ultimate (or a detected Premium/Ultimate instance plan, license, namespace plan or group the token is a member of). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
