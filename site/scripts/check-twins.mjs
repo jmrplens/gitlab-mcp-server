@@ -20,6 +20,7 @@ import process from "node:process";
 
 import { FAQ_TITLES } from "../src/lib/page-markdown.mjs";
 import { TWIN_NOTE } from "./gen-llms.mjs";
+import { dateProblems } from "./twin-dates.mjs";
 import { unanchoredTargets } from "./twin-targets.mjs";
 
 const DIST = resolve(process.argv[2] ?? "dist");
@@ -215,24 +216,14 @@ for (const page of pages) {
 		);
 	}
 
-	// One date in three places, all read from src/lib/page-dates.mjs: the
-	// twin's Updated line, the sitemap's <lastmod> and the page's
-	// dateModified. Each used to read git its own way, and they disagreed by a
-	// day wherever a commit's local date was not its UTC one.
-	const updated = header?.[2];
-	if (updated) {
-		const lastmod = lastmods.get(page);
-		if (lastmod !== updated) {
-			fail(
-				`/${twin} says Updated: ${updated}, the sitemap says <lastmod>${lastmod ?? "nothing"}</lastmod>`,
-			);
-		}
-		const modified = pageDateModified(html, page);
-		if (modified !== undefined && String(modified).slice(0, 10) !== updated) {
-			fail(
-				`/${twin} says Updated: ${updated}, the page's JSON-LD says dateModified ${modified}`,
-			);
-		}
+	// One date in three places (scripts/twin-dates.mjs says which).
+	for (const problem of dateProblems({
+		twin,
+		updated: header?.[2],
+		lastmod: lastmods.get(page),
+		modified: pageDateModified(html, page),
+	})) {
+		fail(problem);
 	}
 }
 
