@@ -458,7 +458,9 @@ function reduceHtml(text, file) {
 					[...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
 						([, , cell]) =>
 							escapeCellPipes(
-								decode(inlineElements(cell, file)).replace(/\s+/g, " ").trim(),
+								decodeText(inlineElements(cell, file))
+									.replace(/\s+/g, " ")
+									.trim(),
 							),
 					),
 			);
@@ -501,6 +503,18 @@ function escapeCellPipes(cell) {
 	}
 	return out;
 }
+
+/**
+ * Prose with its entities read, for text outside code. A `<` read from
+ * `&lt;` is written escaped, as a page writes `\<id>`: the page showed it as
+ * text, and bare it would open an element for a markdown reader and for the
+ * check after the reduction. The pass that lifts MDX's escapes drops the
+ * backslash again wherever no tag could start.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+const decodeText = (text) => decode(text.replace(/&lt;/g, "\\<"));
 
 /** @param {string} text @returns {string} the text with its entities read */
 const decode = (text) =>
