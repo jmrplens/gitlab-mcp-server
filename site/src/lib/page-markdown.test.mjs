@@ -507,6 +507,21 @@ describe("raw HTML", () => {
 		);
 	});
 
+	// MDX reads `\|` in a cell as a pipe, so the twin carries that escape once
+	// rather than escaping its backslash's pipe a second time, which would end
+	// the cell there; a pipe the page writes bare is escaped.
+	test("a pipe in an HTML table cell is escaped once, whether or not the page escaped it", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>A</th><th>B</th></tr>",
+				"  <tr><td>a \\| b</td><td>c | d</td></tr>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(out, "| A | B |\n| --- | --- |\n| a \\| b | c \\| d |");
+	});
+
 	test("an image outside a table drawn from a data URI becomes its alternative text", () => {
 		const out = reduce(
 			'Before.\n\n<img\n  src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"\n  width="48"\n  alt="Brand mark"\n/>\n\nAfter.',
