@@ -1462,6 +1462,98 @@ func askedAgainStandIn(t *testing.T, handlerStatus int, handlerAnswer string, ag
 	})
 }
 
+// queryAnswer is the raw answer a stand-in gives POST /orbit/query: the
+// envelope GitLab.com answered on 2026-10-29 (41l in the capture), with the
+// nodes, the has_more and the row count a test names.
+func queryAnswer(nodes string, hasMore bool, rows int) string {
+	return fmt.Sprintf(`{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[%s],"edges":[],"pagination":{"has_more":%t,"truncated":false}},"query_type":"traversal","row_count":%d}`, nodes, hasMore, rows)
+}
+
+// TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement holds the
+// subtests that read what cmd/orbit_fixtures provisions able to fail: a
+// statement GitLab answers with no row is an error that names it, since make
+// orbit-wait-indexer waits for the index to be READY before the suite runs,
+// so an empty answer after it means the graph lost what the setup made (issue
+// 1588), and one GitLab answers with a row is the summary queryRun logs. It
+// needs no network and no token.
+func TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement(t *testing.T) {
+	const statement = "MATCH (w:WorkItem)-[:IN_PROJECT]->(p:Project {full_path: 'ns/kg-fixtures'}) RETURN w.id"
+	tests := []struct {
+		name    string
+		answer  string
+		wantErr bool
+	}{
+		{name: "no row", answer: queryAnswer("", false, 0), wantErr: true},
+		{name: "one row", answer: queryAnswer(`{"type":"WorkItem","id":"1"}`, false, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/orbit/query") {
+					t.Errorf("request = %s %s, want POST /orbit/query", r.Method, r.URL.Path)
+				}
+				testutil.RespondJSON(w, http.StatusOK, tt.answer)
+			}))
+			out, err := provisionedRun(client, statement)(context.Background())
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("provisionedRun() error = %v, want the summary of one row", err)
+				}
+				if out != "query_type=traversal row_count=1" {
+					t.Errorf("provisionedRun() = %v, want the row summary queryRun logs", out)
+				}
+				return
+			}
+			if !errors.Is(err, errNoRow) {
+				t.Fatalf("provisionedRun() error = %v, want errNoRow", err)
+			}
+			if !strings.Contains(err.Error(), statement) {
+				t.Errorf("provisionedRun() error = %q, want it to name the statement", err)
+			}
+		})
+	}
+}
+
+// TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID holds the
+// SKIP and LIMIT subtest to what it asks: the second fixture project by id,
+// with has_more set exactly when the namespace holds a project after it. An
+// answer that only ran used to pass it.
+func TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID(t *testing.T) {
+	second := `{"type":"Project","id":"83234232"}`
+	tests := []struct {
+		name    string
+		answer  string
+		ids     []string
+		wantErr string
+	}{
+		{name: "the second of two", answer: queryAnswer(second, false, 1), ids: []string{"83234232", "83234203"}},
+		{name: "the second of three, with one after it", answer: queryAnswer(second, true, 1), ids: []string{"83234203", "83234232", "83234999"}},
+		{name: "the first project", answer: queryAnswer(`{"type":"Project","id":"83234203"}`, false, 1), ids: []string{"83234203", "83234232"}, wantErr: "answered project 83234203"},
+		{name: "has_more with nothing after it", answer: queryAnswer(second, true, 1), ids: []string{"83234203", "83234232"}, wantErr: "has_more=true"},
+		{name: "no has_more with one after it", answer: queryAnswer(second, false, 1), ids: []string{"83234203", "83234232", "83234999"}, wantErr: "has_more=false"},
+		{name: "no row", answer: queryAnswer("", false, 0), ids: []string{"83234203", "83234232"}, wantErr: "answered 0 rows"},
+		{name: "one fixture project", answer: queryAnswer(second, false, 1), ids: []string{"83234232"}, wantErr: "needs two fixture projects"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out orbit.QueryOutput
+			if err := json.Unmarshal([]byte(tt.answer), &out); err != nil {
+				t.Fatalf("decode the stand-in answer: %v", err)
+			}
+			got := skipLimitProblem(out, tt.ids)
+			if tt.wantErr == "" {
+				if got != "" {
+					t.Errorf("skipLimitProblem() = %q, want none", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.wantErr) {
+				t.Errorf("skipLimitProblem() = %q, want it to say %q", got, tt.wantErr)
+			}
+		})
+	}
+}
+
 // testOrbitLiveFixtures exercises the query types GitLab infers from GQL
 // against the live fixture data the setup script provisions in any GitLab
 // namespace (defaults to jmrp-oss/orbit-fixtures, configurable via
