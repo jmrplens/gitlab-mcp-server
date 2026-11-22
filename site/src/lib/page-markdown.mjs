@@ -454,8 +454,9 @@ const inlineElements = (html, file, cell = false) =>
  * The raw HTML a page writes, as markdown. A page writes HTML where markdown
  * cannot say it: `<code>{expression}</code>` (a code span would print the
  * expression), a styled table, an image drawn from a data URI. A table
- * becomes a pipe table, its first row the header; an image, a link and inline
- * code become their markdown. Anything else is left for the check after the
+ * becomes a pipe table, its first row the header, and one holding anything
+ * beside its rows and their cells fails; an image, a link and inline code
+ * become their markdown. Anything else is left for the check after the
  * reduction, which fails the build on it.
  *
  * @param {string} text masked markdown, expressions resolved
@@ -466,16 +467,29 @@ function reduceHtml(text, file) {
 	const tables = text.replace(
 		/^([ \t]*)<table\b[^>]*>([\s\S]*?)<\/table>/gm,
 		(_, indent, inner) => {
+			refuseLeftover(
+				inner
+					.replace(/<tr\b[^>]*>[\s\S]*?<\/tr>/g, "")
+					.replace(/<\/?(?:thead|tbody|tfoot)\b[^>]*>/g, ""),
+				"table",
+				file,
+			);
 			const rows = [...inner.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(
-				([, row]) =>
-					[...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
+				([, row]) => {
+					refuseLeftover(
+						row.replace(/<(t[hd])\b[^>]*>[\s\S]*?<\/\1>/g, ""),
+						"table row",
+						file,
+					);
+					return [...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
 						([, , cell]) =>
 							escapeCellPipes(
 								decodeText(inlineElements(cell, file, true))
 									.replace(/\s+/g, " ")
 									.trim(),
 							),
-					),
+					);
+				},
 			);
 			if (rows.length === 0) {
 				throw new Error(`${file}: an HTML table with no rows`);
@@ -490,6 +504,27 @@ function reduceHtml(text, file) {
 		},
 	);
 	return inlineElements(tables, file);
+}
+
+/**
+ * Fails on what an HTML table, or one of its rows, holds beside the parts
+ * the reduction keeps: the rows of a table (its <thead>, <tbody> and <tfoot>
+ * only group them) and the cells of a row. The pipe table it becomes has no
+ * place for a <caption> or for text between cells, and the whole table is
+ * replaced, so the check for markup left after the reduction would never see
+ * what vanished.
+ *
+ * @param {string} rest the table or row with the kept parts removed
+ * @param {string} what "table" or "table row", named in the failure
+ * @param {string} file named in the failure
+ */
+function refuseLeftover(rest, what, file) {
+	const left = rest.trim();
+	if (!left) return;
+	const shown = /^<[^>]*>|^[^<]{1,40}/.exec(left)?.[0]?.trim() ?? left;
+	throw new Error(
+		`${file}: an HTML ${what} holding ${shown}, which the markdown twin has no place for`,
+	);
 }
 
 /**
