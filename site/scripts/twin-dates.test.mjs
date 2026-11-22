@@ -27,6 +27,17 @@ describe("dateProblems", () => {
 		assert.deepEqual(dateProblems({ twin, lastmod: "2026-11-20" }), []);
 	});
 
+	// A page that opts out of its date with `lastUpdated: false` has a twin
+	// with no Updated line, so a dated twin names a page that must date itself.
+	test("names a dated page that lost its own date", () => {
+		assert.deepEqual(
+			dateProblems({ twin, updated: "2026-11-20", lastmod: "2026-11-20" }),
+			[
+				"/about/index.md says Updated: 2026-11-20, and the page's JSON-LD carries no dateModified",
+			],
+		);
+	});
+
 	test("names a sitemap date and a page date that disagree with the twin", () => {
 		assert.deepEqual(
 			dateProblems({
