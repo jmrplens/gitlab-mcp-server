@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,185 |
-| Unit test functions                                   | 22,383 |
+| Total test functions                                  | 24,193 |
+| Unit test functions                                   | 22,391 |
 | E2E test functions                                    |  1,802 |
 | cmd test functions                                    |  6,069 |
 | Test files (internal/)                                |    781 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,821 | 57.1% |
+| `TestFunc_Scenario` (2-part)           | 13,823 | 57.1% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,465 | 39.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,471 | 39.1% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,378 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,381 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (182) |         11,477 |        491 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (182) |         11,482 |        491 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,802 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,069 |        500 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,185** |  **1,738** |                                                                                                 |
+| **Total**               |     **24,193** |  **1,738** |                                                                                                 |
 
 ### Core Packages
 
@@ -93,8 +93,8 @@
 | testutil/netfixture      |        12 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,450 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,378** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,453 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,381** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -286,8 +286,8 @@
 | runners                 |        144 |          2 |   100.0% |        21 |
 | search                  |        171 |          5 |   100.0% |        10 |
 | securefiles             |         33 |          1 |   100.0% |         4 |
-| securityattributes      |         39 |          1 |   100.0% |         5 |
-| securitycategories      |         29 |          1 |   100.0% |         3 |
+| securityattributes      |         42 |          1 |   100.0% |         5 |
+| securitycategories      |         31 |          1 |   100.0% |         3 |
 | securityfindings        |         32 |          1 |   100.0% |         1 |
 | securityscanprofiles    |         26 |          1 |   100.0% |         3 |
 | securitysettings        |         43 |          3 |   100.0% |         3 |
@@ -315,7 +315,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        147 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,477** |    **491** |          | **1,198** |
+| **Total**               | **11,482** |    **491** |          | **1,198** |
 
 </details>
 

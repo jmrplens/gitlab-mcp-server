@@ -31085,7 +31085,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation bulkUpdateSecurityAttributes (securityAttributeBulkUpdateMutation)",
+          "operation": "mutation bulkUpdateSecurityAttributes (SecurityAttributes.BulkUpdateSecurityAttributes)",
           "root_fields": [
             "bulkUpdateSecurityAttributes"
           ],
@@ -31096,6 +31096,9 @@
           "classic": "api",
           "sites": [
             "securityattributes.bulkUpdateSecurityAttributes"
+          ],
+          "sdk_methods": [
+            "SecurityAttributes.BulkUpdateSecurityAttributes"
           ]
         }
       ],
@@ -31114,7 +31117,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityAttributeCreate (securityAttributeCreateMutation)",
+          "operation": "mutation securityAttributeCreate (SecurityAttributes.CreateSecurityAttributes)",
           "root_fields": [
             "securityAttributeCreate"
           ],
@@ -31127,6 +31130,9 @@
           "classic": "api",
           "sites": [
             "securityattributes.createSecurityAttributes"
+          ],
+          "sdk_methods": [
+            "SecurityAttributes.CreateSecurityAttributes"
           ]
         }
       ],
@@ -31145,7 +31151,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityAttributeDestroy (securityAttributeDestroyMutation)",
+          "operation": "mutation securityAttributeDestroy (SecurityAttributes.DestroySecurityAttribute)",
           "root_fields": [
             "securityAttributeDestroy"
           ],
@@ -31156,6 +31162,9 @@
           "classic": "api",
           "sites": [
             "securityattributes.destroySecurityAttribute"
+          ],
+          "sdk_methods": [
+            "SecurityAttributes.DestroySecurityAttribute"
           ]
         }
       ],
@@ -31174,7 +31183,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityAttributeProjectUpdate (securityAttributeProjectUpdateMutation)",
+          "operation": "mutation securityAttributeProjectUpdate (SecurityAttributes.ProjectUpdateSecurityAttribute)",
           "root_fields": [
             "securityAttributeProjectUpdate"
           ],
@@ -31185,6 +31194,9 @@
           "classic": "api",
           "sites": [
             "securityattributes.projectUpdateSecurityAttribute"
+          ],
+          "sdk_methods": [
+            "SecurityAttributes.ProjectUpdateSecurityAttribute"
           ]
         }
       ],
@@ -31203,7 +31215,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityAttributeUpdate (securityAttributeUpdateMutation)",
+          "operation": "mutation securityAttributeUpdate (SecurityAttributes.UpdateSecurityAttribute)",
           "root_fields": [
             "securityAttributeUpdate"
           ],
@@ -31216,6 +31228,9 @@
           "classic": "api",
           "sites": [
             "securityattributes.updateSecurityAttribute"
+          ],
+          "sdk_methods": [
+            "SecurityAttributes.UpdateSecurityAttribute"
           ]
         }
       ],
@@ -31234,7 +31249,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityCategoryCreate (securityCategoryCreateMutation)",
+          "operation": "mutation securityCategoryCreate (SecurityCategories.CreateSecurityCategory)",
           "root_fields": [
             "securityCategoryCreate"
           ],
@@ -31247,6 +31262,9 @@
           "classic": "api",
           "sites": [
             "securitycategories.createSecurityCategory"
+          ],
+          "sdk_methods": [
+            "SecurityCategories.CreateSecurityCategory"
           ]
         }
       ],
@@ -31294,7 +31312,7 @@
       "requests": [
         {
           "kind": "graphql",
-          "operation": "mutation securityCategoryUpdate (securityCategoryUpdateMutation)",
+          "operation": "mutation securityCategoryUpdate (SecurityCategories.UpdateSecurityCategory)",
           "root_fields": [
             "securityCategoryUpdate"
           ],
@@ -31307,6 +31325,9 @@
           "classic": "api",
           "sites": [
             "securitycategories.updateSecurityCategory"
+          ],
+          "sdk_methods": [
+            "SecurityCategories.UpdateSecurityCategory"
           ]
         }
       ],
