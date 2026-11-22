@@ -324,6 +324,16 @@ func ClassifyError(err error) string {
 // sentinel has no body to decode and arrives wrapped by fmt.Errorf like any
 // other, and over REST it arrives as it is.
 //
+// The GraphQL wrapper is read first, because one error can match both. Three
+// client-go writes (UpdateSecurityAttribute, CreateSecurityCategory and
+// UpdateSecurityCategory) return the top-level errors of a mutation GitLab
+// refused with HTTP 200 as an error that unwraps both to the wrapper and to
+// the ErrNotFound sentinel, so that callers written when they returned the
+// sentinel for a refusal keep matching it. Read through the sentinel, that
+// refusal was a 404 to every reader below (issue 1784). The wrapper's Err
+// holds a response only when GitLab answered with another status than 200,
+// and a refusal answered with 200 carries none.
+//
 // It is the one way this file finds the response, and every reader goes
 // through it: [ClassifyError], [NewDetailedError], [IsHTTPStatus],
 // [ExtractGitLabMessage] and [sanitize]. They used to disagree about a GraphQL
@@ -332,13 +342,21 @@ func ClassifyError(err error) string {
 // [WrapErrWithStatusHint] dropped the hint it was given for exactly that
 // status and the raw body was reflected past the sanitizer.
 func gitLabResponseOf(err error) (*gl.ErrorResponse, bool) {
-	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
-		return glErr, true
-	}
 	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
 		return errors.AsType[*gl.ErrorResponse](gqlErr.Err)
 	}
-	return nil, false
+	return errors.AsType[*gl.ErrorResponse](err)
+}
+
+// matchesNotFoundSentinel reports whether err is client-go's ErrNotFound
+// sentinel, the 404 it answers without reading the body, and not a GraphQL
+// refusal that matches the sentinel only for compatibility, which
+// [gitLabResponseOf] explains.
+func matchesNotFoundSentinel(err error) bool {
+	if _, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		return false
+	}
+	return errors.Is(err, gl.ErrNotFound)
 }
 
 // answeredStatus returns the status GitLab answered with, and zero for an
@@ -853,9 +871,11 @@ func ErrInvalidEnum(field, value string, validValues []string) error {
 //
 // The status is read the way [ClassifyError] reads it, so the two never
 // disagree about one error: a GraphQL refusal is looked through, and a 404
-// is recognized by client-go's sentinel, which carries no response.
+// is recognized by client-go's sentinel, which carries no response, unless
+// the error is a GraphQL refusal that matches the sentinel only for
+// compatibility and was answered with HTTP 200.
 func IsHTTPStatus(err error, code int) bool {
-	if code == http.StatusNotFound && errors.Is(err, gl.ErrNotFound) {
+	if code == http.StatusNotFound && matchesNotFoundSentinel(err) {
 		return true
 	}
 	glErr, ok := gitLabResponseOf(err)

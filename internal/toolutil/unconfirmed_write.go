@@ -79,11 +79,19 @@ func writeErrorMessages(err error) []string {
 // request ran nothing; an error with no response is no answer of GitLab's to
 // read at all. Every write this is asked about is one request, so the answer
 // is the write's own and never a lookup's made before it.
+//
+// An error carrying client-go's *gl.GraphQLResponseError is read by its
+// top-level errors alone, although three client-go writes hand a refusal over
+// as one that matches the not-found sentinel too, for compatibility (see
+// gitLabResponseOf). Read through the sentinel, a refused write was one GitLab
+// ran, and a fine-grained session was told a write GitLab never made was
+// probably committed (issue 1784).
 func WriteAnsweredWithoutObject(resp *gl.Response, err error) bool {
 	if err == nil || resp == nil || resp.Response == nil || resp.StatusCode != http.StatusOK {
 		return false
 	}
-	if errors.Is(err, gl.ErrNotFound) || errors.Is(err, gl.ErrEmptyResponse) {
+	if _, refused := errors.AsType[*gl.GraphQLResponseError](err); !refused &&
+		(errors.Is(err, gl.ErrNotFound) || errors.Is(err, gl.ErrEmptyResponse)) {
 		return true
 	}
 	return GraphQLNullPropagated(writeErrorMessages(err))
