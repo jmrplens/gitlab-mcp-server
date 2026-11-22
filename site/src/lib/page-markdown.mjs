@@ -423,12 +423,19 @@ function htmlImage(tag, file) {
 	return src.startsWith("data:") ? alt : `![${alt}](${src})`;
 }
 
-/** The inline HTML a page writes where markdown cannot: images, code, links. */
+/**
+ * The inline HTML a page writes where markdown cannot: images, code, links.
+ * A tag behind a backslash is MDX's escape for its `<`, which the page shows
+ * as the tag's text, so it stays text here as it does for TAG and the check
+ * for elements left after the reduction.
+ */
 const inlineElements = (html, file) =>
 	html
-		.replace(/<img\b[^>]*>/g, (tag) => htmlImage(tag, file))
-		.replace(/<code>([\s\S]*?)<\/code>/g, (_, code) => span(decode(code)))
-		.replace(/<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/g, "[$2]($1)");
+		.replace(/(?<!\\)<img\b[^>]*>/g, (tag) => htmlImage(tag, file))
+		.replace(/(?<!\\)<code>([\s\S]*?)<\/code>/g, (_, code) =>
+			span(decode(code)),
+		)
+		.replace(/(?<!\\)<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/g, "[$2]($1)");
 
 /**
  * The raw HTML a page writes, as markdown. A page writes HTML where markdown
