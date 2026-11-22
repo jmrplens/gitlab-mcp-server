@@ -3347,6 +3347,46 @@ func TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus(t *testing.T) {
 	}
 }
 
+// TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus verifies that a
+// GraphQL refusal client-go also hands over as its not-found sentinel reads
+// as the refusal it is: no status, since GitLab answered it with HTTP 200,
+// and never a 404.
+//
+// UpdateSecurityAttribute, CreateSecurityCategory and UpdateSecurityCategory
+// return their top-level errors that way ([refusalMatchingNotFound]). Read by
+// the sentinel, a handler's 404 branch took a refused update for a missing
+// object, the classifier described it as not found and the error card carried
+// a status GitLab never answered with (issue 1784).
+func TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus(t *testing.T) {
+	_, err := refusalMatchingNotFound(t, refusedCategoryUpdateBody)
+	wrapped := fmt.Errorf("update security category: %w", err)
+	for _, tc := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{name: "404", err: err, code: http.StatusNotFound},
+		{name: "404, wrapped", err: wrapped, code: http.StatusNotFound},
+		{name: "200", err: err, code: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if IsHTTPStatus(tc.err, tc.code) {
+				t.Errorf("IsHTTPStatus(%d) = true, want false", tc.code)
+			}
+		})
+	}
+	t.Run("classified", func(t *testing.T) {
+		if got, notFound := ClassifyError(wrapped), ClassifyError(gl.ErrNotFound); got == notFound {
+			t.Errorf("ClassifyError() = %q, the description of a 404", got)
+		}
+	})
+	t.Run("error card", func(t *testing.T) {
+		if de := NewDetailedError("security_category", "update", wrapped); de.GitLabStatus != 0 {
+			t.Errorf("GitLabStatus = %d, want 0", de.GitLabStatus)
+		}
+	})
+}
+
 // TestIsPermissionRefusal_ReadsWhatGitLabAnswered verifies the predicate a
 // handler keys its permission hint on, over the error client-go really hands
 // it for each answer.
