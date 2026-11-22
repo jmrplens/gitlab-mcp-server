@@ -545,6 +545,26 @@ describe("raw HTML", () => {
 		assert.equal(out, "| A | B |\n| --- | --- |\n| a \\| b | c \\| d |");
 	});
 
+	// GFM splits a row at a bare pipe even inside a code span, so a pipe in
+	// the code of an HTML cell is escaped in the twin; the same code outside
+	// a table keeps its pipe as written.
+	test("a pipe in the code of an HTML table cell is escaped", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>Pattern</th><th>Meaning</th></tr>",
+				"  <tr><td><code>a | b</code></td><td><code>c \\| d</code></td></tr>",
+				"</table>",
+				"",
+				"Outside, <code>a | b</code> stays.",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Pattern | Meaning |\n| --- | --- |\n| `a \\| b` | `c \\| d` |\n\nOutside, `a | b` stays.",
+		);
+	});
+
 	// The page shows `&lt;id&gt;` as the text <id>. Read back into a bare
 	// `<id>`, it is an element to a markdown reader and to the check after the
 	// reduction, so the twin writes it escaped, as a page writes `\<id>`.
