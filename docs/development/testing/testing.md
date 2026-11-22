@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,182 |
-| Unit test functions                                   | 22,380 |
+| Total test functions                                  | 24,185 |
+| Unit test functions                                   | 22,383 |
 | E2E test functions                                    |  1,802 |
 | cmd test functions                                    |  6,069 |
 | Test files (internal/)                                |    781 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,821 | 57.2% |
+| `TestFunc_Scenario` (2-part)           | 13,821 | 57.1% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,462 | 39.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,465 | 39.1% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          4,378 |        273 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (182) |         11,474 |        491 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (182) |         11,477 |        491 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,802 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,069 |        500 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,182** |  **1,738** |                                                                                                 |
+| **Total**               |     **24,185** |  **1,738** |                                                                                                 |
 
 ### Core Packages
 
@@ -142,7 +142,7 @@
 | adminspecs              |         19 |          1 |   100.0% |        92 |
 | alertmanagement         |         28 |          2 |   100.0% |         4 |
 | appearance              |         14 |          1 |   100.0% |         2 |
-| applications            |         20 |          1 |   100.0% |         4 |
+| applications            |         21 |          1 |   100.0% |         4 |
 | appstatistics           |         14 |          1 |   100.0% |         1 |
 | attestations            |         27 |          2 |   100.0% |         2 |
 | auditevents             |         63 |          2 |   100.0% |         6 |
@@ -195,7 +195,7 @@
 | freezeperiods           |         45 |          3 |   100.0% |         5 |
 | geo                     |         64 |          3 |   100.0% |         8 |
 | gitignoretemplates      |         24 |          2 |   100.0% |         2 |
-| groupanalytics          |         12 |          2 |   100.0% |         3 |
+| groupanalytics          |         13 |          2 |   100.0% |         3 |
 | groupboards             |         83 |          2 |   100.0% |        10 |
 | groupcredentials        |         46 |          3 |   100.0% |         4 |
 | groupepicboards         |         20 |          3 |   100.0% |         2 |
@@ -275,7 +275,7 @@
 | protectedenvs           |         55 |          2 |   100.0% |         5 |
 | protectedpackages       |         45 |          2 |   100.0% |         4 |
 | releaselinks            |         72 |          2 |   100.0% |         6 |
-| releases                |         89 |          2 |   100.0% |         6 |
+| releases                |         90 |          2 |   100.0% |         6 |
 | repository              |         92 |          2 |   100.0% |         9 |
 | repositorysubmodules    |         86 |          5 |   100.0% |         3 |
 | resourceevents          |        131 |          5 |   100.0% |        17 |
@@ -315,7 +315,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        147 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,474** |    **491** |          | **1,198** |
+| **Total**               | **11,477** |    **491** |          | **1,198** |
 
 </details>
 
