@@ -253,6 +253,11 @@ describe("code stays opaque", () => {
 		assert.equal(reduce(body), body);
 	});
 
+	test("a fence line with text after its marker does not close a fence", () => {
+		const body = ["~~~md", "~~~text", "[in](../code/)", "~~~"].join("\n");
+		assert.equal(reduce(body), body);
+	});
+
 	test("an indented fence moves with its tab and keeps its blank lines", () => {
 		const out = reduce(
 			'<Tabs>\n\t<TabItem label="A">\n\t\t```sh\n\t\techo <URL>\n\n\n\t\techo two\n\t\t```\n\t</TabItem>\n</Tabs>',

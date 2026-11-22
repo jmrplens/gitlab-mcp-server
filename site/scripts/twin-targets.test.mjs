@@ -43,4 +43,9 @@ describe("unanchoredTargets", () => {
 			"../relative/",
 		]);
 	});
+
+	test("a fence line with text after its marker does not close a fence", () => {
+		const text = ["~~~md", "~~~text", "~~~", "[A](/relative/)"].join("\n");
+		assert.deepEqual(unanchoredTargets(text), ["/relative/"]);
+	});
 });
