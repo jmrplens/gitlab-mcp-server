@@ -160,6 +160,7 @@ func toOutput(a *gl.Attestation) Output {
 // instance that has not enabled the flag, which is every self-managed one by
 // default.
 func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListOutput, error) {
+	const op = "list attestations"
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
@@ -178,14 +179,14 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			if _, _, projectErr := client.GL().Projects.GetProject(in.ProjectID.String(), nil, gl.WithContext(ctx)); projectErr == nil {
-				return ListOutput{}, toolutil.WrapErrWithHint("list attestations", err, featureOffHint)
+				return ListOutput{}, toolutil.WrapErrWithHint(op, err, featureOffHint)
 			}
 		}
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(op, err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
 	}
 	extras, err := toolutil.CapturedAttestations(captured, len(atts))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list attestations", err)
+		return ListOutput{}, toolutil.WrapErr(op, err)
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts)), Pagination: toolutil.PaginationFromResponse(resp)}
 	for i, a := range atts {

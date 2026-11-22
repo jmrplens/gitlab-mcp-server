@@ -755,8 +755,8 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// The plan an instance reports on GET /metadata from 19.6, which the
 	// metadata and health packages both read. Published by issue 1492's
 	// publish-plan change, which removes these two declarations.
-	{Package: toolsDir + "/metadata", Entity: "API::Entities::Metadata", Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
-	{Package: toolsDir + "/health", Entity: "API::Entities::Metadata", Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
+	{Package: toolsDir + "/metadata", Entity: metadataEntity, Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
+	{Package: healthPkg, Entity: metadataEntity, Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
 
 	// The release warnings only POST /projects/:id/releases passes
 	// (lib/api/releases.rb), which the group release list never sends.
@@ -1000,7 +1000,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// current user's own GET /user, and the participants of an issue and of a
 	// merge request.
 	{Package: toolsDir + "/awardemoji", Entity: userPublicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
-	{Package: toolsDir + "/health", Entity: userPublicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+	{Package: healthPkg, Entity: userPublicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 	{Package: issuesPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 	{Package: mergeRequestsPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
 
