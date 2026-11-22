@@ -24,6 +24,8 @@ const usage = `usage: release_packages mcpb VERSION [DIST]
        release_packages validate-npm --version VERSION [--packages DIR] [--main DIR] [--no-install]
        release_packages validate-pypi --version VERSION [--wheels DIR] [--no-install]
        release_packages validate-nuget --version VERSION [--packages DIR] [--no-install]
+       release_packages verify-published VERSION CHECKSUMS [--nuget-digests FILE] [--skip-npm] [--skip-pypi]
+                        [--skip-nuget] [--retry-budget SECONDS] [--retry-delay SECONDS] [--nuget-deadline SECONDS]
 `
 
 // exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
@@ -76,6 +78,8 @@ func runIn(root string, args []string, stdout, stderr io.Writer, getenv func(str
 		return runValidatePypi(root, rest, stdout, stderr)
 	case "validate-nuget":
 		return runValidateNuget(root, rest, stdout, stderr)
+	case "verify-published":
+		return runVerifyPublished(root, rest, stdout, stderr)
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0

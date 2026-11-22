@@ -43,7 +43,7 @@ func TestKindOf_SourceFiles_SpellTheHeaderInTheirCommentSyntax(t *testing.T) {
 		{name: "cmd/server/main.go", want: []string{slashC, slashL}},
 		{name: "scripts/install.sh", want: []string{hashC, hashL}},
 		{name: "scripts/run.bash", want: []string{hashC, hashL}},
-		{name: "scripts/verify_published_packages.py", want: []string{hashC, hashL}},
+		{name: "scripts/e2e_release_gate_test.py", want: []string{hashC, hashL}},
 		{name: "cmd/gen_api_live/introspect.rb", want: []string{hashC, hashL}},
 		{name: "scripts/install.ps1", want: []string{hashC, hashL}},
 		{name: "scripts/Module.psm1", want: []string{hashC, hashL}},

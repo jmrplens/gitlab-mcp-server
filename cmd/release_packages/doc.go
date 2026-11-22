@@ -16,7 +16,10 @@
 // validate-nuget), item 13 of issue 1114: scripts/build-npm.mjs,
 // scripts/build_pypi.py, scripts/build_nuget.py and their three validators,
 // moved into Go, the builders held by their tests to a record of what the
-// scripts packed (testdata/build_packages.json, taken at 1c26b3b04).
+// scripts packed (testdata/build_packages.json, taken at 1c26b3b04). The same
+// item moved scripts/verify_published_packages.py into verify-published, held
+// to a record of what the script reported against scripted registries
+// (testdata/verify_published.json, taken at 1c26b3b04).
 //
 // # mcpb
 //
@@ -190,6 +193,21 @@
 // in stdio and HTTP mode. The validators shell out to npm, pip and dotnet for
 // that tier, which is what they check.
 //
+// # verify-published
+//
+// Reads back what npm, PyPI and NuGet serve once the publishes are done, in a
+// job holding no publishing credential, and holds every binary and notices
+// file in it to the release's signed checksums.txt, each wheel to its PEP 740
+// provenance from release.yml's trusted publisher, and, given the digests the
+// nuget job attested, each NuGet package to them once nuget.org's repository
+// signature is removed the way NuGet defines an unsigned package. A download
+// that fails is waited for, because minutes after an upload a 404 cannot be
+// told from propagation lag: npm and PyPI share a budget of seconds slept
+// (--retry-budget), and NuGet has a deadline counted from the start of the
+// run (--nuget-deadline), since nuget.org validates while the others are
+// waited for. A body in hand is never asked for twice, so a digest that does
+// not match fails on sight.
+//
 // # The standard library and this module only
 //
 // The mcpb subcommand runs in release.yml's release job, which holds the
@@ -213,6 +231,7 @@
 //	go run ./cmd/release_packages/ validate-npm --version 3.4.0
 //	go run ./cmd/release_packages/ validate-pypi --version 3.4.0
 //	go run ./cmd/release_packages/ validate-nuget --version 3.4.0
+//	go run ./cmd/release_packages/ verify-published 3.4.0 dist/checksums.txt --nuget-digests nupkg.sha256
 //
 // Each runs from the repository root and exits 0 when everything passes, 1
 // when something does not or could not be checked, and 2 for arguments it
