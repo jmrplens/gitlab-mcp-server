@@ -118,6 +118,11 @@ describe("pageDate", () => {
 	test("a page git knows nothing about has no date", () => {
 		assert.equal(pageDate(PAGE, "", { root, times: new Map() }), undefined);
 	});
+
+	test("a page git does not track yet has no date, whatever its data's commits", () => {
+		const times = new Map([[DATA.release, Date.UTC(2026, 9, 1) / 1000]]);
+		assert.equal(pageDate(PAGE, "%%VERSION%%", { root, times }), undefined);
+	});
 });
 
 describe("sourceOf", () => {
