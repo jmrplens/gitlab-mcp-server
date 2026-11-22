@@ -966,8 +966,11 @@ export function reduceBody(page) {
 /**
  * The markdown twin of one page, in the format the sibling sites publish: the
  * title, the description, the canonical URL, optionally the date the page last
- * changed (the edge turns it into Last-Modified, reading the header up to the
- * first line that is exactly `---`), then the body.
+ * changed, a line that is exactly `---`, then the body. The edge turns
+ * `Updated:` into Last-Modified, but reads the header only up to the first
+ * such line, so the rule is what makes the header a header: without it the
+ * edge reads on into the body and ignores the date unless the body happens to
+ * open with a rule of its own.
  *
  * @param {Parameters<typeof reduceBody>[0] & { title: string, description: string, updated?: string, lead?: string }} page
  * @returns {string}
@@ -986,7 +989,7 @@ export function renderTwin(page) {
 		`Source: ${pageUrl(page.route)}`,
 	];
 	if (page.updated) header.push(`Updated: ${page.updated}`);
-	const parts = [header.join("\n")];
+	const parts = [header.join("\n"), "---"];
 	// The splash pages' hero, which Starlight renders from the frontmatter
 	// above the body. Its links are written as the page means them, so they
 	// are made absolute but not localized.

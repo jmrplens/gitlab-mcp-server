@@ -89,15 +89,17 @@ for (const page of pages) {
 	}
 	const text = readFileSync(join(DIST, twin), "utf8");
 	// The header every sibling site writes: title, description, the page's own
-	// canonical URL. An empty twin is worse than a missing one: it answers the
-	// request, so whatever fetched it reads the page as having no content.
+	// canonical URL, the optional date, and a line that is exactly `---`, which
+	// is where the edge stops reading the header: without it the date is never
+	// read. An empty twin is worse than a missing one: it answers the request,
+	// so whatever fetched it reads the page as having no content.
 	const header =
-		/^# \S.*\n\n\S.*\n\nSource: (\S+)\n(?:Updated: \d{4}-\d{2}-\d{2}\n)?\n\S/.exec(
+		/^# \S.*\n\n\S.*\n\nSource: (\S+)\n(?:Updated: (\d{4}-\d{2}-\d{2})\n)?\n---\n\n\S/.exec(
 			text,
 		);
 	if (!header) {
 		fail(
-			`/${twin} does not open with "# title", the description and "Source:"`,
+			`/${twin} does not open with "# title", the description, "Source:", the optional "Updated:" and a "---" line`,
 		);
 	} else if (header[1] !== `${SITE_ROOT}/${page}`) {
 		fail(`/${twin} names ${header[1]} as its source, not ${SITE_ROOT}/${page}`);

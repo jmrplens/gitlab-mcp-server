@@ -466,11 +466,13 @@ describe("links", () => {
 });
 
 describe("renderTwin", () => {
-	test("writes the sibling header, the release and the body", () => {
+	// The body holds no rule of its own: the `---` after the header is the one
+	// renderTwin writes, the line the edge stops reading the header at.
+	test("writes the sibling header, its closing rule, the release and the body", () => {
 		const twin = renderTwin({
 			title: "Guide",
 			description: "What the guide covers.",
-			body: "---\n\nInstall %%VERSION%%.",
+			body: "Install %%VERSION%%.",
 			file: "src/content/docs/guide.mdx",
 			route: "guide",
 			root,
@@ -482,6 +484,25 @@ describe("renderTwin", () => {
 		assert.equal(
 			twin,
 			"# Guide\n\nWhat the guide covers.\n\nSource: https://docs.jmrp.io/gitlab-mcp-server/guide/\nUpdated: 2026-11-20\n\n---\n\nInstall 9.8.7.\n",
+		);
+	});
+
+	test("closes the header with the rule when the page has no date", () => {
+		const twin = renderTwin({
+			title: "Guide",
+			description: "What the guide covers.",
+			body: "Body.",
+			file: "src/content/docs/guide.mdx",
+			route: "guide",
+			root,
+			release: "9.8.7",
+			labels: LABELS,
+			stats: {},
+			lead: "Tagline.",
+		});
+		assert.equal(
+			twin,
+			"# Guide\n\nWhat the guide covers.\n\nSource: https://docs.jmrp.io/gitlab-mcp-server/guide/\n\n---\n\nTagline.\n\nBody.\n",
 		);
 	});
 
