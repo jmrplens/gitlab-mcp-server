@@ -443,6 +443,84 @@ describe("expressions", () => {
 	});
 });
 
+describe("raw HTML", () => {
+	test("a link and inline code written as HTML become markdown", () => {
+		const out = reduce(
+			'import footprint from "../../data/stats.json";\n\n' +
+				'See <a href="#setup">the setup</a> and <a href="/gitlab-mcp-server/about/">about</a>, ' +
+				"tokenized with <code>{footprint.tools.free}</code> and <code>a &lt; b</code>.",
+		);
+		assert.equal(
+			out,
+			"See [the setup](https://docs.jmrp.io/gitlab-mcp-server/guide/#setup) and " +
+				"[about](https://docs.jmrp.io/gitlab-mcp-server/about/), tokenized with `875` and `a < b`.",
+		);
+	});
+
+	test("a Spanish page localizes an HTML link like a markdown one", () => {
+		assert.equal(
+			reduce('<a href="/gitlab-mcp-server/about/">Acerca de</a>', {
+				route: "es/guide",
+			}),
+			"[Acerca de](https://docs.jmrp.io/gitlab-mcp-server/es/about/)",
+		);
+	});
+
+	// The icon gallery: a styled HTML table whose first column draws each
+	// icon from a data URI. The twin keeps the table and names each image by
+	// its alternative text rather than carrying kilobytes of encoded SVG.
+	test("an HTML table becomes a table, its images their alternative text", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <thead>",
+				"    <tr>",
+				'      <th style="width:60px">Preview</th>',
+				"      <th>Name</th>",
+				"    </tr>",
+				"  </thead>",
+				"  <tbody>",
+				"    <tr>",
+				"      <td>",
+				"        <img",
+				"          src=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E\"",
+				'          width="32"',
+				'          alt="Branch"',
+				"        />",
+				"      </td>",
+				"      <td>",
+				"        <code>IconBranch</code>",
+				"      </td>",
+				"    </tr>",
+				"    <tr>",
+				"      <td>none</td>",
+				"      <td>a | b</td>",
+				"    </tr>",
+				"  </tbody>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Preview | Name |\n| --- | --- |\n| Branch | `IconBranch` |\n| none | a \\| b |",
+		);
+	});
+
+	test("an image outside a table drawn from a data URI becomes its alternative text", () => {
+		const out = reduce(
+			'Before.\n\n<img\n  src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"\n  width="48"\n  alt="Brand mark"\n/>\n\nAfter.',
+		);
+		assert.equal(out, "Before.\n\nBrand mark\n\nAfter.");
+	});
+
+	test("an HTML element the reducer does not know fails", () => {
+		assert.throws(
+			() => reduce("A <details><summary>More</summary>hidden</details> here."),
+			/no markdown reduction for the HTML <details>/,
+		);
+	});
+});
+
 describe("tables", () => {
 	// The source pads every cell to its column's width so the table reads in
 	// an editor; a reader of the twin parses it, and the padding was a third
@@ -503,7 +581,7 @@ describe("links", () => {
 			out,
 			"[A](https://docs.jmrp.io/gitlab-mcp-server/about/) [B](https://docs.jmrp.io/gitlab-mcp-server/guide/#heading) " +
 				"![C](https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/content/docs/img.png) " +
-				'<a href="https://docs.jmrp.io/gitlab-mcp-server/x/">D</a> [E](https://example.com)',
+				"[D](https://docs.jmrp.io/gitlab-mcp-server/x/) [E](https://example.com)",
 		);
 	});
 

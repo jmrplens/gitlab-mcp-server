@@ -393,6 +393,84 @@ export function inlineHtml(html, where) {
 	return decode(out);
 }
 
+/**
+ * The value of one attribute of an HTML tag, quoted either way.
+ *
+ * @param {string} tag
+ * @param {string} name
+ * @returns {string | undefined}
+ */
+function attribute(tag, name) {
+	const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(
+		tag,
+	);
+	return match ? (match[1] ?? match[2]) : undefined;
+}
+
+/**
+ * An <img> as markdown. One drawn from a data URI becomes its alternative
+ * text: the twin is read as text, and kilobytes of encoded SVG say nothing a
+ * reader of it can use. Any other becomes a markdown image.
+ */
+function htmlImage(tag, file) {
+	const alt = attribute(tag, "alt");
+	const src = attribute(tag, "src") ?? "";
+	if (!alt) {
+		throw new Error(
+			`${file}: an <img> with no alt text, which the markdown twin would have nothing to say for`,
+		);
+	}
+	return src.startsWith("data:") ? alt : `![${alt}](${src})`;
+}
+
+/** The inline HTML a page writes where markdown cannot: images, code, links. */
+const inlineElements = (html, file) =>
+	html
+		.replace(/<img\b[^>]*>/g, (tag) => htmlImage(tag, file))
+		.replace(/<code>([\s\S]*?)<\/code>/g, (_, code) => span(decode(code)))
+		.replace(/<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/g, "[$2]($1)");
+
+/**
+ * The raw HTML a page writes, as markdown. A page writes HTML where markdown
+ * cannot say it: `<code>{expression}</code>` (a code span would print the
+ * expression), a styled table, an image drawn from a data URI. A table
+ * becomes a pipe table, its first row the header; an image, a link and inline
+ * code become their markdown. Anything else is left for the check after the
+ * reduction, which fails the build on it.
+ *
+ * @param {string} text masked markdown, expressions resolved
+ * @param {string} file named in a failure
+ * @returns {string}
+ */
+function reduceHtml(text, file) {
+	const tables = text.replace(
+		/^([ \t]*)<table\b[^>]*>([\s\S]*?)<\/table>/gm,
+		(_, indent, inner) => {
+			const rows = [...inner.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(
+				([, row]) =>
+					[...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
+						([, , cell]) =>
+							decode(inlineElements(cell, file))
+								.replace(/\s+/g, " ")
+								.trim()
+								.replace(/\|/g, "\\|"),
+					),
+			);
+			if (rows.length === 0) {
+				throw new Error(`${file}: an HTML table with no rows`);
+			}
+			const line = (/** @type {string[]} */ cells) =>
+				`| ${cells.join(" | ")} |`;
+			const [head, ...body] = rows;
+			return indentBy(
+				[line(head), line(head.map(() => "---")), ...body.map(line)].join("\n"),
+				indent,
+			);
+		},
+	);
+	return inlineElements(tables, file);
+}
+
 /** @param {string} text @returns {string} the text with its entities read */
 const decode = (text) =>
 	text
@@ -1019,12 +1097,23 @@ function reduceMasked(page) {
 		page.file,
 	);
 	markdown = resolveExpressions(markdown, bindings, page.file);
+	markdown = reduceHtml(markdown, page.file);
 	if (locale === "es") markdown = localizeLinks(markdown);
 	markdown = absoluteTargets(markdown, { file: page.file, route: page.route });
 	const residual = /(?<!\\)<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
 	if (residual) {
 		throw new Error(
 			`${page.file}: <${residual[1]}> survived the reduction. Teach src/lib/page-markdown.mjs.`,
+		);
+	}
+	// An HTML element reduceHtml does not know would reach the twin as markup.
+	// Code is masked by now and an autolink's scheme ends its name with a
+	// colon, so a lowercase tag name here is an element the page wrote.
+	const element = /(?<!\\)<\/?([a-z][a-z0-9]*)(?=[\s/>])/.exec(markdown);
+	if (element) {
+		throw new Error(
+			`${page.file}: no markdown reduction for the HTML <${element[1]}>. ` +
+				"Teach reduceHtml in src/lib/page-markdown.mjs.",
 		);
 	}
 	// A directive reduceDirectives does not know, such as `:::details`, would
