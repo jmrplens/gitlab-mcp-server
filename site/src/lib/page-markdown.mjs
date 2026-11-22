@@ -158,7 +158,8 @@ function maskLine(line) {
 const CODE_SPAN = /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)/g;
 
 // The blockquote markers a line opens with, and a fence line behind them: its
-// marker and what follows it.
+// marker and what follows it. Its indentation is not limited to three spaces
+// as in CommonMark: MDX disables indented code, and with it that limit.
 const QUOTES = /^(?:[ \t]*>)*/;
 const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
 
