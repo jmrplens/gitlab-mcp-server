@@ -254,6 +254,25 @@ func (c *Client) ReadFineGrained(ctx context.Context, facts TokenFacts) finegrai
 	return c.ReadFineGrainedAt(ctx, facts, version)
 }
 
+// ReadFineGrainedOnce is [Client.ReadFineGrained] for a build that may already
+// have read the version: it reads the grant at the version the last answered
+// read reported, and asks /version only when no read has answered. From
+// GitLab 19.6 the tier probe reads the version first, for the instance plan
+// (issue 1491), so an HTTP pool entry and a stdio start ask it once whatever
+// their token. A refusal of the version already seen is an answer with no
+// version to judge at, as [Client.ReadVersion] reads it. A revalidation keeps
+// [Client.ReadFineGrained], since it is there to learn whether the release
+// moved.
+func (c *Client) ReadFineGrainedOnce(ctx context.Context, facts TokenFacts) finegrained.Reading {
+	if _, refused := c.VersionRefusal(); refused {
+		return c.ReadFineGrainedAt(ctx, facts, "")
+	}
+	if version := c.version.Load(); version != nil {
+		return c.ReadFineGrainedAt(ctx, facts, *version)
+	}
+	return c.ReadFineGrained(ctx, facts)
+}
+
 // ReadFineGrainedAt is [Client.ReadFineGrained] with the version already
 // read and answered, which is a stdio start's: [Client.Initialize] asked it
 // moments ago, and asking again would cost the instance a request and a token

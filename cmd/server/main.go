@@ -1929,9 +1929,10 @@ func warnStdioProvisionalTier(ctx context.Context, resolution gitlabclient.TierR
 }
 
 // stdioAuthority is what the process's fine-grained token may be shown, judged
-// from its grant and the version [gitlabclient.Client.Initialize] already read,
-// and nil for any other token. A start that could not reach GitLab asks the
-// version again, since Initialize left none.
+// from its grant and the version [gitlabclient.Client.Initialize] or the tier
+// probe already read ([gitlabclient.Client.ReadFineGrainedOnce]), and nil for
+// any other token. A start that could not reach GitLab asks the version again,
+// since nothing read one.
 //
 // It writes one line at INFO about a fine-grained token in either phase, with
 // the authority's [finegrained.Authority.LogArgs]: in phase A that the grant
@@ -1943,13 +1944,7 @@ func stdioAuthority(ctx context.Context, client *gitlabclient.Client, facts gitl
 	if !facts.FineGrained {
 		return nil
 	}
-	var reading finegrained.Reading
-	if client.IsInitialized() {
-		reading = client.ReadFineGrainedAt(ctx, facts, client.Version())
-	} else {
-		reading = client.ReadFineGrained(ctx, facts)
-	}
-	authority := actiongrants.Build(true, reading)
+	authority := actiongrants.Build(true, client.ReadFineGrainedOnce(ctx, facts))
 	if authority.Phase() == finegrained.PhaseUnknown {
 		slog.InfoContext(ctx, "the fine-grained token's grant was not evaluated; withholding what no grant reaches",
 			authority.LogArgs()...)

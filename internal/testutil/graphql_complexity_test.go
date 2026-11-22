@@ -227,6 +227,29 @@ func TestGitLabQueryComplexity_MembershipTierQueryAtTheRegistersPage_IsTheMeasur
 	}
 }
 
+// TestGitLabQueryComplexity_MembershipGroupsQuery_CostsWhatTheFirstPassCosts
+// holds the membership step's second pass (internal/gitlab, issue 1491), the
+// same document without topLevelOnly, to the cost of the first at the
+// register's page size: an argument of Query.groups costs nothing, so the two
+// cost the same, and the figure GitLab.com measured for the first is the one
+// both stand under. A change that makes them differ sends whoever made it to
+// measure the second on GitLab.com as the first was.
+func TestGitLabQueryComplexity_MembershipGroupsQuery_CostsWhatTheFirstPassCosts(t *testing.T) {
+	variables := map[string]any{"first": tenancy.TierMembershipPageSize}
+	first, err := GitLabQueryComplexity(gitlabclient.MembershipTierQuery, variables)
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity(first pass) error = %v", err)
+	}
+	second, err := GitLabQueryComplexity(gitlabclient.MembershipGroupsQuery, variables)
+	if err != nil {
+		t.Fatalf("GitLabQueryComplexity(second pass) error = %v", err)
+	}
+	if second != first || second > GitLabAuthenticatedMaxComplexity {
+		t.Errorf("the second pass costs %d against the first pass's %d and the limit %d: measure it on GitLab.com and record it",
+			second, first, GitLabAuthenticatedMaxComplexity)
+	}
+}
+
 // TestGitLabQueryComplexity_UnrecordedFieldIgnoresItsPageSize verifies that a
 // connection the cost table does not record is charged one plus its children
 // and never reads its page size: GitLab multiplies only for a resolver that

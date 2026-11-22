@@ -77,6 +77,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tenancy"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/netfixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -5303,13 +5304,20 @@ func TestPrepareStdioCatalog_AnInstanceThatNeverAnswers_IsAskedWithinTheDetectio
 						described.Store(true)
 					}
 					// Held until the client gives up, which is what the
-					// detection bound is for.
+					// detection bound is for. The body is read first: the
+					// server notices a client that gave up on a POST, the
+					// membership query, only once the body was read.
+					_, _ = io.Copy(io.Discard, r.Body)
 					<-r.Context().Done()
 				}))
 				t.Cleanup(gitlab.Close)
 				return gitlab.URL, &described
 			},
-			within: stdioDetectTimeout + slack,
+			// An enterprise build from 18.11 is asked the membership step
+			// (issue 1491), which runs on its own clock measured from the
+			// process context rather than inside the detection bound
+			// (issue 1592), so it adds its own bound to the start.
+			within: stdioDetectTimeout + tenancy.TierMembershipTimeout + slack,
 		},
 	}
 	for _, tt := range tests {

@@ -112,6 +112,10 @@ type Client struct {
 	// stored before version, so a reader that finds a version finds the plan
 	// of that read or a later one. See [Client.tierFromInstancePlan].
 	plan atomic.Pointer[instancePlan]
+	// enterprise is the edition the same read reported, nil when it named
+	// none or before any read answered; stored before version, as plan is.
+	// See [Client.editionAsRead].
+	enterprise atomic.Pointer[bool]
 	// versionRefusal is GitLab's sentence when it accepted this client's
 	// credential and refused it /api/v4/version for a fine-grained permission
 	// the token's grant lacks; nil otherwise. See [Client.VersionRefusal].
@@ -815,6 +819,31 @@ func (c *Client) readEdition(ctx context.Context) (editionAnswer, *gitLabVersion
 	return editionCE, versionInfo, nil
 }
 
+// editionAsRead is the edition the last answered read of /api/v4/version
+// reported, without asking again, and false when no read has answered yet. A
+// refusal of the fine-grained permission the endpoint needs is an answer, the
+// edition unreadable, as [Client.readEdition] reads it. The tier probe reads
+// the version first from GitLab 19.6 on (issue 1491), so what it learned is
+// what an entry's warning and its membership step read, and an entry asks
+// /version once.
+func (c *Client) editionAsRead() (editionAnswer, bool) {
+	if _, refused := c.VersionRefusal(); refused {
+		return editionUnreadable, true
+	}
+	if c.version.Load() == nil {
+		return editionUnknown, false
+	}
+	enterprise := c.enterprise.Load()
+	switch {
+	case enterprise == nil:
+		return editionUnknown, true
+	case *enterprise:
+		return editionEnterprise, true
+	default:
+		return editionCE, true
+	}
+}
+
 // editionUnreadable is [Client.DetectEnterprise]'s answer for a token GitLab
 // refuses the version endpoint for a fine-grained permission: the fallback,
 // with the reason at debug.
@@ -984,15 +1013,21 @@ func namespacePlanAnswers(plan string) bool {
 //
 // An edition the endpoint did not answer is not called CE either (issue
 // 1782): the line says it could not be read, at debug, with the reason. It
-// reads the edition with [Client.readEdition], so the client keeps the tier
-// [Client.DetectTier] stores.
+// reads the edition the probe's own version read reported
+// ([Client.editionAsRead]) and asks [Client.readEdition] only when that read
+// did not answer, so the client keeps the tier [Client.DetectTier] stores and
+// an entry asks /version once.
 func (c *Client) warnUnresolvedTier(ctx context.Context) {
-	answer, _, err := c.readEdition(ctx)
+	answer, known := c.editionAsRead()
+	var err error
+	if !known {
+		answer, _, err = c.readEdition(ctx)
+	}
 	switch answer {
 	case editionEnterprise:
 		slog.WarnContext(ctx, "could not determine the licensing tier of this enterprise instance, serving the Free tool surface; "+
-			"the license is readable only by an administrator, and the plan of a namespace the token administers or of a group it is a member of "+
-			"is reported only on GitLab.com. "+
+			"the license is readable only by an administrator, no namespace the token administers reports a plan, "+
+			"and no group it is a member of answered for one. From GitLab 19.6 the instance reports its plan to every token. "+
 			"Set GITLAB_MCP_TIER (or --tier in HTTP mode) to premium or ultimate if this instance is licensed")
 	case editionUnreadable:
 		slog.DebugContext(ctx, "no license, no paid namespace plan and no edition the token may read; the tier is free")
@@ -1064,6 +1099,7 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	version := validVersion(versionInfo.Version)
 	plan := parseInstancePlan(versionInfo.Plan)
 	c.plan.Store(&plan)
+	c.enterprise.Store(versionInfo.Enterprise)
 	c.version.Store(&version)
 	c.versionRefusal.Store(nil)
 	return &versionInfo, nil

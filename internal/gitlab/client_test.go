@@ -2505,6 +2505,11 @@ func tierCascadeServer(t *testing.T, licenseStatus int, licensePlan string, name
 		// Every endpoint the cascade asks is a read. Answering a write the
 		// same way would let a probe that started sending one pass unnoticed,
 		// so it is refused here and reported on the test goroutine's behalf.
+		// The membership query is the one POST, a read: an enterprise build
+		// from 18.11 is asked it (issue 1491), and no group answers here.
+		if answeredMembership(w, r) {
+			return
+		}
 		if r.Method != http.MethodGet {
 			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -2633,6 +2638,9 @@ func TestDetectTier_SelfManagedNamespacePlan_IsNotEvidence(t *testing.T) {
 func pagedNamespaceServer(t *testing.T, pages [][]map[string]any, asked *int32) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if answeredMembership(w, r) {
+			return
+		}
 		if r.Method != http.MethodGet {
 			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -2724,6 +2732,9 @@ func TestDetectTier_NamespacePlan_StopsAtUltimate(t *testing.T) {
 // resolve lower than the caller has already been shown to hold.
 func TestDetectTier_NamespacePlan_KeepsWhatAnEarlierPageAnswered(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if answeredMembership(w, r) {
+			return
+		}
 		if r.Method != http.MethodGet {
 			t.Errorf("the tier cascade sent %s %s; every endpoint it asks is a GET", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusMethodNotAllowed)

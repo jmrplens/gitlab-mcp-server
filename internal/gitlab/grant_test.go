@@ -700,3 +700,41 @@ func TestClient_RefreshAuthority_ReadsAgainTheRouteTheBuildRead(t *testing.T) {
 		})
 	}
 }
+
+// TestClient_ReadFineGrainedOnce_AsksTheVersionOnlyWhenNoReadAnswered holds
+// what an HTTP pool entry and a stdio start cost from issue 1491 on: the tier
+// probe already read the version, to read the instance plan, so the grant is
+// read at that version without a second /version. A refusal already seen is
+// an answer too, and leaves nothing to judge at. A client that has read
+// nothing asks once, as ReadFineGrained does.
+func TestClient_ReadFineGrainedOnce_AsksTheVersionOnlyWhenNoReadAnswered(t *testing.T) {
+	readable := TokenFacts{Scopes: []string{ScopeGranular}, ID: 9, FineGrained: true, GrantReadable: true}
+	cases := []struct {
+		name         string
+		version      string
+		readFirst    bool
+		wantVersions int64
+		wantFallback finegrained.FallbackReason
+		wantVersion  string
+	}{
+		{name: "a version already read", version: "19.4.1-ee", readFirst: true, wantVersions: 1, wantVersion: "19.4.1-ee"},
+		{name: "a refusal already seen", version: "refused", readFirst: true, wantVersions: 1, wantFallback: finegrained.FallbackVersionUnreadable},
+		{name: "nothing read yet", version: "19.4.1-ee", wantVersions: 1, wantVersion: "19.4.1-ee"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stand := newGrantServer(t, http.StatusOK, grantBody, tc.version)
+			client := grantClient(t, stand.url)
+			if tc.readFirst {
+				client.AtLeast(t.Context(), 19, 6)
+			}
+			got := client.ReadFineGrainedOnce(t.Context(), readable)
+			if got.Fallback != tc.wantFallback || got.Version != tc.wantVersion {
+				t.Errorf("ReadFineGrainedOnce() = %+v, want fallback %q at %q", got, tc.wantFallback, tc.wantVersion)
+			}
+			if n := stand.versions.Load(); n != tc.wantVersions {
+				t.Errorf("/version asked %d times, want %d", n, tc.wantVersions)
+			}
+		})
+	}
+}

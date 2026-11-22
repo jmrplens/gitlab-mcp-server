@@ -7765,3 +7765,36 @@ func TestEvictBelowMinimum_AnEntryNoLongerPooled_IsLeftAlone(t *testing.T) {
 			pool.Size(), pool.Stats().BelowMinimumEvictions, *causes, *recorded)
 	}
 }
+
+// TestGetOrCreate_AnEntryWhoseTierIsDetected_AsksTheVersionOnce holds what
+// issue 1491 costs an entry build: the tier probe reads the version first, for
+// the instance plan, and the fine-grained grant and an enterprise build's
+// warning read the version it already holds, so an entry asks /version once
+// whatever its token, a classic one falling back to Free included.
+func TestGetOrCreate_AnEntryWhoseTierIsDetected_AsksTheVersionOnce(t *testing.T) {
+	cases := []struct {
+		name  string
+		facts *gitlabclient.TokenFacts
+	}{
+		{name: "a fine-grained token"},
+		{name: "a classic token", facts: func() *gitlabclient.TokenFacts {
+			facts := gitlabclient.FactsFromScopes([]string{"api"}, 3)
+			return &facts
+		}()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newFineGrainedGitLab(t)
+			cfg := testConfig(g.server.URL)
+			cfg.IgnoreScopes = false
+			cfg.TierExplicit = false
+			pool := New(cfg, testFactory())
+			if _, err := pool.GetOrCreateEntryWithFacts("glpat-detected", g.server.URL, tc.facts); err != nil {
+				t.Fatalf("GetOrCreateEntryWithFacts() error: %v", err)
+			}
+			if n := g.versions.Load(); n != 1 {
+				t.Errorf("the entry build asked /version %d times, want once", n)
+			}
+		})
+	}
+}

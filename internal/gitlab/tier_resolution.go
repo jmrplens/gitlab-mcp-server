@@ -149,7 +149,7 @@ func (c *Client) ResolveTier(ctx, membershipBase context.Context) TierResolution
 		resolution.merge(tierStepLicense, license)
 	}
 	resolution.merge(tierStepNamespaces, c.tierFromNamespaces(ctx))
-	if resolution.Tier < edition.Ultimate && membershipTierApplies(c) {
+	if resolution.Tier < edition.Ultimate && c.membershipStepApplies(ctx, plan) {
 		memberCtx, cancel := membershipContext(membershipBase)
 		resolution.merge(tierStepMembership, c.tierFromMembership(memberCtx))
 		cancel()

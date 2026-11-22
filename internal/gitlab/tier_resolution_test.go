@@ -251,10 +251,12 @@ func TestDetectTier_SelfManagedLicense_Unanswered_IsProvisionalUntilAskedAgain(t
 		},
 		{
 			// The deadline that ends the hang is the one the namespace step
-			// runs under, so it goes unread as well.
+			// runs under, so it goes unread as well, and so does the
+			// membership step an enterprise build from 18.11 is asked
+			// (issue 1491), whose base the test passes the same context as.
 			name:       "a hang past the deadline",
 			server:     &fakeGitLabDotCom{namespaces: selfManagedNamespaces, licenseHang: true},
-			unresolved: []string{tierStepLicense, tierStepNamespaces},
+			unresolved: []string{tierStepLicense, tierStepNamespaces, tierStepMembership},
 		},
 	}
 	for _, tc := range cases {
