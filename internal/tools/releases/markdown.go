@@ -116,6 +116,14 @@ func FormatMarkdown(r Output) string {
 	}
 	c.URL(releaseWebURL(r))
 	c.Text("Description", r.Description)
+	// The evidence warnings GitLab raised, which only the create answer
+	// carries.
+	if len(r.Warnings) > 0 {
+		table := c.Table("Warnings", "Message")
+		for _, warning := range r.Warnings {
+			table.Row(toolutil.EscapeMdTableCell(warning))
+		}
+	}
 	c.End(
 		toolutil.HintAction(actionReleaseLinkList, "see the assets linked to this release"),
 		toolutil.HintAction(actionReleaseLinkCreate, "add a single asset link"),

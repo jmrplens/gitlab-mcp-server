@@ -354,6 +354,38 @@ func TestFormatCreateMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatCreateMarkdown_Warnings_AreShownInTheText pins the warnings
+// GitLab 19.6 raises about a new application's granular scopes in the card,
+// one row each and escaped, so a client that reads only the text learns of
+// them as well as one that reads structuredContent.
+func TestFormatCreateMarkdown_Warnings_AreShownInTheText(t *testing.T) {
+	out := CreateOutput{
+		ID: 4, ApplicationName: "Warned", ApplicationID: "aid-4", Secret: "sec", CallbackURL: "http://cb",
+		Warnings: []string{
+			"Tokens cannot use the MCP server without a user-level scope granting execute_mcp_tool.",
+			"a | b",
+		},
+	}
+
+	want := "## Application Created\n\n" +
+		"- **ID**: 4\n" +
+		"- **Name**: Warned\n" +
+		"- **App ID**: `aid-4`\n" +
+		"- **Callback URL**: http\\://cb\n" +
+		"- **Confidential**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Secret**: `sec`\n" +
+		"\n### Warnings\n\n" +
+		"| Message |\n| --- |\n" +
+		"| Tokens cannot use the MCP server without a user-level scope granting execute_mcp_tool. |\n" +
+		"| a &#124; b |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the secret securely. It cannot be retrieved later\n"
+
+	if got := FormatCreateMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestFormatCreateMarkdown_NoScopes pins the other side of the scopes row: an
 // application GitLab sent no scopes for renders no row at all, where the
 // two-cell table this replaced rendered a label above an empty cell.

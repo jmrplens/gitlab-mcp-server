@@ -823,6 +823,30 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown_EvidenceWarnings_AreShownInTheText pins the warnings
+// GitLab 19.6 adds to a create answer in the card, one row each and escaped,
+// so a client that reads only the text is told the release's evidence was
+// not collected as well as one that reads structuredContent.
+func TestFormatMarkdown_EvidenceWarnings_AreShownInTheText(t *testing.T) {
+	got := FormatMarkdown(Output{
+		TagName:  "v1.2.0",
+		Name:     "Warned",
+		Warnings: []string{"No evidence was collected for this release.", "a | b"},
+	})
+
+	want := "## Release: Warned\n\n" +
+		"- **Tag**: v1.2.0\n" +
+		"\n### Warnings\n\n" +
+		"| Message |\n| --- |\n" +
+		"| No evidence was collected for this release. |\n" +
+		"| a &#124; b |\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestFormatMarkdown_UntitledRelease pins the heading of a release GitLab has
 // no title for: the tag names it, rather than a heading trailing a colon.
 func TestFormatMarkdown_UntitledRelease(t *testing.T) {
