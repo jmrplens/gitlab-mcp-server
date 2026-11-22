@@ -258,6 +258,34 @@ describe("code stays opaque", () => {
 		assert.equal(reduce(body), body);
 	});
 
+	test("a fence in a blockquote is code, and ends with its quote", () => {
+		const body = [
+			"> ~~~md",
+			"> [in](../code/) <Tag> {x}",
+			">",
+			"> > ~~~",
+			"> ~~~",
+			"",
+			"Between the quotes.",
+			"",
+			"> ```",
+			"> [in](../unclosed/)",
+			"",
+			"[A](/gitlab-mcp-server/about/)",
+			"",
+			"```",
+			"> [in](../fence/)",
+			"```",
+		].join("\n");
+		assert.equal(
+			reduce(body),
+			body.replace(
+				"(/gitlab-mcp-server/about/)",
+				"(https://docs.jmrp.io/gitlab-mcp-server/about/)",
+			),
+		);
+	});
+
 	test("an indented fence moves with its tab and keeps its blank lines", () => {
 		const out = reduce(
 			'<Tabs>\n\t<TabItem label="A">\n\t\t```sh\n\t\techo <URL>\n\n\n\t\techo two\n\t\t```\n\t</TabItem>\n</Tabs>',

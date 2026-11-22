@@ -48,4 +48,26 @@ describe("unanchoredTargets", () => {
 		const text = ["~~~md", "~~~text", "~~~", "[A](/relative/)"].join("\n");
 		assert.deepEqual(unanchoredTargets(text), ["/relative/"]);
 	});
+
+	test("a fence in a blockquote is code, and ends with its quote", () => {
+		const text = [
+			"> ~~~md",
+			"> [A](/in/a/quoted/fence/)",
+			"> > ~~~",
+			"> [B](/still/in/the/fence/)",
+			"> ~~~",
+			"> [C](/quoted/prose/)",
+			"",
+			"> ```",
+			"> [D](/in/an/unclosed/quoted/fence/)",
+			"[E](/after/the/quote/)",
+			"```",
+			"> [F](/in/a/fence/)",
+			"```",
+		].join("\n");
+		assert.deepEqual(unanchoredTargets(text), [
+			"/quoted/prose/",
+			"/after/the/quote/",
+		]);
+	});
 });
