@@ -247,6 +247,59 @@ func TestFormatIssuesCountMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatCountMarkdown_ACountTooLargeToCalculate_SaysItIsUnknown verifies
+// each of the three cards says GitLab could not count when the answer carries
+// too_large, in place of the 0 the SDK reads off the null count, so a reader
+// of the text is not told the group had no activity; a too_large GitLab sent
+// as false leaves the count as it was.
+func TestFormatCountMarkdown_ACountTooLargeToCalculate_SaysItIsUnknown(t *testing.T) {
+	yes, no := true, false
+	const unknown = "unknown, GitLab could not count it within its time limit"
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "issues too large",
+			got:  FormatIssuesCountMarkdown(IssuesCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **Issues Count (last 90 days)**: " + unknown + "\n" +
+				issuesCountHints,
+		},
+		{
+			name: "merge requests too large",
+			got:  FormatMRCountMarkdown(MRCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Created Merge Requests Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **Merge Requests Count (last 90 days)**: " + unknown + "\n" +
+				mrCountHints,
+		},
+		{
+			name: "members too large",
+			got:  FormatMembersCountMarkdown(MembersCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Added Members Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **New Members Count (last 90 days)**: " + unknown + "\n" +
+				membersCountHints,
+		},
+		{
+			name: "too_large sent as false",
+			got:  FormatIssuesCountMarkdown(IssuesCountOutput{GroupPath: "g", IssuesCount: 4, TooLarge: &no}),
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `g`\n" +
+				"- **Issues Count (last 90 days)**: 4\n" +
+				issuesCountHints,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertAnalyticsCard(t, tt.got, tt.want)
+		})
+	}
+}
+
 // TestFormatMRCountMarkdown verifies the whole card the merge request count
 // renders.
 func TestFormatMRCountMarkdown(t *testing.T) {
