@@ -9,7 +9,9 @@ import { FAQ_TITLES } from "../src/lib/page-markdown.mjs";
 /**
  * The questions of the FAQ section a twin carries: the `###` headings under
  * the `##` heading FAQ.astro gives it, up to the next `##`. Fenced code is
- * skipped, so a heading inside a sample is not a question.
+ * skipped, so a heading inside a sample is not a question. A fence closes as
+ * CommonMark closes it: on a run of its marker at least as long as the one
+ * that opened it, followed by nothing but spaces or tabs.
  *
  * @param {string} text the twin
  * @returns {string[]}
@@ -20,9 +22,14 @@ export function twinQuestions(text) {
 	let inFaq = false;
 	let fence = "";
 	for (const line of text.split("\n")) {
-		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+		const [, marker, rest = ""] = /^\s*(`{3,}|~{3,})(.*)/.exec(line) ?? [];
 		if (fence) {
-			if (marker && marker[0] === fence[0] && marker.length >= fence.length)
+			if (
+				marker &&
+				marker[0] === fence[0] &&
+				marker.length >= fence.length &&
+				/^[ \t]*$/.test(rest)
+			)
 				fence = "";
 			continue;
 		}
