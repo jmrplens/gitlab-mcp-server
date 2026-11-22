@@ -623,6 +623,15 @@ describe("tables", () => {
 		assert.match(out, /^> \| Q \|\n> \| --- \|\n> \| yes \|$/m);
 	});
 
+	// GFM lets a row leave out its closing pipe, so a row whose last pipe is
+	// escaped ends in a cell holding that pipe, not in a delimiter.
+	test("a row whose last pipe is escaped keeps its last cell", () => {
+		assert.equal(
+			reduce("| Value  |\n| ------ |\n| x \\|"),
+			"| Value |\n| --- |\n| x \\| |",
+		);
+	});
+
 	test("a table in a code block stays as written", () => {
 		const block = "```text\n| Name     | Count |\n| -------- | ----- |\n```";
 		assert.equal(reduce(block), block);
