@@ -30,6 +30,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 
+import { resolveStatTokens } from "./stat-tokens.mjs";
+
 /** The origin every canonical URL of the site names. */
 export const ORIGIN = "https://docs.jmrp.io";
 
@@ -76,7 +78,7 @@ const ASIDE_TITLES = {
 };
 
 // The heading FAQ.astro gives the section when the page names none.
-const FAQ_TITLES = {
+export const FAQ_TITLES = {
 	en: "Frequently asked questions",
 	es: "Preguntas frecuentes",
 };
@@ -156,7 +158,8 @@ function maskLine(line) {
 const CODE_SPAN = /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)/g;
 
 // The blockquote markers a line opens with, and a fence line behind them: its
-// marker and what follows it.
+// marker and what follows it. Its indentation is not limited to three spaces
+// as in CommonMark: MDX disables indented code, and with it that limit.
 const QUOTES = /^(?:[ \t]*>)*/;
 const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
 
@@ -304,6 +307,73 @@ const tidy = (text) =>
 		.replace(/\n{3,}/g, "\n\n")
 		.replace(/(^>.*)\n\n(?=>)/gm, "$1\n\n<!-- -->\n\n");
 
+// --- Tables ------------------------------------------------------------------
+
+// A pipe-table row behind the indentation and quote markers of the blocks it
+// sits in: its prefix, then the row from its opening pipe to its closing one.
+const TABLE_ROW = /^([ \t>]*)(\|.*\|)[ \t]*$/;
+
+/**
+ * Splits a table row into its cells at every pipe no backslash escapes. A
+ * pipe inside a code span is masked by now and splits nothing. GFM lets a row
+ * leave out its closing pipe, so a row whose last pipe is escaped ends in a
+ * cell holding that pipe, which is kept rather than dropped.
+ *
+ * @param {string} row from the opening pipe to the last one
+ * @returns {string[]}
+ */
+function tableCells(row) {
+	const cells = [];
+	let cell = "";
+	let closed = false;
+	for (let i = 1; i < row.length; i += 1) {
+		const char = row[i];
+		closed = false;
+		if (char === "\\" && i + 1 < row.length) {
+			cell += char + row[i + 1];
+			i += 1;
+		} else if (char === "|") {
+			cells.push(cell);
+			cell = "";
+			closed = true;
+		} else {
+			cell += char;
+		}
+	}
+	if (!closed) cells.push(cell);
+	return cells;
+}
+
+/**
+ * Removes the padding the sources align their table columns with. The page
+ * keeps it because a person reads the source in an editor; a reader of the
+ * twin parses the table, and the padding was a third of the twins' bytes. A
+ * cell keeps one space on each side and a separator cell becomes `---`, its
+ * alignment colons kept. Code is masked by now, so a table in a sample is not
+ * a table here and keeps its spacing.
+ *
+ * @param {string} text masked markdown
+ * @returns {string}
+ */
+function collapseTables(text) {
+	return text
+		.split("\n")
+		.map((line) => {
+			const row = TABLE_ROW.exec(line);
+			if (!row) return line;
+			const cells = tableCells(row[2]).map((cell) => cell.trim());
+			const separator = cells.every((cell) => /^:?-+:?$/.test(cell));
+			const out = cells.map((cell) => {
+				if (separator) {
+					return ` ${cell.startsWith(":") ? ":" : ""}---${cell.endsWith(":") ? ":" : ""} `;
+				}
+				return cell ? ` ${cell} ` : " ";
+			});
+			return `${row[1]}|${out.join("|")}|`;
+		})
+		.join("\n");
+}
+
 // --- Inline HTML -------------------------------------------------------------
 
 /**
@@ -329,6 +399,171 @@ export function inlineHtml(html, where) {
 	}
 	return decode(out);
 }
+
+/**
+ * The value of one attribute of an HTML tag, quoted either way.
+ *
+ * @param {string} tag
+ * @param {string} name
+ * @returns {string | undefined}
+ */
+function attribute(tag, name) {
+	const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(
+		tag,
+	);
+	return match ? (match[1] ?? match[2]) : undefined;
+}
+
+/**
+ * An <img> as markdown. One drawn from a data URI becomes its alternative
+ * text: the twin is read as text, and kilobytes of encoded SVG say nothing a
+ * reader of it can use. Any other becomes a markdown image.
+ */
+function htmlImage(tag, file) {
+	const alt = attribute(tag, "alt");
+	const src = attribute(tag, "src") ?? "";
+	if (!alt) {
+		throw new Error(
+			`${file}: an <img> with no alt text, which the markdown twin would have nothing to say for`,
+		);
+	}
+	return src.startsWith("data:") ? alt : `![${alt}](${src})`;
+}
+
+/**
+ * The inline HTML a page writes where markdown cannot: images, code, links.
+ * A tag behind a backslash is MDX's escape for its `<`, which the page shows
+ * as the tag's text, so it stays text here as it does for TAG and the check
+ * for elements left after the reduction. In a table cell the pipes of the
+ * code are escaped before the span masks them, since GFM splits a row at a
+ * bare pipe even inside a code span; outside a table code keeps them as
+ * written.
+ *
+ * @param {string} html
+ * @param {string} file named in a failure
+ * @param {boolean} [cell] whether the html is a table cell's
+ */
+const inlineElements = (html, file, cell = false) =>
+	html
+		.replace(/(?<!\\)<img\b[^>]*>/g, (tag) => htmlImage(tag, file))
+		.replace(/(?<!\\)<code>([\s\S]*?)<\/code>/g, (_, code) =>
+			span(cell ? escapeCellPipes(decode(code)) : decode(code)),
+		)
+		.replace(/(?<!\\)<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/g, "[$2]($1)");
+
+/**
+ * The raw HTML a page writes, as markdown. A page writes HTML where markdown
+ * cannot say it: `<code>{expression}</code>` (a code span would print the
+ * expression), a styled table, an image drawn from a data URI. A table
+ * becomes a pipe table, its first row the header, and one holding anything
+ * beside its rows and their cells fails; an image, a link and inline code
+ * become their markdown. Anything else is left for the check after the
+ * reduction, which fails the build on it.
+ *
+ * @param {string} text masked markdown, expressions resolved
+ * @param {string} file named in a failure
+ * @returns {string}
+ */
+function reduceHtml(text, file) {
+	const tables = text.replace(
+		/^([ \t]*)<table\b[^>]*>([\s\S]*?)<\/table>/gm,
+		(_, indent, inner) => {
+			refuseLeftover(
+				inner
+					.replace(/<tr\b[^>]*>[\s\S]*?<\/tr>/g, "")
+					.replace(/<\/?(?:thead|tbody|tfoot)\b[^>]*>/g, ""),
+				"table",
+				file,
+			);
+			const rows = [...inner.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(
+				([, row]) => {
+					refuseLeftover(
+						row.replace(/<(t[hd])\b[^>]*>[\s\S]*?<\/\1>/g, ""),
+						"table row",
+						file,
+					);
+					return [...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
+						([, , cell]) =>
+							escapeCellPipes(
+								decodeText(inlineElements(cell, file, true))
+									.replace(/\s+/g, " ")
+									.trim(),
+							),
+					);
+				},
+			);
+			if (rows.length === 0) {
+				throw new Error(`${file}: an HTML table with no rows`);
+			}
+			const line = (/** @type {string[]} */ cells) =>
+				`| ${cells.join(" | ")} |`;
+			const [head, ...body] = rows;
+			return indentBy(
+				[line(head), line(head.map(() => "---")), ...body.map(line)].join("\n"),
+				indent,
+			);
+		},
+	);
+	return inlineElements(tables, file);
+}
+
+/**
+ * Fails on what an HTML table, or one of its rows, holds beside the parts
+ * the reduction keeps: the rows of a table (its <thead>, <tbody> and <tfoot>
+ * only group them) and the cells of a row. The pipe table it becomes has no
+ * place for a <caption> or for text between cells, and the whole table is
+ * replaced, so the check for markup left after the reduction would never see
+ * what vanished.
+ *
+ * @param {string} rest the table or row with the kept parts removed
+ * @param {string} what "table" or "table row", named in the failure
+ * @param {string} file named in the failure
+ */
+function refuseLeftover(rest, what, file) {
+	const left = rest.trim();
+	if (!left) return;
+	const shown = /^<[^>]*>|^[^<]{1,40}/.exec(left)?.[0]?.trim() ?? left;
+	throw new Error(
+		`${file}: an HTML ${what} holding ${shown}, which the markdown twin has no place for`,
+	);
+}
+
+/**
+ * Escapes every pipe of a table cell that no backslash escapes already. The
+ * cell is markdown, where a backslash escapes the character after it, and MDX
+ * read the page's `\|` as a pipe: that escape is kept as written, so a
+ * backslash is copied together with the character after it and only a bare
+ * pipe gains one. Escaping every pipe again would turn `\|` into `\\|`, an
+ * escaped backslash followed by a pipe that ends the cell.
+ *
+ * @param {string} cell
+ * @returns {string}
+ */
+function escapeCellPipes(cell) {
+	let out = "";
+	for (let i = 0; i < cell.length; i += 1) {
+		const char = cell[i];
+		if (char === "\\" && i + 1 < cell.length) {
+			out += char + cell[i + 1];
+			i += 1;
+		} else {
+			out += char === "|" ? "\\|" : char;
+		}
+	}
+	return out;
+}
+
+/**
+ * Prose with its entities read, for text outside code. A `<` read from
+ * `&lt;` is written escaped, as a page writes `\<id>`: the page showed it as
+ * text, and bare it would open an element for a markdown reader and for the
+ * check after the reduction. The pass that lifts MDX's escapes drops the
+ * backslash again wherever no tag could start.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+const decodeText = (text) => decode(text.replace(/&lt;/g, "\\<"));
 
 /** @param {string} text @returns {string} the text with its entities read */
 const decode = (text) =>
@@ -529,9 +764,10 @@ function resolveExpressions(text, bindings, file) {
 // --- Components -----------------------------------------------------------
 
 // A component tag, opening, closing or self-closing, across newlines: several
-// <LinkCard> tags spread their attributes over four lines.
+// <LinkCard> tags spread their attributes over four lines. A `<` behind a
+// backslash is MDX's escape for the character, as in `\<NAME\>`, never a tag.
 const TAG =
-	/<(\/?)([A-Z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*?)(\/?)>/;
+	/(?<!\\)<(\/?)([A-Z][A-Za-z0-9]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*?)(\/?)>/;
 
 /**
  * The attributes of a tag: a quoted value as its text, an expression as the
@@ -554,28 +790,6 @@ function parseAttributes(raw, bindings, file) {
 
 /** @param {unknown} value @returns {string} */
 const text = (value) => (typeof value === "string" ? value : "");
-
-/**
- * Resolves `{{dotted.path}}` tokens in an FAQ answer from stats.json, the way
- * src/utils/faq.ts does for the rendered section: numbers formatted en-US on
- * every page, an unknown path left as written.
- */
-function resolveStatTokens(answer, stats) {
-	return answer.replace(/\{\{([\w.]+)\}\}/g, (whole, path) => {
-		/** @type {unknown} */
-		let value = stats;
-		for (const key of path.split(".")) {
-			value =
-				value && typeof value === "object"
-					? /** @type {Record<string, unknown>} */ (value)[key]
-					: undefined;
-		}
-		if (value === undefined || value === null) return whole;
-		return typeof value === "number"
-			? value.toLocaleString("en-US")
-			: String(value);
-	});
-}
 
 /**
  * Renders one component that wraps content.
@@ -668,8 +882,11 @@ function renderSelfClosing(name, attributes, context) {
 			const items = context.faq ?? [];
 			if (items.length === 0) return "";
 			const title = text(attributes.title) || FAQ_TITLES[context.locale];
+			// The figures are formatted as the page's own body formats them, and
+			// as the rendered section and the JSON-LD do (src/lib/stat-tokens.mjs).
 			const entries = items.map(
-				({ q, a }) => `### ${q}\n\n${resolveStatTokens(a, context.stats)}`,
+				({ q, a }) =>
+					`### ${q}\n\n${resolveStatTokens(a, context.stats, context.locale)}`,
 			);
 			// The answers come from the frontmatter, outside the masked body, so
 			// their code spans are masked here before the passes that follow.
@@ -750,7 +967,10 @@ function reduce(source, context, flat = false) {
 		}
 		// Scan to the matching close, counting nested tags of the same name so a
 		// tab set inside a tab closes the inner one first.
-		const scanner = new RegExp(`<${name}(?=[\\s/>])|</${name}>`, "g");
+		const scanner = new RegExp(
+			`(?<!\\\\)(?:<${name}(?=[\\s/>])|</${name}>)`,
+			"g",
+		);
 		let depth = 1;
 		let end = -1;
 		let after = -1;
@@ -923,6 +1143,30 @@ function absoluteTargets(text, { file, route }) {
  * @returns {string}
  */
 export function reduceBody(page) {
+	return unmaskedFailures(() => reduceMasked(page));
+}
+
+/**
+ * Runs a reduction step, lifting the mask from the message of any failure it
+ * throws: a message quotes the page, and a code span of the page is masked
+ * while the reduction runs, so it would otherwise read as private-use
+ * characters rather than the backticks the author wrote.
+ *
+ * @template T
+ * @param {() => T} step
+ * @returns {T}
+ */
+function unmaskedFailures(step) {
+	try {
+		return step();
+	} catch (error) {
+		if (error instanceof Error) error.message = unmask(error.message);
+		throw error;
+	}
+}
+
+/** @param {Parameters<typeof reduceBody>[0]} page */
+function reduceMasked(page) {
 	const locale = localeOf(page.route);
 	const withRelease = page.body.replaceAll("%%VERSION%%", page.release);
 	const { body, bindings } = readImports(maskCode(withRelease), {
@@ -946,19 +1190,47 @@ export function reduceBody(page) {
 		locale,
 		page.file,
 	);
-	markdown = resolveExpressions(markdown, bindings, page.file).replace(
-		/\\([{}])/g,
-		"$1",
-	);
+	markdown = resolveExpressions(markdown, bindings, page.file);
+	markdown = reduceHtml(markdown, page.file);
 	if (locale === "es") markdown = localizeLinks(markdown);
 	markdown = absoluteTargets(markdown, { file: page.file, route: page.route });
-	const residual = /<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
+	const residual = /(?<!\\)<\/?([A-Z][A-Za-z0-9]*)/.exec(markdown);
 	if (residual) {
 		throw new Error(
 			`${page.file}: <${residual[1]}> survived the reduction. Teach src/lib/page-markdown.mjs.`,
 		);
 	}
-	const reduced = unmask(tidy(markdown)).trim();
+	// An HTML element reduceHtml does not know would reach the twin as markup.
+	// Code is masked by now and an autolink's scheme ends its name with a
+	// colon, so a lowercase tag name here is an element the page wrote.
+	const element = /(?<!\\)<\/?([a-z][a-z0-9]*)(?=[\s/>])/.exec(markdown);
+	if (element) {
+		throw new Error(
+			`${page.file}: no markdown reduction for the HTML <${element[1]}>. ` +
+				"Teach reduceHtml in src/lib/page-markdown.mjs.",
+		);
+	}
+	// A directive reduceDirectives does not know, such as `:::details`, would
+	// reach the twin as its raw fence lines. Code is masked by now, so a line
+	// opening with `:::` here is one Starlight reads as a directive, behind
+	// its indentation and the `>` of a blockquote it sits in: an <Aside> is a
+	// blockquote by now, and a page may quote a directive itself.
+	const directive = /^[ \t>]*(:::.*)$/m.exec(markdown);
+	if (directive) {
+		throw new Error(
+			`${page.file}: no markdown reduction for the directive ${JSON.stringify(directive[1].trim())}. ` +
+				"Teach reduceDirectives in src/lib/page-markdown.mjs.",
+		);
+	}
+	// MDX's escapes for characters it would otherwise read as syntax, now that
+	// nothing reads syntax any more: `\{` and `\}` around an expression, and
+	// `\>`. The twin keeps the backslash of `\<` where the `<` would open a
+	// tag (`\<id>`), because a markdown renderer reads `<id>` as HTML and drops
+	// the placeholder; a `<` no tag can start with is unescaped.
+	markdown = markdown
+		.replace(/\\([{}>])/g, "$1")
+		.replace(/\\<(?![A-Za-z/!?])/g, "<");
+	const reduced = unmask(tidy(collapseTables(markdown))).trim();
 	if (!reduced) throw new Error(`${page.file}: nothing left after reduction`);
 	return reduced;
 }
@@ -966,8 +1238,11 @@ export function reduceBody(page) {
 /**
  * The markdown twin of one page, in the format the sibling sites publish: the
  * title, the description, the canonical URL, optionally the date the page last
- * changed (the edge turns it into Last-Modified, reading the header up to the
- * first line that is exactly `---`), then the body.
+ * changed, a line that is exactly `---`, then the body. The edge turns
+ * `Updated:` into Last-Modified, but reads the header only up to the first
+ * such line, so the rule is what makes the header a header: without it the
+ * edge reads on into the body and ignores the date unless the body happens to
+ * open with a rule of its own.
  *
  * @param {Parameters<typeof reduceBody>[0] & { title: string, description: string, updated?: string, lead?: string }} page
  * @returns {string}
@@ -986,17 +1261,20 @@ export function renderTwin(page) {
 		`Source: ${pageUrl(page.route)}`,
 	];
 	if (page.updated) header.push(`Updated: ${page.updated}`);
-	const parts = [header.join("\n")];
+	const parts = [header.join("\n"), "---"];
 	// The splash pages' hero, which Starlight renders from the frontmatter
 	// above the body. Its links are written as the page means them, so they
 	// are made absolute but not localized.
 	if (page.lead) {
+		const lead = page.lead.trim();
 		parts.push(
-			unmask(
-				absoluteTargets(maskCode(page.lead.trim()), {
-					file: page.file,
-					route: page.route,
-				}),
+			unmaskedFailures(() =>
+				unmask(
+					absoluteTargets(maskCode(lead), {
+						file: page.file,
+						route: page.route,
+					}),
+				),
 			),
 		);
 	}

@@ -15,6 +15,7 @@ faq:
 
 
 import { Aside, Tabs, TabItem, Code } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 import collectorConfig from "../../../../../examples/telemetry/otel-collector.yaml?raw";
 import composeFile from "../../../../../examples/telemetry/compose.yaml?raw";
 
@@ -881,3 +882,5 @@ without prior notice". It is adopted anyway, on the grounds that it affects
 operators rather than MCP clients: a convention change costs a dashboard edit
 and costs consumers of this server nothing. It lives in a separate repository
 rather than on `opentelemetry.io`, whose `/docs/specs/semconv/mcp/` returns 404.
+
+<FAQ />

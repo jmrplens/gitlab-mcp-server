@@ -112,10 +112,10 @@ Para configuraciones de solo lectura, usa un token con el scope `read_api`: el s
 
 ## Instalación rápida
 
-Elige una: cada vía termina contigo escribiendo un prompt a tu asistente. Cada canal tiene además su propia página con todos los comandos y los pasos de verificación, actualización y desinstalación; empieza por [Elige una vía](/gitlab-mcp-server/es/install/overview/) si no tienes claro cuál te encaja. Para la referencia completa por cliente, consulta <a href="#configuración-manual">Configuración manual</a> más abajo.
+Elige una: cada vía termina contigo escribiendo un prompt a tu asistente. Cada canal tiene además su propia página con todos los comandos y los pasos de verificación, actualización y desinstalación; empieza por [Elige una vía](/gitlab-mcp-server/es/install/overview/) si no tienes claro cuál te encaja. Para la referencia completa por cliente, consulta [Configuración manual](#configuración-manual) más abajo.
 
 :::tip[¿Quieres verlo antes de instalar?]
-El [inspector del navegador](https://mcp.jmrp.io/es/inspector/?server=gitlab) inicia sesión con OAuth y llama al <a href="#pruébalo-sin-instalar-nada-endpoint-alojado">endpoint alojado</a> — `https://mcp.jmrp.io/gitlab` — en modo solo lectura desde una pestaña, sin descargar nada. Ejecutarlo tú sigue siendo la forma de usarlo a diario.
+El [inspector del navegador](https://mcp.jmrp.io/es/inspector/?server=gitlab) inicia sesión con OAuth y llama al [endpoint alojado](#pruébalo-sin-instalar-nada-endpoint-alojado) (`https://mcp.jmrp.io/gitlab`) en modo solo lectura desde una pestaña, sin descargar nada. Ejecutarlo tú sigue siendo la forma de usarlo a diario.
 :::
 
 ### Botones de un clic
@@ -346,7 +346,7 @@ Comprobar la descarga contra `checksums.txt` y su firma Cosign, actualizar y des
 
 ## Ejecutar el binario a mano
 
-No hay asistente de configuración. La configuración MCP va en el propio archivo JSON de tu cliente, que es lo que documenta <a href="#configuración-manual">Configuración manual</a> más abajo, y un asistente que escribe un dotfile en una máquina no podía ponerla ahí.
+No hay asistente de configuración. La configuración MCP va en el propio archivo JSON de tu cliente, que es lo que documenta [Configuración manual](#configuración-manual) más abajo, y un asistente que escribe un dotfile en una máquina no podía ponerla ahí.
 
 Ejecutar el binario en una terminal sin `GITLAB_TOKEN` y `GITLAB_URL` definidos (basta con que falte una de las dos), o hacer doble clic sobre él, imprime qué es el servidor, los dos valores que necesita y dónde está documentado el JSON de cada cliente, y después espera a que pulses Enter para que una ventana abierta con doble clic en Windows no se cierre antes de que puedas leerla. Un cliente MCP nunca ve esa pantalla: un cliente conecta tuberías en lugar de una terminal, así que el servidor arranca con normalidad.
 
@@ -651,7 +651,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --pub
 
 Configura cada cliente con ese valor exacto de `--public-url` como URL del servidor: un cliente descarta los metadatos RFC 9728 cuando su `resource` difiere de la URL que usó.
 
-Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. El servidor verifica cada token Bearer contra `GET /api/v4/user` de la instancia y lee sus scopes, y después guarda la identidad en caché durante `--oauth-cache-ttl` (15 minutos por defecto); consulta <a href="/gitlab-mcp-server/es/operations/http-server/#caché-de-tokens">Caché de tokens</a>. Consulta [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/) para crear la Aplicación OAuth de GitLab requerida.
+Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. El servidor verifica cada token Bearer contra `GET /api/v4/user` de la instancia y lee sus scopes, y después guarda la identidad en caché durante `--oauth-cache-ttl` (15 minutos por defecto); consulta [Caché de tokens](/gitlab-mcp-server/es/operations/http-server/#caché-de-tokens). Consulta [Aplicación OAuth](/gitlab-mcp-server/es/operations/oauth-app/) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
 Los clientes deben configurarse con el `clientId` de una Aplicación OAuth de GitLab que tenga marcado el scope que pide el despliegue: `api` en uno que puede escribir, `read_api` en uno que usa `--read-only` o `--safe-mode`. GitLab rechaza la autorización con `invalid_scope` si a la aplicación le falta el scope que pide el cliente. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Configuración de clientes](/gitlab-mcp-server/es/install/clients/) para ejemplos por cliente.

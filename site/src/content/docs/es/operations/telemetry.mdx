@@ -15,6 +15,7 @@ faq:
 
 
 import { Aside, Tabs, TabItem, Code } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
 import collectorConfig from "../../../../../../examples/telemetry/otel-collector.yaml?raw";
 import composeFile from "../../../../../../examples/telemetry/compose.yaml?raw";
 
@@ -912,3 +913,5 @@ operadores y no a los clientes MCP, así que un cambio de convención cuesta
 editar un cuadro de mando y no cuesta nada a quien consume este servidor. Vive
 en un repositorio aparte y no en `opentelemetry.io`, cuyo
 `/docs/specs/semconv/mcp/` devuelve 404.
+
+<FAQ />

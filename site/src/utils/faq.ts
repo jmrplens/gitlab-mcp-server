@@ -12,10 +12,13 @@
 //
 // Answers may contain:
 //   - stat tokens, `{{tools.free}}`, resolved from src/data/stats.json so the
-//     published numbers cannot fall behind the real catalog;
+//     published numbers cannot fall behind the real catalog, and formatted in
+//     the page's locale as its body formats its own figures
+//     (src/lib/stat-tokens.mjs, which the markdown twin reads too);
 //   - inline `code` and **bold**, kept for the rendered section and stripped for
 //     the JSON-LD, which requires plain text.
 import stats from "../data/stats.json";
+import { resolveStatTokens as resolveTokens } from "../lib/stat-tokens.mjs";
 
 export interface FaqItem {
 	q: string;
@@ -30,31 +33,18 @@ export interface FaqSpan {
 }
 
 /**
- * Replaces `{{dotted.path}}` tokens with values from stats.json.
- * An unknown path is left verbatim so a typo shows up in the rendered page
- * instead of silently publishing an empty string.
+ * Replaces `{{dotted.path}}` tokens with values from stats.json, a number in
+ * the number format of `lang`, the page's language. An unknown path is left
+ * verbatim so a typo shows up in the rendered page instead of silently
+ * publishing an empty string.
  */
-export function resolveStatTokens(text: string): string {
-	return text.replace(/\{\{([\w.]+)\}\}/g, (whole, path: string) => {
-		const value = path
-			.split(".")
-			.reduce<unknown>(
-				(node, key) =>
-					node && typeof node === "object"
-						? (node as Record<string, unknown>)[key]
-						: undefined,
-				stats,
-			);
-		if (value === undefined || value === null) return whole;
-		return typeof value === "number"
-			? value.toLocaleString("en-US")
-			: String(value);
-	});
+export function resolveStatTokens(text: string, lang: string): string {
+	return resolveTokens(text, stats, lang);
 }
 
-/** Splits an answer into inline spans for rendering. */
-export function parseFaqSpans(answer: string): FaqSpan[] {
-	const resolved = resolveStatTokens(answer);
+/** Splits an answer into inline spans for rendering on a page in `lang`. */
+export function parseFaqSpans(answer: string, lang: string): FaqSpan[] {
+	const resolved = resolveStatTokens(answer, lang);
 	const spans: FaqSpan[] = [];
 	// Inline code first: backticks bind tighter than emphasis in Markdown, so a
 	// `**literal**` inside code must not be treated as bold.
@@ -81,11 +71,12 @@ export function parseFaqSpans(answer: string): FaqSpan[] {
 
 /**
  * Renders an answer as the plain text required by schema.org Answer.text:
- * stat tokens resolved, inline markers removed, content preserved.
+ * stat tokens resolved for a page in `lang`, inline markers removed, content
+ * preserved.
  */
-export function faqPlainText(answer: string): string {
+export function faqPlainText(answer: string, lang: string): string {
 	return (
-		resolveStatTokens(answer)
+		resolveStatTokens(answer, lang)
 			.replace(/`([^`]+)`/g, "$1")
 			.replace(/\*\*([^*]+)\*\*/g, "$1")
 			// Keep the link text, drop the URL: schema.org Answer.text is prose, and a

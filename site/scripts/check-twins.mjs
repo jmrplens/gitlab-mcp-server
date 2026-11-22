@@ -19,6 +19,8 @@ import { join, resolve } from "node:path";
 import process from "node:process";
 
 import { TWIN_NOTE } from "./gen-llms.mjs";
+import { dateProblems } from "./twin-dates.mjs";
+import { twinQuestions } from "./twin-questions.mjs";
 import { unanchoredTargets } from "./twin-targets.mjs";
 
 const DIST = resolve(process.argv[2] ?? "dist");
@@ -45,6 +47,49 @@ if (!SITE_ROOT) {
 
 const problems = [];
 const fail = (message) => problems.push(message);
+
+// The <lastmod> the sitemap states for each page, by its dist-relative
+// directory ("" for the landing, "tools/overview/" for a page).
+/** @type {Map<string, string>} */
+const lastmods = new Map();
+for (const name of readdirSync(DIST)) {
+	if (!/^sitemap-\d+\.xml$/.test(name)) continue;
+	for (const entry of readFileSync(join(DIST, name), "utf8").matchAll(
+		/<loc>([^<]+)<\/loc><lastmod>([^<]+)<\/lastmod>/g,
+	)) {
+		if (entry[1].startsWith(`${SITE_ROOT}/`)) {
+			lastmods.set(entry[1].slice(SITE_ROOT.length + 1), entry[2]);
+		}
+	}
+}
+
+/** The JSON-LD node of a page with one of the given ids, if it has one. */
+function jsonLdNode(html, ids) {
+	for (const script of html.matchAll(
+		/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g,
+	)) {
+		let data;
+		try {
+			data = JSON.parse(script[1]);
+		} catch {
+			continue;
+		}
+		for (const node of data["@graph"] ?? [data]) {
+			if (ids.includes(node?.["@id"])) return node;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * The dateModified of a page's own document node, the TechArticle or, on the
+ * landings, the WebPage: not the site-wide graph's, which dates the software.
+ */
+const pageDateModified = (html, page) =>
+	jsonLdNode(html, [
+		`${SITE_ROOT}/${page}#article`,
+		`${SITE_ROOT}/${page}#webpage`,
+	])?.dateModified;
 
 /** Every file under dist matching a name test, as dist-relative paths. */
 function* files(dir, matches, prefix = "") {
@@ -89,15 +134,17 @@ for (const page of pages) {
 	}
 	const text = readFileSync(join(DIST, twin), "utf8");
 	// The header every sibling site writes: title, description, the page's own
-	// canonical URL. An empty twin is worse than a missing one: it answers the
-	// request, so whatever fetched it reads the page as having no content.
+	// canonical URL, the optional date, and a line that is exactly `---`, which
+	// is where the edge stops reading the header: without it the date is never
+	// read. An empty twin is worse than a missing one: it answers the request,
+	// so whatever fetched it reads the page as having no content.
 	const header =
-		/^# \S.*\n\n\S.*\n\nSource: (\S+)\n(?:Updated: \d{4}-\d{2}-\d{2}\n)?\n\S/.exec(
+		/^# \S.*\n\n\S.*\n\nSource: (\S+)\n(?:Updated: (\d{4}-\d{2}-\d{2})\n)?\n---\n\n\S/.exec(
 			text,
 		);
 	if (!header) {
 		fail(
-			`/${twin} does not open with "# title", the description and "Source:"`,
+			`/${twin} does not open with "# title", the description, "Source:", the optional "Updated:" and a "---" line`,
 		);
 	} else if (header[1] !== `${SITE_ROOT}/${page}`) {
 		fail(`/${twin} names ${header[1]} as its source, not ${SITE_ROOT}/${page}`);
@@ -123,6 +170,33 @@ for (const page of pages) {
 	}
 	if (!html.includes(`"contentUrl":"${SITE_ROOT}/${twin}"`)) {
 		fail(`/${page} does not describe its twin in its JSON-LD encoding`);
+	}
+
+	// The questions a page advertises in its FAQPage JSON-LD are the ones it
+	// shows, and the twin carries the same. The JSON-LD is built from the
+	// frontmatter whether or not the body places <FAQ />, so a page that
+	// forgot the component advertised questions no reader could see.
+	const faqPage = jsonLdNode(html, [`${SITE_ROOT}/${page}#faq`]);
+	const advertised = (faqPage?.mainEntity ?? []).map((q) => q.name);
+	const shown = twinQuestions(text);
+	if (
+		advertised.length !== shown.length ||
+		advertised.some((q, i) => q !== shown[i])
+	) {
+		fail(
+			`/${page} advertises ${advertised.length} FAQ question(s) in its FAQPage JSON-LD and its twin shows ${shown.length}; ` +
+				"a page with faq: in its frontmatter places <FAQ /> in its body",
+		);
+	}
+
+	// One date in three places (scripts/twin-dates.mjs says which).
+	for (const problem of dateProblems({
+		twin,
+		updated: header?.[2],
+		lastmod: lastmods.get(page),
+		modified: pageDateModified(html, page),
+	})) {
+		fail(problem);
 	}
 }
 

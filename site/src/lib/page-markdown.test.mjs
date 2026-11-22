@@ -135,6 +135,40 @@ describe("components", () => {
 		assert.doesNotMatch(out, /�/);
 	});
 
+	// A directive this file does not reduce would reach the twin as its raw
+	// `:::` lines. The failure names the line as the page wrote it: a code
+	// span in it is masked while the reduction runs, and is shown unmasked.
+	test("an unknown directive fails, naming its line as written", () => {
+		assert.throws(
+			() => reduce(":::details[Open `config.yaml`]\nHidden.\n:::"),
+			(error) =>
+				error instanceof Error &&
+				error.message.includes(":::details[Open `config.yaml`]") &&
+				!/[\u{f0000}-\u{ffffd}]/u.test(error.message),
+		);
+	});
+
+	// An <Aside> is a blockquote by the time directives are read, and a page
+	// may quote one itself, so a directive there opens behind `> `.
+	test("a directive inside an aside or a blockquote fails like any other", () => {
+		assert.throws(
+			() => reduce("<Aside>\n:::details[Open]\nHidden.\n:::\n</Aside>"),
+			/no markdown reduction for the directive ":::details\[Open\]"/,
+		);
+		assert.throws(
+			() => reduce("> :::details[Open]\n> Hidden.\n> :::"),
+			/no markdown reduction for the directive ":::details\[Open\]"/,
+		);
+	});
+
+	test("a failure shows the page's code spans, never their masked form", () => {
+		assert.throws(
+			() => reduce("[A `b`](/elsewhere/) {stats.`x`}"),
+			(error) =>
+				error instanceof Error && !/[\u{f0000}-\u{ffffd}]/u.test(error.message),
+		);
+	});
+
 	test("a directive on a Spanish page takes the Spanish default title", () => {
 		assert.match(
 			reduce(":::note\nUna nota.\n:::", { route: "es/guide" }),
@@ -208,6 +242,19 @@ describe("components", () => {
 		);
 	});
 
+	// The body of a Spanish page formats its figures es-ES, so an answer on the
+	// same page does too: "1102", never "1,102" beside it.
+	test("FAQ figures follow the page's locale", () => {
+		const page = (route) =>
+			reduce("<FAQ />", {
+				route,
+				stats: { tools: { gitlab_com: 1102, enterprise: 12345 } },
+				faq: [{ q: "Q", a: "{{tools.gitlab_com}} and {{tools.enterprise}}." }],
+			});
+		assert.match(page("guide"), /^1,102 and 12,345\.$/m);
+		assert.match(page("es/guide"), /^1102 and 12\.345\.$/m);
+	});
+
 	test("FAQ on a page without questions renders nothing", () => {
 		assert.throws(() => reduce("<FAQ />"), /nothing left after reduction/);
 	});
@@ -235,6 +282,31 @@ describe("components", () => {
 	});
 });
 
+describe("escapes", () => {
+	// MDX reads `\<NAME\>` as the text <NAME>, not a tag, and so does the twin.
+	test("an escaped angle bracket is text, not a tag", () => {
+		assert.equal(
+			reduce("Set GITLAB_MCP_\\<NAME\\> and \\<Aside\\>."),
+			"Set GITLAB_MCP_\\<NAME> and \\<Aside>.",
+		);
+		assert.equal(reduce("GitLab \\< 14 only."), "GitLab < 14 only.");
+	});
+
+	// The same holds for an HTML element the reduction would otherwise turn
+	// into markdown: the page shows the tags, so the twin keeps them as text.
+	test("an escaped HTML tag is text, not an element to reduce", () => {
+		const body =
+			"Write \\<code>text\\</code>, " +
+			'\\<a href="https://example.com/">a link\\</a> and ' +
+			'\\<img alt="Logo" src="https://example.com/logo.png">.';
+		assert.equal(reduce(body), body);
+	});
+
+	test("an escaped brace is text, not an expression", () => {
+		assert.equal(reduce("Write \\{id\\}."), "Write {id}.");
+	});
+});
+
 describe("code stays opaque", () => {
 	test("pseudo-tags and braces in code are neither components nor expressions", () => {
 		const body = [
@@ -256,6 +328,26 @@ describe("code stays opaque", () => {
 	test("a fence line with text after its marker does not close a fence", () => {
 		const body = ["~~~md", "~~~text", "[in](../code/)", "~~~"].join("\n");
 		assert.equal(reduce(body), body);
+	});
+
+	// MDX disables indented code, and with it micromark's limit of three
+	// spaces before a fence: an MDX body closes a fence on a marker at any
+	// indentation, unlike the CommonMark twin scripts/twin-questions.mjs reads.
+	test("a fence closes on a marker indented four spaces, as MDX closes it", () => {
+		const body = [
+			"```md",
+			"[in](../code/)",
+			"    ```",
+			"",
+			"[A](/gitlab-mcp-server/about/)",
+		].join("\n");
+		assert.equal(
+			reduce(body),
+			body.replace(
+				"(/gitlab-mcp-server/about/)",
+				"(https://docs.jmrp.io/gitlab-mcp-server/about/)",
+			),
+		);
 	});
 
 	test("a fence in a blockquote is code, and ends with its quote", () => {
@@ -395,6 +487,222 @@ describe("expressions", () => {
 	});
 });
 
+describe("raw HTML", () => {
+	test("a link and inline code written as HTML become markdown", () => {
+		const out = reduce(
+			'import footprint from "../../data/stats.json";\n\n' +
+				'See <a href="#setup">the setup</a> and <a href="/gitlab-mcp-server/about/">about</a>, ' +
+				"tokenized with <code>{footprint.tools.free}</code> and <code>a &lt; b</code>.",
+		);
+		assert.equal(
+			out,
+			"See [the setup](https://docs.jmrp.io/gitlab-mcp-server/guide/#setup) and " +
+				"[about](https://docs.jmrp.io/gitlab-mcp-server/about/), tokenized with `875` and `a < b`.",
+		);
+	});
+
+	test("a Spanish page localizes an HTML link like a markdown one", () => {
+		assert.equal(
+			reduce('<a href="/gitlab-mcp-server/about/">Acerca de</a>', {
+				route: "es/guide",
+			}),
+			"[Acerca de](https://docs.jmrp.io/gitlab-mcp-server/es/about/)",
+		);
+	});
+
+	// The icon gallery: a styled HTML table whose first column draws each
+	// icon from a data URI. The twin keeps the table and names each image by
+	// its alternative text rather than carrying kilobytes of encoded SVG.
+	test("an HTML table becomes a table, its images their alternative text", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <thead>",
+				"    <tr>",
+				'      <th style="width:60px">Preview</th>',
+				"      <th>Name</th>",
+				"    </tr>",
+				"  </thead>",
+				"  <tbody>",
+				"    <tr>",
+				"      <td>",
+				"        <img",
+				"          src=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E\"",
+				'          width="32"',
+				'          alt="Branch"',
+				"        />",
+				"      </td>",
+				"      <td>",
+				"        <code>IconBranch</code>",
+				"      </td>",
+				"    </tr>",
+				"    <tr>",
+				"      <td>none</td>",
+				"      <td>a | b</td>",
+				"    </tr>",
+				"  </tbody>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Preview | Name |\n| --- | --- |\n| Branch | `IconBranch` |\n| none | a \\| b |",
+		);
+	});
+
+	// MDX reads `\|` in a cell as a pipe, so the twin carries that escape once
+	// rather than escaping its backslash's pipe a second time, which would end
+	// the cell there; a pipe the page writes bare is escaped.
+	test("a pipe in an HTML table cell is escaped once, whether or not the page escaped it", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>A</th><th>B</th></tr>",
+				"  <tr><td>a \\| b</td><td>c | d</td></tr>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(out, "| A | B |\n| --- | --- |\n| a \\| b | c \\| d |");
+	});
+
+	// GFM splits a row at a bare pipe even inside a code span, so a pipe in
+	// the code of an HTML cell is escaped in the twin; the same code outside
+	// a table keeps its pipe as written.
+	test("a pipe in the code of an HTML table cell is escaped", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>Pattern</th><th>Meaning</th></tr>",
+				"  <tr><td><code>a | b</code></td><td><code>c \\| d</code></td></tr>",
+				"</table>",
+				"",
+				"Outside, <code>a | b</code> stays.",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Pattern | Meaning |\n| --- | --- |\n| `a \\| b` | `c \\| d` |\n\nOutside, `a | b` stays.",
+		);
+	});
+
+	// The rows are all the twin keeps of an HTML table, so anything else the
+	// table holds would vanish from it without a word.
+	test("an HTML table holding more than its rows fails", () => {
+		assert.throws(
+			() =>
+				reduce(
+					[
+						"<table>",
+						"  <caption>Required settings</caption>",
+						"  <tr><th>Key</th></tr>",
+						"  <tr><td>TOKEN</td></tr>",
+						"</table>",
+					].join("\n"),
+				),
+			/an HTML table holding <caption>/,
+		);
+		assert.throws(
+			() =>
+				reduce(
+					"<table>\n  <tr><th>Key</th> stray </tr>\n  <tr><td>TOKEN</td></tr>\n</table>",
+				),
+			/an HTML table row holding stray/,
+		);
+	});
+
+	// The page shows `&lt;id&gt;` as the text <id>. Read back into a bare
+	// `<id>`, it is an element to a markdown reader and to the check after the
+	// reduction, so the twin writes it escaped, as a page writes `\<id>`.
+	test("an angle bracket a table cell writes as an entity stays text", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>Route</th><th>Test</th></tr>",
+				"  <tr><td>/projects/&lt;id&gt;</td><td>a &lt; b &amp;&amp; c</td></tr>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Route | Test |\n| --- | --- |\n| /projects/\\<id> | a < b && c |",
+		);
+	});
+
+	test("an image outside a table drawn from a data URI becomes its alternative text", () => {
+		const out = reduce(
+			'Before.\n\n<img\n  src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"\n  width="48"\n  alt="Brand mark"\n/>\n\nAfter.',
+		);
+		assert.equal(out, "Before.\n\nBrand mark\n\nAfter.");
+	});
+
+	test("an HTML element the reducer does not know fails", () => {
+		assert.throws(
+			() => reduce("A <details><summary>More</summary>hidden</details> here."),
+			/no markdown reduction for the HTML <details>/,
+		);
+	});
+});
+
+describe("tables", () => {
+	// The source pads every cell to its column's width so the table reads in
+	// an editor; a reader of the twin parses it, and the padding was a third
+	// of the twins' bytes.
+	test("cells keep one space of padding and separators keep their alignment", () => {
+		const out = reduce(
+			[
+				"| Name     | Count | Where        |",
+				"| :------- | ----: | :----------: |",
+				"| `a | b`  |     2 | left \\| right |",
+				"| x        |       | **y**        |",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			[
+				"| Name | Count | Where |",
+				"| :--- | ---: | :---: |",
+				"| `a | b` | 2 | left \\| right |",
+				"| x | | **y** |",
+			].join("\n"),
+		);
+	});
+
+	test("a table in a list item or a quote keeps its indentation and markers", () => {
+		const out = reduce(
+			[
+				"- Item",
+				"",
+				"  | A    | B   |",
+				"  | ---- | --- |",
+				"  | one  | 2   |",
+				"",
+				"> | Q    |",
+				"> | ---- |",
+				"> | yes  |",
+			].join("\n"),
+		);
+		assert.match(
+			out,
+			/^ {2}\| A \| B \|\n {2}\| --- \| --- \|\n {2}\| one \| 2 \|$/m,
+		);
+		assert.match(out, /^> \| Q \|\n> \| --- \|\n> \| yes \|$/m);
+	});
+
+	// GFM lets a row leave out its closing pipe, so a row whose last pipe is
+	// escaped ends in a cell holding that pipe, not in a delimiter.
+	test("a row whose last pipe is escaped keeps its last cell", () => {
+		assert.equal(
+			reduce("| Value  |\n| ------ |\n| x \\|"),
+			"| Value |\n| --- |\n| x \\| |",
+		);
+	});
+
+	test("a table in a code block stays as written", () => {
+		const block = "```text\n| Name     | Count |\n| -------- | ----- |\n```";
+		assert.equal(reduce(block), block);
+	});
+});
+
 describe("links", () => {
 	test("site, fragment and relative asset targets become absolute", () => {
 		const out = reduce(
@@ -404,7 +712,7 @@ describe("links", () => {
 			out,
 			"[A](https://docs.jmrp.io/gitlab-mcp-server/about/) [B](https://docs.jmrp.io/gitlab-mcp-server/guide/#heading) " +
 				"![C](https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/content/docs/img.png) " +
-				'<a href="https://docs.jmrp.io/gitlab-mcp-server/x/">D</a> [E](https://example.com)',
+				"[D](https://docs.jmrp.io/gitlab-mcp-server/x/) [E](https://example.com)",
 		);
 	});
 
@@ -466,11 +774,13 @@ describe("links", () => {
 });
 
 describe("renderTwin", () => {
-	test("writes the sibling header, the release and the body", () => {
+	// The body holds no rule of its own: the `---` after the header is the one
+	// renderTwin writes, the line the edge stops reading the header at.
+	test("writes the sibling header, its closing rule, the release and the body", () => {
 		const twin = renderTwin({
 			title: "Guide",
 			description: "What the guide covers.",
-			body: "---\n\nInstall %%VERSION%%.",
+			body: "Install %%VERSION%%.",
 			file: "src/content/docs/guide.mdx",
 			route: "guide",
 			root,
@@ -482,6 +792,25 @@ describe("renderTwin", () => {
 		assert.equal(
 			twin,
 			"# Guide\n\nWhat the guide covers.\n\nSource: https://docs.jmrp.io/gitlab-mcp-server/guide/\nUpdated: 2026-11-20\n\n---\n\nInstall 9.8.7.\n",
+		);
+	});
+
+	test("closes the header with the rule when the page has no date", () => {
+		const twin = renderTwin({
+			title: "Guide",
+			description: "What the guide covers.",
+			body: "Body.",
+			file: "src/content/docs/guide.mdx",
+			route: "guide",
+			root,
+			release: "9.8.7",
+			labels: LABELS,
+			stats: {},
+			lead: "Tagline.",
+		});
+		assert.equal(
+			twin,
+			"# Guide\n\nWhat the guide covers.\n\nSource: https://docs.jmrp.io/gitlab-mcp-server/guide/\n\n---\n\nTagline.\n\nBody.\n",
 		);
 	});
 

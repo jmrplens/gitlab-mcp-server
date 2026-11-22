@@ -114,6 +114,16 @@ jobs:
       - run: pnpm run build
         working-directory: site
 
+      # The same closure ci.yml's site build checks: every page has its
+      # markdown twin with its header and date, announced from its head, and
+      # both llms.txt indexes list exactly the pages that exist. It runs here
+      # too because not every deploy has been through CI: the release's last
+      # job pushes the server.json stamp straight to main, and that push
+      # deploys the site. It reads dist and nothing else, no network.
+      - name: Check the markdown twins
+        run: pnpm run twins:check
+        working-directory: site
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: site/dist

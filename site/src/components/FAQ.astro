@@ -41,7 +41,7 @@ const titleId = faqSlug(title);
 					    sharing an id is invalid HTML and breaks anchor links. */}
 					<h3 id={`faq-${faqSlug(item.q)}`}>{item.q}</h3>
 					<p>
-						{parseFaqSpans(item.a).map((span) =>
+						{parseFaqSpans(item.a, lang).map((span) =>
 							span.type === "code" ? (
 								<code>{span.value}</code>
 							) : span.type === "bold" ? (

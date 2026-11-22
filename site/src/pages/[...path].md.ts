@@ -40,6 +40,7 @@ interface DocsEntry {
 		description?: string;
 		faq?: { q: string; a: string }[];
 		hero?: Hero;
+		lastUpdated?: Date | boolean;
 	};
 }
 
@@ -78,7 +79,7 @@ function heroLead(hero: Hero | undefined): string {
 
 export const GET: APIRoute = ({ props }) => {
 	const { entry, route } = props as Props;
-	const { title, description, faq, hero } = entry.data;
+	const { title, description, faq, hero, lastUpdated } = entry.data;
 	const file = entry.filePath ?? `src/content/docs/${entry.id}.mdx`;
 	const locale = localeOf(route) as "en" | "es";
 	return new Response(
@@ -100,7 +101,10 @@ export const GET: APIRoute = ({ props }) => {
 					footprint: inputs.footprint,
 					file,
 				}),
-			updated: inputs.updated.get(file),
+			// A page that opts out of its date with `lastUpdated: false` has no
+			// footer date and no dateModified, so its twin states none either;
+			// scripts/twin-dates.mjs requires the page's date of a dated twin.
+			updated: lastUpdated === false ? undefined : inputs.updated(file),
 			lead: heroLead(hero),
 		}),
 		{ headers: { "content-type": "text/markdown; charset=utf-8" } },
