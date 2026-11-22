@@ -280,7 +280,7 @@ func attributeIDsFromGIDs(gids []string) ([]int64, error) {
 // nulled below by its attributes with the errors that null writes, is one a
 // fine-grained session is told probably committed (issue 1103): GitLab checks
 // the category and its attributes against a fine-grained token only after the
-// write ran, and at 19.4.1 neither type declares a fine-grained permission.
+// write ran, and at 19.6.1 neither type declares a fine-grained permission.
 
 func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, namespaceID int64, opts *gl.CreateSecurityCategoryOptions) (*gl.SecurityCategory, error) {
 	category, resp, err := client.GL().SecurityCategories.CreateSecurityCategory(namespaceID, opts, gl.WithContext(ctx))
