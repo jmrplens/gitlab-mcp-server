@@ -330,6 +330,26 @@ describe("code stays opaque", () => {
 		assert.equal(reduce(body), body);
 	});
 
+	// MDX disables indented code, and with it micromark's limit of three
+	// spaces before a fence: an MDX body closes a fence on a marker at any
+	// indentation, unlike the CommonMark twin scripts/twin-questions.mjs reads.
+	test("a fence closes on a marker indented four spaces, as MDX closes it", () => {
+		const body = [
+			"```md",
+			"[in](../code/)",
+			"    ```",
+			"",
+			"[A](/gitlab-mcp-server/about/)",
+		].join("\n");
+		assert.equal(
+			reduce(body),
+			body.replace(
+				"(/gitlab-mcp-server/about/)",
+				"(https://docs.jmrp.io/gitlab-mcp-server/about/)",
+			),
+		);
+	});
+
 	test("a fence in a blockquote is code, and ends with its quote", () => {
 		const body = [
 			"> ~~~md",
