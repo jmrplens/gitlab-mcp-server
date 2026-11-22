@@ -565,6 +565,31 @@ describe("raw HTML", () => {
 		);
 	});
 
+	// The rows are all the twin keeps of an HTML table, so anything else the
+	// table holds would vanish from it without a word.
+	test("an HTML table holding more than its rows fails", () => {
+		assert.throws(
+			() =>
+				reduce(
+					[
+						"<table>",
+						"  <caption>Required settings</caption>",
+						"  <tr><th>Key</th></tr>",
+						"  <tr><td>TOKEN</td></tr>",
+						"</table>",
+					].join("\n"),
+				),
+			/an HTML table holding <caption>/,
+		);
+		assert.throws(
+			() =>
+				reduce(
+					"<table>\n  <tr><th>Key</th> stray </tr>\n  <tr><td>TOKEN</td></tr>\n</table>",
+				),
+			/an HTML table row holding stray/,
+		);
+	});
+
 	// The page shows `&lt;id&gt;` as the text <id>. Read back into a bare
 	// `<id>`, it is an element to a markdown reader and to the check after the
 	// reduction, so the twin writes it escaped, as a page writes `\<id>`.
