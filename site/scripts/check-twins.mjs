@@ -46,6 +46,43 @@ if (!SITE_ROOT) {
 const problems = [];
 const fail = (message) => problems.push(message);
 
+// The <lastmod> the sitemap states for each page, by its dist-relative
+// directory ("" for the landing, "tools/overview/" for a page).
+/** @type {Map<string, string>} */
+const lastmods = new Map();
+for (const name of readdirSync(DIST)) {
+	if (!/^sitemap-\d+\.xml$/.test(name)) continue;
+	for (const entry of readFileSync(join(DIST, name), "utf8").matchAll(
+		/<loc>([^<]+)<\/loc><lastmod>([^<]+)<\/lastmod>/g,
+	)) {
+		if (entry[1].startsWith(`${SITE_ROOT}/`)) {
+			lastmods.set(entry[1].slice(SITE_ROOT.length + 1), entry[2]);
+		}
+	}
+}
+
+/**
+ * The dateModified of a page's own document node, the TechArticle or, on the
+ * landings, the WebPage: not the site-wide graph's, which dates the software.
+ */
+function pageDateModified(html, page) {
+	const ids = [`${SITE_ROOT}/${page}#article`, `${SITE_ROOT}/${page}#webpage`];
+	for (const script of html.matchAll(
+		/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g,
+	)) {
+		let data;
+		try {
+			data = JSON.parse(script[1]);
+		} catch {
+			continue;
+		}
+		for (const node of data["@graph"] ?? [data]) {
+			if (ids.includes(node?.["@id"])) return node.dateModified;
+		}
+	}
+	return undefined;
+}
+
 /** Every file under dist matching a name test, as dist-relative paths. */
 function* files(dir, matches, prefix = "") {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -125,6 +162,26 @@ for (const page of pages) {
 	}
 	if (!html.includes(`"contentUrl":"${SITE_ROOT}/${twin}"`)) {
 		fail(`/${page} does not describe its twin in its JSON-LD encoding`);
+	}
+
+	// One date in three places, all read from src/lib/page-dates.mjs: the
+	// twin's Updated line, the sitemap's <lastmod> and the page's
+	// dateModified. Each used to read git its own way, and they disagreed by a
+	// day wherever a commit's local date was not its UTC one.
+	const updated = header?.[2];
+	if (updated) {
+		const lastmod = lastmods.get(page);
+		if (lastmod !== updated) {
+			fail(
+				`/${twin} says Updated: ${updated}, the sitemap says <lastmod>${lastmod ?? "nothing"}</lastmod>`,
+			);
+		}
+		const modified = pageDateModified(html, page);
+		if (modified !== undefined && String(modified).slice(0, 10) !== updated) {
+			fail(
+				`/${twin} says Updated: ${updated}, the page's JSON-LD says dateModified ${modified}`,
+			);
+		}
 	}
 }
 

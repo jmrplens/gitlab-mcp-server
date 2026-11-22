@@ -100,7 +100,7 @@ export const GET: APIRoute = ({ props }) => {
 					footprint: inputs.footprint,
 					file,
 				}),
-			updated: inputs.updated.get(file),
+			updated: inputs.updated(file),
 			lead: heroLead(hero),
 		}),
 		{ headers: { "content-type": "text/markdown; charset=utf-8" } },
