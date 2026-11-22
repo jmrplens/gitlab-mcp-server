@@ -450,10 +450,9 @@ function reduceHtml(text, file) {
 				([, row]) =>
 					[...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
 						([, , cell]) =>
-							decode(inlineElements(cell, file))
-								.replace(/\s+/g, " ")
-								.trim()
-								.replace(/\|/g, "\\|"),
+							escapeCellPipes(
+								decode(inlineElements(cell, file)).replace(/\s+/g, " ").trim(),
+							),
 					),
 			);
 			if (rows.length === 0) {
@@ -469,6 +468,31 @@ function reduceHtml(text, file) {
 		},
 	);
 	return inlineElements(tables, file);
+}
+
+/**
+ * Escapes every pipe of a table cell that no backslash escapes already. The
+ * cell is markdown, where a backslash escapes the character after it, and MDX
+ * read the page's `\|` as a pipe: that escape is kept as written, so a
+ * backslash is copied together with the character after it and only a bare
+ * pipe gains one. Escaping every pipe again would turn `\|` into `\\|`, an
+ * escaped backslash followed by a pipe that ends the cell.
+ *
+ * @param {string} cell
+ * @returns {string}
+ */
+function escapeCellPipes(cell) {
+	let out = "";
+	for (let i = 0; i < cell.length; i += 1) {
+		const char = cell[i];
+		if (char === "\\" && i + 1 < cell.length) {
+			out += char + cell[i + 1];
+			i += 1;
+		} else {
+			out += char === "|" ? "\\|" : char;
+		}
+	}
+	return out;
 }
 
 /** @param {string} text @returns {string} the text with its entities read */
