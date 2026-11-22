@@ -666,10 +666,11 @@ func TestRun_Repository_GateIsGreenAndShapeIsStable(t *testing.T) {
 // the first in key order answering it, and a method of a service other than
 // the one the operation's package resolves to, by its own name (orbit) and
 // through graphqlServiceAliases (vulnerabilities). It runs on the tree, so
-// the services, the calls and the operations are the real ones, and the one
-// Replaces the tree carries, TerraformStates.List, stays answered by
+// the services, the calls and the operations are the real ones: the
+// Replaces the tree carries for TerraformStates.List stays answered by
 // terraformstates.listPage although orbit.Status, earlier in key order, names
-// it too. R-ACTION is handed no method of another service, so the
+// it too, and the one for SecurityCategories.DestroySecurityCategory is
+// handed on untouched. R-ACTION is handed no method of another service, so the
 // Groups.ListSubGroups the vulnerabilities plant names stays on its list;
 // the plants that name a method R-ACTION does not list are handed on, and
 // hide nothing, since the gate fails on each.
@@ -716,6 +717,8 @@ func TestBuildReport_Repository_ReplacesThatAnswerNothing_FailTheGate(t *testing
 		"TerraformStates.Get":       "terraformstates.listPage: " + reason,
 		"TerraformStates.List":      "terraformstates.listPage: " + reason,
 		"TerraformStates.Lst":       "terraformstates.listPage: " + reason,
+		// The other Replaces the tree carries, which no plant touches.
+		"SecurityCategories.DestroySecurityCategory": "securitycategories.destroySecurityCategory: " + securityCategoryDestroySelection,
 	}
 	if got := CoveredGraphQLMethods(); !reflect.DeepEqual(got, handed) {
 		t.Errorf("CoveredGraphQLMethods =\n%v\nwant\n%v, no method of a service other than its operation's", got, handed)
