@@ -73,6 +73,12 @@ const tlsFailureMessage = "TLS/SSL handshake failed. If the host has no CA certi
 	"install ca-certificates (or the instance's CA) or set SSL_CERT_FILE to a PEM bundle that holds it; " +
 	"only for a self-signed certificate nothing can be made to trust, set GITLAB_MCP_SKIP_TLS_VERIFY=true"
 
+// graphQLRefusalDescription describes a GraphQL request GitLab answered with
+// HTTP 200 and refused in the response's top-level errors, which carry the
+// reason: the request reached GitLab, so nothing about the connection is
+// wrong, and no status says more than the errors do.
+const graphQLRefusalDescription = "GitLab refused the GraphQL request; its errors say why"
+
 // RequestPathRefusedHint is the next step offered with a request path
 // refusal: the path is built from the action's arguments, so what changes the
 // outcome is the argument the segment came from, and the cause names the path
@@ -280,6 +286,16 @@ func ClassifyError(err error) string {
 		if status := answeredStatus(glErr); status != 0 {
 			return classifyGitLabResponse(glErr, status)
 		}
+	}
+
+	// GitLab answered with HTTP 200 and refused the request in the top-level
+	// errors of a GraphQL response, which client-go hands over with no
+	// response ([swapAnsweredGraphQLRefusal]). Checked before the network
+	// branches, two of which match the text of the error: a refusal naming a
+	// "certificate" field read as a failed handshake, and one quoting
+	// "connection refused" as an unreachable server (issue 1784).
+	if _, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		return graphQLRefusalDescription
 	}
 
 	// Network-level errors (connection refused, DNS, timeout, TLS)
