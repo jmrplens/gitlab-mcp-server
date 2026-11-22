@@ -3387,6 +3387,96 @@ func TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus(t *testing.T) {
 	})
 }
 
+// TestSanitizeError_GraphQLRefusalAnsweredWith200_BoundsItsMessages verifies
+// that the messages of a GraphQL refusal GitLab answered with HTTP 200 are
+// bounded the way those of one answered with any other status are.
+//
+// client-go hands such a refusal over as a *gl.GraphQLResponseError whose Err
+// is its own words ("mutation.securityCategoryUpdate failed") and carries no
+// response, so the sanitizer, which found the list through the response,
+// left every message in the text whole: a message of any length, across
+// lines, naming a host only the operator's network knows. Three client-go
+// writes hand it over matching the not-found sentinel as well, and while that
+// sentinel was read as the response the messages were withheld behind a 404;
+// reading the refusal before the sentinel (issue 1784) is what let them
+// through. The list is capped as one message, the handler's context is kept
+// when nothing past the cap is left in it, and the whole text is replaced
+// when something is.
+func TestSanitizeError_GraphQLRefusalAnsweredWith200_BoundsItsMessages(t *testing.T) {
+	_, matching := refusalMatchingNotFound(t, graphQLErrorsBody(t, graphQLUpstreamMessage))
+	plain := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, graphQLUpstreamMessage)), &plain.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	short := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, "Name has already\nbeen taken")), &short.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	bounded := " (GraphQL errors: " + strings.Repeat("x", 2048) + "...)"
+	noErr := &gl.GraphQLResponseError{}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, "Name has already been taken")), &noErr.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	unrendered := fmt.Errorf("create security attributes: %w", noErr)
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a refusal matching the not-found sentinel keeps the handler's context",
+			err:  fmt.Errorf("update security category: %w", matching),
+			want: "update security category: mutation.securityCategoryUpdate failed" + bounded,
+		},
+		{
+			name: "a refusal of its own keeps the handler's context",
+			err:  fmt.Errorf("create security attributes: %w", plain),
+			want: "create security attributes: mutation.securityAttributeCreate failed" + bounded,
+		},
+		{
+			name: "a message past the cap in the handler's text takes the whole text with it",
+			err:  fmt.Errorf("create security attributes (%s): %w", graphQLUpstreamMessage, plain),
+			want: "mutation.securityAttributeCreate failed" + bounded,
+		},
+		{
+			name: "a message within the cap is only flattened",
+			err:  fmt.Errorf("create security attributes: %w", short),
+			want: "create security attributes: mutation.securityAttributeCreate failed (GraphQL errors: Name has already been taken)",
+		},
+		{
+			name: "a refusal listing no errors keeps client-go's own words",
+			err:  fmt.Errorf("create security attributes: %w", &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}),
+			want: "create security attributes: mutation.securityAttributeCreate failed (no additional error messages)",
+		},
+		{
+			name: "a refusal whose rendering panics is left as fmt renders it",
+			err:  unrendered,
+			want: flattenErrorText(unrendered.Error()),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sanitized := SanitizeError(tt.err)
+			if got := sanitized.Error(); got != tt.want {
+				t.Errorf("SanitizeError() = %q, want %q", got, tt.want)
+			}
+			if _, found := errors.AsType[*gl.GraphQLResponseError](sanitized); !found {
+				t.Errorf("SanitizeError() = %q, want the GraphQL error still reachable through the chain", sanitized)
+			}
+		})
+	}
+	t.Run("WrapErrWithMessage", func(t *testing.T) {
+		got := WrapErrWithMessage("update security category", matching).Error()
+		if !strings.HasSuffix(got, "mutation.securityCategoryUpdate failed"+bounded) {
+			t.Errorf("WrapErrWithMessage() = %q, want it to end with the bounded list", got)
+		}
+		if strings.Contains(got, "gitlab-web-03.internal") || strings.Contains(got, "second line") {
+			t.Errorf("WrapErrWithMessage() = %q, must not carry the message past the cap", got)
+		}
+	})
+}
+
 // TestIsPermissionRefusal_ReadsWhatGitLabAnswered verifies the predicate a
 // handler keys its permission hint on, over the error client-go really hands
 // it for each answer.
