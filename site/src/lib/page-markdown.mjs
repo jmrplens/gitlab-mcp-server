@@ -1163,11 +1163,13 @@ function reduceMasked(page) {
 	}
 	// A directive reduceDirectives does not know, such as `:::details`, would
 	// reach the twin as its raw fence lines. Code is masked by now, so a line
-	// opening with `:::` here is one Starlight reads as a directive.
-	const directive = /^[ \t]*:::.*$/m.exec(markdown);
+	// opening with `:::` here is one Starlight reads as a directive, behind
+	// its indentation and the `>` of a blockquote it sits in: an <Aside> is a
+	// blockquote by now, and a page may quote a directive itself.
+	const directive = /^[ \t>]*(:::.*)$/m.exec(markdown);
 	if (directive) {
 		throw new Error(
-			`${page.file}: no markdown reduction for the directive ${JSON.stringify(directive[0].trim())}. ` +
+			`${page.file}: no markdown reduction for the directive ${JSON.stringify(directive[1].trim())}. ` +
 				"Teach reduceDirectives in src/lib/page-markdown.mjs.",
 		);
 	}
