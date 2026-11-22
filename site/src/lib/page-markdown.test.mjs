@@ -532,6 +532,24 @@ describe("raw HTML", () => {
 		assert.equal(out, "| A | B |\n| --- | --- |\n| a \\| b | c \\| d |");
 	});
 
+	// The page shows `&lt;id&gt;` as the text <id>. Read back into a bare
+	// `<id>`, it is an element to a markdown reader and to the check after the
+	// reduction, so the twin writes it escaped, as a page writes `\<id>`.
+	test("an angle bracket a table cell writes as an entity stays text", () => {
+		const out = reduce(
+			[
+				"<table>",
+				"  <tr><th>Route</th><th>Test</th></tr>",
+				"  <tr><td>/projects/&lt;id&gt;</td><td>a &lt; b &amp;&amp; c</td></tr>",
+				"</table>",
+			].join("\n"),
+		);
+		assert.equal(
+			out,
+			"| Route | Test |\n| --- | --- |\n| /projects/\\<id> | a < b && c |",
+		);
+	});
+
 	test("an image outside a table drawn from a data URI becomes its alternative text", () => {
 		const out = reduce(
 			'Before.\n\n<img\n  src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"\n  width="48"\n  alt="Brand mark"\n/>\n\nAfter.',
