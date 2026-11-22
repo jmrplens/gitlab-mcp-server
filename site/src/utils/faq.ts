@@ -34,6 +34,8 @@ export interface FaqSpan {
 	type: "text" | "code" | "bold" | "link";
 	value: string;
 	href?: string;
+	/** The spans of a bold or a link whose text holds markup, such as **`api`**. */
+	children?: FaqSpan[];
 }
 
 /**

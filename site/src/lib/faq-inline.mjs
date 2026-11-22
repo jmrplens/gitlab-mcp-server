@@ -13,8 +13,10 @@
  *
  * @typedef {object} InlineSpan
  * @property {"text" | "code" | "bold" | "link"} type
- * @property {string} value
+ * @property {string} value the text a reader sees, markers removed
  * @property {string} [href]
+ * @property {InlineSpan[]} [children] the spans of a bold or a link whose
+ *   text holds markup itself, such as **`api`**
  */
 
 /**
@@ -37,9 +39,9 @@ export function inlineSpans(text) {
 		if (m[1] !== undefined) {
 			spans.push({ type: "code", value: m[1] });
 		} else if (m[2] !== undefined) {
-			spans.push({ type: "bold", value: m[2] });
+			spans.push({ type: "bold", ...nested(m[2]) });
 		} else {
-			spans.push({ type: "link", value: m[3], href: m[4] });
+			spans.push({ type: "link", ...nested(m[3]), href: m[4] });
 		}
 		last = m.index + m[0].length;
 	}
@@ -50,17 +52,31 @@ export function inlineSpans(text) {
 }
 
 /**
+ * The text of a bold or a link, with the spans it holds when it holds markup
+ * of its own: a scope written as **`api`** is bold code, not bold text
+ * between backticks.
+ *
+ * @param {string} text
+ * @returns {{ value: string, children?: InlineSpan[] }}
+ */
+function nested(text) {
+	const children = inlineSpans(text);
+	if (children.every((span) => span.type === "text")) return { value: text };
+	return { value: children.map((span) => span.value).join(""), children };
+}
+
+/**
  * The text with its inline markers removed and what they mark kept: a link
  * keeps its text and drops its URL, since schema.org's Question.name and
  * Answer.text are prose, and a bare Markdown target there reads as noise to
- * an extractor.
+ * an extractor. Read from the spans the page renders, so a code span keeps
+ * the markers written inside it, as the visible question shows them.
  *
  * @param {string} text with any stat tokens already resolved
  * @returns {string}
  */
 export function plainInline(text) {
-	return text
-		.replace(/`([^`]+)`/g, "$1")
-		.replace(/\*\*([^*]+)\*\*/g, "$1")
-		.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+	return inlineSpans(text)
+		.map((span) => span.value)
+		.join("");
 }

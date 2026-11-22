@@ -5,7 +5,8 @@
 // The inline spans of an FAQ question or answer as elements: code, bold and
 // links, the rest as text. FAQ.astro renders both through it, so a question
 // that writes a flag as code shows code, as its answer does, rather than the
-// backticks.
+// backticks. A bold or a link whose text holds markup, such as **`api`**,
+// renders its own spans the same way.
 import type { FaqSpan } from "../utils/faq";
 
 interface Props {
@@ -20,9 +21,11 @@ const { spans } = Astro.props;
 		span.type === "code" ? (
 			<code>{span.value}</code>
 		) : span.type === "bold" ? (
-			<strong>{span.value}</strong>
+			<strong>{span.children ? <Astro.self spans={span.children} /> : span.value}</strong>
 		) : span.type === "link" ? (
-			<a href={span.href}>{span.value}</a>
+			<a href={span.href}>
+				{span.children ? <Astro.self spans={span.children} /> : span.value}
+			</a>
 		) : (
 			span.value
 		),
