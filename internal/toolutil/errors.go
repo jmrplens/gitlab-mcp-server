@@ -1189,7 +1189,9 @@ func (e *sanitizedCauseError) Unwrap() error { return e.cause }
 // uncapped, and judged for authorship by nothing. The safe rendering of the
 // wrapper is the response's followed by [boundedGraphQLMessages], and a
 // message the bounded list does not carry whole counts as one that may not be
-// reflected, so the fallback above covers it too.
+// reflected, so the fallback above covers it too. A refusal GitLab answered
+// with HTTP 200 carries no response at all, and its list is bounded the same
+// way by [swapAnsweredGraphQLRefusal].
 func sanitize(err error) error {
 	if err == nil {
 		return nil
@@ -1198,6 +1200,8 @@ func sanitize(err error) error {
 	text := original
 	if glErr, ok := gitLabResponseOf(err); ok {
 		text = swapGitLabResponse(text, err, glErr)
+	} else if gqlErr, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		text = swapAnsweredGraphQLRefusal(text, gqlErr)
 	}
 	text = replaceUnboundRendering(text, err)
 	text = flattenErrorText(text)
@@ -1215,7 +1219,7 @@ func swapGitLabResponse(text string, err error, glErr *gl.ErrorResponse) string 
 	raw, safe := renderGitLabResponse(glErr)
 	unsafe := []string{unreflectableMessage(glErr)}
 	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
-		listed, withheld := boundedGraphQLMessages(gqlErr, glErr)
+		listed, withheld := boundedGraphQLMessages(gqlErr, graphQLAuthored(glErr))
 		safe += listed
 		raw = recoveredErrorText(gqlErr)
 		if raw == "" {
@@ -1228,6 +1232,37 @@ func swapGitLabResponse(text string, err error, glErr *gl.ErrorResponse) string 
 	}
 	text = strings.ReplaceAll(text, raw, safe)
 	for _, message := range unsafe {
+		if message != "" && strings.Contains(text, message) {
+			return safe
+		}
+	}
+	return text
+}
+
+// swapAnsweredGraphQLRefusal replaces the rendering of gqlErr inside text with
+// its bounded one, for a GraphQL refusal that carries no response, and returns
+// the bounded one alone when a message the bounded list does not carry whole
+// is still in the text afterwards.
+//
+// That is how client-go hands over a refusal GitLab answered with HTTP 200:
+// the top-level errors of a body it decoded into the method's own result, and
+// an Err of its own words ("mutation.securityCategoryUpdate failed") with no
+// response, so [gitLabResponseOf] finds none and [swapGitLabResponse] never
+// saw the list. The body answered 200 and decoded as the method's GraphQL
+// result, so its messages are GitLab's and are listed, bounded as one message
+// the way a refusal answered with any other status is (issue 1784).
+func swapAnsweredGraphQLRefusal(text string, gqlErr *gl.GraphQLResponseError) string {
+	raw := recoveredErrorText(gqlErr)
+	if raw == "" {
+		return text
+	}
+	listed, withheld := boundedGraphQLMessages(gqlErr, true)
+	safe := renderRecovering(gqlErr.Err) + listed
+	if raw == safe {
+		return text
+	}
+	text = strings.ReplaceAll(text, raw, safe)
+	for _, message := range withheld {
 		if message != "" && strings.Contains(text, message) {
 			return safe
 		}
@@ -1254,8 +1289,9 @@ var graphQLResponseKeys = map[string]bool{"data": true, "errors": true, "extensi
 // list by [boundedGitLabMessage], so the most of them a reader sees is what it
 // would see of a REST message. They are dropped altogether when the body
 // carries a key a GraphQL response does not have, since GitLab did not compose
-// that body. A body that listed no errors keeps client-go's own words.
-func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, glErr *gl.ErrorResponse) (suffix string, withheld []string) {
+// that body, which authored says. A body that listed no errors keeps
+// client-go's own words.
+func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, authored bool) (suffix string, withheld []string) {
 	if len(gqlErr.Errors.Errors) == 0 {
 		return graphQLNoMessages, nil
 	}
@@ -1264,7 +1300,7 @@ func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, glErr *gl.ErrorResp
 		messages = append(messages, graphQLError.Message)
 	}
 	listed := ""
-	if graphQLAuthored(glErr) {
+	if authored {
 		listed = boundedGitLabMessage(strings.Join(messages, ", "))
 	}
 	// An empty message is carried by any list, so it is never withheld, and
