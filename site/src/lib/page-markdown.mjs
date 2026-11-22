@@ -433,13 +433,20 @@ function htmlImage(tag, file) {
  * The inline HTML a page writes where markdown cannot: images, code, links.
  * A tag behind a backslash is MDX's escape for its `<`, which the page shows
  * as the tag's text, so it stays text here as it does for TAG and the check
- * for elements left after the reduction.
+ * for elements left after the reduction. In a table cell the pipes of the
+ * code are escaped before the span masks them, since GFM splits a row at a
+ * bare pipe even inside a code span; outside a table code keeps them as
+ * written.
+ *
+ * @param {string} html
+ * @param {string} file named in a failure
+ * @param {boolean} [cell] whether the html is a table cell's
  */
-const inlineElements = (html, file) =>
+const inlineElements = (html, file, cell = false) =>
 	html
 		.replace(/(?<!\\)<img\b[^>]*>/g, (tag) => htmlImage(tag, file))
 		.replace(/(?<!\\)<code>([\s\S]*?)<\/code>/g, (_, code) =>
-			span(decode(code)),
+			span(cell ? escapeCellPipes(decode(code)) : decode(code)),
 		)
 		.replace(/(?<!\\)<a\s+href="([^"]*)"\s*>([\s\S]*?)<\/a>/g, "[$2]($1)");
 
@@ -464,7 +471,7 @@ function reduceHtml(text, file) {
 					[...row.matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/g)].map(
 						([, , cell]) =>
 							escapeCellPipes(
-								decodeText(inlineElements(cell, file))
+								decodeText(inlineElements(cell, file, true))
 									.replace(/\s+/g, " ")
 									.trim(),
 							),
