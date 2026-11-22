@@ -4,7 +4,7 @@ description: Install GitLab MCP Server on macOS or Linux from the jmrplens/tap H
 datePublished: "2026-09-01"
 ---
 
-The formula is `Formula/gitlab-mcp-server.rb` in the [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) tap, and the release workflow regenerates it on every release with `scripts/update-homebrew-tap.sh`, from the same signed `checksums.txt` the release ships. It is a binary formula: an `on_macos`/`on_linux` block crossed with `on_arm`/`on_intel` picks the release asset for your platform (Apple Silicon or Intel on macOS, arm64 or x86_64 on Linux), Homebrew checks it against the SHA-256 pinned in the formula, and installs it as `bin/gitlab-mcp-server` under its prefix. Nothing compiles, and no dependencies are pulled in. From the first release after 3.1.0 the formula also installs `LICENSE` and `THIRD_PARTY_NOTICES` into the formula's prefix (`$(brew --prefix gitlab-mcp-server)`).
+The formula is `Formula/gitlab-mcp-server.rb` in the [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) tap, and the release workflow regenerates it on every release with the `homebrew` subcommand of `cmd/release_packages`, from the same signed `checksums.txt` the release ships. It is a binary formula: an `on_macos`/`on_linux` block crossed with `on_arm`/`on_intel` picks the release asset for your platform (Apple Silicon or Intel on macOS, arm64 or x86_64 on Linux), Homebrew checks it against the SHA-256 pinned in the formula, and installs it as `bin/gitlab-mcp-server` under its prefix. Nothing compiles, and no dependencies are pulled in. From the first release after 3.1.0 the formula also installs `LICENSE` and `THIRD_PARTY_NOTICES` into the formula's prefix (`$(brew --prefix gitlab-mcp-server)`).
 
 ## Install
 

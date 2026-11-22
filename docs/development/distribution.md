@@ -212,15 +212,18 @@ GoReleaser does not produce them, so they are absent from the signed
 `checksums.txt`, and appending them there would invalidate the Cosign
 signature over it.
 
-`scripts/update-server-json-sha.sh` takes the bundles to declare as its third
-argument, comma-separated: in a release, the three per-OS ones. It writes one
+The release stamp, `go run ./cmd/release_packages/ stamp`, takes the bundles
+to declare as its third argument, comma-separated: in a release, the three
+per-OS ones. It writes one
 `mcpb` entry per bundle in `server.json`, each with its own identifier and a
 `fileSha256` hashed from the file, and refuses, before writing anything, a set
 that does not serve `darwin`, `win32` and `linux` exactly once: a registry
 entry has no platform field, so the universal bundle beside them would make
-each system installable two ways with nothing to choose by. The same script
+each system installable two ways with nothing to choose by. The same stamp
 stamps the version of `mcpb/manifest.json`, the flow that versions
-`server.json`, and the stamped manifests are committed back to `main`.
+`server.json`, and the stamped manifests are committed back to `main`. It
+writes each file byte for byte as the shell script it replaced wrote it with
+jq, which `testdata/release_stamp.json` records and its tests replay.
 
 ### Files
 
@@ -256,17 +259,24 @@ manifests point at the release assets themselves. The `make` targets run the
 same scripts by hand, and each package target takes the directory of release
 binaries as a variable (`NPM_BINARIES`, `PYPI_BINARIES`, `NUGET_BINARIES`).
 
-| Channel  | Assemble                                    | Validate                                                                                                  | Publish                                                                                                                       | Release job    |
-| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| npm      | `make gen-npm` (`scripts/build-npm.mjs`)    | `make validate-npm` in a `node:24` container, `make validate-npm-local` on a runner                       | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand                                               | `npm`          |
-| PyPI     | `make gen-pypi` (`scripts/build_pypi.py`)   | `make validate-pypi` in a `python:3.14-slim` container, `make validate-pypi-local` on a runner            | `scripts/publish-pypi.sh --trusted-publishing`; `make publish-pypi-dry` and `make publish-pypi` by hand                       | `pypi`         |
-| NuGet    | `make gen-nuget` (`scripts/build_nuget.py`) | `make validate-nuget` in the .NET SDK container pinned by digest, `make validate-nuget-local` on a runner | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand                                         | `nuget`        |
-| Homebrew | `scripts/update-homebrew-tap.sh`            | The script's `--dry-run`, in a rehearsal                                                                  | The same script pushes the formula to `jmrplens/homebrew-tap`                                                                 | `homebrew`     |
-| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                      | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork, unless one is open or merged there | `winget`       |
-| Registry | `scripts/update-server-json-sha.sh`         | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact             | `mcp-publisher publish`                                                                                                       | `mcp-registry` |
-| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                 | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done                                 | none           |
+| Channel  | Assemble                                    | Validate                                                                                                                                                                    | Publish                                                                                                                       | Release job    |
+| -------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| npm      | `make gen-npm` (`release_packages npm`)     | `make validate-npm` in a `node:24` container, `release_packages validate-npm` in the release job, `make validate-npm-local` on a disposable machine                         | `scripts/publish-npm.sh`; `make publish-npm-dry` and `make publish-npm` by hand                                               | `npm`          |
+| PyPI     | `make gen-pypi` (`release_packages pypi`)   | `make validate-pypi` in a `python:3.14-slim` container, `release_packages validate-pypi` in the release job, `make validate-pypi-local` on a disposable machine             | `scripts/publish-pypi.sh --trusted-publishing`; `make publish-pypi-dry` and `make publish-pypi` by hand                       | `pypi`         |
+| NuGet    | `make gen-nuget` (`release_packages nuget`) | `make validate-nuget` in the .NET SDK container pinned by digest, `release_packages validate-nuget` in the release job, `make validate-nuget-local` on a disposable machine | `scripts/publish-nuget.sh`; `make publish-nuget-dry` and `make publish-nuget` by hand                                         | `nuget`        |
+| Homebrew | `release_packages homebrew`                 | Its `--dry-run`, in a rehearsal                                                                                                                                             | The same subcommand pushes the formula to `jmrplens/homebrew-tap`                                                             | `homebrew`     |
+| winget   | `komac update`, pinned and hash-checked     | `komac update --dry-run`, in a rehearsal; Microsoft's validation of the pull request                                                                                        | A version pull request to `microsoft/winget-pkgs` through the `jmrplens/winget-pkgs` fork, unless one is open or merged there | `winget`       |
+| Registry | `release_packages stamp`                    | `make check-server-json`; `make check-server-json-packages` downloads every declared artifact                                                                               | `mcp-publisher publish`                                                                                                       | `mcp-registry` |
+| LobeHub  | `make gen-lhm-manifest`                     | `make check-lhm-manifest`                                                                                                                                                   | `make publish-lobehub`, by hand from a machine with `lhm login` and `lhm github connect` done                                 | none           |
 
-`scripts/verify_published_packages.py` (the `verify-published` job) reads the
+Every `release_packages` subcommand is [`cmd/release_packages`](cmd-utilities.md#release_packages).
+The jobs that hold a publishing credential (`npm`, `pypi`, `nuget`,
+`homebrew`, `mcp-registry`) take it as the artifact the `release-tools` job
+builds once per run, each checking it against the SHA-256 that job printed
+before running it, and `commit-manifests` builds it from its own checkout of
+`main` with the Go cache off.
+
+`release_packages verify-published` (the `verify-published` job) reads the
 npm, PyPI and NuGet packages back out of their registries and compares the
 binaries inside them with the signed `checksums.txt`, and the Homebrew tap,
 the winget pull request, the MCP Registry entry and the manifest commit to
@@ -304,7 +314,7 @@ anything is signed or minted. Dependabot's `pip` entry recompiles the lock
 under the repository's cooldowns, with the Python its header names, and CI's
 supply-chain job installs it as the script does, with the runner's `python3`,
 on every push, so a lock that does not install there fails before a release
-does. `verify_published_packages.py` then holds
+does. `release_packages verify-published` then holds
 each wheel to the provenance PyPI serves for it: a bundle from this
 repository's trusted publisher (`release.yml`, environment `release`) whose
 attestation states PyPI's publish predicate for the wheel's file name at the
@@ -403,8 +413,8 @@ and answers three outputs before anything publishes:
   published with `--latest=false` (the installers download
   `/releases/latest`), and the Homebrew tap, the MCP Registry publish and the
   manifest commit to `main` (which the site's `%%VERSION%%` reads through
-  `server.json`) are skipped. `scripts/update-homebrew-tap.sh` also refuses on
-  its own to write a version older than the one the tap holds.
+  `server.json`) are skipped. `release_packages homebrew` also refuses on its
+  own to write a version older than the one the tap holds.
 - **`npm_dist_tag`**: `latest` for the newest release and `release-X.Y` for a
   backport, which `scripts/publish-npm.sh --tag` publishes every package
   under, so `npm install` keeps resolving the newest release.
@@ -413,8 +423,8 @@ PyPI and NuGet need nothing of this: both resolve the highest version, not the
 one published last. A rehearsal computes the three outputs from the version
 `VERSION` carries, the same way, so a rehearsal of an older line skips the
 same jobs a release of it would. The tests of `cmd/release_checks`,
-`scripts/publish_npm_sh_test.py` and `scripts/update_homebrew_tap_sh_test.py`
-hold the check and the two scripts to it, and
+`scripts/publish_npm_sh_test.py` and `cmd/release_packages` hold the check,
+the npm publish and the tap update to it, and
 `TestLoadWorkflows_ReleaseWorkflow_OnlyTheNewestReleaseMovesAPointer` in
 `cmd/audit_supply_chain` holds `release.yml` to reading the answer at every
 step and job listed above.
@@ -423,9 +433,9 @@ Two details that the per-channel pages on the site do not carry:
 
 - **The PyPI distribution name is a constant.** The unprefixed
   `gitlab-mcp-server` name on PyPI is held by an unrelated account under a
-  PEP 541 reclamation request. If it is reclaimed, the rename is `DIST_NAME`
-  in `scripts/build_pypi.py` and `scripts/validate_pypi.py`, the PyPI
-  identifier in `server.json`, and the documentation.
+  PEP 541 reclamation request. If it is reclaimed, the rename is `pypiDist`
+  in `cmd/release_packages/pypi.go`, the PyPI identifier in `server.json`,
+  and the documentation.
 - **The Agent Plugins manifests are checked by `make check-openplugin`**
   ([`cmd/audit_plugin_manifests`](cmd-utilities.md#audit_plugin_manifests)),
   which validates the root `plugin.json` and `mcp.json` against the Agent
