@@ -314,26 +314,32 @@ const TABLE_ROW = /^([ \t>]*)(\|.*\|)[ \t]*$/;
 
 /**
  * Splits a table row into its cells at every pipe no backslash escapes. A
- * pipe inside a code span is masked by now and splits nothing.
+ * pipe inside a code span is masked by now and splits nothing. GFM lets a row
+ * leave out its closing pipe, so a row whose last pipe is escaped ends in a
+ * cell holding that pipe, which is kept rather than dropped.
  *
- * @param {string} row from the opening pipe to the closing one
+ * @param {string} row from the opening pipe to the last one
  * @returns {string[]}
  */
 function tableCells(row) {
 	const cells = [];
 	let cell = "";
+	let closed = false;
 	for (let i = 1; i < row.length; i += 1) {
 		const char = row[i];
+		closed = false;
 		if (char === "\\" && i + 1 < row.length) {
 			cell += char + row[i + 1];
 			i += 1;
 		} else if (char === "|") {
 			cells.push(cell);
 			cell = "";
+			closed = true;
 		} else {
 			cell += char;
 		}
 	}
+	if (!closed) cells.push(cell);
 	return cells;
 }
 
