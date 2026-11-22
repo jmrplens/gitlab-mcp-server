@@ -154,7 +154,7 @@ func TestGuardMessage_Refusal_NamesWhatToDoAboutIt(t *testing.T) {
 		"http://gitlab.test:8929",
 		"18.0.0",
 		"Community Edition",
-		"free (no license found)",
+		"free (nothing answered)",
 		"licensed (Premium or Ultimate)",
 		"make test-e2e-ee",
 		envRuntimeMismatch + "=skip",
@@ -178,8 +178,8 @@ func TestGuardMessage_FreeRefusal_PointsAtTheUnlicensedTarget(t *testing.T) {
 	if !strings.Contains(message, "      make test-e2e-ce\n") {
 		t.Fatalf("the refusal should point at the unlicensed target:\n%s", message)
 	}
-	if !strings.Contains(message, "premium (license)") {
-		t.Fatalf("the refusal should say the license was found:\n%s", message)
+	if !strings.Contains(message, "premium (answered)") {
+		t.Fatalf("the refusal should say GitLab answered for the tier:\n%s", message)
 	}
 }
 
@@ -529,6 +529,52 @@ func TestInstanceIsEnterprise_TheVersionsFlag_IsTakenOnlyWhenTheInstanceSaysIt(t
 		t.Run(tc.name, func(t *testing.T) {
 			if got := instanceIsEnterprise(t.Context(), tc.url, stubToken, false); got != tc.want {
 				t.Errorf("instanceIsEnterprise() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProbe_AnInstancePlan_ConfirmsTheTierFreeIncluded holds what the probe
+// records from GitLab 19.6 on (issue 1491): the instance plan is an answer for
+// any token that may read the metadata, so a free plan is a reading rather
+// than the fallback, and TierConfirmed says so. Before, only a paid license
+// confirmed a tier, and a Community Edition image's Free was recorded as
+// nothing found.
+func TestProbe_AnInstancePlan_ConfirmsTheTierFreeIncluded(t *testing.T) {
+	cases := []struct {
+		name      string
+		version   string
+		want      edition.Tier
+		confirmed bool
+	}{
+		{name: "a free plan", version: `{"version":"19.6.1","enterprise":false,"plan":"free"}`, want: edition.Free, confirmed: true},
+		{name: "an ultimate plan", version: `{"version":"19.6.1-ee","enterprise":true,"plan":"ultimate"}`, want: edition.Ultimate, confirmed: true},
+		{name: "a release before the plan", version: `{"version":"19.5.5","enterprise":false}`, want: edition.Free},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.version))
+			})
+			mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":1,"username":"probe"}`))
+			})
+			stub := httptest.NewServer(mux)
+			t.Cleanup(stub.Close)
+			client, err := gitlabclient.NewClientWithTokenRetries(stub.URL, stubToken, false, true)
+			if err != nil {
+				t.Fatalf("building a client for the stub: %v", err)
+			}
+
+			facts, err := probe(t.Context(), client, stub.URL, false, stubToken)
+			if err != nil {
+				t.Fatalf("probe() error = %v", err)
+			}
+			if facts.Tier != tc.want || facts.TierConfirmed != tc.confirmed {
+				t.Errorf("probe() tier = %s (confirmed=%t), want %s (confirmed=%t)", facts.Tier, facts.TierConfirmed, tc.want, tc.confirmed)
 			}
 		})
 	}

@@ -451,8 +451,10 @@ type Run struct {
 	GitLabVersion string `json:"gitlab_version"`
 	// Tier is the licensing tier the catalog was built at.
 	Tier string `json:"tier"`
-	// TierConfirmed is whether the tier came from the instance license rather
-	// than from a setting. An unconfirmed tier means the catalog may hold
+	// TierConfirmed is whether a step of the tier probe answered for the tier
+	// (from GitLab 19.6 the instance plan, free included, and before it a
+	// license, a namespace or a group) rather than the tier being the
+	// fallback. An unconfirmed tier means the catalog may hold
 	// actions the instance will refuse, which is a different reading of a
 	// failed attempt.
 	TierConfirmed bool `json:"tier_confirmed"`

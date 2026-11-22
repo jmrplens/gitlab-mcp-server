@@ -191,8 +191,9 @@ type provenance struct {
 	// GitLabVersion and Edition are the instance it ran against.
 	GitLabVersion string `json:"gitlab_version"`
 	Edition       string `json:"edition"`
-	// Tier is what the instance's license resolved to, TierConfirmed whether
-	// the resolution was confirmed rather than assumed, and TierPin the tier
+	// Tier is what the tier probe resolved, TierConfirmed whether a step of
+	// it answered (from GitLab 19.6 the instance plan, free included) rather
+	// than the tier being assumed, and TierPin the tier
 	// the run forced on top of it.
 	Tier          string `json:"tier"`
 	TierConfirmed bool   `json:"tier_confirmed"`
