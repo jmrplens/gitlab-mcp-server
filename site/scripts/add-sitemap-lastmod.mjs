@@ -11,10 +11,12 @@
 //
 // The day comes from src/lib/page-dates.mjs, the same source the page's footer,
 // its dateModified and its markdown twin read: the newest commit among the page
-// and the data it shows, as a UTC day. A URL with no source file, or a checkout
-// with no history, falls back to the build date. In a shallow CI checkout Git
-// dates may collapse to the latest commit; the deploy workflow uses
-// fetch-depth: 0 so per-file dates are accurate.
+// and the data it shows, as a UTC day. A page git does not date (one not
+// committed yet, or a checkout with no history) states no date on the page or
+// in its twin, so its URL gets no <lastmod> either; only a URL with no source
+// file falls back to the build date. In a shallow CI checkout Git dates may
+// collapse to the latest commit; the deploy workflow uses fetch-depth: 0 so
+// per-file dates are accurate.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
