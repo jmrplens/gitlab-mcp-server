@@ -78,7 +78,7 @@ const ASIDE_TITLES = {
 };
 
 // The heading FAQ.astro gives the section when the page names none.
-const FAQ_TITLES = {
+export const FAQ_TITLES = {
 	en: "Frequently asked questions",
 	es: "Preguntas frecuentes",
 };

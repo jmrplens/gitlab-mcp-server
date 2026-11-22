@@ -13,6 +13,7 @@ faq:
 
 import { Aside } from "@astrojs/starlight/components";
 import ChartPair from "../../../components/ChartPair.astro";
+import FAQ from "../../../components/FAQ.astro";
 
 Nothing else published about this server says what it costs to run. This page
 does: resident memory, processor time, goroutine count and per-method latency,
@@ -666,3 +667,5 @@ go run ./cmd/bench_resources/ -sessions 50,96,100,500,1000,2000,4000 -sessions-n
 
 The rest of the command's flags, and the fairness mode, are in the
 [command reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/cmd-utilities.md#bench_resources).
+
+<FAQ />

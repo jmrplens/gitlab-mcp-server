@@ -13,6 +13,7 @@ faq:
 
 import { Aside } from "@astrojs/starlight/components";
 import ChartPair from "../../../../components/ChartPair.astro";
+import FAQ from "../../../../components/FAQ.astro";
 
 Nada de lo publicado hasta ahora sobre este servidor decía lo que cuesta
 ejecutarlo. Esta página sí: memoria residente, tiempo de procesador, número de
@@ -710,3 +711,5 @@ go run ./cmd/bench_resources/ -sessions 50,96,100,500,1000,2000,4000 -sessions-n
 
 El resto de los flags de la orden, y el modo de equidad, están en la
 [referencia de órdenes](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/cmd-utilities.md#bench_resources).
+
+<FAQ />

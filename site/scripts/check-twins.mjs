@@ -18,6 +18,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
+import { FAQ_TITLES } from "../src/lib/page-markdown.mjs";
 import { TWIN_NOTE } from "./gen-llms.mjs";
 import { unanchoredTargets } from "./twin-targets.mjs";
 
@@ -61,12 +62,8 @@ for (const name of readdirSync(DIST)) {
 	}
 }
 
-/**
- * The dateModified of a page's own document node, the TechArticle or, on the
- * landings, the WebPage: not the site-wide graph's, which dates the software.
- */
-function pageDateModified(html, page) {
-	const ids = [`${SITE_ROOT}/${page}#article`, `${SITE_ROOT}/${page}#webpage`];
+/** The JSON-LD node of a page with one of the given ids, if it has one. */
+function jsonLdNode(html, ids) {
 	for (const script of html.matchAll(
 		/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g,
 	)) {
@@ -77,10 +74,47 @@ function pageDateModified(html, page) {
 			continue;
 		}
 		for (const node of data["@graph"] ?? [data]) {
-			if (ids.includes(node?.["@id"])) return node.dateModified;
+			if (ids.includes(node?.["@id"])) return node;
 		}
 	}
 	return undefined;
+}
+
+/**
+ * The dateModified of a page's own document node, the TechArticle or, on the
+ * landings, the WebPage: not the site-wide graph's, which dates the software.
+ */
+const pageDateModified = (html, page) =>
+	jsonLdNode(html, [
+		`${SITE_ROOT}/${page}#article`,
+		`${SITE_ROOT}/${page}#webpage`,
+	])?.dateModified;
+
+/**
+ * The questions of the FAQ section a twin carries: the `###` headings under
+ * the `##` heading FAQ.astro gives it, up to the next `##`. Fenced code is
+ * skipped, so a heading inside a sample is not a question.
+ */
+function twinQuestions(text) {
+	const titles = new Set(Object.values(FAQ_TITLES).map((t) => `## ${t}`));
+	const questions = [];
+	let inFaq = false;
+	let fence = "";
+	for (const line of text.split("\n")) {
+		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+		if (fence) {
+			if (marker && marker[0] === fence[0] && marker.length >= fence.length)
+				fence = "";
+			continue;
+		}
+		if (marker) {
+			fence = marker;
+			continue;
+		}
+		if (/^## /.test(line)) inFaq = titles.has(line.trim());
+		else if (inFaq && /^### /.test(line)) questions.push(line.slice(4).trim());
+	}
+	return questions;
 }
 
 /** Every file under dist matching a name test, as dist-relative paths. */
@@ -162,6 +196,23 @@ for (const page of pages) {
 	}
 	if (!html.includes(`"contentUrl":"${SITE_ROOT}/${twin}"`)) {
 		fail(`/${page} does not describe its twin in its JSON-LD encoding`);
+	}
+
+	// The questions a page advertises in its FAQPage JSON-LD are the ones it
+	// shows, and the twin carries the same. The JSON-LD is built from the
+	// frontmatter whether or not the body places <FAQ />, so a page that
+	// forgot the component advertised questions no reader could see.
+	const faqPage = jsonLdNode(html, [`${SITE_ROOT}/${page}#faq`]);
+	const advertised = (faqPage?.mainEntity ?? []).map((q) => q.name);
+	const shown = twinQuestions(text);
+	if (
+		advertised.length !== shown.length ||
+		advertised.some((q, i) => q !== shown[i])
+	) {
+		fail(
+			`/${page} advertises ${advertised.length} FAQ question(s) in its FAQPage JSON-LD and its twin shows ${shown.length}; ` +
+				"a page with faq: in its frontmatter places <FAQ /> in its body",
+		);
 	}
 
 	// One date in three places, all read from src/lib/page-dates.mjs: the
