@@ -367,7 +367,7 @@ they are held at. When no fine-grained token reaches the action at that GitLab
 release:
 
 ```text
-action "ci_catalog.list" exists but is not available to a fine-grained personal access token: GitLab 19.6.1 declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, and answers such a read with null. Use a classic personal access token with read_api for reads or api for writes (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+action "ci_catalog.list" exists but is not available to a fine-grained personal access token: GitLab 19.6.1 declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, and removes the items from such a list. Use a classic personal access token with read_api for reads or api for writes (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
 ```
 
 When the grant was not evaluated, this second form also says why, in the words of the

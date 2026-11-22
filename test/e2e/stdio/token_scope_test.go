@@ -320,7 +320,7 @@ const (
 func TestTokenScope_FineGrainedToken_PhaseAWithholdsWithTheVersionNamed(t *testing.T) {
 	want := `gitlab_execute_action: action "` + phaseAWithheldAction + `" ` + withheldPrefix +
 		`GitLab ` + actiongrants.Table().DisplayVersion() + ` declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, ` +
-		`and answers such a read with null.`
+		`and removes the items from such a list.`
 	call := `{"name":"gitlab_execute_action","arguments":{"action":"` + phaseAWithheldAction + `","params":{}}}`
 
 	fake := startFakeGitLab(t)
