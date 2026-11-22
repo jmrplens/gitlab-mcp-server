@@ -20,6 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { pageDates, sourceOf } from "../src/lib/page-dates.mjs";
+import { lastmodOf, stampLastmods } from "./sitemap-lastmod.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const siteRoot = join(here, "..");
@@ -48,24 +49,13 @@ function sourceFileFor(url) {
 	return sourceOf(rel, siteRoot) ?? null;
 }
 
-function lastmodFor(url) {
-	const src = sourceFileFor(url);
-	return (src && dates(src)?.day) ?? buildDate;
-}
+const lastmodFor = (url) => lastmodOf(sourceFileFor(url), dates, buildDate);
 
-// Add <lastmod> to each <url> that lacks one. Matching the whole <url>…</url>
-// block (not just <loc>) keeps this idempotent: if an entry already carries a
-// <lastmod>, it is left untouched rather than getting a duplicate.
 function stampSitemap(file) {
-	const xml = readFileSync(file, "utf8");
-	let changed = 0;
-	const out = xml.replace(/<url>[\s\S]*?<\/url>/g, (block) => {
-		if (block.includes("<lastmod>")) return block;
-		return block.replace(/<loc>([^<]+)<\/loc>/, (locMatch, loc) => {
-			changed++;
-			return `<loc>${loc}</loc><lastmod>${lastmodFor(loc)}</lastmod>`;
-		});
-	});
+	const { xml: out, changed } = stampLastmods(
+		readFileSync(file, "utf8"),
+		lastmodFor,
+	);
 	if (changed > 0) {
 		writeFileSync(file, out);
 		console.log(
