@@ -178,6 +178,37 @@ func TestImpersonationTokens_AdminMintedPAT_NamesTheUser(t *testing.T) {
 	})
 }
 
+// TestImpersonationTokens_AdminMintedFineGrainedPAT_CarriesItsGrant mints a
+// fine-grained personal access token for a fixture user on every surface, as
+// an administrator, with granular_scopes instead of scopes, which the
+// administrator route takes from GitLab 19.6, and checks the answer is a
+// granular token carrying the grant it was asked for.
+func TestImpersonationTokens_AdminMintedFineGrainedPAT_CarriesItsGrant(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.GitLabAtLeast(19, 6)))
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.User {
+		return fixture.NewUser(e, "patfg")
+	}, func(e *harness.Env, surface harness.Surface, user fixture.User) {
+		s := e.On(surface)
+		name := e.Name("patfg")
+
+		minted := harness.Do[impersonationtokens.PATOutput](s, actionUserCreatePersonalAccessToken, map[string]any{
+			"user_id": user.ID, "name": name,
+			"granular_scopes": []map[string]any{{"access": fixture.AccessUser, "permissions": []string{"read_user"}}},
+			"expires_at":      time.Now().Add(adminMintedTokenLifetime).Format(time.DateOnly),
+		})
+		if minted.ID == 0 || minted.Token == "" {
+			e.T.Fatalf("create_personal_access_token answered %+v, want a token with an ID and its secret", minted)
+		}
+		e.Defer("token "+name, func(ctx context.Context) error { return revokePersonalToken(ctx, e, minted.ID) })
+		want := []toolutil.TokenGranularScopeOutput{{Access: fixture.AccessUser, Permissions: []string{"read_user"}}}
+		if !minted.Granular || minted.UserID != user.ID || !reflect.DeepEqual(minted.GranularScopes, want) {
+			e.T.Errorf("create_personal_access_token answered granular %t user %d granular_scopes %+v, want true %d %+v",
+				minted.Granular, minted.UserID, minted.GranularScopes, user.ID, want)
+		}
+	})
+}
+
 // impersonationTokenIDs collects the IDs of listed impersonation tokens.
 func impersonationTokenIDs(listed []impersonationtokens.Output) []int64 {
 	ids := make([]int64, 0, len(listed))

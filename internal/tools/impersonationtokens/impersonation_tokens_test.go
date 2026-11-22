@@ -753,6 +753,130 @@ func TestCreatePAT_InvalidUserID(t *testing.T) {
 	}
 }
 
+// TestCreatePAT_AGrant_ReachesTheBodyInsteadOfScopes verifies the
+// fine-grained create GitLab 19.6 adds to the administrator route: the grant
+// is sent as granular_scopes, each scope with its access, permissions and
+// the projects it names, and no scopes key is sent beside it, since the route
+// declares exactly one of the two.
+func TestCreatePAT_AGrant_ReachesTheBodyInsteadOfScopes(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/users/42/personal_access_tokens")
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode the body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":9,"name":"tok","granular":true,"user_id":42,`+
+			`"granular_scopes":[{"access":"selected_memberships","permissions":["read_project"],"project_id":3}]}`)
+	}))
+
+	out, err := CreatePAT(t.Context(), client, CreatePATInput{
+		UserID: 42, Name: "tok",
+		GranularScopes: []tokengrantdata.GranularScopeInput{
+			{Access: "selected_memberships", Permissions: []string{"read_project"}, ProjectIDs: []int64{3}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePAT() error = %v", err)
+	}
+	if _, sent := body["scopes"]; sent {
+		t.Errorf("body = %v, want no scopes beside the grant", body)
+	}
+	want := []any{map[string]any{"access": "selected_memberships", "permissions": []any{"read_project"}, "project_ids": []any{float64(3)}}}
+	if !reflect.DeepEqual(body["granular_scopes"], want) {
+		t.Errorf("granular_scopes = %#v, want %#v", body["granular_scopes"], want)
+	}
+	if !out.Granular || len(out.GranularScopes) != 1 || out.GranularScopes[0].ProjectID != 3 {
+		t.Errorf("CreatePAT() = %+v, want the granular token GitLab answered with", out)
+	}
+}
+
+// TestCreatePAT_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest verifies
+// the two refusals the grant adds to the administrator route, classic scopes
+// beside it and a scope with no permissions, are made before anything is
+// sent.
+func TestCreatePAT_TheGrantGitLabWouldRefuse_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input CreatePATInput
+		want  string
+	}{
+		{
+			name: "scopes beside a grant",
+			input: CreatePATInput{UserID: 42, Name: "tok", Scopes: []string{"api"}, GranularScopes: []tokengrantdata.GranularScopeInput{
+				{Access: "user", Permissions: []string{"read_user"}},
+			}},
+			want: "exactly one of scopes",
+		},
+		{
+			name:  "a scope without permissions",
+			input: CreatePATInput{UserID: 42, Name: "tok", GranularScopes: []tokengrantdata.GranularScopeInput{{Access: "user"}}},
+			want:  "granular_scopes[0].permissions is required",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":9}`)
+			}))
+			_, err := CreatePAT(t.Context(), client, tc.input)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("CreatePAT() error = %v, want one carrying %q", err, tc.want)
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("CreatePAT() sent %d requests, want none", n)
+			}
+		})
+	}
+}
+
+// TestCreatePAT_AGrantAnOlderGitLabRefuses_NamesGitLab196 holds the hint for
+// the refusal an instance older than GitLab 19.6 answers a grant with: the
+// administrator route requires classic scopes there and ignores
+// granular_scopes, so it says scopes is missing. The hint follows that
+// refusal of a grant alone; a classic call refused the same way, and a grant
+// refused for another reason, keep the route's own hint.
+func TestCreatePAT_AGrantAnOlderGitLabRefuses_NamesGitLab196(t *testing.T) {
+	grant := []tokengrantdata.GranularScopeInput{{Access: "user", Permissions: []string{"read_user"}}}
+	for _, tc := range []struct {
+		name     string
+		input    CreatePATInput
+		body     string
+		wantHint bool
+	}{
+		{
+			name:     "a grant GitLab 19.5 refuses",
+			input:    CreatePATInput{UserID: 42, Name: "tok", GranularScopes: grant},
+			body:     `{"error":"scopes is missing"}`,
+			wantHint: true,
+		},
+		{
+			name:  "a grant refused for another reason",
+			input: CreatePATInput{UserID: 42, Name: "tok", GranularScopes: grant},
+			body:  `{"error":"name is missing"}`,
+		},
+		{
+			name:  "classic scopes refused the same way",
+			input: CreatePATInput{UserID: 42, Name: "tok", Scopes: []string{"api"}},
+			body:  `{"error":"scopes is missing"}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, tc.body)
+			}))
+			_, err := CreatePAT(t.Context(), client, tc.input)
+			if err == nil {
+				t.Fatal("CreatePAT() error = nil, want the 400")
+			}
+			if got := strings.Contains(err.Error(), grantNeedsGitLab196Hint); got != tc.wantHint {
+				t.Errorf("CreatePAT() error = %q, carries the GitLab 19.6 hint = %t, want %t", err.Error(), got, tc.wantHint)
+			}
+		})
+	}
+}
+
 // TestCreatePAT_EmptyScopes asserts that CreatePAT refuses a token with no
 // scopes with an error naming the field, before any request.
 func TestCreatePAT_EmptyScopes(t *testing.T) {

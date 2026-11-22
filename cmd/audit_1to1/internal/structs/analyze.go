@@ -1159,11 +1159,6 @@ var acceptedMissingInputs = &declarationTable{name: "acceptedMissingInputs", ent
 	// route reads and nothing else.
 	"projects.ListUserContributedProjectsInput": contributedProjectsUnfiltered,
 
-	// A param client-go models before the pinned GitLab takes it.
-	"impersonationtokens.CreatePATInput.granular_scopes": "POST /users/:user_id/personal_access_tokens takes granular_scopes " +
-		"from GitLab 19.6 on; the live record is pinned at 19.5.0, where the route requires classic scopes and drops the grant, " +
-		"so the action offers it with the re-pin",
-
 	// Params modeled on a nested object / slice element per the full-nested-object
 	// policy (the auditor flattens the SDK nested options into the parent input).
 	"snippets.ProjectCreateInput.file_path":           "modeled on the nested files[] object (CreateFileInput.FilePath)",

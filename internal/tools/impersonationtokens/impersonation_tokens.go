@@ -19,6 +19,12 @@ import (
 
 const errUserIDPositive = "user_id must be a positive integer"
 
+// grantNeedsGitLab196Hint explains the 400 an instance older than GitLab 19.6
+// answers a grant on the administrator token route with: the route requires
+// classic scopes there and ignores granular_scopes, so the refusal names the
+// parameter the caller did not send rather than the one it did.
+const grantNeedsGitLab196Hint = "the administrator route takes granular_scopes from GitLab 19.6 on; an older instance requires classic scopes there, so send scopes instead, or create the fine-grained token on GitLab 19.6 or later"
+
 // Output represents an impersonation token: what [gl.ImpersonationToken]
 // decodes, its description and granular_scopes (set on a granular token the
 // endpoint asked them for) included, plus what
@@ -106,13 +112,17 @@ type RevokeInput struct {
 	TokenID int64 `json:"token_id" jsonschema:"Impersonation token ID to revoke,required"`
 }
 
-// CreatePATInput holds parameters for creating a personal access token for a user.
+// CreatePATInput holds parameters for creating a personal access token for a
+// user: a classic one with scopes or, from GitLab 19.6, a fine-grained one with
+// granular_scopes, exactly one of the two as the route declares
+// (exactly_one_of in lib/api/users.rb).
 type CreatePATInput struct {
-	UserID      int64    `json:"user_id" jsonschema:"GitLab user ID,required"`
-	Name        string   `json:"name" jsonschema:"Name of the personal access token,required"`
-	Scopes      []string `json:"scopes" jsonschema:"Array of scopes,required"`
-	Description string   `json:"description,omitempty" jsonschema:"Description for the token"`
-	ExpiresAt   string   `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
+	UserID         int64                               `json:"user_id" jsonschema:"GitLab user ID,required"`
+	Name           string                              `json:"name" jsonschema:"Name of the personal access token,required"`
+	Scopes         []string                            `json:"scopes,omitempty" jsonschema:"Classic scopes of the token. Send this or granular_scopes, not both"`
+	GranularScopes []tokengrantdata.GranularScopeInput `json:"granular_scopes,omitempty" jsonschema:"Grant of a fine-grained token, one entry per access and its permissions, applied to the user the token is for (GitLab 19.6 and later). Send this or scopes, not both"`
+	Description    string                              `json:"description,omitempty" jsonschema:"Description for the token"`
+	ExpiresAt      string                              `json:"expires_at,omitempty" jsonschema:"Token expiration date (YYYY-MM-DD)"`
 }
 
 // --- Conversion helpers ---.
@@ -273,25 +283,32 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	if input.Name == "" {
 		return PATOutput{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(input.Scopes) == 0 {
-		return PATOutput{}, errors.New("scopes is required and must not be empty")
-	}
-	opts := &gl.CreatePersonalAccessTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
 	expiresAt, err := toolutil.ParseDateField("expires_at", input.ExpiresAt)
 	if err != nil {
 		return PATOutput{}, fmt.Errorf("create_personal_access_token: %w", err)
 	}
-	opts.ExpiresAt = expiresAt
+	if grantErr := tokengrantdata.CheckGrant(input.Scopes, input.GranularScopes); grantErr != nil {
+		return PATOutput{}, grantErr
+	}
+	granular := tokengrantdata.Options(input.GranularScopes)
+	opts := &gl.CreatePersonalAccessTokenOptions{
+		Name:           new(input.Name),
+		GranularScopes: granular,
+		ExpiresAt:      expiresAt,
+	}
+	if len(input.Scopes) > 0 {
+		opts.Scopes = &input.Scopes
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
+	}
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessToken(input.UserID, opts, gl.WithContext(ctx))
+	if err != nil && granular != nil && toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, "scopes is missing") {
+		return PATOutput{}, toolutil.WrapErrWithHint("create_personal_access_token", err, grantNeedsGitLab196Hint)
+	}
 	if err != nil {
-		return PATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token", err, http.StatusForbidden,
+		return PATOutput{}, tokengrantdata.WrapCreateErr("create_personal_access_token", err, granular != nil, toolutil.IsPermissionRefusal,
 			"creating PAT for another user requires admin token; scopes must include valid PAT scopes; expires_at format YYYY-MM-DD")
 	}
 	extra, err := toolutil.CapturedToken(captured)
