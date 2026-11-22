@@ -18,9 +18,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
-import { FAQ_TITLES } from "../src/lib/page-markdown.mjs";
 import { TWIN_NOTE } from "./gen-llms.mjs";
 import { dateProblems } from "./twin-dates.mjs";
+import { twinQuestions } from "./twin-questions.mjs";
 import { unanchoredTargets } from "./twin-targets.mjs";
 
 const DIST = resolve(process.argv[2] ?? "dist");
@@ -90,33 +90,6 @@ const pageDateModified = (html, page) =>
 		`${SITE_ROOT}/${page}#article`,
 		`${SITE_ROOT}/${page}#webpage`,
 	])?.dateModified;
-
-/**
- * The questions of the FAQ section a twin carries: the `###` headings under
- * the `##` heading FAQ.astro gives it, up to the next `##`. Fenced code is
- * skipped, so a heading inside a sample is not a question.
- */
-function twinQuestions(text) {
-	const titles = new Set(Object.values(FAQ_TITLES).map((t) => `## ${t}`));
-	const questions = [];
-	let inFaq = false;
-	let fence = "";
-	for (const line of text.split("\n")) {
-		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-		if (fence) {
-			if (marker && marker[0] === fence[0] && marker.length >= fence.length)
-				fence = "";
-			continue;
-		}
-		if (marker) {
-			fence = marker;
-			continue;
-		}
-		if (/^## /.test(line)) inFaq = titles.has(line.trim());
-		else if (inFaq && /^### /.test(line)) questions.push(line.slice(4).trim());
-	}
-	return questions;
-}
 
 /** Every file under dist matching a name test, as dist-relative paths. */
 function* files(dir, matches, prefix = "") {
