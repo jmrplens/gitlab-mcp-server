@@ -423,7 +423,7 @@
 | cmd/internal/testsource                   |   100.0% |
 | cmd/measure_conditions                    |   100.0% |
 | cmd/merge_coverage                        |   100.0% |
-| cmd/orbit_fixtures                        |      n/a |
+| cmd/orbit_fixtures                        |   100.0% |
 | cmd/release_checks                        |   100.0% |
 | cmd/release_packages                      |   100.0% |
 | cmd/reproduce_release                     |   100.0% |
