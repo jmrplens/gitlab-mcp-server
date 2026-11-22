@@ -31,6 +31,27 @@ describe("inlineSpans", () => {
 		]);
 	});
 
+	// A scope written as **`api`** and a link whose text is code are markup
+	// inside markup: the bold or the link holds the code as a child span, so
+	// the page shows code rather than backticks, and its value is the text.
+	test("code inside bold or a link is a child span", () => {
+		assert.deepEqual(inlineSpans("scope **`api`** or [`icons.go`](/i/)"), [
+			{ type: "text", value: "scope " },
+			{
+				type: "bold",
+				value: "api",
+				children: [{ type: "code", value: "api" }],
+			},
+			{ type: "text", value: " or " },
+			{
+				type: "link",
+				value: "icons.go",
+				href: "/i/",
+				children: [{ type: "code", value: "icons.go" }],
+			},
+		]);
+	});
+
 	test("text without markup is one text span, and none is no span", () => {
 		assert.deepEqual(inlineSpans("How much memory?"), [
 			{ type: "text", value: "How much memory?" },
@@ -50,6 +71,20 @@ describe("plainInline", () => {
 		assert.equal(
 			plainInline("**Yes**, see [the page](/sizing/)."),
 			"Yes, see the page.",
+		);
+	});
+
+	// Backticks bind tighter than emphasis, so the plain text keeps what the
+	// visible question shows inside a code span, markers included.
+	test("markup inside a code span stays literal", () => {
+		assert.equal(plainInline("Is `**literal**` bold?"), "Is **literal** bold?");
+		assert.equal(plainInline("Run `[a](b)` or **c**"), "Run [a](b) or c");
+	});
+
+	test("code inside bold or a link loses its backticks", () => {
+		assert.equal(
+			plainInline("The scope **`api`**, see [`icons.go`](/i/)."),
+			"The scope api, see icons.go.",
 		);
 	});
 

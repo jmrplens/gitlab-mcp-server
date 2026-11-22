@@ -186,6 +186,16 @@ describe("components", () => {
 			],
 			['> :::tip{icon="heart"}\n> A hint.\n> :::', ':::tip{icon="heart"}'],
 			["<Aside>\n:::details{open}\nHidden.\n:::\n</Aside>", ":::details{open}"],
+			// Inside a directive the conversion copies as one body, whose lines
+			// it never reads one by one.
+			[
+				':::note\n> :::tip{icon="heart"}\n> A hint.\n> :::\n:::',
+				':::tip{icon="heart"}',
+			],
+			[
+				':::caution\n  :::tip{icon="heart"}\n  A hint.\n  :::\n:::',
+				':::tip{icon="heart"}',
+			],
 		]) {
 			assert.throws(
 				() => reduce(body),
