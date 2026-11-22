@@ -17,6 +17,11 @@ const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const DEFINITION =
 	/^(?:[ \t]*(?:>|[-*+][ \t]|\d{1,9}[.)][ \t]))*[ \t]*\[(?!\^)(?:[^\]\\\n]|\\.)+\]:[ \t]*(?:<([^<>\n]*)>|([^\s<]\S*))/gm;
 
+// The blockquote markers a line opens with, and a fence line behind them: its
+// marker and what follows it.
+const QUOTES = /^(?:[ \t]*>)*/;
+const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
+
 /**
  * The link and image targets of a markdown text that carry no scheme, the
  * destinations of reference definitions included.
@@ -48,14 +53,19 @@ export function unanchoredTargets(text) {
 		prose = [];
 	};
 	for (const line of text.split("\n")) {
-		const marker = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
+		const depth = QUOTES.exec(line)[0].split(">").length - 1;
+		const marker = FENCE.exec(line);
+		// A fence in a blockquote ends with the quote, closed or not.
+		if (fence !== null && depth < fence.depth) fence = null;
 		if (fence !== null) {
-			// A closing fence carries nothing after its marker but spaces or
-			// tabs; a line such as ~~~text is code.
+			// A closing fence sits behind the fence's own quote markers and
+			// carries nothing after its marker but spaces or tabs; a line such
+			// as ~~~text, or > ~~~ in an unquoted fence, is code.
 			if (
 				marker &&
-				marker[1][0] === fence[0] &&
-				marker[1].length >= fence.length &&
+				depth === fence.depth &&
+				marker[1][0] === fence.marker[0] &&
+				marker[1].length >= fence.marker.length &&
 				/^[ \t]*$/.test(marker[2])
 			) {
 				fence = null;
@@ -64,7 +74,7 @@ export function unanchoredTargets(text) {
 		}
 		if (marker) {
 			scan();
-			fence = marker[1];
+			fence = { marker: marker[1], depth };
 			continue;
 		}
 		prose.push(line);

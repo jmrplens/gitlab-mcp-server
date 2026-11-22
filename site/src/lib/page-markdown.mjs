@@ -155,6 +155,11 @@ function maskLine(line) {
 // paragraph. A run nothing closes is literal text.
 const CODE_SPAN = /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)/g;
 
+// The blockquote markers a line opens with, and a fence line behind them: its
+// marker and what follows it.
+const QUOTES = /^(?:[ \t]*>)*/;
+const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
+
 /**
  * Masks every fenced block, fence lines included, and every code span.
  *
@@ -164,7 +169,7 @@ const CODE_SPAN = /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)/g;
 export function maskCode(text) {
 	const out = [];
 	let prose = [];
-	/** @type {{ char: string, length: number } | null} */
+	/** @type {{ char: string, length: number, depth: number, quotes: RegExp } | null} */
 	let fence = null;
 	const flush = () => {
 		if (prose.length > 0) {
@@ -173,14 +178,22 @@ export function maskCode(text) {
 		prose = [];
 	};
 	for (const line of text.split("\n")) {
-		const marker = /^[ \t]*(`{3,}|~{3,})/.exec(line);
+		const quotes = QUOTES.exec(line)?.[0] ?? "";
+		const depth = quotes.split(">").length - 1;
+		const marker = FENCE.exec(line);
+		// A fence in a blockquote ends with the quote, closed or not.
+		if (fence && depth < fence.depth) fence = null;
 		if (fence) {
-			out.push(maskLine(line));
+			// The fence's own quote markers stay unmasked, so the quote reads
+			// as one; a deeper marker is code.
+			const own = fence.quotes.exec(line)?.[0] ?? "";
+			out.push(own + maskLine(line.slice(own.length)));
 			if (
 				marker &&
+				depth === fence.depth &&
 				marker[1][0] === fence.char &&
 				marker[1].length >= fence.length &&
-				!line.slice(marker[0].length).trim()
+				!marker[2].trim()
 			) {
 				fence = null;
 			}
@@ -188,8 +201,13 @@ export function maskCode(text) {
 		}
 		if (marker) {
 			flush();
-			out.push(maskLine(line));
-			fence = { char: marker[1][0], length: marker[1].length };
+			out.push(quotes + maskLine(line.slice(quotes.length)));
+			fence = {
+				char: marker[1][0],
+				length: marker[1].length,
+				depth,
+				quotes: new RegExp(`^(?:[ \\t]*>){${depth}}`),
+			};
 			continue;
 		}
 		prose.push(line);
