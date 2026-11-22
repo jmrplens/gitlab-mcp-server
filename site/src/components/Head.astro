@@ -13,7 +13,7 @@ import { faqPlainText } from "../utils/faq";
 
 // Route paths that actually resolve to a built page. Breadcrumbs are assembled
 // per path segment, but section segments like /tools/ or /operations/ have no
-// index page — emitting them as linked `item` URLs pointed 44 of 60 pages at
+// index page, and emitting them as linked `item` URLs pointed 44 of 60 pages at
 // 404s, which invalidates the breadcrumb for Google and dead-ends AI crawlers.
 // Deriving the set from the content collection means adding a real section
 // index later re-links it automatically, with no code change here.
@@ -33,7 +33,7 @@ const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PERSON_ID = "https://jmrp.io/#person";
 const WEBSITE_ID = `${SITE}${BASE}/#website`;
 // Matches the SoftwareApplication @id in the site-wide @graph (astro.config.mjs),
-// which carries the directory-listing sameAs — so each page's TechArticle ties back to it.
+// which carries the directory-listing sameAs, so each page's TechArticle ties back to it.
 const SOFTWARE_ID = "https://github.com/jmrplens/gitlab-mcp-server#software";
 // Google's Article family requires an image; the social card doubles as one.
 const OG_IMAGE = `${SITE}${BASE}/og-image.png`;
@@ -79,11 +79,27 @@ const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname; 
 const lang = rel.startsWith("/es/") || rel === "/es" ? "es" : "en";
 const isHome = rel === "/" || rel === "" || rel === "/es/" || rel === "/es";
 // Starlight emits the not-found page as dist/404.html, which GitHub Pages serves
-// with a real HTTP 404 — but its canonical still points at /404/, a URL that does
+// with a real HTTP 404, but its canonical still points at /404/, a URL that does
 // not exist. Marking it noindex keeps a soft-404 out of the index and stops that
 // dangling canonical from being consulted at all. It gets no article node either:
 // an error page is not a document worth describing.
 const isNotFound = rel === "/404/" || rel === "/404";
+
+// The page's markdown twin (src/pages/[...path].md.ts): its own path with
+// `index.md` appended, the convention the edge negotiates `Accept:
+// text/markdown` by. Announced from the head and described in the page's
+// JSON-LD, so a reader finds it without guessing the convention. Only a path
+// that ends in `/` has one, and the not-found page is not a page.
+const twinPath = !isNotFound && pathname.endsWith("/") ? `${pathname}index.md` : null;
+const twinEncoding = twinPath
+	? {
+		encoding: {
+			"@type": "MediaObject",
+			encodingFormat: "text/markdown",
+			contentUrl: new URL(twinPath, SITE).href,
+		},
+	}
+	: {};
 
 // Git-derived last-updated date (Starlight `lastUpdated: true`).
 const updated =
@@ -123,9 +139,10 @@ const techArticle =
 			publisher: { "@id": PERSON_ID },
 			isPartOf: { "@id": WEBSITE_ID },
 			about: { "@id": SOFTWARE_ID },
+			...twinEncoding,
 		};
 
-// The splash homepages get no TechArticle — they are not articles — but they
+// The splash homepages get no TechArticle (they are not articles), but they
 // still need a page-level node. Without one, each locale's home was described
 // only by a free-floating FAQPage, leaving the site's two most important URLs
 // with no document entity to anchor `isPartOf` / `about` / `speakable`.
@@ -149,6 +166,7 @@ const webPage =
 			isPartOf: { "@id": WEBSITE_ID },
 			about: { "@id": SOFTWARE_ID },
 			publisher: { "@id": PERSON_ID },
+			...twinEncoding,
 		}
 		: null;
 
@@ -240,6 +258,7 @@ if (!isHome && !isNotFound) {
 {webPage && <script type="application/ld+json" is:inline set:html={JSON.stringify(webPage)} />}
 {faq && <script type="application/ld+json" is:inline set:html={JSON.stringify(faq)} />}
 {breadcrumb && <script type="application/ld+json" is:inline set:html={JSON.stringify(breadcrumb)} />}
+{twinPath && <link rel="alternate" type="text/markdown" href={twinPath} />}
 <link
 	rel="alternate"
 	type="text/plain"

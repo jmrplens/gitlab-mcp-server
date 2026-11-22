@@ -33,7 +33,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { VERSION_TOKEN, readRelease } from "../src/lib/version-token.mjs";
@@ -49,6 +49,19 @@ const contentDir = join(here, "..", "src", "content", "docs");
 // canonical name one URL.
 const DOCS_BASE = "https://docs.jmrp.io/gitlab-mcp-server/";
 const REPO_BASE = "https://github.com/jmrplens/gitlab-mcp-server/";
+
+// What each index says about the markdown twins. Exported so the closing
+// guard (scripts/check-twins.mjs) checks the built index for the same words.
+export const TWIN_NOTE = {
+	en: "Every page listed here is also served as markdown at its own path with `index.md` appended, which is the cheapest way to read one page as text.",
+	es: "Cada página de esta lista se sirve también como markdown en su propia ruta con `index.md` al final, que es la forma más barata de leer una página como texto.",
+};
+
+// The blog series that tells how the server was built, in each language.
+const BLOG_SERIES = {
+	en: "https://jmrp.io/blog/series/gitlab-mcp-server/",
+	es: "https://jmrp.io/es/blog/series/gitlab-mcp-server/",
+};
 
 // The repository's own machine-readable files, republished here under their own
 // names. `label` is what the index calls them; `covers` says what a retriever
@@ -118,7 +131,7 @@ const REFERENCE_FILES = [
 // The sidebar, restated as data. Astro's config cannot be imported here: it
 // fetches a remote identity document at module scope, so importing it would put
 // a network call in the middle of a file generator. The completeness check
-// below is what keeps this table honest — a page added to the collection and
+// below is what keeps this table honest: a page added to the collection and
 // not listed here fails the build rather than silently disappearing from the
 // index.
 //
@@ -433,6 +446,19 @@ function renderIndex({ locale, pages, version, referenceSizes }) {
 			: `This is the index of the documentation site (version ${version}). Every entry links one documentation page and carries that page's own description. Source, issues and releases live at ${REPO_BASE.replace(/\/$/, "")}.`,
 	);
 	push();
+	// The markdown twins (src/pages/[...path].md.ts), stated in the words the
+	// sibling sites use, so a reader of any of their indexes learns the same
+	// convention. scripts/check-twins.mjs holds the built index to it.
+	push(es ? TWIN_NOTE.es : TWIN_NOTE.en);
+	push();
+	// The blog series is not a page of this site, so no entry lists it; it is
+	// named here for the same reason the about page links it.
+	push(
+		es
+			? `La historia de cómo se construyó el servidor se cuenta en una serie del blog: ${BLOG_SERIES.es}`
+			: `The story of how the server was built is told in a blog series: ${BLOG_SERIES.en}`,
+	);
+	push();
 	push(
 		es
 			? `Portada: [${home.title}](${pageURL("", locale)}) - ${home.description}`
@@ -572,9 +598,16 @@ function main() {
 	}
 }
 
-try {
-	main();
-} catch (error) {
-	console.error(error.message);
-	process.exit(1);
+// Run only as a script, so scripts/check-twins.mjs can import TWIN_NOTE
+// without regenerating the indexes.
+if (
+	process.argv[1] &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+	try {
+		main();
+	} catch (error) {
+		console.error(error.message);
+		process.exit(1);
+	}
 }

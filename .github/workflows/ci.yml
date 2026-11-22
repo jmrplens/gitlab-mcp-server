@@ -391,7 +391,7 @@ jobs:
       - name: Check MCP Registry manifest
         run: make check-server-json
       # Downloads every declared artifact, so it runs on main only. A pull
-      # request does not move server.json — the release stamp does — and paying
+      # request does not move server.json (the release stamp does), and paying
       # a 75 MB download plus a registry round-trip on every push would trade a
       # real gate for a flaky one.
       - name: Check MCP Registry packages are published
@@ -438,7 +438,7 @@ jobs:
         run: make brand-check
       # check-icon-webp is deliberately NOT run here: it is a byte-level
       # comparison whose output depends on the librsvg/cwebp versions doing
-      # the rendering — CI's Ubuntu toolchain produces different (equally
+      # the rendering: CI's Ubuntu toolchain produces different (equally
       # valid) bytes than the maintainer machine for a handful of icons, so
       # the gate only holds on the machine that committed the assets. It
       # stays maintainer tooling, run with gen-icon-webp after icon edits.
@@ -476,7 +476,7 @@ jobs:
     # The only job here with a bound, because a hung scanner would otherwise
     # sit on a runner for the six-hour default. It has to leave room for the
     # scan to grow with the repository: at 5 minutes it started failing every
-    # attempt once the analysis reached 250s on top of ~51s of setup — 302s
+    # attempt once the analysis reached 250s on top of ~51s of setup, 302s
     # against a 300s ceiling. The scan itself had finished; what was cut off
     # was the upload of the 8 MB report, so the run was killed after doing
     # all the work and before recording any of it. 15 keeps the guard against
@@ -708,8 +708,8 @@ jobs:
 
   # The HTTP transport module needs no GitLab and no credentials, so it runs
   # here rather than only on demand. It is the gate for the handler chain in
-  # package main — cross-origin, preflight, auth modes, rate limiting, and every
-  # flag that restricts something — which unit tests cannot reach and which has
+  # package main (cross-origin, preflight, auth modes, rate limiting, and every
+  # flag that restricts something), which unit tests cannot reach and which has
   # shipped broken more than once. Its proxy and balancer cases run the real
   # proxies in Docker, which this runner has by construction, so
   # E2E_HTTP_DOCKER=required makes a case that cannot start (an image that
@@ -973,6 +973,9 @@ jobs:
           # to the collection and not listed there would simply be missing from
           # the index, which nothing else would notice.
           pnpm run llms:check
+          # The unit tests of the reducer that writes each page's markdown
+          # twin, including the build failure on a component it cannot reduce.
+          pnpm run twins:test
           # A page names the current release as %%VERSION%%, which the build
           # replaces with the published release, the top-level version of
           # server.json. This refuses the token in frontmatter, where the
@@ -1063,6 +1066,9 @@ jobs:
           pnpm run html-validate
           pnpm run htmlhint
           pnpm run a11y:check
+          # Every built page has its markdown twin, announced from its head,
+          # and both llms.txt indexes list exactly the pages that exist.
+          pnpm run twins:check
         working-directory: site
 
   hadolint:
@@ -1079,8 +1085,8 @@ jobs:
 
   # Both published platforms, each one built AND started. This job used to
   # build only the runner's native architecture and never run it, so the
-  # linux/arm64 image that could not exec at all — the cross-compiled PIE
-  # binary asked for the glibc loader the Alpine runtime does not ship —
+  # linux/arm64 image that could not exec at all (the cross-compiled PIE
+  # binary asked for the glibc loader the Alpine runtime does not ship)
   # passed CI and every release gate on its way to the registry.
   docker:
     name: "🐳 Docker (${{ matrix.platform }})"
@@ -1105,7 +1111,7 @@ jobs:
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
             echo "docker=false" >> "$GITHUB_OUTPUT"
-            echo "No Docker-related files changed — skipping build"
+            echo "No Docker-related files changed, skipping build"
           fi
       - name: Compute build date
         if: steps.filter.outputs.docker == 'true'
