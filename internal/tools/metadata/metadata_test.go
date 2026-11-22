@@ -9,6 +9,7 @@ package metadata
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -243,6 +244,49 @@ func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
+}
+
+// TestGet_Plan_IsReadOffTheCaptureAndLeftOutWhenNullOrAbsent verifies the
+// plan GET /metadata sends from GitLab 19.6, which client-go's Metadata does
+// not model: published as GitLab spelled it, shown on the card, and left out
+// for the null GitLab.com sends and for an older instance's answer.
+func TestGet_Plan_IsReadOffTheCaptureAndLeftOutWhenNullOrAbsent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want *string
+	}{
+		{name: "a licensed instance", body: `{"version":"19.6.1","plan":"premium"}`, want: new("premium")},
+		{name: "GitLab.com", body: `{"version":"19.7.0-pre","plan":null}`},
+		{name: "before 19.6", body: `{"version":"19.5.0"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+			out, err := Get(t.Context(), client, GetInput{})
+			if err != nil {
+				t.Fatalf("Get() error = %v, want nil", err)
+			}
+			if (out.Plan == nil) != (tc.want == nil) || (out.Plan != nil && *out.Plan != *tc.want) {
+				t.Errorf("Plan = %v, want %v", out.Plan, tc.want)
+			}
+			if card := FormatGetMarkdown(out); strings.Contains(card, "Plan") != (tc.want != nil) {
+				t.Errorf("the card names a plan %t, want %t:\n%s", strings.Contains(card, "Plan"), tc.want != nil, card)
+			}
+		})
+	}
+}
+
+// TestGet_APlanTheTypeCannotHold_IsReported verifies a plan in a shape the
+// extra cannot hold is reported rather than published as no plan.
+func TestGet_APlanTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"19.6.1","plan":7}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error { _, err := Get(t.Context(), client, GetInput{}); return err }},
+	})
 }
 
 // TestGet_ReadsTheWholeMetadataObject verifies that the handler surfaces the

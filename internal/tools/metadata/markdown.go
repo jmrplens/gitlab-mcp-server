@@ -19,6 +19,9 @@ func FormatGetMarkdown(out GetOutput) string {
 	c.Field("Version", out.Version)
 	c.Field("Revision", out.Revision)
 	c.Bool("Enterprise", out.Enterprise)
+	if out.Plan != nil {
+		c.Field("Plan", *out.Plan)
+	}
 	kas := c.Sub("KAS")
 	kas.Bool("Enabled", out.KAS.Enabled)
 	kas.Field("Version", out.KAS.Version)

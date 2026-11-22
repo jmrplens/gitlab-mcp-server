@@ -92,10 +92,6 @@ const (
 	// each declaration to the route's params and the package's recorded
 	// requests rather than trusting its match.
 	categoryOptionNeverRequested = "entity-option-this-package-never-requests"
-	// categoryTrackedForPublication is a key GitLab added that this server
-	// does not publish yet and an issue tracks publishing: the declaration
-	// names the issue, and the change that publishes the key removes it.
-	categoryTrackedForPublication = "tracked-for-publication"
 	// categoryEntityPublishedElsewhere is an entity the package does surface,
 	// on another type or under a shape of this server's own, so the field
 	// names the comparison looks for are not the names the caller reads.
@@ -506,13 +502,6 @@ const (
 // gl.Group, against every route client-go answers with that struct.
 const reasonApprovalGroupSDKRoute = "mrapprovals.GroupOutput pairs with gl.Group through groupOutput, so readSDKRoutes holds it against the group routes GroupsService answers with that struct (GET /groups, GET /groups/:id, POST /groups and the rest). No handler in internal/tools/mrapprovals calls any of them: the type is filled from the groups nested in an approval rule (ee/lib/api/entities/merge_request_approval_rule.rb, through gl.MergeRequestApprovalRule) and, under group, in the approver_groups of the approval state an Enterprise instance answers the approvals GET with (ee/lib/api/entities/approval_state.rb). It keeps the documented reference subset of those groups, and group.get returns a group whole."
 
-// reasonMetadataPlanTracked answers the plan key of the metadata entity until
-// the change that publishes it.
-const reasonMetadataPlanTracked = "lib/api/entities/metadata.rb exposes plan from 19.6 (doc/api/metadata.md): the " +
-	"instance's subscription plan, null on an instance with none. client-go's Metadata does not model it, and " +
-	"issue 1492 publishes it from the captured response on admin.metadata_get, server.status and " +
-	"server.health_check in the change after this one, which removes this declaration."
-
 // reasonGroupReleaseWarningsNeverPassed answers the warnings key on the group
 // release list.
 const reasonGroupReleaseWarningsNeverPassed = "lib/api/entities/release.rb exposes warnings only when the " +
@@ -752,12 +741,6 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	// keyed by the entity the finding was read on, so the groupmembers pair
 	// answers that package's member output and its billable member output
 	// together: neither route set declares either option.
-	// The plan an instance reports on GET /metadata from 19.6, which the
-	// metadata and health packages both read. Published by issue 1492's
-	// publish-plan change, which removes these two declarations.
-	{Package: toolsDir + "/metadata", Entity: metadataEntity, Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
-	{Package: healthPkg, Entity: metadataEntity, Field: "plan", Category: categoryTrackedForPublication, Reason: reasonMetadataPlanTracked},
-
 	// The release warnings only POST /projects/:id/releases passes
 	// (lib/api/releases.rb), which the group release list never sends.
 	{Package: toolsDir + "/groupreleases", Entity: "API::Entities::Release", Field: "warnings", Category: categoryOptionNeverPassed, Reason: reasonGroupReleaseWarningsNeverPassed},
@@ -1240,6 +1223,7 @@ var declaredUnsurfaced = slices.Concat([]sentDeclaration{ //nolint:gochecknoglob
 	{Package: healthPkg, Entity: metadataEntity, Field: "revision", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
 	{Package: healthPkg, Entity: metadataEntity, Field: "enterprise", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
 	{Package: healthPkg, Entity: metadataEntity, Field: "kas", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
+	{Package: healthPkg, Entity: metadataEntity, Field: "plan", Category: categoryEntityPublishedElsewhere, Reason: reasonHealthMetadata},
 
 	// The application settings, which the package publishes whole as a map.
 	{Package: toolsDir + "/settings", Entity: "API::Entities::ApplicationSetting", Field: declaredSegment, Category: categoryEntityPublishedElsewhere, Reason: reasonSettingsPublishedAsAMap},
@@ -1436,9 +1420,10 @@ const reasonHealthCurrentUser = "the health check reads GET /user to prove the c
 // reasonHealthMetadata answers the four metadata keys the health check
 // publishes under names of its own.
 const reasonHealthMetadata = "lib/api/metadata.rb presents Entities::Metadata on GET /metadata, which the health check " +
-	"asks, and on the deprecated GET /version beside it: version, revision, kas and enterprise. health.Output publishes all " +
-	"four as gitlab_version, gitlab_revision, gitlab_kas (its four keys in snake case, as admin.metadata_get spells them) " +
-	"and gitlab_enterprise, the prefix setting what GitLab answered apart from what the server says about itself."
+	"asks, and on the deprecated GET /version beside it: version, revision, kas, enterprise and, from 19.6, plan. " +
+	"health.Output publishes all five as gitlab_version, gitlab_revision, gitlab_kas (its four keys in snake case, as " +
+	"admin.metadata_get spells them), gitlab_enterprise and gitlab_plan, the prefix setting what GitLab answered apart " +
+	"from what the server says about itself."
 
 // reasonSettingsPublishedAsAMap answers every key of the application settings.
 const reasonSettingsPublishedAsAMap = "settings.GetOutput and settings.UpdateOutput publish the whole answer as the settings " +

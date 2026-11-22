@@ -55,7 +55,7 @@ func TestCheck_Healthy(t *testing.T) {
 		switch r.URL.Path {
 		case pathMetadata:
 			testutil.RespondJSON(w, http.StatusOK, `{
-"version":"17.5.0","revision":"abc123","enterprise":true,
+"version":"17.5.0","revision":"abc123","enterprise":true,"plan":"ultimate",
 "kas":{"enabled":true,"externalUrl":"grpc://kas.example.com:8150","externalK8sProxyUrl":"https://kas.example.com/k8s-proxy","version":"17.5.1"}
 }`)
 		case pathCurrentUser:
@@ -86,6 +86,12 @@ func TestCheck_Healthy(t *testing.T) {
 	}
 	if out.GitLabEnterprise == nil || !*out.GitLabEnterprise {
 		t.Errorf("GitLabEnterprise = %v, want a pointer to true", out.GitLabEnterprise)
+	}
+	if out.GitLabPlan == nil || *out.GitLabPlan != "ultimate" {
+		t.Errorf("GitLabPlan = %v, want a pointer to ultimate", out.GitLabPlan)
+	}
+	if card := FormatMarkdownString(out); !strings.Contains(card, "ultimate") {
+		t.Errorf("the card does not name the plan:\n%s", card)
 	}
 	wantKAS := &KASOutput{
 		Enabled:             true,
@@ -305,6 +311,29 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	}
 }
 
+// TestCheck_APlanTheTypeCannotHold_IsUnhealthy verifies a metadata answer
+// whose plan does not decode is reported as a failed connectivity check, the
+// way an answer the SDK cannot decode is, rather than as a healthy instance
+// of no plan.
+func TestCheck_APlanTheTypeCannotHold_IsUnhealthy(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathMetadata {
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"19.6.1","plan":7}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Check(t.Context(), client, Input{})
+	if err != nil {
+		t.Fatalf(fmtStatusCheckErr, err)
+	}
+	if out.Status != "unhealthy" || !strings.HasPrefix(out.Error, errPrefixConnectivity) || out.GitLabPlan != nil {
+		t.Errorf("Check() = status %q, error %q, plan %v; want unhealthy with the %q prefix and no plan",
+			out.Status, out.Error, out.GitLabPlan, errPrefixConnectivity)
+	}
+}
+
 // TestCheck_DegradedUserFails asserts that an instance which answers the
 // version call but refuses the identity lookup is reported degraded, with the
 // version it did send and an error naming the identity half.
@@ -404,6 +433,7 @@ func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
 				ExternalK8SProxyURL: "https://kas-k8s-proxy-url",
 				Version:             "kas-version",
 			},
+			GitLabPlan:     new("plan-of-the-license"),
 			Authenticated:  true,
 			Username:       "username-of-the-credential",
 			UserID:         4242,
@@ -429,6 +459,7 @@ func TestOutput_JSONDocument_KeysEveryFieldUnderItsOwnName(t *testing.T) {
 				"external_k8s_proxy_url": "https://kas-k8s-proxy-url",
 				"version":                "kas-version",
 			},
+			"gitlab_plan":      "plan-of-the-license",
 			"authenticated":    true,
 			"username":         "username-of-the-credential",
 			"user_id":          float64(4242),
@@ -887,7 +918,7 @@ func TestActionSpecs_EachAction_PublishesTheSurfaceAModelFindsItBy(t *testing.T)
 			individual: toolutil.IndividualToolSpec{
 				Name:        "gitlab_server_status",
 				Title:       "Server Status",
-				Description: "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.",
+				Description: "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition, licensed plan (GitLab 19.6 and later) and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.",
 			},
 		},
 		{

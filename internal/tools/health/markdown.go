@@ -57,6 +57,9 @@ func FormatMarkdownString(s Output) string {
 	c.Field("Version", s.GitLabVersion)
 	c.Field("Revision", s.GitLabRevision)
 	c.BoolPtr("Enterprise Edition", s.GitLabEnterprise)
+	if s.GitLabPlan != nil {
+		c.Field("Plan", *s.GitLabPlan)
+	}
 	if kas := s.GitLabKAS; kas != nil {
 		k := c.Sub("Agent Server for Kubernetes")
 		k.Bool("Enabled", kas.Enabled)
