@@ -18,6 +18,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
+import { plainInline } from "../src/lib/faq-inline.mjs";
 import { TWIN_NOTE } from "./gen-llms.mjs";
 import { dateProblems } from "./twin-dates.mjs";
 import { twinQuestions } from "./twin-questions.mjs";
@@ -175,10 +176,12 @@ for (const page of pages) {
 	// The questions a page advertises in its FAQPage JSON-LD are the ones it
 	// shows, and the twin carries the same. The JSON-LD is built from the
 	// frontmatter whether or not the body places <FAQ />, so a page that
-	// forgot the component advertised questions no reader could see.
+	// forgot the component advertised questions no reader could see. The
+	// JSON-LD names a question as plain text and the twin keeps its markdown,
+	// so the twin's heading is read without its inline markers.
 	const faqPage = jsonLdNode(html, [`${SITE_ROOT}/${page}#faq`]);
 	const advertised = (faqPage?.mainEntity ?? []).map((q) => q.name);
-	const shown = twinQuestions(text);
+	const shown = twinQuestions(text).map(plainInline);
 	if (
 		advertised.length !== shown.length ||
 		advertised.some((q, i) => q !== shown[i])

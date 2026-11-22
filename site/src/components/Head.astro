@@ -9,7 +9,7 @@
 // astro.config.mjs; these IDs link the per-page nodes back into that graph.
 import Default from "@astrojs/starlight/components/Head.astro";
 import { getCollection } from "astro:content";
-import { faqPlainText } from "../utils/faq";
+import { faqPlainQuestion, faqPlainText } from "../utils/faq";
 
 // Route paths that actually resolve to a built page. Breadcrumbs are assembled
 // per path segment, but section segments like /tools/ or /operations/ have no
@@ -186,9 +186,10 @@ const faq =
 			about: { "@id": SOFTWARE_ID },
 			mainEntity: faqEntries.map((item) => ({
 				"@type": "Question",
-				name: item.q,
 				// Same source as the rendered section, resolved to the plain text
-				// schema.org requires (stat tokens expanded, inline markers removed).
+				// schema.org requires (inline markers removed, and in the answer
+				// stat tokens expanded).
+				name: faqPlainQuestion(item.q),
 				acceptedAnswer: { "@type": "Answer", text: faqPlainText(item.a, lang) },
 			})),
 		}

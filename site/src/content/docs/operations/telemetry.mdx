@@ -77,13 +77,13 @@ telemetry running on something other than what you meant; the fourth,
 `telemetry disabled: it could not be started`, and the server goes on serving
 without telemetry.
 
-<Aside type="caution" title="`http://` is not the default">
+:::caution[`http://` is not the default]
 The Go exporters default to `https://localhost:4318`. Turning telemetry on with
 no endpoint set attempts TLS against a plaintext local collector, and every
 batch fails for all three signals. Write the scheme explicitly:
 `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`. Writing bare
 `localhost:4318` also yields https.
-</Aside>
+:::
 
 <Aside type="caution" title="Durations are integer milliseconds">
 "Any value that represents a timeout MUST be an integer representing a number of
@@ -102,15 +102,15 @@ server defines takes a Go duration, which makes the inconsistency easier to
 trip over rather than harder.
 </Aside>
 
-<Aside type="caution" title="`http/json` is refused at startup">
+:::caution[`http/json` is refused at startup]
 Since v1.46.0 the Go trace exporter implements it and the metric and log
 exporters do not. Honoring it would give one deployment two encodings at once,
 JSON spans beside protobuf metrics, from a single setting that reads as though
 it selects one thing. It fails by name rather than silently downgrading or
 silently splitting.
-</Aside>
+:::
 
-<Aside type="caution" title="`OTEL_EXPORTER_OTLP_INSECURE=true` overrides an `https` endpoint for traces and metrics">
+:::caution[`OTEL_EXPORTER_OTLP_INSECURE=true` overrides an `https` endpoint for traces and metrics]
 The specification says the variable "only applies to OTLP/gRPC when an endpoint
 is provided without the http or https scheme". The Go trace and metric
 exporters do not read it that way: their environment configuration applies the
@@ -130,7 +130,7 @@ endpoint upgrades traces and metrics to TLS. For those two signals any
 non-empty value decides and only `true` (in any capitalization) means plaintext, so
 `INSECURE=1` upgrades them as surely as `false` does; the log exporter accepts
 only `true` and `false` and ignores anything else.
-</Aside>
+:::
 
 This server emulates that deviation per signal rather than reading the scheme
 off the URL, so the [plaintext warning](#authenticating-to-your-collector) names

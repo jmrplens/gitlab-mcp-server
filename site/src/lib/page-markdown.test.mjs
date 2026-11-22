@@ -161,6 +161,56 @@ describe("components", () => {
 		);
 	});
 
+	// Starlight's directive label is markdown, so a flag in it is written as
+	// code (smartypants would print `--` as a dash), and the twin keeps it.
+	test("a code span in a directive's label stays code in the title", () => {
+		assert.match(
+			reduce(":::caution[`--public-url` is required]\nSet it.\n:::"),
+			/^> \*\*`--public-url` is required\*\*\n>\n> Set it\.$/m,
+		);
+	});
+
+	// `{...}` after a directive's name sets attributes, such as an icon, which
+	// the twin has no form for. Left in place, the braces reached
+	// resolveExpressions and the failure blamed an expression nothing imports.
+	test("a directive with attributes fails, naming the directive", () => {
+		for (const [body, line] of [
+			[':::tip{icon="heart"}\nA hint.\n:::', ':::tip{icon="heart"}'],
+			[
+				':::caution[Careful]{icon="heart"}\nMind it.\n:::',
+				':::caution[Careful]{icon="heart"}',
+			],
+			[
+				':::note[Open `a{b}`]{icon="heart"}\nA note.\n:::',
+				':::note[Open `a{b}`]{icon="heart"}',
+			],
+			['> :::tip{icon="heart"}\n> A hint.\n> :::', ':::tip{icon="heart"}'],
+			["<Aside>\n:::details{open}\nHidden.\n:::\n</Aside>", ":::details{open}"],
+			// Inside a directive the conversion copies as one body, whose lines
+			// it never reads one by one.
+			[
+				':::note\n> :::tip{icon="heart"}\n> A hint.\n> :::\n:::',
+				':::tip{icon="heart"}',
+			],
+			[
+				':::caution\n  :::tip{icon="heart"}\n  A hint.\n  :::\n:::',
+				':::tip{icon="heart"}',
+			],
+		]) {
+			assert.throws(
+				() => reduce(body),
+				(error) =>
+					error instanceof Error &&
+					error.message.includes(
+						`the directive ${JSON.stringify(line)} sets attributes`,
+					) &&
+					!error.message.includes("evaluate") &&
+					!/[\u{f0000}-\u{ffffd}]/u.test(error.message),
+				body,
+			);
+		}
+	});
+
 	test("a failure shows the page's code spans, never their masked form", () => {
 		assert.throws(
 			() => reduce("[A `b`](/elsewhere/) {stats.`x`}"),
