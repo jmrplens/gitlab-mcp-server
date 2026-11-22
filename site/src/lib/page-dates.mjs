@@ -129,6 +129,10 @@ export function pageInputs(file, source, root) {
  * @returns {{ time: Date, day: string } | undefined} the moment and its UTC day
  */
 export function pageDate(file, source, { root, times }) {
+	// Starlight dates only a page git tracks, and src/routeData.ts redates
+	// only what Starlight dated, so a page git does not know yet has no date
+	// here either, whatever its data's commits.
+	if (!times.has(slashed(file))) return undefined;
 	let newest = 0;
 	for (const path of [slashed(file), ...pageInputs(file, source, root)]) {
 		newest = Math.max(newest, times.get(path) ?? 0);
