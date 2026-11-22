@@ -420,6 +420,10 @@ const (
 // run, which it answers with HTTP 200 and a top-level error.
 const gitLabRefusal = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
 
+// graphQLRefused is how toolutil describes such a refusal: GitLab's own,
+// carried by its top-level errors, and no failure of the connection.
+const graphQLRefused = "GitLab refused the GraphQL request; its errors say why"
+
 // TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns pins, whole, the error
 // each handler returns for each way GitLab refuses its mutation: a refusal it
 // answers with a top-level error, and the payload's own errors list of a write
@@ -442,7 +446,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "create, refused", queryKey: "securityAttributeCreate", call: createHigh,
 			body: `{"data":{"securityAttributeCreate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "create security attributes: unexpected error. Suggestion: " + createHint + ": mutation.securityAttributeCreate failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "create security attributes: " + graphQLRefused + ". Suggestion: " + createHint + ": mutation.securityAttributeCreate failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "create, the payload's errors", queryKey: "securityAttributeCreate", call: createHigh,
@@ -452,7 +456,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "update, refused", queryKey: "securityAttributeUpdate", call: renameHigh,
 			body: `{"data":{"securityAttributeUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "update security attribute: unexpected error. Suggestion: " + updateHint + ": mutation.securityAttributeUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "update security attribute: " + graphQLRefused + ". Suggestion: " + updateHint + ": mutation.securityAttributeUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "update, the payload's errors", queryKey: "securityAttributeUpdate", call: renameHigh,
@@ -462,7 +466,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "delete, refused", queryKey: "securityAttributeDestroy", call: deleteNine,
 			body: `{"data":{"securityAttributeDestroy":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "delete security attribute: unexpected error. Suggestion: " + deleteHint + ": mutation.securityAttributeDestroy failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "delete security attribute: " + graphQLRefused + ". Suggestion: " + deleteHint + ": mutation.securityAttributeDestroy failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "delete, the payload's errors", queryKey: "securityAttributeDestroy", call: deleteNine,
@@ -472,7 +476,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "project update, refused", queryKey: "securityAttributeProjectUpdate", call: addNineToProject,
 			body: `{"data":{"securityAttributeProjectUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "update project security attributes: unexpected error. Suggestion: " + projectUpdateHint + ": mutation.securityAttributeProjectUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "update project security attributes: " + graphQLRefused + ". Suggestion: " + projectUpdateHint + ": mutation.securityAttributeProjectUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "project update, the payload's errors", queryKey: "securityAttributeProjectUpdate", call: addNineToProject,
@@ -482,7 +486,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "bulk update, refused", queryKey: "bulkUpdateSecurityAttributes", call: bulkAddNine,
 			body: `{"data":{"bulkUpdateSecurityAttributes":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "bulk update security attributes: unexpected error. Suggestion: " + bulkUpdateHint + ": mutation.bulkUpdateSecurityAttributes failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "bulk update security attributes: " + graphQLRefused + ". Suggestion: " + bulkUpdateHint + ": mutation.bulkUpdateSecurityAttributes failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "bulk update, the payload's errors", queryKey: "bulkUpdateSecurityAttributes", call: bulkAddNine,

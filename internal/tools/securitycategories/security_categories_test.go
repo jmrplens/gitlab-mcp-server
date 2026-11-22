@@ -463,6 +463,11 @@ const (
 	gitLabRefusal = "The resource that you are attempting to access does not exist or you don't have permission to perform this action"
 )
 
+// graphQLRefused is how toolutil describes a refusal client-go hands over:
+// GitLab's own, carried by its top-level errors, and no failure of the
+// connection. The delete's refusal, built by the handler, is not one.
+const graphQLRefused = "GitLab refused the GraphQL request; its errors say why"
+
 // TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns pins, whole, the error
 // each handler returns for each way GitLab refuses its mutation: a refusal it
 // answers with a top-level error, and the payload's own errors list of a write
@@ -499,7 +504,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "create, refused", queryKey: "securityCategoryCreate", call: create,
 			body: `{"data":{"securityCategoryCreate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "create security category: unexpected error. Suggestion: " + createHint + ": mutation.securityCategoryCreate failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "create security category: " + graphQLRefused + ". Suggestion: " + createHint + ": mutation.securityCategoryCreate failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "create, the payload's errors", queryKey: "securityCategoryCreate", call: create,
@@ -509,7 +514,7 @@ func TestHandlers_Refusals_ReadAsTheTextEachHandlerReturns(t *testing.T) {
 		{
 			name: "update, refused", queryKey: "securityCategoryUpdate", call: update,
 			body: `{"data":{"securityCategoryUpdate":null},"errors":[{"message":"` + gitLabRefusal + `"}]}`,
-			want: "update security category: unexpected error. Suggestion: " + updateHint + ": mutation.securityCategoryUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
+			want: "update security category: " + graphQLRefused + ". Suggestion: " + updateHint + ": mutation.securityCategoryUpdate failed (GraphQL errors: " + gitLabRefusal + ")",
 		},
 		{
 			name: "update, the payload's errors", queryKey: "securityCategoryUpdate", call: update,
