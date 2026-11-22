@@ -279,6 +279,16 @@ describe("escapes", () => {
 		assert.equal(reduce("GitLab \\< 14 only."), "GitLab < 14 only.");
 	});
 
+	// The same holds for an HTML element the reduction would otherwise turn
+	// into markdown: the page shows the tags, so the twin keeps them as text.
+	test("an escaped HTML tag is text, not an element to reduce", () => {
+		const body =
+			"Write \\<code>text\\</code>, " +
+			'\\<a href="https://example.com/">a link\\</a> and ' +
+			'\\<img alt="Logo" src="https://example.com/logo.png">.';
+		assert.equal(reduce(body), body);
+	});
+
 	test("an escaped brace is text, not an expression", () => {
 		assert.equal(reduce("Write \\{id\\}."), "Write {id}.");
 	});
