@@ -26,54 +26,13 @@ const (
 )
 
 const (
-	namespaceGIDType        = "Namespace"
 	securityCategoryGIDType = "Security::Category"
 
-	securityCategoryCreateMutation = `
-		mutation CreateSecurityCategory($input: SecurityCategoryCreateInput!) {
-			securityCategoryCreate(input: $input) {
-				securityCategory {
-					id
-					name
-					description
-					multipleSelection
-					editableState
-					templateType
-					securityAttributes {
-						id
-						name
-						color
-						description
-						editableState
-					}
-				}
-				errors
-			}
-		}`
-	securityCategoryUpdateMutation = `
-		mutation UpdateSecurityCategory($input: SecurityCategoryUpdateInput!) {
-			securityCategoryUpdate(input: $input) {
-				securityCategory {
-					id
-					name
-					description
-					multipleSelection
-					editableState
-					templateType
-					securityAttributes {
-						id
-						name
-						color
-						description
-						editableState
-					}
-				}
-				errors
-			}
-		}`
 	// securityCategoryDestroyMutation asks for the attributes GitLab deleted
 	// with the category, which nothing else tells a caller. The category's
-	// own id is the one the caller sent, and is not asked back.
+	// own id is the one the caller sent, and is not asked back. It stays the
+	// handler's own document, and not client-go's DestroySecurityCategory,
+	// until that method selects deletedAttributesGid (issue 1784).
 	securityCategoryDestroyMutation = `
 		mutation DestroySecurityCategory($input: SecurityCategoryDestroyInput!) {
 			securityCategoryDestroy(input: $input) {
@@ -135,52 +94,8 @@ type Output struct {
 	SecurityAttributes []AttributeSummary `json:"security_attributes,omitempty"`
 }
 
-type categoryNode struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name"`
-	Description        *string         `json:"description"`
-	MultipleSelection  bool            `json:"multipleSelection"`
-	EditableState      string          `json:"editableState"`
-	TemplateType       *string         `json:"templateType"`
-	SecurityAttributes []attributeNode `json:"securityAttributes"`
-}
-
-type attributeNode struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Color         string `json:"color"`
-	Description   string `json:"description"`
-	EditableState string `json:"editableState"`
-}
-
 type categoryMutationEnvelope struct {
 	Errors []toolutil.GraphQLError `json:"errors"`
-}
-
-// categoryMutationPayload is the payload the create and the update answer
-// with: the category, and the errors of a write GitLab ran and refused to
-// keep.
-type categoryMutationPayload struct {
-	SecurityCategory *categoryNode `json:"securityCategory"`
-	Errors           []string      `json:"errors"`
-}
-
-type securityCategoryCreateData struct {
-	SecurityCategoryCreate *categoryMutationPayload `json:"securityCategoryCreate"`
-}
-
-type securityCategoryCreateResponse struct {
-	Data securityCategoryCreateData `json:"data"`
-	categoryMutationEnvelope
-}
-
-type securityCategoryUpdateData struct {
-	SecurityCategoryUpdate *categoryMutationPayload `json:"securityCategoryUpdate"`
-}
-
-type securityCategoryUpdateResponse struct {
-	Data securityCategoryUpdateData `json:"data"`
-	categoryMutationEnvelope
 }
 
 type securityCategoryDestroyPayload struct {
@@ -197,49 +112,40 @@ type securityCategoryDestroyResponse struct {
 	categoryMutationEnvelope
 }
 
-func categoryNodeOutput(category *categoryNode) (Output, error) {
+// categoryOutput converts the category client-go decoded, which has already
+// read its global ids as numbers, and nil as the zero output. Its description
+// and template type are nullable in the schema and read as the empty string
+// when GitLab answers null.
+func categoryOutput(category *gl.SecurityCategory) Output {
 	if category == nil {
-		return Output{}, nil
-	}
-	_, id, err := toolutil.ParseGID(category.ID)
-	if err != nil {
-		return Output{}, fmt.Errorf("parse security category id: %w", err)
+		return Output{}
 	}
 	out := Output{
-		ID:                 id,
+		ID:                 category.ID,
 		Name:               category.Name,
 		MultipleSelection:  category.MultipleSelection,
-		EditableState:      category.EditableState,
+		EditableState:      string(category.EditableState),
 		SecurityAttributes: make([]AttributeSummary, 0, len(category.SecurityAttributes)),
 	}
 	if category.Description != nil {
 		out.Description = *category.Description
 	}
 	if category.TemplateType != nil {
-		out.TemplateType = *category.TemplateType
+		out.TemplateType = string(*category.TemplateType)
 	}
+	// client-go builds every attribute of the list it decoded, so none is nil:
+	// GitLab nulls the whole list rather than one item of it, its items being
+	// non-null.
 	for _, attribute := range category.SecurityAttributes {
-		mapped, attributeErr := attributeNodeSummary(attribute)
-		if attributeErr != nil {
-			return Output{}, attributeErr
-		}
-		out.SecurityAttributes = append(out.SecurityAttributes, mapped)
+		out.SecurityAttributes = append(out.SecurityAttributes, AttributeSummary{
+			ID:            attribute.ID,
+			Name:          attribute.Name,
+			Color:         attribute.Color,
+			Description:   attribute.Description,
+			EditableState: string(attribute.EditableState),
+		})
 	}
-	return out, nil
-}
-
-func attributeNodeSummary(attribute attributeNode) (AttributeSummary, error) {
-	_, id, err := toolutil.ParseGID(attribute.ID)
-	if err != nil {
-		return AttributeSummary{}, fmt.Errorf("parse security attribute id: %w", err)
-	}
-	return AttributeSummary{
-		ID:            id,
-		Name:          attribute.Name,
-		Color:         attribute.Color,
-		Description:   attribute.Description,
-		EditableState: attribute.EditableState,
-	}, nil
+	return out
 }
 
 func optionalText(value *string) *string {
@@ -289,7 +195,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint(opCreateCategory, err, "verify namespace_id and that the token has permission on a Premium or Ultimate namespace")
 	}
-	return categoryNodeOutput(category)
+	return categoryOutput(category), nil
 }
 
 // Update updates a GitLab security category.
@@ -322,7 +228,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint(opUpdateCategory, err, "verify category_id and namespace_id; only editable custom categories can be updated")
 	}
-	return categoryNodeOutput(category)
+	return categoryOutput(category), nil
 }
 
 // Delete deletes a GitLab security category and its associated attributes,
@@ -364,65 +270,32 @@ func attributeIDsFromGIDs(gids []string) ([]int64, error) {
 	return ids, nil
 }
 
-func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, namespaceID int64, opts *gl.CreateSecurityCategoryOptions) (*categoryNode, error) {
-	input := map[string]any{
-		"namespaceId": toolutil.FormatGID(namespaceGIDType, namespaceID),
-		"name":        opts.Name,
-	}
-	if opts.Description != nil {
-		input["description"] = opts.Description
-	}
-	if opts.MultipleSelection != nil {
-		input["multipleSelection"] = opts.MultipleSelection
-	}
-	var result securityCategoryCreateResponse
-	resp, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryCreateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+// The create and the update are sent through client-go's SecurityCategories
+// service (issue 1784). It answers GitLab's refusal as a *gl.GraphQLResponseError
+// that also matches its not-found sentinel, which toolutil reads by its
+// messages rather than as a 404, the payload's own errors as an error of its
+// own, and a category answered null with no error as the sentinel itself.
+//
+// A write GitLab ran and answered without the category, null with no error or
+// nulled below by its attributes with the errors that null writes, is one a
+// fine-grained session is told probably committed (issue 1103): GitLab checks
+// the category and its attributes against a fine-grained token only after the
+// write ran, and at 19.4.1 neither type declares a fine-grained permission.
+
+func createSecurityCategory(ctx context.Context, client *gitlabclient.Client, namespaceID int64, opts *gl.CreateSecurityCategoryOptions) (*gl.SecurityCategory, error) {
+	category, resp, err := client.GL().SecurityCategories.CreateSecurityCategory(namespaceID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, toolutil.UnconfirmedWrite(client, resp, opCreateCategory, objectCategory, err, err)
 	}
-	return categoryWritten(client, resp, opCreateCategory, "securityCategoryCreate", result.Errors, result.Data.SecurityCategoryCreate)
+	return category, nil
 }
 
-// categoryWritten reads what a category write answered: GitLab's refusal,
-// the payload's own errors, or the category. A write GitLab ran and answered
-// without the category, null with no error or nulled below by its attributes
-// with the errors that null writes, is one a fine-grained session is told
-// probably committed (issue 1103): GitLab checks the category and its
-// attributes against a fine-grained token only after the write ran, and at
-// 19.4.1 neither type declares a fine-grained permission.
-func categoryWritten(client *gitlabclient.Client, resp *gl.Response, operation, field string, responseErrors []toolutil.GraphQLError, payload *categoryMutationPayload) (*categoryNode, error) {
-	if topLevelErr := toolutil.GraphQLTopLevelError(field, responseErrors); topLevelErr != nil {
-		return nil, toolutil.UnconfirmedWrite(client, resp, operation, objectCategory, topLevelErr, topLevelErr)
-	}
-	if payload == nil {
-		return nil, gl.ErrNotFound
-	}
-	if mutationErr := toolutil.GraphQLMutationError(field, payload.Errors); mutationErr != nil {
-		return nil, mutationErr
-	}
-	if payload.SecurityCategory == nil {
-		return nil, client.Authority().UnconfirmedWrite(operation, objectCategory, gl.ErrNotFound)
-	}
-	return payload.SecurityCategory, nil
-}
-
-func updateSecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID, namespaceID int64, opts *gl.UpdateSecurityCategoryOptions) (*categoryNode, error) {
-	input := map[string]any{
-		"id":          toolutil.FormatGID(securityCategoryGIDType, categoryID),
-		"namespaceId": toolutil.FormatGID(namespaceGIDType, namespaceID),
-	}
-	if opts.Name != nil {
-		input["name"] = opts.Name
-	}
-	if opts.Description != nil {
-		input["description"] = opts.Description
-	}
-	var result securityCategoryUpdateResponse
-	resp, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: securityCategoryUpdateMutation, Variables: map[string]any{"input": input}}, &result, gl.WithContext(ctx))
+func updateSecurityCategory(ctx context.Context, client *gitlabclient.Client, categoryID, namespaceID int64, opts *gl.UpdateSecurityCategoryOptions) (*gl.SecurityCategory, error) {
+	category, resp, err := client.GL().SecurityCategories.UpdateSecurityCategory(categoryID, namespaceID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, toolutil.UnconfirmedWrite(client, resp, opUpdateCategory, objectCategory, err, err)
 	}
-	return categoryWritten(client, resp, opUpdateCategory, "securityCategoryUpdate", result.Errors, result.Data.SecurityCategoryUpdate)
+	return category, nil
 }
 
 // destroySecurityCategory deletes one category and returns the global ids of

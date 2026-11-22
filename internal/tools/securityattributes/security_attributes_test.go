@@ -574,12 +574,13 @@ func bulkAddNine(client *gitlabclient.Client) error {
 	return err
 }
 
-// TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation
-// payloads are treated as missing GitLab resources.
+// TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that the two
+// writes that answer with attributes read an answer without them as not
+// found, for a classic session.
 //
-// The table covers null payloads and empty node results for create, update,
-// delete, project update, and bulk update. Each case expects a Not Found error
-// instead of silently accepting a partial GraphQL response.
+// The table covers null payloads and empty node results for create and
+// update. Each case expects a Not Found error instead of silently accepting a
+// partial GraphQL response.
 func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -625,33 +626,6 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 				return err
 			},
 		},
-		{
-			name:     "delete null payload",
-			queryKey: "securityAttributeDestroy",
-			payload:  `{"securityAttributeDestroy":null}`,
-			call: func(client *gitlabclient.Client) error {
-				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
-				return err
-			},
-		},
-		{
-			name:     "project update null payload",
-			queryKey: "securityAttributeProjectUpdate",
-			payload:  `{"securityAttributeProjectUpdate":null}`,
-			call: func(client *gitlabclient.Client) error {
-				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
-				return err
-			},
-		},
-		{
-			name:     "bulk update null payload",
-			queryKey: "bulkUpdateSecurityAttributes",
-			payload:  `{"bulkUpdateSecurityAttributes":null}`,
-			call: func(client *gitlabclient.Client) error {
-				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
-				return err
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -665,6 +639,41 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 			err := tt.call(client)
 			if err == nil || !strings.Contains(err.Error(), "Not Found") {
 				t.Fatalf("handler error = %v, want Not Found", err)
+			}
+		})
+	}
+}
+
+// TestHandlers_NullPayloadWithoutAnError_ReadsAsDone pins what the three
+// writes that answer with no object read a null payload with no error as,
+// since they send their mutations through client-go (issue 1784): the write
+// done, and the counts of a project update zero. client-go decodes the payload
+// into a value rather than a pointer, so the null cannot be told from a
+// payload with no errors.
+//
+// GitLab does not answer that way: a mutation it refuses answers with its
+// payload null and the reason as a top-level error, which every handler
+// returns. The handlers used to read the bare null as not found; this records
+// the one answer whose reading the move changed.
+func TestHandlers_NullPayloadWithoutAnError_ReadsAsDone(t *testing.T) {
+	cases := []struct {
+		name     string
+		queryKey string
+		call     func(*gitlabclient.Client) error
+	}{
+		{name: "delete", queryKey: "securityAttributeDestroy", call: deleteNine},
+		{name: "project update", queryKey: "securityAttributeProjectUpdate", call: addNineToProject},
+		{name: "bulk update", queryKey: "bulkUpdateSecurityAttributes", call: bulkAddNine},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				tc.queryKey: func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"`+tc.queryKey+`":null}`)
+				},
+			})
+			if err := tc.call(testutil.NewTestClient(t, handler)); err != nil {
+				t.Errorf("handler error = %v, want the write read as done", err)
 			}
 		})
 	}
@@ -785,11 +794,12 @@ func TestCreate_FineGrainedSession_RefusalAmongTheNullsIsNoUnconfirmedWrite(t *t
 }
 
 // TestHandlers_ReturnErrorOnMalformedGraphQLIDs verifies that malformed GraphQL
-// global IDs in security attribute responses fail during output conversion.
+// global IDs in security attribute responses fail rather than convert.
 //
 // The mock replaces valid category or attribute GIDs with invalid strings and
-// expects parse-specific errors. This protects callers from receiving outputs
-// with ambiguous numeric IDs.
+// expects the error client-go returns when it cannot decode one, naming the
+// value it refused. This protects callers from receiving outputs with
+// ambiguous numeric IDs.
 func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -805,7 +815,7 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
-			want: "parse security attribute id",
+			want: `invalid global ID format: "bad-attribute-id"`,
 		},
 		{
 			name:    "category id",
@@ -815,7 +825,7 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
 				return err
 			},
-			want: "parse security category id",
+			want: `invalid global ID format: "bad-category-id"`,
 		},
 		{
 			name:    "create attribute id",
@@ -824,7 +834,7 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
 				return err
 			},
-			want: "parse security attribute id",
+			want: `invalid global ID format: "bad-attribute-id"`,
 		},
 	}
 
@@ -1239,8 +1249,9 @@ func assertQueuedMessage(t *testing.T, message string) {
 // the one branch of the three that nothing exercised.
 //
 // It is also half of what lets BulkUpdate hand both target lists over
-// unguarded: the empty project list now reaches formatGIDs rather than being
-// held back by a length check, and this says it still contributes no item.
+// unguarded: the empty project list reaches client-go's
+// BulkUpdateSecurityAttributes rather than being held back by a length check,
+// and this says it still contributes no item.
 // TestBulkUpdate_ProjectsOnly_SendsOnlyTheProjectItems is the other half.
 func TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
@@ -1274,7 +1285,7 @@ func TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems(t *testing.T) {
 // and echoes no group.
 //
 // It states the property BulkUpdate relies on when it hands both lists over
-// unconditionally. An empty group list is passed to formatGIDs like any other,
+// unconditionally. An empty group list is passed to client-go like any other,
 // and an item list that grew an empty entry, or that put the groups after the
 // projects, would be a different request for a mutation that replaces every
 // attribute on what it names.
@@ -1615,27 +1626,23 @@ func TestFormatBulkUpdateMarkdown_RendersIDsAsALists(t *testing.T) {
 	}
 }
 
-// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies nil GraphQL nodes
-// convert to zero-value outputs without panicking.
+// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies nil attributes
+// client-go decoded convert to zero-value outputs without panicking.
 //
-// The test exercises attribute, category summary, and attribute slice helpers to
-// keep defensive conversion behavior stable for partial GraphQL responses.
+// The test exercises the attribute and attribute slice helpers to keep
+// defensive conversion behavior stable for partial GraphQL responses.
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
-	if out, err := attributeNodeOutput(nil); err != nil || out.ID != 0 || out.SecurityCategory != nil {
-		t.Fatalf("attributeNodeOutput(nil) = %#v", out)
+	if out := attributeOutput(nil); out.ID != 0 || out.SecurityCategory != nil {
+		t.Fatalf("attributeOutput(nil) = %#v", out)
 	}
-	if summary, err := categoryNodeSummary(nil); err != nil || summary == nil || summary.ID != 0 {
-		t.Fatalf("categoryNodeSummary(nil) = %#v, want zero summary", summary)
+	if out := attributesOutput(nil); out.Attributes == nil || len(out.Attributes) != 0 {
+		t.Fatalf("attributesOutput(nil) = %#v, want an empty list", out)
 	}
-	if out, err := attributeNodesOutput(nil); err != nil || len(out.Attributes) != 0 {
-		t.Fatalf("attributeNodesOutput(nil) = %#v", out)
-	}
-	// An attribute node carrying no category converts to an output carrying
-	// none, rather than to one carrying an empty category object a reader
-	// would take for a category GitLab named.
-	out, err := attributeNodeOutput(&attributeNode{ID: "gid://gitlab/Security::Attribute/9", Name: "High"})
-	if err != nil || out.ID != 9 || out.Name != "High" || out.SecurityCategory != nil {
-		t.Fatalf("attributeNodeOutput(no category) = %#v, err = %v", out, err)
+	// An attribute carrying no category converts to an output carrying none,
+	// rather than to one carrying an empty category object a reader would
+	// take for a category GitLab named.
+	if out := attributeOutput(&gl.SecurityAttribute{ID: 9, Name: "High"}); out.ID != 9 || out.Name != "High" || out.SecurityCategory != nil {
+		t.Fatalf("attributeOutput(no category) = %#v", out)
 	}
 }
 

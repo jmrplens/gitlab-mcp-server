@@ -3,9 +3,12 @@
 
 package main
 
-// The answers for five GraphQL domains: branch rules, the CI/CD catalog,
-// custom emoji, and security attributes and categories; and for the one
-// document the Terraform state list sends of its own.
+// The answers for four GraphQL domains: branch rules, the CI/CD catalog,
+// custom emoji, and security categories, whose delete is the one security
+// attribute or category mutation still sent as a document of this server's
+// own (issue 1784; the others are answered with client-go's, in
+// sdk_declarations_sent.go); and for the one document the Terraform state
+// list sends of its own.
 //
 // Each field the pinned schema offered at an object these packages decode, and
 // no document of theirs selected, was triaged. The ones a caller needs are
@@ -21,7 +24,6 @@ const (
 	branchRulesPackage        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branchrules"
 	ciCatalogPackage          = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cicatalog"
 	customEmojiPackage        = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/customemoji"
-	securityAttributesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityattributes"
 	securityCategoriesPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitycategories"
 	terraformStatesPackage    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/terraformstates"
 )
@@ -113,53 +115,11 @@ func domainSentDeclarations() []sentDeclaration {
 	return append(declarations, securityAndEmojiDeclarations()...)
 }
 
-// securityAndEmojiDeclarations answers what the security attribute and
-// category mutations and the custom emoji listing leave out: the ids a payload
-// hands back that the caller sent, the objects reached again by walking back
-// to their parent, and the viewer's permissions on an emoji.
+// securityAndEmojiDeclarations answers what the security category delete and
+// the custom emoji listing leave out: the id the delete hands back that the
+// caller sent, and the viewer's permissions on an emoji.
 func securityAndEmojiDeclarations() []sentDeclaration {
 	return []sentDeclaration{
-		{
-			Package:    securityAttributesPackage,
-			SchemaType: "SecurityAttributeDestroyPayload",
-			Field:      "deletedAttributeGid",
-			Category:   categoryRestated,
-			Reason: "The global id of the deleted attribute, which is the id the caller sent: " +
-				"Mutations::Security::Attributes::Destroy finds the attribute by that argument and hands its id back " +
-				"on success, and nil only beside the errors the decoder reads. The confirmation already names the " +
-				"attribute by that id.",
-		},
-		{
-			Package:    securityAttributesPackage,
-			SchemaType: "SecurityAttributeProjectUpdatePayload",
-			Field:      "project",
-			Category:   categoryRestated,
-			Reason: "The whole Project the caller named by project_id, handed back by " +
-				"Mutations::Security::Attributes::ProjectUpdate on success. What the call answers is how many " +
-				"attributes it added and removed, which is published; the project's own fields are the project " +
-				"domain's surface, published by gitlab_project.",
-		},
-		{
-			Package:    securityAttributesPackage,
-			SchemaType: "SecurityCategory",
-			Field:      "securityAttributes",
-			Category:   categoryNotThisResponse,
-			Reason: "The category is selected so the caller knows which category the created or updated attribute " +
-				"belongs to, and its attribute list is the category's own content: securitycategories publishes it " +
-				"as security_attributes when a category is created or updated. Every attribute this call created " +
-				"or updated is already in the response, and selecting the list would walk back from the category " +
-				"to the attributes the response carries.",
-		},
-		{
-			Package:    securityCategoriesPackage,
-			SchemaType: "SecurityAttribute",
-			Field:      "securityCategory",
-			Category:   categoryRestated,
-			Reason: "Each attribute in a category's security_attributes belongs to that category, which is the " +
-				"object the response is: SecurityAttribute.securityCategory walks from the child back to the parent " +
-				"the same payload carries, so selecting it would publish the category a second time under each of " +
-				"its attributes.",
-		},
 		{
 			Package:    securityCategoriesPackage,
 			SchemaType: "SecurityCategoryDestroyPayload",

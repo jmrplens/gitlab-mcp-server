@@ -178,6 +178,40 @@ func workItemShapes(method, root string) []sdkShapeDeclaration {
 	})
 }
 
+// securityShapes answers the disagreements the security attribute and category
+// documents have with the one pair of decoders client-go shares between the
+// two services: an attribute's decoder declares the category it belongs to,
+// and a category's declares its attributes, so each document reaches back
+// through the other's decoder to a field it does not select.
+func securityShapes() []sdkShapeDeclaration {
+	const categoryAttributes = "securityCategoryGQL (security_categories.go) declares securityAttributes for the " +
+		"category service's own documents, and the attribute documents select an attribute's category without " +
+		"its attributes. unwrap hands the list on as an always empty SecurityCategory.SecurityAttributes, which " +
+		"securityattributes never reads: its card names the category an attribute belongs to and nothing more."
+	const attributeCategory = "securityAttributeGQL (security_attributes.go) declares securityCategory for the " +
+		"attribute service's own documents, and the category documents select a category's attributes without " +
+		"walking back to the category. unwrap hands it on as a nil SecurityAttribute.SecurityCategory, which " +
+		"securitycategories never reads: every attribute it publishes belongs to the category the answer is."
+	return []sdkShapeDeclaration{
+		{
+			Method: "SecurityAttributesService.CreateSecurityAttributes", Path: "data.securityAttributeCreate.securityAttributes[].securityCategory.securityAttributes",
+			Category: categoryDecodedNeverRead, Reason: categoryAttributes,
+		},
+		{
+			Method: "SecurityAttributesService.UpdateSecurityAttribute", Path: "data.securityAttributeUpdate.securityAttribute.securityCategory.securityAttributes",
+			Category: categoryDecodedNeverRead, Reason: categoryAttributes,
+		},
+		{
+			Method: "SecurityCategoriesService.CreateSecurityCategory", Path: "data.securityCategoryCreate.securityCategory.securityAttributes[].securityCategory",
+			Category: categoryDecodedNeverRead, Reason: attributeCategory,
+		},
+		{
+			Method: "SecurityCategoriesService.UpdateSecurityCategory", Path: "data.securityCategoryUpdate.securityCategory.securityAttributes[].securityCategory",
+			Category: categoryDecodedNeverRead, Reason: attributeCategory,
+		},
+	}
+}
+
 // declaredSDKShapes answers the disagreements between client-go's documents
 // and its decoders at the sends this server reaches.
 func declaredSDKShapes() []sdkShapeDeclaration {
@@ -204,7 +238,7 @@ func declaredSDKShapes() []sdkShapeDeclaration {
 				"documents Filters as always empty on a listed view, to be read with GetWorkItemSavedView. Our list " +
 				"publishes no filters and its card tells the caller to read them by ID for the same reason.",
 		},
-	}, workItemShapes("WorkItemsService.GetWorkItem", "data.namespace.workItem"),
+	}, securityShapes(), workItemShapes("WorkItemsService.GetWorkItem", "data.namespace.workItem"),
 		workItemShapes("WorkItemsService.CreateWorkItem", "data.workItemCreate.workItem"),
 		workItemShapes("WorkItemsService.UpdateWorkItem", "data.workItemUpdate.workItem"))
 }

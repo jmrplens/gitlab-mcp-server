@@ -662,11 +662,12 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 }
 
 // TestHandlers_ReturnErrorOnMalformedGraphQLIDs verifies that malformed GraphQL
-// global IDs in security category responses fail during output conversion.
+// global IDs in security category responses fail rather than convert.
 //
 // The mock replaces valid category or attribute GIDs with invalid strings and
-// expects parse-specific errors. This protects callers from receiving outputs
-// with ambiguous numeric IDs.
+// expects the error client-go returns when it cannot decode one, naming the
+// value it refused. This protects callers from receiving outputs with
+// ambiguous numeric IDs.
 func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -676,12 +677,12 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 		{
 			name:    "category id",
 			payload: strings.Replace(sampleCategory, "gid://gitlab/Security::Category/7", "bad-category-id", 1),
-			want:    "parse security category id",
+			want:    `invalid global ID format: "bad-category-id"`,
 		},
 		{
 			name:    "attribute id",
 			payload: strings.Replace(sampleCategory, "gid://gitlab/Security::Attribute/9", "bad-attribute-id", 1),
-			want:    "parse security attribute id",
+			want:    `invalid global ID format: "bad-attribute-id"`,
 		},
 	}
 
@@ -1049,14 +1050,15 @@ func TestFormatOutputMarkdown_NoName(t *testing.T) {
 	}
 }
 
-// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies nil GraphQL nodes
-// convert to zero-value category outputs without panicking.
+// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies a nil category
+// client-go decoded converts to a zero-value category output without
+// panicking.
 //
 // The helper should return an empty category output and no attributes, keeping
 // defensive conversion behavior stable for partial GraphQL responses.
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
-	if out, err := categoryNodeOutput(nil); err != nil || out.ID != 0 || len(out.SecurityAttributes) != 0 {
-		t.Fatalf("categoryNodeOutput(nil) = %#v", out)
+	if out := categoryOutput(nil); out.ID != 0 || len(out.SecurityAttributes) != 0 {
+		t.Fatalf("categoryOutput(nil) = %#v", out)
 	}
 }
 
