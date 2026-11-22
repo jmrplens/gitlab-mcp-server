@@ -274,8 +274,9 @@ describe("escapes", () => {
 	test("an escaped angle bracket is text, not a tag", () => {
 		assert.equal(
 			reduce("Set GITLAB_MCP_\\<NAME\\> and \\<Aside\\>."),
-			"Set GITLAB_MCP_<NAME> and <Aside>.",
+			"Set GITLAB_MCP_\\<NAME> and \\<Aside>.",
 		);
+		assert.equal(reduce("GitLab \\< 14 only."), "GitLab < 14 only.");
 	});
 
 	test("an escaped brace is text, not an expression", () => {

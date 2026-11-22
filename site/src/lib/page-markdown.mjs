@@ -1127,9 +1127,13 @@ function reduceMasked(page) {
 		);
 	}
 	// MDX's escapes for characters it would otherwise read as syntax, now that
-	// nothing reads syntax any more: `\{` and `\}` around an expression,
-	// `\<` and `\>` around a tag.
-	markdown = markdown.replace(/\\([{}<>])/g, "$1");
+	// nothing reads syntax any more: `\{` and `\}` around an expression, and
+	// `\>`. The twin keeps the backslash of `\<` where the `<` would open a
+	// tag (`\<id>`), because a markdown renderer reads `<id>` as HTML and drops
+	// the placeholder; a `<` no tag can start with is unescaped.
+	markdown = markdown
+		.replace(/\\([{}>])/g, "$1")
+		.replace(/\\<(?![A-Za-z/!?])/g, "<");
 	const reduced = unmask(tidy(collapseTables(markdown))).trim();
 	if (!reduced) throw new Error(`${page.file}: nothing left after reduction`);
 	return reduced;
