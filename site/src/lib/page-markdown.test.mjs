@@ -148,6 +148,19 @@ describe("components", () => {
 		);
 	});
 
+	// An <Aside> is a blockquote by the time directives are read, and a page
+	// may quote one itself, so a directive there opens behind `> `.
+	test("a directive inside an aside or a blockquote fails like any other", () => {
+		assert.throws(
+			() => reduce("<Aside>\n:::details[Open]\nHidden.\n:::\n</Aside>"),
+			/no markdown reduction for the directive ":::details\[Open\]"/,
+		);
+		assert.throws(
+			() => reduce("> :::details[Open]\n> Hidden.\n> :::"),
+			/no markdown reduction for the directive ":::details\[Open\]"/,
+		);
+	});
+
 	test("a failure shows the page's code spans, never their masked form", () => {
 		assert.throws(
 			() => reduce("[A `b`](/elsewhere/) {stats.`x`}"),
