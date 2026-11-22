@@ -99,6 +99,11 @@ type Output struct {
 	CreatedAt     string `json:"created_at,omitempty"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
 	ExpireAt      string `json:"expire_at,omitempty"`
+	// SigningMethod is how the attestation was signed, sigstore or local_ca,
+	// which lib/api/entities/supply_chain/attestation.rb sends from 19.6 and
+	// client-go's Attestation does not model, read from the captured
+	// response (ADR-0021).
+	SigningMethod string `json:"signing_method,omitempty"`
 }
 
 // ListOutput holds one page of the list response.
@@ -155,6 +160,7 @@ func toOutput(a *gl.Attestation) Output {
 // instance that has not enabled the flag, which is every self-managed one by
 // default.
 func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListOutput, error) {
+	const op = "list attestations"
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
@@ -168,18 +174,25 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if err != nil {
 		return ListOutput{}, err
 	}
-	atts, resp, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), digest, gl.WithContext(ctx), toolutil.PaginationRequestOption(in.PaginationInput))
+	listCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	atts, resp, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), digest, gl.WithContext(listCtx), toolutil.PaginationRequestOption(in.PaginationInput))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			if _, _, projectErr := client.GL().Projects.GetProject(in.ProjectID.String(), nil, gl.WithContext(ctx)); projectErr == nil {
-				return ListOutput{}, toolutil.WrapErrWithHint("list attestations", err, featureOffHint)
+				return ListOutput{}, toolutil.WrapErrWithHint(op, err, featureOffHint)
 			}
 		}
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(op, err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
+	}
+	extras, err := toolutil.CapturedAttestations(captured, len(atts))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts)), Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, a := range atts {
-		out.Attestations = append(out.Attestations, toOutput(a))
+	for i, a := range atts {
+		o := toOutput(a)
+		o.SigningMethod = extras[i].SigningMethod
+		out.Attestations = append(out.Attestations, o)
 	}
 	return out, nil
 }

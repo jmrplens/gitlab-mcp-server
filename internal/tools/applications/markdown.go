@@ -47,6 +47,14 @@ func formatApplicationDetail(heading string, item ApplicationItem, secretLabel s
 	c.Bool("Confidential", item.Confidential)
 	c.Secret(secretLabel, item.Secret)
 	c.Field("Scopes", strings.Join(item.Scopes, ", "))
+	// The warnings GitLab raised about the granular scopes of a new
+	// application, which only the create answer carries.
+	if len(item.Warnings) > 0 {
+		table := c.Table("Warnings", "Message")
+		for _, warning := range item.Warnings {
+			table.Row(toolutil.EscapeMdTableCell(warning))
+		}
+	}
 	c.End(hints...)
 	return sb.String()
 }

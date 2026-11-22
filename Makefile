@@ -2818,12 +2818,16 @@ gen-graphql-schema:
 ## the release's tag (the graphql-schema-dump job), so it needs the network and
 ## no Docker; RELEASE_SCHEMA_FROM names a dump on disk instead, written by
 ## `bundle exec rake gitlab:graphql:schema:dump` at the tag once GitLab no
-## longer keeps the job's artifact. Run it whenever gen-api-live moves the REST
-## record to another release: check-graphql-schema refuses the two naming
-## different releases.
+## longer keeps the job's artifact. RELEASE_SCHEMA_JOB names a
+## graphql-schema-dump job by its ID instead, for a tag whose pipeline failed
+## elsewhere, which leaves its jobs/artifacts address answering 404 while the
+## dump job passed; the pin records that job's URL. Run it whenever
+## gen-api-live moves the REST record to another release: check-graphql-schema
+## refuses the two naming different releases.
 RELEASE_SCHEMA_FROM ?=
+RELEASE_SCHEMA_JOB ?=
 gen-graphql-release-schema:
-	go run ./cmd/gen_graphql_schema/ -release $(if $(RELEASE_SCHEMA_FROM),-from "$(RELEASE_SCHEMA_FROM)")
+	go run ./cmd/gen_graphql_schema/ -release $(if $(RELEASE_SCHEMA_FROM),-from "$(RELEASE_SCHEMA_FROM)") $(if $(RELEASE_SCHEMA_JOB),-job "$(RELEASE_SCHEMA_JOB)")
 
 ## check-graphql-schema: fail when either committed schema does not parse or
 ## its provenance record does not decode; when the gitlab.com pin is not of what

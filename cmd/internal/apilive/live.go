@@ -42,7 +42,15 @@ import (
 // pagination says; in version 4 the same absence meant "not recorded". A
 // reader taking a version 4 record for version 5 would call every keyset
 // route an offset one.
-const SchemaVersion = 5
+//
+// Version 6 records [Directive.ParentAuthorizes] and
+// [TodoSet.ParentAuthorizes]. From GitLab 19.6 a type skipped with the
+// parent_authorizes reason names permissions that every field returning it
+// without a directive of its own checks on its parent's boundary; in version
+// 5 the same skip required nothing. A reader taking a version 6 record for
+// version 5 would judge those fields as checking nothing, and list actions
+// for a grant GitLab refuses.
+const SchemaVersion = 6
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"

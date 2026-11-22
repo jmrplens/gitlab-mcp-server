@@ -14,7 +14,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
-// roleCaptureBody is one member role carrying all twenty-five keys, with
+// roleCaptureBody is one member role carrying all twenty-eight keys, with
 // alternating values so a reader that mapped two fields to one key would show
 // the wrong answer rather than the same one twice.
 const roleCaptureBody = `{
@@ -43,7 +43,10 @@ const roleCaptureBody = `{
 	"read_security_scan_profiles": false,
 	"read_virtual_registry": true,
 	"update_sec_ai_workflow_settings": false,
-	"update_security_scan_profiles": true
+	"update_security_scan_profiles": true,
+	"archive_subgroup": false,
+	"pull_container_image": true,
+	"push_container_image": false
 }`
 
 // capturedRolePermissions pairs each key with the field it must have landed
@@ -75,6 +78,9 @@ func capturedRolePermissions(extra roleExtra) map[string]*bool {
 		"read_virtual_registry":           extra.ReadVirtualRegistry,
 		"update_sec_ai_workflow_settings": extra.UpdateSecAIWorkflowSettings,
 		"update_security_scan_profiles":   extra.UpdateSecurityScanProfiles,
+		"archive_subgroup":                extra.ArchiveSubgroup,
+		"pull_container_image":            extra.PullContainerImage,
+		"push_container_image":            extra.PushContainerImage,
 	}
 }
 
@@ -106,10 +112,13 @@ var wantRolePermissions = map[string]bool{
 	"read_virtual_registry":           true,
 	"update_sec_ai_workflow_settings": false,
 	"update_security_scan_profiles":   true,
+	"archive_subgroup":                false,
+	"pull_container_image":            true,
+	"push_container_image":            false,
 }
 
 // TestCapturedRole_ReadsEveryPermissionTheEntitySends drives the reader over a
-// body carrying all twenty-five keys and checks each lands on its own field
+// body carrying all twenty-eight keys and checks each lands on its own field
 // with the value the body gave it.
 func TestCapturedRole_ReadsEveryPermissionTheEntitySends(t *testing.T) {
 	extra, err := capturedRole(gitlabclient.CapturedBody([]byte(roleCaptureBody)))

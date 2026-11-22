@@ -497,6 +497,98 @@ func TestGetGroupBoardList_Success(t *testing.T) {
 	}
 }
 
+// TestGroupBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer verifies the
+// status of a status list, which client-go's BoardList does not model, is
+// read off the captured answer by the four list handlers and a board's own
+// lists.
+func TestGroupBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T) {
+	const statusList = `{"id":10,"position":0,"label":null,"status":{"id":2,"name":"In progress",` +
+		`"icon_name":"status-running","color":"#1f75cb","position":0,"description":"Being worked on","category":"in_progress"}}`
+	want := &toolutil.WorkItemStatusOutput{
+		ID: 2, Name: "In progress", IconName: "status-running", Color: "#1f75cb",
+		Description: "Being worked on", Category: "in_progress",
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, statusList)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+statusList+`]`)
+	})
+	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, statusList)
+	})
+	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Dev","lists":[`+statusList+`]}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	group := toolutil.StringOrInt("42")
+
+	handlers := []struct {
+		name string
+		call func(context.Context) (BoardListOutput, error)
+	}{
+		{"list", func(ctx context.Context) (BoardListOutput, error) {
+			out, err := ListGroupBoardLists(ctx, client, ListGroupBoardListsInput{GroupID: group, BoardID: 1})
+			if err != nil || len(out.Lists) != 1 {
+				return BoardListOutput{}, fmt.Errorf("ListGroupBoardLists answered %d columns, want 1: %w", len(out.Lists), err)
+			}
+			return out.Lists[0], nil
+		}},
+		{"get", func(ctx context.Context) (BoardListOutput, error) {
+			return GetGroupBoardList(ctx, client, GetGroupBoardListInput{GroupID: group, BoardID: 1, ListID: 10})
+		}},
+		{"create", func(ctx context.Context) (BoardListOutput, error) {
+			return CreateGroupBoardList(ctx, client, CreateGroupBoardListInput{GroupID: group, BoardID: 1, LabelID: 20})
+		}},
+		{"update", func(ctx context.Context) (BoardListOutput, error) {
+			return UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: group, BoardID: 1, ListID: 10, Position: 1})
+		}},
+		{"a board's lists", func(ctx context.Context) (BoardListOutput, error) {
+			out, err := GetGroupBoard(ctx, client, GetGroupBoardInput{GroupID: group, BoardID: 1})
+			if err != nil || len(out.Lists) != 1 {
+				return BoardListOutput{}, fmt.Errorf("GetGroupBoard answered %d columns, want 1: %w", len(out.Lists), err)
+			}
+			return out.Lists[0], nil
+		}},
+	}
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			got, err := handler.call(t.Context())
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got.Status, want) {
+				t.Errorf("status = %+v, want %+v", got.Status, want)
+			}
+		})
+	}
+}
+
+// TestGroupBoardLists_AStatusTheTypeCannotHold_IsReported verifies each
+// list handler reports a status that arrives in a shape the extra cannot
+// hold rather than publishing the list without it.
+func TestGroupBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":10,"status":"in_progress"}`
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/boards/1/lists" {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListGroupBoardLists(t.Context(), client, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := GetGroupBoardList(t.Context(), client, GetGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10})
+			return err
+		}},
+	})
+}
+
 // TestGetGroupBoardList_MissingParams verifies that GetGroupBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

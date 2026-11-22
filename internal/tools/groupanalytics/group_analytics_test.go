@@ -96,6 +96,72 @@ func runCountHandlerCases(t *testing.T, handler countHandler) {
 	}
 }
 
+// TestCountHandlers_ACountTooLargeToCalculate_SaysSo verifies the too_large
+// key 19.6 sends beside a null count is published by each of the three
+// handlers, and is absent from an answer that counted, so a 0 the SDK reads
+// off the null is never the whole answer.
+func TestCountHandlers_ACountTooLargeToCalculate_SaysSo(t *testing.T) {
+	calls := map[string]func(context.Context, *gitlabclient.Client) (*bool, error){
+		"issues_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetIssuesCount(ctx, c, IssuesCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+		"merge_requests_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetMRCount(ctx, c, MRCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+		"new_members_count": func(ctx context.Context, c *gitlabclient.Client) (*bool, error) {
+			out, err := GetMembersCount(ctx, c, MembersCountInput{GroupPath: "g"})
+			return out.TooLarge, err
+		},
+	}
+	for key, call := range calls {
+		for _, tc := range []struct {
+			name string
+			body string
+			want bool
+		}{
+			{"too large", `{"` + key + `":null,"too_large":true}`, true},
+			{"counted", `{"` + key + `":3}`, false},
+		} {
+			t.Run(key+"/"+tc.name, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+				}))
+				got, err := call(t.Context(), client)
+				if err != nil {
+					t.Fatalf("handler error = %v", err)
+				}
+				if (got != nil && *got) != tc.want || (got == nil) == tc.want {
+					t.Errorf("too_large = %v, want present and true: %v", got, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// TestCountHandlers_ATooLargeTheTypeCannotHold_IsReported verifies each count
+// handler reports a too_large in a shape the extra cannot hold.
+func TestCountHandlers_ATooLargeTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"too_large":"yes"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "issues", Call: func() error {
+			_, err := GetIssuesCount(t.Context(), client, IssuesCountInput{GroupPath: "g"})
+			return err
+		}},
+		{Name: "merge requests", Call: func() error {
+			_, err := GetMRCount(t.Context(), client, MRCountInput{GroupPath: "g"})
+			return err
+		}},
+		{Name: "members", Call: func() error {
+			_, err := GetMembersCount(t.Context(), client, MembersCountInput{GroupPath: "g"})
+			return err
+		}},
+	})
+}
+
 func countBody(key string, count int64) string {
 	return fmt.Sprintf(`{"%s":%d}`, key, count)
 }
@@ -177,6 +243,59 @@ func TestFormatIssuesCountMarkdown(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertAnalyticsCard(t, FormatIssuesCountMarkdown(tt.input), tt.want)
+		})
+	}
+}
+
+// TestFormatCountMarkdown_ACountTooLargeToCalculate_SaysItIsUnknown verifies
+// each of the three cards says GitLab could not count when the answer carries
+// too_large, in place of the 0 the SDK reads off the null count, so a reader
+// of the text is not told the group had no activity; a too_large GitLab sent
+// as false leaves the count as it was.
+func TestFormatCountMarkdown_ACountTooLargeToCalculate_SaysItIsUnknown(t *testing.T) {
+	yes, no := true, false
+	const unknown = "unknown, GitLab could not count it within its time limit"
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "issues too large",
+			got:  FormatIssuesCountMarkdown(IssuesCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **Issues Count (last 90 days)**: " + unknown + "\n" +
+				issuesCountHints,
+		},
+		{
+			name: "merge requests too large",
+			got:  FormatMRCountMarkdown(MRCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Created Merge Requests Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **Merge Requests Count (last 90 days)**: " + unknown + "\n" +
+				mrCountHints,
+		},
+		{
+			name: "members too large",
+			got:  FormatMembersCountMarkdown(MembersCountOutput{GroupPath: "big", TooLarge: &yes}),
+			want: "## Recently Added Members Count\n\n" +
+				"- **Group**: `big`\n" +
+				"- **New Members Count (last 90 days)**: " + unknown + "\n" +
+				membersCountHints,
+		},
+		{
+			name: "too_large sent as false",
+			got:  FormatIssuesCountMarkdown(IssuesCountOutput{GroupPath: "g", IssuesCount: 4, TooLarge: &no}),
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `g`\n" +
+				"- **Issues Count (last 90 days)**: 4\n" +
+				issuesCountHints,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertAnalyticsCard(t, tt.got, tt.want)
 		})
 	}
 }

@@ -81,6 +81,51 @@ func TestReleaseCreate_Success(t *testing.T) {
 	}
 }
 
+// TestReleaseCreate_EvidenceWarnings_ArePublished verifies the warnings 19.6
+// adds to a create answer, which client-go's Release does not model, are read
+// off the captured response, and that an answer without them publishes none.
+func TestReleaseCreate_EvidenceWarnings_ArePublished(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "with warnings",
+			body: `{"tag_name":"v1.2.0","warnings":["No evidence was collected for this release."]}`,
+			want: []string{"No evidence was collected for this release."},
+		},
+		{name: "without", body: `{"tag_name":"v1.2.0"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusCreated, tc.body)
+			}))
+			out, err := Create(t.Context(), client, CreateInput{ProjectID: "42", TagName: testTagV120})
+			if err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(out.Warnings, tc.want) {
+				t.Errorf("warnings = %q, want %q", out.Warnings, tc.want)
+			}
+		})
+	}
+}
+
+// TestReleaseCreate_AWarningTheTypeCannotHold_IsReported verifies the create
+// reports captured warnings in a shape the extra cannot hold.
+func TestReleaseCreate_AWarningTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"tag_name":"v1.2.0","warnings":"one"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", TagName: testTagV120})
+			return err
+		}},
+	})
+}
+
 // TestReleaseCreate_MissingTag verifies that Create returns an error
 // when the specified tag does not exist. The mock returns a 404 response.
 func TestReleaseCreate_MissingTag(t *testing.T) {
@@ -775,6 +820,30 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 
 	if got != want {
 		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_EvidenceWarnings_AreShownInTheText pins the warnings
+// GitLab 19.6 adds to a create answer in the card, one row each and escaped,
+// so a client that reads only the text is told the release's evidence was
+// not collected as well as one that reads structuredContent.
+func TestFormatMarkdown_EvidenceWarnings_AreShownInTheText(t *testing.T) {
+	got := FormatMarkdown(Output{
+		TagName:  "v1.2.0",
+		Name:     "Warned",
+		Warnings: []string{"No evidence was collected for this release.", "a | b"},
+	})
+
+	want := "## Release: Warned\n\n" +
+		"- **Tag**: v1.2.0\n" +
+		"\n### Warnings\n\n" +
+		"| Message |\n| --- |\n" +
+		"| No evidence was collected for this release. |\n" +
+		"| a &#124; b |\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 

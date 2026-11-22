@@ -50,35 +50,16 @@ type releaseDeclaration struct {
 	Reason string
 }
 
-// orbitPackage is where the Orbit documents live.
-const orbitPackage = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit"
-
-// orbitQueryFields and orbitNamespaceFields name what each Orbit document asks
-// of a schema that no self-managed release has.
-const (
-	orbitQueryFields     = "Query.orbit"
-	orbitNamespaceFields = "OrbitNamespace.enabled, access, trial and indexing"
-)
-
-// orbitReason is why the release refuses every Orbit document and why that is
-// right. TestReleaseDeclarations_OrbitDocuments_BelongToGitLabDotComOnlyActions
-// holds the claim about the actions to the catalog.
-func orbitReason(fields string) string {
-	return "Orbit is served by GitLab.com alone: no self-managed release has " + fields + ", and every Orbit " +
-		"action is declared GitLabDotComOnly, so the catalog offers none of them to a session on another " +
-		"instance and this document is never sent to one. The gitlab.com pin, which is the schema of the " +
-		"only instance that answers it, judges it."
-}
-
 // releaseDeclarations are the documents the release pin refuses on purpose.
+//
+// It is empty from the 19.6 pin on. The five Orbit documents were the only
+// entries while the release had no Query.orbit and no OrbitNamespace; GitLab
+// 19.6.1-ee's schema carries both, so it accepts every document of this
+// repository, and a declaration here would answer nothing, which the stale
+// check refuses. The Orbit actions stay GitLabDotComOnly: the schema having
+// the fields is not an instance serving the Knowledge Graph.
 func releaseDeclarations() []releaseDeclaration {
-	return []releaseDeclaration{
-		{Package: orbitPackage, Document: "queryServiceStatus", Reason: orbitReason(orbitQueryFields)},
-		{Package: orbitPackage, Document: "querySchema", Reason: orbitReason(orbitQueryFields)},
-		{Package: orbitPackage, Document: "queryGraphStatusByPath", Reason: orbitReason(orbitNamespaceFields)},
-		{Package: orbitPackage, Document: "queryGraphStatusByGroupID", Reason: orbitReason(orbitNamespaceFields)},
-		{Package: orbitPackage, Document: "queryGraphStatusByProjectID", Reason: orbitReason(orbitNamespaceFields)},
-	}
+	return nil
 }
 
 // releaseVerdict is what the release pass found.

@@ -68,7 +68,7 @@ type permissionRow struct {
 
 // permissionRows is every customizable permission a member role can carry, in
 // the order the table prints them: the twenty client-go models, then the
-// twenty-five read from the captured response.
+// twenty-eight read from the captured response.
 //
 // A table rather than a run of calls because the second half grows whenever
 // GitLab adds a customizable permission, which is most releases, and a list is
@@ -120,6 +120,9 @@ func permissionRows(o Output) []permissionRow {
 		{"Read Virtual Registry", o.ReadVirtualRegistry},
 		{"Update Security AI Workflow Settings", o.UpdateSecAIWorkflowSettings},
 		{"Update Security Scan Profiles", o.UpdateSecurityScanProfiles},
+		{"Archive Subgroup", o.ArchiveSubgroup},
+		{"Pull Container Image", o.PullContainerImage},
+		{"Push Container Image", o.PushContainerImage},
 	}
 }
 

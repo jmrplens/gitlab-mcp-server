@@ -150,12 +150,14 @@ func securitySentDeclarations() []sentDeclaration {
 			Field:      "crashState",
 			Category:   categoryNewerThanFloor,
 			Reason: "crashState (the minimized and normalized stack trace of a coverage fuzzing crash) was added in GitLab " +
-				"19.6 by gitlab-org/gitlab!264173, merged on 2026-10-23: the pin of 2026-10-29 has it and the " +
-				"schema of GitLab 19.5.0 does not. GitLab refuses a whole document that names a field it does not " +
-				"have, and the location selection is spliced into the vulnerability list, get and four state " +
-				"changes (served from 18.10) and the security finding list (served from 18.5), so selecting it " +
-				"stopped all seven actions on every release up to 19.5, as the Enterprise end-to-end run against " +
-				"19.5.3 showed. The stack trace a fuzzing location carries is published as stacktrace_snippet.",
+				"19.6 by gitlab-org/gitlab!264173, merged on 2026-10-23: the release pin has it since 19.6.1 " +
+				"(dump job 18210278050) and the schema of GitLab 19.5.0 does not, and it stays out while the floor " +
+				"the location selection is held to (locationSelectionFloor in internal/toolutil) is 19.5. GitLab " +
+				"refuses a whole document that names a field it does not have, and the location selection is " +
+				"spliced into the vulnerability list, get and four state changes (served from 18.10) and the " +
+				"security finding list (served from 18.5), so selecting it stopped all seven actions on every " +
+				"release up to 19.5, as the Enterprise end-to-end run against 19.5.3 showed. The stack trace a " +
+				"fuzzing location carries is published as stacktrace_snippet.",
 		},
 		{
 			Package:    toolutilDir,

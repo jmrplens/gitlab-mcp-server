@@ -5483,6 +5483,44 @@ func TestGet_DuoCodeReviewDecisionsEnabled_KeepsUnsentApartFromOff(t *testing.T)
 	}
 }
 
+// TestGet_DuoSettingsOf19_6_AreReadOffTheCapture verifies the three project
+// settings ee/lib/ee/api/entities/project.rb sends from 19.6, which client-go's
+// Project does not model, reach the output each from its own key, and stay
+// absent on an answer that carries none.
+func TestGet_DuoSettingsOf19_6_AreReadOffTheCapture(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		payload  string
+		allowed  *bool
+		depth    *string
+		schedule *bool
+	}{
+		{"sent", `{"id":42,"duo_code_review_depth_allowed":true,"duo_code_review_default_depth":"lite",` +
+			`"duo_scheduled_automations_enabled":false}`, new(true), new("lite"), new(false)},
+		{"not sent", `{"id":42}`, nil, nil, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(out.DuoCodeReviewDepthAllowed, tt.allowed) ||
+				!reflect.DeepEqual(out.DuoCodeReviewDefaultDepth, tt.depth) ||
+				!reflect.DeepEqual(out.DuoScheduledAutomationsEnabled, tt.schedule) {
+				t.Errorf("settings = %v, %v, %v; want %v, %v, %v", out.DuoCodeReviewDepthAllowed, out.DuoCodeReviewDefaultDepth,
+					out.DuoScheduledAutomationsEnabled, tt.allowed, tt.depth, tt.schedule)
+			}
+		})
+	}
+}
+
 // TestUpdate_AutomaticRebaseEnabled_ReachesTheOptionOnlyWhenGiven verifies the
 // automatic rebase setting is sent as the caller gave it, false included, and
 // left out of the options when the caller did not name it, so an update of

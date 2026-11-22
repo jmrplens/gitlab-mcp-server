@@ -48,9 +48,15 @@ type genRun struct {
 	// from names a schema dump already on disk, read instead of downloading
 	// the one GitLab's CI published for the release's tag.
 	from string
-	// dumpBase is where the release tag's dump is downloaded from, as a
-	// field so a test can point it at a server of its own.
+	// job names the graphql-schema-dump job whose dump to download by its ID
+	// instead of the tag's latest successful one, recorded as its URL like
+	// the tag's and not as a file.
+	job string
+	// dumpBase is where the release tag's dump is downloaded from, and
+	// jobBase where one job's is, as fields so a test can point them at a
+	// server of its own.
 	dumpBase string
+	jobBase  string
 	// dumpLimit bounds that download or the file from names, maxDumpBytes
 	// when zero, as a field so a test can reach the refusal without 64 MiB.
 	dumpLimit int64
@@ -75,8 +81,9 @@ func main() {
 	release := flag.Bool("release", false, "pin, or with -check judge, the schema of the GitLab release the REST record is taken from instead of gitlab.com's")
 	apiLiveDir := flag.String("api-live-dir", apilive.DefaultDir, "directory holding the REST record that names the release")
 	from := flag.String("from", "", "with -release and without -check, a schema dump on disk to read instead of the one GitLab's CI published for the release tag")
+	job := flag.String("job", "", "with -release and without -check, the ID of the graphql-schema-dump job whose dump to download instead of the release tag's latest successful one")
 	flag.Parse()
-	if err := fromFlagProblem(*from, *release, *check); err != nil {
+	if err := sourceFlagProblem(*from, *job, *release, *check); err != nil {
 		fmt.Fprintln(os.Stderr, prefix, err)
 		osExit(2)
 		return
@@ -102,7 +109,9 @@ func main() {
 		release:    *release,
 		apiLiveDir: *apiLiveDir,
 		from:       *from,
+		job:        *job,
 		dumpBase:   defaultDumpBase,
+		jobBase:    defaultJobBase,
 	}, os.Stdout, os.Stderr))
 }
 

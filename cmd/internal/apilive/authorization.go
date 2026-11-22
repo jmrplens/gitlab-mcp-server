@@ -389,13 +389,48 @@ type Directive struct {
 	RequirementGroup string   `json:"requirement_group,omitempty"`
 	AssignableWhen   []string `json:"assignable_when,omitempty"`
 	SkipReason       string   `json:"skip_reason,omitempty"`
+	// ParentAuthorizes are the permissions a type skipped with the
+	// parent_authorizes reason declares (GitLab 19.6 on): every field without a
+	// directive of its own that returns the type checks them on the boundary
+	// its parent's directives locate (Types::BaseField#parent_authorizes_check).
+	// Empty on a skip that declares none, which nothing checks.
+	ParentAuthorizes []string `json:"parent_authorizes,omitempty"`
 	UnknownKeys      []string `json:"unknown_keys,omitempty"`
+}
+
+// SkipParentAuthorizes is the skip reason under which a type's
+// [Directive.ParentAuthorizes] are checked on the fields that return it.
+const SkipParentAuthorizes = "parent_authorizes"
+
+// ParentPermissions are the permissions a set of directives declares for the
+// fields returning its type to check, sorted, as
+// Types::BaseField#declared_parent_permissions reads them: those of the first
+// skip directive, and nil when it declares none.
+func ParentPermissions(directives []Directive) []string {
+	for _, directive := range directives {
+		if directive.SkipReason == "" {
+			continue
+		}
+		if len(directive.ParentAuthorizes) == 0 {
+			return nil
+		}
+		return slices.Sorted(slices.Values(directive.ParentAuthorizes))
+	}
+	return nil
 }
 
 // TodoSet is a set of type and mutation names.
 type TodoSet struct {
 	Types     []string `json:"types"`
 	Mutations []string `json:"mutations"`
+	// ParentAuthorizes are the types skipped with parent_authorizes that
+	// declare no permissions although a field on a checked type returns them,
+	// the pending list's parent_authorizes: entries (GitLab 19.6 on). On the
+	// rule side of [GraphQLAuthz.UndeclaredByTodoRule] they are what the
+	// image's own Tasks::Gitlab::Permissions::Graphql::ParentAuthorizesCheck
+	// reports, not a set derived here, so the comparison holds the list to
+	// GitLab's checker.
+	ParentAuthorizes []string `json:"parent_authorizes,omitempty"`
 }
 
 // Todo is GitLab's config/authz/graphql/authorization_todo.txt as the image

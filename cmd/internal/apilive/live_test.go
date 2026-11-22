@@ -127,7 +127,7 @@ func fullRecord() Document {
 				Granular: []Directive{{
 					Permissions: []string{"read_work_item"}, BoundaryType: "project", Boundary: "project",
 					BoundaryArgument: "full_path", RequirementGroup: "second", AssignableWhen: []string{"saas"},
-					SkipReason: "parent_authorizes", UnknownKeys: []string{"weight"},
+					SkipReason: "parent_authorizes", ParentAuthorizes: []string{"read_note"}, UnknownKeys: []string{"weight"},
 				}},
 				ObjectFields: map[string]ObjectField{"author": {Type: "UserCore", Connection: true}},
 			}},
@@ -137,13 +137,16 @@ func fullRecord() Document {
 				Granular:      []Directive{{Permissions: []string{"create_work_item"}}},
 				FieldGranular: []Directive{{Permissions: []string{"update_work_item"}}},
 			}},
-			Fields:               map[string][]Directive{"Issue.createNoteEmail": {{Permissions: []string{"create_note"}}}},
-			UndeclaredByTodoRule: TodoSet{Types: []string{"Namespace"}, Mutations: []string{"AiAction"}},
+			Fields: map[string][]Directive{"Issue.createNoteEmail": {{Permissions: []string{"create_note"}}}},
+			UndeclaredByTodoRule: TodoSet{
+				Types: []string{"Namespace"}, Mutations: []string{"AiAction"}, ParentAuthorizes: []string{"AccessLevel"},
+			},
 			Todo: &Todo{
-				Digest:         "sha256:feedface",
-				Types:          []string{"PageInfo"},
-				Mutations:      []string{"BoardEpicCreate"},
-				UnknownEntries: []string{"widget:Thing"},
+				Digest:           "sha256:feedface",
+				Types:            []string{"PageInfo"},
+				Mutations:        []string{"BoardEpicCreate"},
+				ParentAuthorizes: []string{"Blame"},
+				UnknownEntries:   []string{"widget:Thing"},
 			},
 		},
 		KeysetPaginators: map[string][]string{ProbedCursorPager: {"cursor"}, ProbedGitalyKeysetPager: {"page_token"}},
@@ -611,7 +614,7 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
 	}
 
 	want := `{
- "schema_version": 5,
+ "schema_version": 6,
  "note": "taken from a booted instance, not from its source",
  "source": {
   "image": "gitlab/gitlab-ee:19.3.1-ee.0",
@@ -843,6 +846,9 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
        "saas"
       ],
       "skip_reason": "parent_authorizes",
+      "parent_authorizes": [
+       "read_note"
+      ],
       "unknown_keys": [
        "weight"
       ]
@@ -900,6 +906,9 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
    ],
    "mutations": [
     "AiAction"
+   ],
+   "parent_authorizes": [
+    "AccessLevel"
    ]
   },
   "todo": {
@@ -909,6 +918,9 @@ func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
    ],
    "mutations": [
     "BoardEpicCreate"
+   ],
+   "parent_authorizes": [
+    "Blame"
    ],
    "unknown_entries": [
     "widget:Thing"

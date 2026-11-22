@@ -30,7 +30,11 @@
 // pin read with -from records that it came from a file, and the release and
 // revision it records are the REST record's, taken on its word rather than
 // checked against the file. -from is refused beside --check, which reads only
-// the committed pair and would report it sound with the file unread.
+// the committed pair and would report it sound with the file unread. -job
+// names one graphql-schema-dump job by its ID instead of the tag's latest
+// successful one, for a tag whose pipeline failed in another job (v19.6.1-ee,
+// whose dump job 18210278050 passed), and the pin records that job's URL as
+// its origin, as it records the tag's.
 // cmd/audit_graphql_documents judges every
 // document against it as well, because a field gitlab.com's pre-release adds
 // is refused by every release. --check -release holds it to the REST record's
@@ -55,5 +59,6 @@
 //	go run ./cmd/gen_graphql_schema/ --check
 //	go run ./cmd/gen_graphql_schema/ -release
 //	go run ./cmd/gen_graphql_schema/ -release -from tmp/tests/graphql/gitlab_schema.graphql
+//	go run ./cmd/gen_graphql_schema/ -release -job 18210278050
 //	go run ./cmd/gen_graphql_schema/ --check -release
 package main

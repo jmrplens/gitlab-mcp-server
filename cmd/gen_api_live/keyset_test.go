@@ -218,7 +218,7 @@ func TestRunCheck_ARouteDeclaringACursorTheRecordDoesNotFollow_IsRefused(t *test
 			dir := t.TempDir()
 			writeRecordAt(t, dir, wholeEnough(), today())
 			record := readJSONFile(t, apilive.Path(dir))
-			record["schema_version"] = float64(5)
+			record["schema_version"] = float64(apilive.SchemaVersion)
 			markKeyset(t, record)
 			testCase.edit(record)
 			writeJSONFile(t, apilive.Path(dir), record)
@@ -242,7 +242,7 @@ func TestRunCheck_AVersion4RecordLabeled5_IsRefused(t *testing.T) {
 	dir := t.TempDir()
 	writeRecordAt(t, dir, wholeEnough(), today())
 	record := readJSONFile(t, apilive.Path(dir))
-	record["schema_version"] = float64(5)
+	record["schema_version"] = float64(apilive.SchemaVersion)
 	delete(record, "keyset_paginators")
 	delete(record["source"].(map[string]any), "keyset_routes")
 	for _, route := range record["routes"].([]any) {
@@ -340,6 +340,25 @@ func TestKeysetProblems_EachRule_NamesWhatItRefuses(t *testing.T) {
 					"nobody could read the code that serves the page",
 				"1 keyset sites name no parameter their next page is asked by (GET /api/:version/fixture/5 " +
 					"lib/api/fixture.rb:105): a reader could not say what to send back",
+			},
+		},
+		{
+			name: "a cursor request context recorded inside the strategies helper",
+			edit: func(d *apilive.Document) {
+				d.Routes[6].Keyset = append(d.Routes[6].Keyset, apilive.KeysetSite{
+					Paginator: apilive.PaginatorCursorContext, File: apilive.StrategiesHelperFile, Line: 31,
+					Cursor: []string{"cursor"},
+				})
+				d.Routes[7].Keyset[0] = apilive.KeysetSite{
+					Paginator: apilive.PaginatorCursorContext, File: "lib/api/helpers/work_items/cursor_pagination.rb", Line: 52,
+					Cursor: []string{"cursor"},
+				}
+			},
+			want: []string{
+				"1 keyset sites are a cursor request context inside lib/api/helpers/pagination_strategies.rb " +
+					"(GET /api/:version/fixture/6 lib/api/helpers/pagination_strategies.rb:31): that context is the one " +
+					"paginate_with_strategies builds for itself, recorded at the helper's call, and recorded again it " +
+					"hands every route the helper serves a cursor its call may never be asked by",
 			},
 		},
 		{

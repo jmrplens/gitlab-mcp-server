@@ -53,6 +53,8 @@ type Output struct {
 	CreatedAt          string                    `json:"created_at,omitempty"`
 	CreatedBy          *toolutil.UserBasicOutput `json:"created_by,omitempty"`
 	JobExecutionStatus string                    `json:"job_execution_status,omitempty"`
+	// UUID is the runner's UUID, sent from 19.6 and read from the capture.
+	UUID string `json:"uuid,omitempty"`
 	// Active mirrors the deprecated gl.Runner.Active flag (use Paused instead).
 	Active bool `json:"active"`
 	// IPAddress mirrors the deprecated gl.Runner.IPAddress (empty from 17.0 on).
@@ -121,6 +123,8 @@ type DetailsOutput struct {
 	// lib/api/entities/ci/runner_details.rb sends from 19.5 to a caller allowed
 	// to read the runner's sensitive data, also read from the capture.
 	TokenExpiresAt string `json:"token_expires_at,omitempty"`
+	// UUID is the runner's UUID, sent from 19.6 and read from the capture.
+	UUID string `json:"uuid,omitempty"`
 	// Active mirrors the deprecated gl.RunnerDetails.Active flag.
 	Active bool `json:"active"`
 	// Architecture mirrors the deprecated gl.RunnerDetails.Architecture.
@@ -195,6 +199,7 @@ func toOutput(r *gl.Runner, extra toolutil.RunnerExtra) Output {
 		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
 		CreatedBy:          extra.CreatedBy,
 		JobExecutionStatus: extra.JobExecutionStatus,
+		UUID:               extra.UUID,
 	}
 	if r.TokenExpiresAt != nil {
 		out.TokenExpiresAt = r.TokenExpiresAt.Format(time.RFC3339)
@@ -230,6 +235,7 @@ func toDetailsOutput(d *gl.RunnerDetails, extra toolutil.RunnerExtra) DetailsOut
 		CreatedBy:          extra.CreatedBy,
 		JobExecutionStatus: extra.JobExecutionStatus,
 		TokenExpiresAt:     toolutil.FormatTimePtr(extra.TokenExpiresAt),
+		UUID:               extra.UUID,
 	}
 	for _, g := range d.Groups {
 		out.Groups = append(out.Groups, RunnerDetailsGroupOutput{

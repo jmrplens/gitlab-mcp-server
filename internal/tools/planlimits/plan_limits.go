@@ -50,6 +50,33 @@ type PlanLimitItem struct {
 	WebHookCallsLow                  int64         `json:"web_hook_calls_low"`
 	WebHookCallsMid                  int64         `json:"web_hook_calls_mid"`
 	LimitsHistory                    LimitsHistory `json:"limits_history,omitzero"`
+	// The nine limits the entity exposes that client-go's PlanLimit does not
+	// model, read from the captured response (ADR-0021): absent from an
+	// instance older than the limit, which sends no key for it.
+	CIPipelineVariablesCount     *int64 `json:"ci_pipeline_variables_count,omitempty"`
+	CIVariableValueSize          *int64 `json:"ci_variable_value_size,omitempty"`
+	CIVariableFileValueSize      *int64 `json:"ci_variable_file_value_size,omitempty"`
+	CIJobVariablesCount          *int64 `json:"ci_job_variables_count,omitempty"`
+	DraftNotesPerMergeRequest    *int64 `json:"draft_notes_per_merge_request,omitempty"`
+	OrganizationHooks            *int64 `json:"organization_hooks,omitempty"`
+	SwiftMaxFileSize             *int64 `json:"swift_max_file_size,omitempty"`
+	IntegrationExecutions        *int64 `json:"integration_executions,omitempty"`
+	IntegrationExecutionsDatadog *int64 `json:"integration_executions_datadog,omitempty"`
+}
+
+// planLimitExtra is what lib/api/entities/plan_limit.rb sends that client-go's
+// PlanLimit does not model, decoded from the captured answer of either plan
+// limit route.
+type planLimitExtra struct {
+	CIPipelineVariablesCount     *int64 `json:"ci_pipeline_variables_count"`
+	CIVariableValueSize          *int64 `json:"ci_variable_value_size"`
+	CIVariableFileValueSize      *int64 `json:"ci_variable_file_value_size"`
+	CIJobVariablesCount          *int64 `json:"ci_job_variables_count"`
+	DraftNotesPerMergeRequest    *int64 `json:"draft_notes_per_merge_request"`
+	OrganizationHooks            *int64 `json:"organization_hooks"`
+	SwiftMaxFileSize             *int64 `json:"swift_max_file_size"`
+	IntegrationExecutions        *int64 `json:"integration_executions"`
+	IntegrationExecutionsDatadog *int64 `json:"integration_executions_datadog"`
 }
 
 // LimitsHistory is the change history GitLab keeps for four of a plan's
@@ -95,13 +122,36 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		opts.PlanName = new(input.PlanName)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	limits, _, err := client.GL().PlanLimits.GetCurrentPlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_plan_limits", err, http.StatusForbidden, "plan limits require administrator access")
 	}
-	return GetOutput{
-		PlanLimitItem: convertPlanLimit(limits),
-	}, nil
+	item, err := capturedPlanLimit("get_plan_limits", limits, captured)
+	if err != nil {
+		return GetOutput{}, err
+	}
+	return GetOutput{PlanLimitItem: item}, nil
+}
+
+// capturedPlanLimit pairs what the SDK decoded with the limits it does not
+// model, read off the captured answer.
+func capturedPlanLimit(op string, limits *gl.PlanLimit, captured *gitlabclient.ResponseCapture) (PlanLimitItem, error) {
+	var extra planLimitExtra
+	if err := captured.Decode(&extra); err != nil {
+		return PlanLimitItem{}, toolutil.WrapErr(op, err)
+	}
+	item := convertPlanLimit(limits)
+	item.CIPipelineVariablesCount = extra.CIPipelineVariablesCount
+	item.CIVariableValueSize = extra.CIVariableValueSize
+	item.CIVariableFileValueSize = extra.CIVariableFileValueSize
+	item.CIJobVariablesCount = extra.CIJobVariablesCount
+	item.DraftNotesPerMergeRequest = extra.DraftNotesPerMergeRequest
+	item.OrganizationHooks = extra.OrganizationHooks
+	item.SwiftMaxFileSize = extra.SwiftMaxFileSize
+	item.IntegrationExecutions = extra.IntegrationExecutions
+	item.IntegrationExecutionsDatadog = extra.IntegrationExecutionsDatadog
+	return item, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -188,13 +238,16 @@ func Change(ctx context.Context, client *gitlabclient.Client, input ChangeInput)
 		WebHookCallsMid:                  input.WebHookCallsMid,
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	limits, _, err := client.GL().PlanLimits.ChangePlanLimits(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ChangeOutput{}, toolutil.WrapErrWithStatusHint("change_plan_limits", err, http.StatusForbidden, "changing plan limits requires administrator access")
 	}
-	return ChangeOutput{
-		PlanLimitItem: convertPlanLimit(limits),
-	}, nil
+	item, err := capturedPlanLimit("change_plan_limits", limits, captured)
+	if err != nil {
+		return ChangeOutput{}, err
+	}
+	return ChangeOutput{PlanLimitItem: item}, nil
 }
 
 // ---------------------------------------------------------------------------

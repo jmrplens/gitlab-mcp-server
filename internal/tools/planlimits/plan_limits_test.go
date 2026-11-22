@@ -243,6 +243,66 @@ func TestGet_OlderInstance_ReadsTheLimitsItDidNotSendAsZero(t *testing.T) {
 	}
 }
 
+// TestPlanLimitRoutes_TheLimitsClientGoDoesNotModel_AreReadOffTheCapture
+// verifies the nine limits lib/api/entities/plan_limit.rb exposes that
+// client-go's PlanLimit does not model are published by both routes, each
+// from its own key, read off the captured answer.
+func TestPlanLimitRoutes_TheLimitsClientGoDoesNotModel_AreReadOffTheCapture(t *testing.T) {
+	const body = `{"ci_pipeline_variables_count":1200,"ci_variable_value_size":131072,` +
+		`"ci_variable_file_value_size":1048576,"ci_job_variables_count":1000,"draft_notes_per_merge_request":200,` +
+		`"organization_hooks":50,"swift_max_file_size":104857600,"integration_executions":500,` +
+		`"integration_executions_datadog":3000}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	want := map[string]*int64{
+		"ci_pipeline_variables_count": new(int64(1200)), "ci_variable_value_size": new(int64(131072)),
+		"ci_variable_file_value_size": new(int64(1048576)), "ci_job_variables_count": new(int64(1000)),
+		"draft_notes_per_merge_request": new(int64(200)), "organization_hooks": new(int64(50)),
+		"swift_max_file_size": new(int64(104857600)), "integration_executions": new(int64(500)),
+		"integration_executions_datadog": new(int64(3000)),
+	}
+	got := func(item PlanLimitItem) map[string]*int64 {
+		return map[string]*int64{
+			"ci_pipeline_variables_count": item.CIPipelineVariablesCount, "ci_variable_value_size": item.CIVariableValueSize,
+			"ci_variable_file_value_size": item.CIVariableFileValueSize, "ci_job_variables_count": item.CIJobVariablesCount,
+			"draft_notes_per_merge_request": item.DraftNotesPerMergeRequest, "organization_hooks": item.OrganizationHooks,
+			"swift_max_file_size": item.SwiftMaxFileSize, "integration_executions": item.IntegrationExecutions,
+			"integration_executions_datadog": item.IntegrationExecutionsDatadog,
+		}
+	}
+	t.Run("get", func(t *testing.T) {
+		out, err := Get(t.Context(), client, GetInput{})
+		if err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		if !reflect.DeepEqual(got(out.PlanLimitItem), want) {
+			t.Errorf("limits = %+v, want %+v", got(out.PlanLimitItem), want)
+		}
+	})
+	t.Run("change", func(t *testing.T) {
+		out, err := Change(t.Context(), client, ChangeInput{PlanName: "default"})
+		if err != nil {
+			t.Fatalf(fmtUnexpErr, err)
+		}
+		if !reflect.DeepEqual(got(out.PlanLimitItem), want) {
+			t.Errorf("limits = %+v, want %+v", got(out.PlanLimitItem), want)
+		}
+	})
+}
+
+// TestPlanLimitRoutes_ALimitTheTypeCannotHold_IsReported verifies both routes
+// report a captured limit in a shape the extra cannot hold.
+func TestPlanLimitRoutes_ALimitTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"organization_hooks":"fifty"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error { _, err := Get(t.Context(), client, GetInput{}); return err }},
+		{Name: "change", Call: func() error { _, err := Change(t.Context(), client, ChangeInput{PlanName: "default"}); return err }},
+	})
+}
+
 // TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

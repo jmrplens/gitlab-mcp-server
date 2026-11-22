@@ -49,14 +49,16 @@ const (
 func TestGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"description":"my-runner","runner_type":"project_type","status":"online",`+
-			`"created_at":"2025-05-03T00:00:00.000Z","created_by":{"id":2,"username":"owner","name":"Owner","locked":false},"job_execution_status":"idle"}`)
+			`"created_at":"2025-05-03T00:00:00.000Z","created_by":{"id":2,"username":"owner","name":"Owner","locked":false},"job_execution_status":"idle",`+
+			`"uuid":"0199d6a2-3c41-7e8b-9f2a-6b5c4d3e2f06"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{RunnerID: 10})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	if out.CreatedAt != "2025-05-03T00:00:00Z" || out.CreatedBy == nil || out.CreatedBy.Username != "owner" || out.JobExecutionStatus != "idle" {
+	if out.CreatedAt != "2025-05-03T00:00:00Z" || out.CreatedBy == nil || out.CreatedBy.Username != "owner" || out.JobExecutionStatus != "idle" ||
+		out.UUID != "0199d6a2-3c41-7e8b-9f2a-6b5c4d3e2f06" {
 		t.Errorf("Get() = %+v, want the captured fields", out)
 	}
 }
@@ -98,7 +100,7 @@ func TestGet_TokenExpiresAt_IsReadOffTheCaptureWhenSent(t *testing.T) {
 // GitLab sent without it.
 func TestList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"job_execution_status":"running","created_by":{"id":2,"username":"owner"}},{"id":2,"job_execution_status":"idle"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"job_execution_status":"running","created_by":{"id":2,"username":"owner"},"uuid":"u-1"},{"id":2,"job_execution_status":"idle"}]`)
 	}))
 
 	out, err := List(context.Background(), client, ListInput{})
@@ -106,6 +108,7 @@ func TestList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
 	if len(out.Runners) != 2 || out.Runners[0].JobExecutionStatus != "running" || out.Runners[0].CreatedBy == nil ||
+		out.Runners[0].UUID != "u-1" || out.Runners[1].UUID != "" ||
 		out.Runners[1].JobExecutionStatus != "idle" || out.Runners[1].CreatedBy != nil {
 		t.Errorf("List() runners = %+v, want each paired with its captured fields", out.Runners)
 	}

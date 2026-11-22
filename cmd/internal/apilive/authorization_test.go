@@ -6,6 +6,7 @@ package apilive
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/finegrained"
@@ -231,6 +232,42 @@ func TestGraphQLType_Declared_CountsASkipAsDeclared(t *testing.T) {
 			t.Parallel()
 			if got := testCase.typ.Declared(); got != testCase.want {
 				t.Errorf("Declared() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestParentPermissions_ReadTheFirstSkipAsGitLabDoes verifies the permissions
+// a type skipped with parent_authorizes hands the fields returning it are read
+// as Types::BaseField#declared_parent_permissions reads them: from the first
+// skip directive, sorted, and none when that skip declares none.
+func TestParentPermissions_ReadTheFirstSkipAsGitLabDoes(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name       string
+		directives []Directive
+		want       []string
+	}{
+		{name: "no directive"},
+		{name: "a requirement and no skip", directives: []Directive{{Permissions: []string{"read_project"}}}},
+		{
+			name:       "a parent_authorizes skip, sorted",
+			directives: []Directive{{SkipReason: SkipParentAuthorizes, ParentAuthorizes: []string{"read_note", "read_issue"}}},
+			want:       []string{"read_issue", "read_note"},
+		},
+		{name: "a skip declaring none", directives: []Directive{{SkipReason: SkipParentAuthorizes}}},
+		{
+			name: "the first skip wins",
+			directives: []Directive{
+				{SkipReason: "not_a_resource"},
+				{SkipReason: SkipParentAuthorizes, ParentAuthorizes: []string{"read_note"}},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ParentPermissions(testCase.directives); !slices.Equal(got, testCase.want) {
+				t.Errorf("ParentPermissions() = %q, want %q", got, testCase.want)
 			}
 		})
 	}

@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -2494,5 +2496,111 @@ func TestProjectBoardReads_Refused_AccessHintFollowsThePermissionRefusal(t *test
 				}
 			})
 		}
+	}
+}
+
+// statusListJSON is a status list as 19.6 renders it, the status
+// ee/lib/ee/api/entities/list.rb adds beside the keys client-go models.
+const statusListJSON = `{"id":100,"position":0,"label":null,"status":{"id":2,"name":"In progress",` +
+	`"icon_name":"status-running","color":"#1f75cb","position":0,"description":null,"category":"in_progress"}}`
+
+// wantInProgressStatus is the status statusListJSON carries, as published.
+func wantInProgressStatus() *toolutil.WorkItemStatusOutput {
+	return &toolutil.WorkItemStatusOutput{
+		ID: 2, Name: "In progress", IconName: "status-running", Color: "#1f75cb", Category: "in_progress",
+	}
+}
+
+// TestBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer verifies the
+// status of a status list, which client-go's BoardList does not model, is
+// read off the captured answer by every handler that answers with a list:
+// the four list handlers and a board's own lists.
+func TestBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathBoardLists, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusCreated, statusListJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+statusListJSON+`]`)
+	})
+	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, statusListJSON)
+	})
+	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Dev","lists":[`+statusListJSON+`]}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	handlers := []struct {
+		name string
+		call func(context.Context) (BoardListOutput, error)
+	}{
+		{"list", func(ctx context.Context) (BoardListOutput, error) {
+			out, err := ListBoardLists(ctx, client, ListBoardListsInput{ProjectID: "10", BoardID: 1})
+			if err != nil || len(out.Lists) != 1 {
+				return BoardListOutput{}, fmt.Errorf("ListBoardLists answered %d columns, want 1: %w", len(out.Lists), err)
+			}
+			return out.Lists[0], nil
+		}},
+		{"get", func(ctx context.Context) (BoardListOutput, error) {
+			return GetBoardList(ctx, client, GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+		}},
+		{"create", func(ctx context.Context) (BoardListOutput, error) {
+			return CreateBoardList(ctx, client, CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
+		}},
+		{"update", func(ctx context.Context) (BoardListOutput, error) {
+			return UpdateBoardList(ctx, client, UpdateBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100, Position: 3})
+		}},
+		{"a board's lists", func(ctx context.Context) (BoardListOutput, error) {
+			out, err := GetBoard(ctx, client, GetBoardInput{ProjectID: "10", BoardID: 1})
+			if err != nil || len(out.Lists) != 1 {
+				return BoardListOutput{}, fmt.Errorf("GetBoard answered %d columns, want 1: %w", len(out.Lists), err)
+			}
+			return out.Lists[0], nil
+		}},
+	}
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			got, err := handler.call(t.Context())
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got.Status, wantInProgressStatus()) {
+				t.Errorf("status = %+v, want %+v", got.Status, wantInProgressStatus())
+			}
+		})
+	}
+}
+
+// TestBoardLists_AStatusTheTypeCannotHold_IsReported verifies each list
+// handler reports a status that arrives in a shape the extra cannot hold
+// rather than publishing the list without it.
+func TestBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":100,"status":"in_progress"}`
+		if r.Method == http.MethodGet && r.URL.Path == pathBoardLists {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListBoardLists(t.Context(), client, ListBoardListsInput{ProjectID: "10", BoardID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := GetBoardList(t.Context(), client, GetBoardListInput{ProjectID: "10", BoardID: 1, ListID: 100})
+			return err
+		}},
+	})
+}
+
+// TestBoardListExtraAt_ABoardWithFewerCapturedLists_ReadsAsNoStatus pins the
+// one place the board's lists and the captured ones could disagree in count.
+func TestBoardListExtraAt_ABoardWithFewerCapturedLists_ReadsAsNoStatus(t *testing.T) {
+	out := convertBoard(&gl.IssueBoard{Lists: []*gl.BoardList{{ID: 1}}}, toolutil.BoardExtra{})
+	if len(out.Lists) != 1 || out.Lists[0].Status != nil {
+		t.Errorf("lists = %+v, want one list without a status", out.Lists)
 	}
 }

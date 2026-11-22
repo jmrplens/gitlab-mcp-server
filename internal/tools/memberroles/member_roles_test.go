@@ -92,7 +92,7 @@ func TestListFormatters_SuggestOnlyTheCreateTheirScopeServes(t *testing.T) {
 }
 
 // TestMemberRoleHandlers_PublishTheCapturedPermissions verifies that the
-// twenty-five permissions API::Entities::MemberRole sends and client-go's
+// twenty-eight permissions API::Entities::MemberRole sends and client-go's
 // MemberRole does not model reach the caller through each of the four routes
 // that answer with a role, off the same bytes the SDK decoded.
 //
@@ -181,10 +181,10 @@ func firstRole(out ListOutput) Output {
 // The two halves of a member role's permissions, counted so a field added to
 // one of them and left out of the tables below is a failure rather than a
 // permission nothing drives: twenty client-go's MemberRole models and decodes,
-// and twenty-five read off the captured response beside it.
+// and twenty-eight read off the captured response beside it.
 const (
 	sdkRolePermissionCount      = 20
-	capturedRolePermissionCount = 25
+	capturedRolePermissionCount = 28
 )
 
 // sdkOutputPermissions pairs the key client-go's MemberRole reads a permission
@@ -217,7 +217,7 @@ func sdkOutputPermissions(out Output) map[string]*bool {
 	}
 }
 
-// capturedOutputPermissions is the same pairing for the twenty-five the
+// capturedOutputPermissions is the same pairing for the twenty-eight the
 // capture reads, taken off the published role rather than off the reader's own
 // [roleExtra], so it answers what [withCapturedPermissions] placed where.
 func capturedOutputPermissions(out Output) map[string]*bool {
@@ -247,6 +247,9 @@ func capturedOutputPermissions(out Output) map[string]*bool {
 		"read_virtual_registry":           out.ReadVirtualRegistry,
 		"update_sec_ai_workflow_settings": out.UpdateSecAIWorkflowSettings,
 		"update_security_scan_profiles":   out.UpdateSecurityScanProfiles,
+		"archive_subgroup":                out.ArchiveSubgroup,
+		"pull_container_image":            out.PullContainerImage,
+		"push_container_image":            out.PushContainerImage,
 	}
 }
 
@@ -259,7 +262,7 @@ func outputRolePermissions(out Output) map[string]*bool {
 }
 
 // oneHotRoleBody is a member role answer where the named permission is the
-// only true one and every other of the forty-five is false.
+// only true one and every other of the forty-eight is false.
 func oneHotRoleBody(on string) string {
 	var body strings.Builder
 	body.WriteString(`{"id":10,"name":"one-hot","base_access_level":30`)
@@ -273,17 +276,17 @@ func oneHotRoleBody(on string) string {
 // TestMemberRoleOutput_HoldsEachPermissionToItsOwnWireKey drives one answer per
 // permission, each carrying that key as the only true one, and holds the
 // published role to showing true on that permission's field and false on the
-// other forty-four.
+// other forty-seven.
 //
-// Every one of the forty-five is copied by a straight-line assignment no branch
-// guards, twenty in the [toOutput] literal and twenty-five in
+// Every one of the forty-eight is copied by a straight-line assignment no branch
+// guards, twenty in the [toOutput] literal and twenty-eight in
 // [withCapturedPermissions], so the only thing a test can catch there is a copy
 // that takes the field beside it. An answer that gives several permissions the
 // same value cannot: exchanging two assignments whose sources agree leaves both
 // reads unchanged, which is as true of a fixture alternating true and false,
 // where every same-parity pair agrees, as of one setting them all to true.
 // Driving the keys one at a time makes every pair disagree in one of the runs,
-// and reading all forty-five back on each run means a copy that dropped its
+// and reading all forty-eight back on each run means a copy that dropped its
 // source or took another's is seen wherever it lands.
 func TestMemberRoleOutput_HoldsEachPermissionToItsOwnWireKey(t *testing.T) {
 	keys := slices.Sorted(maps.Keys(outputRolePermissions(Output{})))

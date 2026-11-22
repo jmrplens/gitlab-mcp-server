@@ -36,6 +36,7 @@ type IssuesCountOutput struct {
 	toolutil.HintableOutput
 	GroupPath   string `json:"group_path"`
 	IssuesCount int64  `json:"issues_count"`
+	TooLarge    *bool  `json:"too_large,omitempty" jsonschema:"Present and true when GitLab could not count within its time limit: the count is then unknown, sent as null and shown as 0"`
 }
 
 // MRCountOutput represents the count of recently created merge requests in a group.
@@ -43,6 +44,7 @@ type MRCountOutput struct {
 	toolutil.HintableOutput
 	GroupPath          string `json:"group_path"`
 	MergeRequestsCount int64  `json:"merge_requests_count"`
+	TooLarge           *bool  `json:"too_large,omitempty" jsonschema:"Present and true when GitLab could not count within its time limit: the count is then unknown, sent as null and shown as 0"`
 }
 
 // MembersCountOutput represents the count of recently added members in a group.
@@ -50,6 +52,24 @@ type MembersCountOutput struct {
 	toolutil.HintableOutput
 	GroupPath       string `json:"group_path"`
 	NewMembersCount int64  `json:"new_members_count"`
+	TooLarge        *bool  `json:"too_large,omitempty" jsonschema:"Present and true when GitLab could not count within its time limit: the count is then unknown, sent as null and shown as 0"`
+}
+
+// countExtra is what the three group activity count entities send that
+// client-go's count structs do not model: from 19.6, too_large, present and
+// true when the count could not be calculated within the time limit, when the
+// count itself is null (ee/lib/api/entities/analytics/group_activity).
+type countExtra struct {
+	TooLarge *bool `json:"too_large"`
+}
+
+// capturedTooLarge reads too_large off the captured answer to a count route.
+func capturedTooLarge(op string, captured *gitlabclient.ResponseCapture) (*bool, error) {
+	var extra countExtra
+	if err := captured.Decode(&extra); err != nil {
+		return nil, toolutil.WrapErr(op, err)
+	}
+	return extra.TooLarge, nil
 }
 
 // GetIssuesCount retrieves the count of recently created issues for a group.
@@ -64,14 +84,20 @@ func GetIssuesCount(ctx context.Context, client *gitlabclient.Client, in IssuesC
 	opts := &gl.GetRecentlyCreatedIssuesCountOptions{
 		GroupPath: in.GroupPath,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedIssuesCount(opts, gl.WithContext(ctx))
 	if err != nil {
 		return IssuesCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created issues count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
+	}
+	tooLarge, err := capturedTooLarge("get recently created issues count", captured)
+	if err != nil {
+		return IssuesCountOutput{}, err
 	}
 
 	return IssuesCountOutput{
 		GroupPath:   in.GroupPath,
 		IssuesCount: result.IssuesCount,
+		TooLarge:    tooLarge,
 	}, nil
 }
 
@@ -87,14 +113,20 @@ func GetMRCount(ctx context.Context, client *gitlabclient.Client, in MRCountInpu
 	opts := &gl.GetRecentlyCreatedMergeRequestsCountOptions{
 		GroupPath: in.GroupPath,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyCreatedMergeRequestsCount(opts, gl.WithContext(ctx))
 	if err != nil {
 		return MRCountOutput{}, toolutil.WrapErrWithStatusHint("get recently created merge requests count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
+	}
+	tooLarge, err := capturedTooLarge("get recently created merge requests count", captured)
+	if err != nil {
+		return MRCountOutput{}, err
 	}
 
 	return MRCountOutput{
 		GroupPath:          in.GroupPath,
 		MergeRequestsCount: result.MergeRequestsCount,
+		TooLarge:           tooLarge,
 	}, nil
 }
 
@@ -110,13 +142,19 @@ func GetMembersCount(ctx context.Context, client *gitlabclient.Client, in Member
 	opts := &gl.GetRecentlyAddedMembersCountOptions{
 		GroupPath: in.GroupPath,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, _, err := client.GL().GroupActivityAnalytics.GetRecentlyAddedMembersCount(opts, gl.WithContext(ctx))
 	if err != nil {
 		return MembersCountOutput{}, toolutil.WrapErrWithStatusHint("get recently added members count", err, http.StatusNotFound, hintVerifyGroupPathPremium)
+	}
+	tooLarge, err := capturedTooLarge("get recently added members count", captured)
+	if err != nil {
+		return MembersCountOutput{}, err
 	}
 
 	return MembersCountOutput{
 		GroupPath:       in.GroupPath,
 		NewMembersCount: result.NewMembersCount,
+		TooLarge:        tooLarge,
 	}, nil
 }

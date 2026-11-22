@@ -56,6 +56,10 @@ type roleExtra struct {
 	ReadVirtualRegistry         *bool `json:"read_virtual_registry"`
 	UpdateSecAIWorkflowSettings *bool `json:"update_sec_ai_workflow_settings"`
 	UpdateSecurityScanProfiles  *bool `json:"update_security_scan_profiles"`
+	// The three customizable permissions 19.6 adds.
+	ArchiveSubgroup    *bool `json:"archive_subgroup"`
+	PullContainerImage *bool `json:"pull_container_image"`
+	PushContainerImage *bool `json:"push_container_image"`
 }
 
 // capturedRole reads the permissions client-go's MemberRole does not model off

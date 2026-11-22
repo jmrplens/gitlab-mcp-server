@@ -181,13 +181,13 @@ func TestRun_TheReleasePass_FailsADocumentOnlyThePinAccepts(t *testing.T) {
 		accepted := strings.Replace(soundFixture, "      severity\n", "", 1)
 		var out, errOut bytes.Buffer
 		status := run(auditRun{dir: fixtureModule(t, map[string]string{"sound": accepted}), patterns: []string{"./..."}, release: true}, &out, &errOut)
-		// The real declarations name Orbit documents this fixture does not
-		// have, so they are stale here; the run is held to the document alone.
 		if strings.Contains(errOut.String(), "refuses") {
 			t.Errorf("the release refused a document it has every field of:\n%s", errOut.String())
 		}
-		if status != 1 || !strings.Contains(errOut.String(), "answers nothing") {
-			t.Errorf("exit status %d: the repository's Orbit declarations answer nothing in a fixture and fail it.\nstderr:\n%s", status, errOut.String())
+		// The real table is empty from the 19.6 pin on, so nothing in it can
+		// be stale against a fixture, and the run passes on the document.
+		if status != 0 {
+			t.Errorf("exit status %d, want 0: the release accepts the document and no declaration is stale.\nstderr:\n%s", status, errOut.String())
 		}
 		if !strings.Contains(out.String(), "GitLab 19.5.0-ee accepts 1 of 1 document(s) of this repository and 0 of 0 of client-go's") {
 			t.Errorf("stdout does not carry the release's summary:\n%s", out.String())
@@ -214,29 +214,23 @@ func TestRun_ASchemaOfItsOwn_AsksNoRelease(t *testing.T) {
 	}
 }
 
-// TestReleaseDeclarations_OrbitDocuments_BelongToGitLabDotComOnlyActions holds
-// the reason every Orbit declaration gives to the catalog: each Orbit action is
-// declared GitLabDotComOnly, so no session on a self-managed instance is
-// offered one and its documents never reach a release.
-func TestReleaseDeclarations_OrbitDocuments_BelongToGitLabDotComOnlyActions(t *testing.T) {
+// TestReleaseDeclarations_TheOrbitDocumentsTheReleaseAccepts_StayGitLabDotComOnly
+// holds what the empty table says to the catalog: the 19.6 release schema
+// accepts the Orbit documents, which no longer need a declaration, and the
+// Orbit actions are still declared GitLabDotComOnly, because a schema carrying
+// the fields is not an instance serving the Knowledge Graph.
+func TestReleaseDeclarations_TheOrbitDocumentsTheReleaseAccepts_StayGitLabDotComOnly(t *testing.T) {
+	if declared := releaseDeclarations(); len(declared) != 0 {
+		t.Errorf("releaseDeclarations() = %d entries, want none: the release pin accepts every document", len(declared))
+	}
 	specs := orbit.ActionSpecs(nil)
 	if len(specs) == 0 {
-		t.Fatal("orbit.ActionSpecs() returned nothing to hold the declarations to")
+		t.Fatal("orbit.ActionSpecs() returned nothing to hold to GitLab.com")
 	}
 	for _, spec := range specs {
 		if !spec.GitLabDotComOnly {
-			t.Errorf("orbit.%s is not GitLabDotComOnly, so the release declarations' reason no longer holds", spec.Name)
+			t.Errorf("orbit.%s is not GitLabDotComOnly", spec.Name)
 		}
-	}
-	for _, declaration := range releaseDeclarations() {
-		t.Run(declaration.Document, func(t *testing.T) {
-			if declaration.Package != orbitPackage {
-				t.Errorf("%s %s is declared outside the Orbit package, and this test holds only Orbit's reason", declaration.Package, declaration.Document)
-			}
-			if !strings.Contains(declaration.Reason, "GitLabDotComOnly") {
-				t.Errorf("the reason for %s does not say why the release never receives it: %s", declaration.Document, declaration.Reason)
-			}
-		})
 	}
 }
 

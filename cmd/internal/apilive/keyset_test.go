@@ -18,7 +18,7 @@ func TestPaginatorNames_SpellWhatTheScriptWrites(t *testing.T) {
 		t.Parallel()
 		want := []string{
 			"paginate_with_strategies", "gitaly_keyset_pager", "gitaly_pagination",
-			"keyset_header_builder", "keyset_paginate",
+			"keyset_header_builder", "keyset_paginate", "cursor_request_context",
 		}
 		if got := Paginators(); !slices.Equal(got, want) {
 			t.Errorf("Paginators() = %q, want %q", got, want)
