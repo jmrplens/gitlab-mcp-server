@@ -13,15 +13,48 @@
 package common
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
+)
+
+// awaitParticipant reads an issue's or a merge request's participants with
+// the run's classic token until they hold username, failing the test if they
+// do not within participantWait. GitLab 19.6 can answer the participants a
+// moment after an assignment without the assignee, on CE and on EE alike, so
+// a scenario that pages through the two participants waits for the second
+// before it asks.
+func awaitParticipant(e *harness.Env, username string, list func() ([]*gl.BasicUser, error)) {
+	e.T.Helper()
+	err := harness.Poll(e.Ctx, participantPoll, participantWait, func() (bool, string, error) {
+		listed, err := list()
+		if err != nil {
+			return false, "", fmt.Errorf("reading the participants: %w", err)
+		}
+		names := make([]string, 0, len(listed))
+		for _, participant := range listed {
+			names = append(names, participant.Username)
+		}
+		return slices.Contains(names, username), "participants " + strings.Join(names, ","), nil
+	})
+	if err != nil {
+		e.T.Fatalf("the participants never held %s: %v", username, err)
+	}
+}
+
+// participantPoll and participantWait bound [awaitParticipant].
+const (
+	participantPoll = 2 * time.Second
+	participantWait = 60 * time.Second
 )
 
 // containsID reports whether an ID is among those listed. It is a name for

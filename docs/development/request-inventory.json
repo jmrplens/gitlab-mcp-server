@@ -10385,6 +10385,7 @@
       "body": [
         "description",
         "expires_at",
+        "granular_scopes",
         "name",
         "scopes"
       ],

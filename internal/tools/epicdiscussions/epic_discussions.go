@@ -598,6 +598,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			"noteableId": workItemGID,
 			"body":       toolutil.NormalizeText(input.Body),
 		},
+		Authority: client.Authority(),
 	})
 	if err != nil {
 		return Output{}, err
@@ -655,6 +656,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 			"body":         toolutil.NormalizeText(input.Body),
 			"discussionId": formatDiscussionGID(input.DiscussionID),
 		},
+		Authority: client.Authority(),
 	})
 	if err != nil {
 		return NoteOutput{}, err

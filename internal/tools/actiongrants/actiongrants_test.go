@@ -152,19 +152,24 @@ func initBytes(t *testing.T, command ...string) int {
 // one written to.
 var committedWithoutObject = map[string]string{
 	"achievement.award":                      "achievements: toolutil.UnconfirmedWrite",
-	"achievement.create":                     "achievements: toolutil.UnconfirmedWrite",
-	"achievement.delete":                     "achievements: toolutil.UnconfirmedWrite",
 	"achievement.revoke":                     "achievements: toolutil.UnconfirmedWrite",
-	"achievement.update":                     "achievements: toolutil.UnconfirmedWrite",
 	"achievement.user_achievement_delete":    "achievements: toolutil.UnconfirmedWrite",
 	"achievement.user_achievement_reorder":   "achievements: toolutil.UnconfirmedWrite",
 	"achievement.user_achievement_update":    "achievements: toolutil.UnconfirmedWrite",
 	"custom_emoji.create":                    "customemoji.Create: the authority at the missing emoji",
 	"custom_emoji.delete":                    "customemoji.Delete reads the errors alone and answers success, which a deletion GitLab ran is",
 	"group.epic_create":                      "epics.Create: toolutil.UnconfirmedWrite",
+	"group.epic_discussion_add_note":         "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
+	"group.epic_discussion_create":           "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
 	"group.epic_discussion_update_note":      "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
+	"group.epic_issue_assign":                epicIssuesReadFirst,
+	"group.epic_issue_remove":                epicIssuesReadFirst,
+	"group.epic_issue_update":                epicIssuesReadFirst,
+	"group.epic_note_create":                 "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
 	"group.epic_note_update":                 "toolutil.ExecGraphQLNoteMutation: the authority at the missing note",
+	"group.epic_update":                      "epics.Update: " + workItemReadFirst,
 	"issue.work_item_create":                 "workitems.Create: toolutil.UnconfirmedWrite",
+	"issue.work_item_update":                 "workitems.Update: " + workItemReadFirst,
 	"issue.work_item_saved_view_create":      "workitemsavedviews: toolutil.UnconfirmedWrite",
 	"issue.work_item_saved_view_subscribe":   "workitemsavedviews: toolutil.UnconfirmedWrite",
 	"issue.work_item_saved_view_unsubscribe": "workitemsavedviews: toolutil.UnconfirmedWrite",
@@ -179,6 +184,19 @@ var committedWithoutObject = map[string]string{
 	"vulnerability.resolve":                  "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
 	"vulnerability.revert":                   "vulnerabilities.runVulnerabilityMutation: the authority at the missing vulnerability",
 }
+
+// workItemReadFirst answers a work item update GitLab 19.6 lets a grant reach
+// without the read its answer needs: client-go's UpdateWorkItem resolves the
+// item through namespace.workItem, which needs that same read of that same
+// item, before it sends workItemUpdate, so a grant without it is answered the
+// lookup's not-found and nothing is written.
+const workItemReadFirst = "client-go's UpdateWorkItem reads the item with read_work_item before workItemUpdate runs"
+
+// epicIssuesReadFirst answers the three epic child writes the same way: each
+// resolves the items it names through namespace.workItem before the
+// workItemUpdate, and none reads the work item the payload carries, so a write
+// GitLab ran is reported done whatever that object came back as.
+const epicIssuesReadFirst = "epicissues: the items are resolved with read_work_item first, and the payload's work item is never read"
 
 // TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered verifies that
 // every action the table says GitLab can run and answer without its object is

@@ -1517,14 +1517,15 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_personal_access_token
 
-Create a personal access token for a user with the given scopes, optional description, and optional expiry. Returns: the new token's id, name, active flag, scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke, gitlab_create_impersonation_token.
+Create a personal access token for a user with classic scopes or, from GitLab 19.6, a fine-grained granular_scopes grant, an optional description, and an optional expiry. Returns: the new token's id, name, active flag, scopes or granular scopes, revoked flag, description, user_id, created_at, expires_at, and the secret token value (shown once). See also: gitlab_personal_access_token_list, gitlab_personal_access_token_revoke, gitlab_create_impersonation_token.
 
 **Parameters:**
 
 - `description` (string): Description for the token
 - `expires_at` (string): Token expiration date (YYYY-MM-DD)
+- `granular_scopes` (array of objects): Grant of a fine-grained token, one entry per access and its permissions, applied to the user the token is for (GitLab 19.6 and later). Send this or scopes, not both
 - `name` (string) (required): Name of the personal access token
-- `scopes` (array of strings) (required): Array of scopes
+- `scopes` (array of strings): Classic scopes of the token. Send this or granular_scopes, not both
 - `user_id` (integer) (required): GitLab user ID
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -4031,7 +4032,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_metadata
 
-Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics.
+Get GitLab instance metadata such as version, revision, KAS endpoints, enterprise edition flag, and the plan the instance is licensed for (GitLab 19.6 and later). Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -14607,7 +14608,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_server_status
 
-Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.
+Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition, licensed plan (GitLab 19.6 and later) and agent server, and the authenticated user. See also: gitlab_get_metadata, gitlab_user_current.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

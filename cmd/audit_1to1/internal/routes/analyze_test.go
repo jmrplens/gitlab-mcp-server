@@ -933,8 +933,9 @@ func TestRun_Repository_HoldsTheRoutesClientGoLaterModels(t *testing.T) {
 // backlog. The creation of a vulnerability from a finding is decided
 // COVERED_GRAPHQL with its service, and no GraphQL action creates one, while
 // the list beside it is inherited from vulnerability.list. The five Orbit
-// routes GitLab.com removed are inherited SUPERSEDED_UPSTREAM, since GraphQL
-// and the Orbit MCP endpoint replaced them. A runner's managers and a job
+// routes GitLab.com removed were inherited SUPERSEDED_UPSTREAM, since GraphQL
+// and the Orbit MCP endpoint replaced them, until GitLab 19.6 stopped
+// mounting them; the record holds none of them now. A runner's managers and a job
 // request skip the fine-grained check for the reason the runner routes an
 // action sends carry, which therefore excludes neither. The integrations
 // list no action sends is offered through its deprecated /services/
@@ -991,11 +992,6 @@ func TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto(t *testing.T)
 		actions  []string
 	}{
 		"GET /projects/:id/vulnerabilities": {category: adjudicationGraphQL, actions: []string{"vulnerability.list"}},
-		"GET /orbit/status":                 {category: adjudicationSuperseded},
-		"GET /orbit/schema":                 {category: adjudicationSuperseded},
-		"GET /orbit/graph_status":           {category: adjudicationSuperseded},
-		"GET /orbit/tools":                  {category: adjudicationSuperseded},
-		"GET /orbit/schema/dsl":             {category: adjudicationSuperseded},
 	}
 	for name, want := range inherited {
 		t.Run(name, func(t *testing.T) {
@@ -1006,16 +1002,24 @@ func TestRun_Repository_DeclaresTheRoutesADecisionDoesNotCarryOnto(t *testing.T)
 			}
 		})
 	}
+	for _, name := range []string{"GET /orbit/status", "GET /orbit/schema", "GET /orbit/graph_status", "GET /orbit/tools", "GET /orbit/schema/dsl"} {
+		t.Run(name, func(t *testing.T) {
+			if route, mounted := answered[name]; mounted {
+				t.Errorf("%s = %+v, want it absent: GitLab 19.6 mounts it no longer", name, route)
+			}
+		})
+	}
 }
 
 // TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem fixes
 // the routes that skip the fine-grained check for ai_workflows_oauth_auth or
 // ai_workflows_token_auth. Their classes add the ai_workflows scope to the
 // api scope every API class allows and only authenticate the user, so a
-// user's token calls them and the fourteen no exception takes out are
-// tracked by the Duo domain's row on v3.50.0; the three whose handler checks
-// the Duo flow's composite identity are taken out by an exception that cites
-// it.
+// user's token calls them and the fifteen no exception takes out are tracked
+// by the Duo domain's row on v3.50.0 and GitLab 19.6.1; the three whose
+// handler checks the Duo flow's composite identity are taken out by an
+// exception that cites it, the risk assessment writeback among them, which
+// 19.6 renamed from risk_classification.
 func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *testing.T) {
 	byRoute := map[string]Route{}
 	report := repositoryReport(t)
@@ -1037,11 +1041,11 @@ func TestRun_Repository_HoldsTheDuoWorkflowRoutesToTheTokenThatCallsThem(t *test
 	slices.Sort(composite)
 	wantComposite := []string{
 		"POST /ai/duo_workflows/code_review/add_comments",
-		"POST /ai/duo_workflows/tools/risk_classification/results",
+		"POST /ai/duo_workflows/tools/risk_assessment/results",
 		"POST /projects/:id/merge_requests/:merge_request_iid/suggested_reviewers",
 	}
-	if !slices.Equal(composite, wantComposite) || len(tracked) != 14 || len(other) != 0 {
-		t.Errorf("composite identity = %v, %d a user's token calls tracked by the Duo row and %v otherwise, want %v, 14 and none", composite, len(tracked), other, wantComposite)
+	if !slices.Equal(composite, wantComposite) || len(tracked) != 15 || len(other) != 0 {
+		t.Errorf("composite identity = %v, %d a user's token calls tracked by the Duo row and %v otherwise, want %v, 15 and none", composite, len(tracked), other, wantComposite)
 	}
 }
 
@@ -1083,7 +1087,7 @@ var protocolDownloads = map[string]string{
 }
 
 // TestRun_Repository_AdjudicatesEveryRouteNoActionReaches fixes the triage of
-// the routes no action reaches on the pinned record (19.5.0) and client-go
+// the routes no action reaches on the pinned record (19.6.1) and client-go
 // v3.50.0, where the two placeholder reassignment routes have left the tracked
 // count, inherited from the decision on the service v3.37.0 added for them,
 // and so have a group's Markdown upload and the removal of a project shared
@@ -1126,7 +1130,7 @@ func TestRun_Repository_AdjudicatesEveryRouteNoActionReaches(t *testing.T) {
 			mislabeled = append(mislabeled, route.Route)
 		}
 	}
-	want := map[string]int{categoryTracked: 533, categoryClientProtocol: 150, categoryCoveredByGraphQL: 49}
+	want := map[string]int{categoryTracked: 548, categoryClientProtocol: 150, categoryCoveredByGraphQL: 51}
 	if !reflect.DeepEqual(categories, want) || len(issues) != 32 || !issues[issueVirtualRegistryRoutes] || !issues[issueDuoRoutes] {
 		t.Errorf("declared %v under %d issues; want %v under one issue for each of 30 catalog domains and of the virtual registries and GitLab Duo, which it does not hold yet", categories, len(issues), want)
 	}
@@ -1208,9 +1212,9 @@ func TestRun_Repository_HoldsTheWorkItemRoutesToTheActionsThatDoTheirOperation(t
 		}
 	}
 	want := map[string]map[string]int{
-		"groups":     {categoryCoveredByGraphQL: 20, categoryTracked: 10},
-		"projects":   {categoryCoveredByGraphQL: 7, categoryTracked: 23},
-		"namespaces": {categoryCoveredByGraphQL: 7, categoryTracked: 23},
+		"groups":     {categoryCoveredByGraphQL: 22, categoryTracked: 10},
+		"projects":   {categoryCoveredByGraphQL: 7, categoryTracked: 25},
+		"namespaces": {categoryCoveredByGraphQL: 7, categoryTracked: 25},
 	}
 	if !reflect.DeepEqual(got, want) || len(astray) != 0 {
 		t.Errorf("work item routes by scope and category = %v, want %v; covered by an action of another domain: %q", got, want, astray)

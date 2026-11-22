@@ -247,6 +247,10 @@ func TestMergeRequestParticipants_List_PagesOneParticipantAtATime(t *testing.T) 
 		assignee := fixture.NewUser(e, "mrparticipantpage")
 		fixture.AddProjectMember(e, f.project, assignee, gl.DeveloperPermissions)
 		fixture.AssignMergeRequest(e, f.project, f.mr.IID, assignee)
+		awaitParticipant(e, assignee.Username, func() ([]*gl.BasicUser, error) {
+			listed, _, err := e.Client().GL().MergeRequests.GetMergeRequestParticipants(f.project.ID, f.mr.IID, gl.WithContext(e.Ctx))
+			return listed, err
+		})
 		return f
 	}, func(e *harness.Env, surface harness.Surface, f mergeRequestFixture) {
 		assertPagesOneAtATime(e, e.On(surface), actionMergeRequestParticipants, f.params(),

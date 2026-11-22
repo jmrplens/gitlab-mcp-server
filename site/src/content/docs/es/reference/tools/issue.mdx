@@ -40,7 +40,7 @@ Acciones de solo lectura: 38 de 71, las que conserva un despliegue en modo de so
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.5.0 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.6.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`. Una acción destructiva solo se ejecuta una vez confirmada, salvo que `GITLAB_MCP_YOLO_MODE` (o `AUTOPILOT`) se salte ese paso: la superficie dinámica necesita `confirm: true` en `gitlab_execute_action`, y las otras dos aceptan un parámetro `confirm` o la pregunta del cliente ([Acciones destructivas](/gitlab-mcp-server/es/operations/security/#acciones-destructivas)). Un parámetro seguido de un nivel entre paréntesis solo se sirve a partir de ese nivel.
 
 | Acción                                                                             | Nivel   | Individual                                |
 | ---------------------------------------------------------------------------------- | ------- | ----------------------------------------- |
@@ -1333,7 +1333,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_create_work_item`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemType` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Work Item: Create en proyecto o grupo; Work Item: Read en proyecto o grupo; se sirve vacío: `workItemCreate { workItem { author } }` (sin User: Read en usuario), `workItemCreate { workItem { features { assignees { assignees { nodes } } } } }` (sin User: Read en usuario), `workItemCreate { workItem { features { hierarchy { parent } } } }` (sin Work Item: Read en proyecto o grupo), `workItemCreate { workItem { features { hierarchy { parent { namespace } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemCreate { workItem { features { hierarchy { children { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemCreate { workItem { features { hierarchy { children { nodes { namespace } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemCreate { workItem { features { iteration { iteration } } } }` (sin Work Item: Read en grupo), `workItemCreate { workItem { features { labels { labels { nodes } } } } }` (sin Label: Read en proyecto o grupo), `workItemCreate { workItem { features { linkedItems { linkedItems { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemCreate { workItem { features { linkedItems { linkedItems { nodes { workItem } } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemCreate { workItem { features { linkedItems { linkedItems { nodes { workItem { namespace } } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemCreate { workItem { features { milestone { milestone } } } }` (sin Work Item: Read en proyecto o grupo) ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro                  | Tipo                                                             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -1368,7 +1368,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_delete_work_item`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item: Read en proyecto o grupo; Work Item: Delete en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, destructiva (necesita confirmación), idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                                                  |
@@ -1384,7 +1384,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_get_work_item`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item: Read en proyecto o grupo; se sirve vacío: `namespace { workItem { author } }` (sin User: Read en usuario), `namespace { workItem { features { assignees { assignees { nodes } } } } }` (sin User: Read en usuario), `namespace { workItem { features { hierarchy { parent } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItem { features { hierarchy { parent { namespace } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItem { features { hierarchy { children { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItem { features { hierarchy { children { nodes { namespace } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItem { features { iteration { iteration } } } }` (sin Work Item: Read en grupo), `namespace { workItem { features { labels { labels { nodes } } } } }` (sin Label: Read en proyecto o grupo), `namespace { workItem { features { linkedItems { linkedItems { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItem { features { linkedItems { linkedItems { nodes { workItem } } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItem { features { linkedItems { linkedItems { nodes { workItem { namespace } } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItem { features { milestone { milestone } } } }` (sin Work Item: Read en proyecto o grupo) ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                                                  |
@@ -1400,7 +1400,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_work_items`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item: Read en proyecto o grupo; se sirve vacío: `namespace { workItems { nodes { author } } }` (sin User: Read en usuario), `namespace { workItems { nodes { features { assignees { assignees { nodes } } } } } }` (sin User: Read en usuario), `namespace { workItems { nodes { features { hierarchy { parent } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItems { nodes { features { hierarchy { parent { namespace } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItems { nodes { features { hierarchy { children { nodes } } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItems { nodes { features { hierarchy { children { nodes { namespace } } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItems { nodes { features { labels { labels { nodes } } } } } }` (sin Label: Read en proyecto o grupo), `namespace { workItems { nodes { features { linkedItems { linkedItems { nodes } } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItems { nodes { features { linkedItems { linkedItems { nodes { workItem } } } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItems { nodes { features { linkedItems { linkedItems { nodes { workItem { namespace } } } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `namespace { workItems { nodes { features { milestone { milestone } } } } }` (sin Work Item: Read en proyecto o grupo), `namespace { workItems { nodes { features { iteration { iteration } } } } }` (sin Work Item: Read en grupo) ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro                         | Tipo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1457,7 +1457,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_create`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemSavedViewType` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Work Item Saved View: Create en proyecto o grupo; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, no idempotente
 
 | Parámetro          | Tipo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Requerido | Descripción                                                                                                                                                                                                                                                    |
@@ -1493,7 +1493,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_get`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo      | Requerido | Descripción                                                                                        |
@@ -1509,7 +1509,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_list`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo      | Requerido | Descripción                                                                                                                             |
@@ -1528,7 +1528,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_subscribe`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemSavedViewType` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Work Item Saved View: Subscribe en proyecto o grupo; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                                  |
@@ -1543,7 +1543,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_unsubscribe`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemSavedViewType` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Work Item Saved View: Subscribe en proyecto o grupo; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro       | Tipo      | Requerido | Descripción                                      |
@@ -1558,7 +1558,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_work_item_saved_view_update`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `WorkItemSavedViewType` en la respuesta, así que la escritura se confirma y su respuesta se pierde ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Work Item Saved View: Update en proyecto o grupo; Work Item Saved View: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro          | Tipo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Requerido | Descripción                                                                                                                                                                                                           |
@@ -1579,7 +1579,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_list_work_item_types`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `read_api` (o `api`)
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item: Read en proyecto o grupo ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: solo lectura, idempotente
 
 | Parámetro        | Tipo                                                                                                            | Requerido | Descripción                                                                                                                             |
@@ -1600,7 +1600,7 @@ La descripción de cada acción, y la de cada uno de sus parámetros, es el text
 - **Herramienta individual**: `gitlab_update_work_item`
 - **Nivel**: Free
 - **Token clásico u OAuth**: `api`
-- **Token de grano fino**: No alcanzable en esta versión: GitLab no declara ningún permiso de grano fino para `Namespace`, del que está hecha la respuesta ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
+- **Token de grano fino**: Namespace: Read en proyecto o grupo o usuario; Work Item: Read en proyecto o grupo; Work Item: Update en proyecto o grupo; se sirve vacío: `workItemUpdate { workItem { author } }` (sin User: Read en usuario), `workItemUpdate { workItem { features { assignees { assignees { nodes } } } } }` (sin User: Read en usuario), `workItemUpdate { workItem { features { hierarchy { parent } } } }` (sin Work Item: Read en proyecto o grupo), `workItemUpdate { workItem { features { hierarchy { parent { namespace } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemUpdate { workItem { features { hierarchy { children { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemUpdate { workItem { features { hierarchy { children { nodes { namespace } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemUpdate { workItem { features { iteration { iteration } } } }` (sin Work Item: Read en grupo), `workItemUpdate { workItem { features { labels { labels { nodes } } } } }` (sin Label: Read en proyecto o grupo), `workItemUpdate { workItem { features { linkedItems { linkedItems { nodes } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemUpdate { workItem { features { linkedItems { linkedItems { nodes { workItem } } } } } }` (sin Work Item: Read en proyecto o grupo), `workItemUpdate { workItem { features { linkedItems { linkedItems { nodes { workItem { namespace } } } } } } }` (sin Namespace: Read en proyecto o grupo o usuario), `workItemUpdate { workItem { features { milestone { milestone } } } }` (sin Work Item: Read en proyecto o grupo) ([página de permisos](/gitlab-mcp-server/es/reference/fine-grained-permissions/#issue))
 - **Comportamiento**: escribe, idempotente
 
 | Parámetro                  | Tipo                                                             | Requerido | Descripción                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |

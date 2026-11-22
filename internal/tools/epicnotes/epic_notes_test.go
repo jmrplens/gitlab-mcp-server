@@ -1186,6 +1186,35 @@ func TestUpdate_SendsTheNoteTheCallerNamed(t *testing.T) {
 	}
 }
 
+// TestCreate_NoteAnsweredNull_FineGrainedSessionIsToldTheNoteProbablyExists
+// verifies the creation hands its client's authority to the note mutation: a
+// note answered with neither note nor status is, for a fine-grained token
+// granted Work Item: Create and not what the note is read with, a note GitLab
+// made and then hid, so that session is told it probably committed, while a
+// classic one keeps the missing note it always read there.
+func TestCreate_NoteAnsweredNull_FineGrainedSessionIsToldTheNoteProbablyExists(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"createNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[],"quickActionsStatus":null}}`)
+		},
+	})
+	input := CreateInput{FullPath: testFullPath, IID: 5, Body: "New comment"}
+
+	fineClient := testutil.NewTestClient(t, handler)
+	fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.6.1-ee"}, finegrained.FallbackNone, ""))
+	if _, err := Create(context.Background(), fineClient, input); !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Errorf("fine-grained Create() error = %v, want an unconfirmed write", err)
+	}
+
+	_, err := Create(context.Background(), testutil.NewTestClient(t, handler), input)
+	if errors.Is(err, finegrained.ErrUnconfirmedWrite) || err == nil || !strings.Contains(err.Error(), "no note returned") {
+		t.Errorf("classic Create() error = %v, want the missing note it always read", err)
+	}
+}
+
 // TestUpdate_NoteAnsweredNull_FineGrainedSessionIsToldTheEditProbablyCommitted
 // verifies the handler hands its client's authority to the note mutation: an
 // edit answered with neither note nor status is, for a fine-grained token

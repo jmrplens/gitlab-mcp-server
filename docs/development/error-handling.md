@@ -216,29 +216,53 @@ Which writes can be answered this way is the fine-grained table's to say, and
 `TestTable_WritesAnsweredWithoutTheirObject_AreEachAnswered` in
 `internal/tools/actiongrants` holds the list (`committedWithoutObject`) to it,
 so a regeneration that adds one fails until its handler is looked at. There
-are 27 at 19.5.0, as at 19.4.1, in two kinds that moved between them:
+are 32 at 19.6.1, against 27 at 19.5.0 and at 19.4.1, in two kinds that moved
+between them:
 
-- The 19 the table denies as committed and then answered `null`: the 19
-  whose payload type declares nothing, `group.epic_create` among them
-  since its epic resolves the group boundary 19.5 added and its
-  answer stops at `WorkItemType` instead. They are withheld from every
-  session that carries an authority, in every phase, so their handlers'
-  answer is for a table recorded from a later release that stops withholding
-  one while a grant can still leave the object out.
-- The eight the table serves whose mutation passes a grant that cannot read
-  the object on its answer spine: the four vulnerability state changes, since
-  Vulnerability: Update does not grant `read_vulnerability`, the two epic
-  note edits, since Work Item: Update does not grant `read_note`, and since
-  19.5 declares `CustomEmoji` the two custom emoji writes, since Custom Emoji:
-  Create and Delete do not grant `read_custom_emoji`. `custom_emoji.delete`
-  needs nothing of its own: its handler reads the errors alone, so it answers
-  a deletion GitLab ran as the success it is. A session reaches these today,
+- The four the table denies as committed and then answered `null`, whose
+  payload type declares nothing: the security attribute and security
+  category creations and updates (`security_attribute.create`,
+  `security_attribute.update`, `security_category.create` and
+  `security_category.update`). They are withheld from every session that
+  carries an authority, in every phase, so their handlers' answer is for a
+  table recorded from a later release that stops withholding one while a
+  grant can still leave the object out. 19.6 did that for twelve of the 19
+  denied at 19.5.0: the five achievement writes, `group.epic_create`,
+  `issue.work_item_create`, the four saved view writes and
+  `project.target_branch_rule_create` are served now and keep the answer
+  they had, `toolutil.UnconfirmedWrite`. Three more, the achievement
+  creation, update and deletion, left the list, since the 19.6.1 table no
+  longer says GitLab can answer them without their object.
+- The 28 the table serves whose mutation passes a grant that cannot read
+  the object on its answer spine: those twelve; the four vulnerability state
+  changes, since Vulnerability: Update does not grant `read_vulnerability`;
+  the two epic note edits, since Work Item: Update does not grant
+  `read_note`; since 19.5 declares `CustomEmoji`, the two custom emoji
+  writes, since Custom Emoji: Create and Delete do not grant
+  `read_custom_emoji`; from 19.6 the three epic note creations
+  (`group.epic_note_create`, `group.epic_discussion_create` and
+  `group.epic_discussion_add_note`), whose note is read with a permission
+  Work Item: Create does not grant; and from 19.6 five work item writes
+  that read the item before they write. `group.epic_update` and
+  `issue.work_item_update` go through client-go's `UpdateWorkItem`, which
+  resolves the item through `namespace.workItem` with the same read of the
+  same item before `workItemUpdate` runs (`workItemReadFirst`), so a grant
+  without it is answered the lookup's not-found and nothing is written; the
+  three epic child writes (`group.epic_issue_assign`,
+  `group.epic_issue_remove` and `group.epic_issue_update`) resolve their
+  items the same way and never read the work item the payload carries
+  (`epicIssuesReadFirst`), so a write GitLab ran is reported done whatever
+  that object came back as. `custom_emoji.delete` needs nothing of its own
+  either: its handler reads the errors alone, so it answers a deletion
+  GitLab ran as the success it is. A session reaches these today,
   in phase A with any grant and in phase B with the read held on another
   project or group. An edit answered with neither note nor
   quick actions status is also what a body of commands alone, which deletes
   the note, answers, and a fine-grained token is never shown the status that
   tells them apart, so `toolutil.ExecGraphQLNoteMutation` takes the client's
-  authority and names both readings.
+  authority and names both readings. A creation answered without its note
+  may likewise be a body of quick actions alone, which GitLab runs without
+  keeping a note, and the same function says so.
 
 A fine-grained token whose kind the server could not learn carries no
 authority, so it gets each handler's classic answer, which for the

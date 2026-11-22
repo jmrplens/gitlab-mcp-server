@@ -84,9 +84,9 @@ func expectWithheldFor(e *harness.Env, s *harness.Session, id harness.ActionID, 
 // TestFineGrained_LicensedActionsNoTokenReaches_AreWithheldWithTheReason
 // starts a session on a token that cannot read the instance's version, so its
 // grant is not evaluated (phase A), and asks for three licensed actions no
-// fine-grained token reaches at the recorded release: an epic read GitLab
-// answers null, a security attribute write it commits and answers null, and a
-// vulnerability count it answers null. Each is withheld on every surface,
+// fine-grained token reaches at the recorded release: a security finding list
+// GitLab answers null, a security attribute write it commits and answers null,
+// and a vulnerability count it answers null. Each is withheld on every surface,
 // naming the GraphQL type and what would let the grant be judged. The
 // arguments never reach GitLab, so they are placeholders.
 func TestFineGrained_LicensedActionsNoTokenReaches_AreWithheldWithTheReason(t *testing.T) {
@@ -102,7 +102,11 @@ func TestFineGrained_LicensedActionsNoTokenReaches_AreWithheldWithTheReason(t *t
 			e.T.Fatalf("a token refused Metadata: Read is judged %+v, want phase A for want of a readable version", authority)
 		}
 
-		expectWithheldFor(e, s, actionEpicGet, map[string]any{"full_path": "a/b", "epic_iid": 1}, "Namespace")
+		// The epic read stood here while Namespace declared no fine-grained
+		// permission; GitLab 19.6 declares it, so the security finding list,
+		// whose PipelineSecurityReportFinding still declares none, takes its
+		// place.
+		expectWithheldFor(e, s, actionSecurityFindingList, map[string]any{"project_path": "a/b", "pipeline_iid": "1"}, "PipelineSecurityReportFinding")
 		expectWithheldFor(e, s, actionSecurityAttributeCreate, map[string]any{
 			"namespace_id": 1, "category_id": 1,
 			"attributes": []map[string]any{{"name": "withheld", "description": "never created", "color": attributeColor}},

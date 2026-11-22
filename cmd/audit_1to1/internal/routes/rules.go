@@ -113,10 +113,12 @@ var skipReasons = map[string]skipReason{
 	"modular_service_token_exchange":      {Category: skipUserToken, Reason: "every personal access token, classic or fine-grained, may call it and GitLab only keeps it out of the fine-grained permissions (ee/lib/api/authn/token_exchange.rb)"},
 	"openbao_token_auth":                  otherCredential("OpenBao posts its audit log with its token"),
 	"orbit_internal_auth":                 otherCredential("the Orbit indexer calls it with its internal token"),
+	"org_mover_jwt_auth":                  otherCredential("the Org Mover control plane drives an organization's maintenance lifecycle and reads the cell's manifest with an ES256 JWT it signs, which Gitlab::OrgMover::Authenticator verifies before every route (lib/api/internal/org_mover.rb)"),
 	"pages_token_auth":                    otherCredential("the GitLab Pages daemon reads a domain's configuration with the secret it shares with GitLab"),
 	"public_endpoint":                     {Category: skipPublic, Reason: "GitLab serves the route with or without a token, so a user's token reaches it as any other"},
 	"runner_token_auth":                   otherCredential("a runner calls it with its authentication token, which an action of the runner group takes from the caller"),
 	"scim_token_auth":                     otherCredential("an identity provider provisions users with the group's or the instance's SCIM token"),
+	"service_ping_jwt_auth":               otherCredential("a service that reports Service Ping for the instance reads its identity and settings through Workhorse with a JWT ServicePing::InternalApiAuthenticator verifies (lib/api/internal/service_ping.rb)"),
 	"slack_signature_auth":                {Category: skipInboundWebhook, Reason: "Slack delivers an event signed with the app's signing secret"},
 	"subscription_portal_jwt_auth":        otherCredential("the Customers Portal calls it with its JWT"),
 	"trigger_token_auth":                  otherCredential("a pipeline trigger token starts the pipeline, which pipeline.trigger_run takes from the caller"),
@@ -141,7 +143,7 @@ func compositeIdentity(file string) skipReason {
 var skipExceptions = map[string]skipReason{
 	"POST /projects/:id/merge_requests/:merge_request_iid/suggested_reviewers": compositeIdentity("ee/lib/api/ai_suggested_reviewers.rb"),
 	"POST /ai/duo_workflows/code_review/add_comments":                          compositeIdentity("ee/lib/api/ai/duo_workflows/code_review.rb"),
-	"POST /ai/duo_workflows/tools/risk_classification/results":                 compositeIdentity("ee/lib/api/ai/duo_workflows/tools/risk_classification/results.rb"),
+	"POST /ai/duo_workflows/tools/risk_assessment/results":                     compositeIdentity("ee/lib/api/ai/duo_workflows/tools/risk_assessment/results.rb"),
 }
 
 // skipped decides a route that skips the fine-grained check: a reason the

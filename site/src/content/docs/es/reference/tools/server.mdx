@@ -31,7 +31,7 @@ Acciones de solo lectura: 2 de 2, las que conserva un despliegue en modo de solo
 
 ## Acciones
 
-La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.5.0 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
+La descripción de cada acción, y la de cada uno de sus parámetros, es el texto que sirve el servidor para ella en la superficie predeterminada, citado tal cual; por eso está en inglés. Las líneas de token dicen lo que exige GitLab 19.6.1 a un token para las peticiones que envía cada acción; en una instancia con Admin Mode activado, una acción que solo puede ejecutar un administrador necesita además `admin_mode`.
 
 | Acción                                       | Individual             |
 | -------------------------------------------- | ---------------------- |
@@ -53,7 +53,7 @@ Sin parámetros.
 
 ### `server.status`
 
-> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/es/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/es/reference/tools/user/#userme).
+> Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the server and GitLab health diagnostics, with the GitLab version, revision, edition, licensed plan (GitLab 19.6 and later) and agent server, and the authenticated user. See also: [`admin.metadata_get`](/gitlab-mcp-server/es/reference/tools/admin/#adminmetadata_get), [`user.me`](/gitlab-mcp-server/es/reference/tools/user/#userme).
 
 - **Meta-herramienta**: `gitlab_server`, acción `status`
 - **Herramienta individual**: `gitlab_server_status`

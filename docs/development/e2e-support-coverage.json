@@ -1,0 +1,3134 @@
+{
+  "schema": 1,
+  "source": {
+    "recorded": "2026-11-21",
+    "runs": [
+      "e2e-ce-coverprofile.out",
+      "e2e-ce-final-coverprofile.out",
+      "e2e-ee-coverprofile.out"
+    ]
+  },
+  "packages": [
+    {
+      "package": "test/e2e/internal/fixture",
+      "measured_by_runs": true,
+      "statements": 3119,
+      "unreached": 628
+    },
+    {
+      "package": "test/e2e/modeleval",
+      "measured_by_runs": false,
+      "statements": 894,
+      "unreached": 455
+    }
+  ],
+  "declarations": [
+    {
+      "file": "test/e2e/internal/fixture/alert.go",
+      "declaration": "func SeedAlert",
+      "sha256": "ef53aaea568098198e0132fc422278f7cbf3541ba1c34db41ec62fdec7692621",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,11.1 1",
+        "12.2,12.131 1",
+        "15.2,15.51 1",
+        "18.2,19.54 2",
+        "23.2,24.1 1",
+        "25.2,29.16 4",
+        "32.2,34.1 2",
+        "35.2,38.1 1",
+        "39.2,40.16 2",
+        "43.2,43.15 1",
+        "43.17,43.40 1",
+        "44.2,45.38 2",
+        "49.2,50.16 2",
+        "53.2,53.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/alert.go",
+      "declaration": "func parseAlertIID",
+      "sha256": "eccb2b4c5c31bf9913273038b73b325e59f86cdc2d279c3d3c8f50b23c95f4a1",
+      "reached": [
+        "1.2,3.1 1",
+        "4.2,4.57 1",
+        "7.2,7.44 1",
+        "10.2,10.27 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func AssignIssue",
+      "sha256": "4b2aabedaea13b78ce704f5656f5584b16e7a616e3b3174b4733433cbbe0fd48",
+      "reached": [
+        "1.2,2.86 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func AssignMergeRequest",
+      "sha256": "b57193aa8e78d60210cd5f3b97fdae1c1578ed92b03799ea8ff74f9700cbefb2",
+      "reached": [
+        "1.2,2.93 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func ReviewMergeRequest",
+      "sha256": "dfd27c6ac9d033f3a04885997cc9fdd92dff7aaaa0cd75c0f4792c74f23871ee",
+      "reached": [
+        "1.2,2.93 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func assignIssue",
+      "sha256": "10750f0b7b3eaa7f7eb61b63997f5f2956dae77f902aa7c203f847ca31e02a3e",
+      "reached": [
+        "1.2,4.65 4",
+        "5.3,7.17 2",
+        "10.3,11.44 2",
+        "12.4,13.1 1",
+        "14.3,14.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func assignMergeRequest",
+      "sha256": "21c529b63f5753e0d559ebc6f488bc9df8ea3b0afeeabb19b57abf0eec45c777",
+      "reached": [
+        "1.2,4.65 4",
+        "5.3,7.17 2",
+        "10.3,10.41 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func basicUserIDs",
+      "sha256": "637f51f32f389764df39acecb9651558c4e9912c2584a659c8f88ce5185027b2",
+      "reached": [
+        "1.2,2.29 2",
+        "3.3,4.1 1",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func keepUsers",
+      "sha256": "db406fe7718bdbb956dd0ca90e4a566ee04987ef8e315904c621c477c6eac0b7",
+      "reached": [
+        "1.2,2.115 2",
+        "3.3,4.17 2",
+        "7.3,7.27 1",
+        "8.4,8.34 1",
+        "12.3,12.36 1",
+        "14.2,14.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/assignment.go",
+      "declaration": "func reviewMergeRequest",
+      "sha256": "1ea284efcd9bf26c3dbee092c75518f1ab0e9749bbaeb4420c1bf9d61e1ecb65",
+      "reached": [
+        "1.2,3.68 3",
+        "4.3,6.17 2",
+        "9.3,9.41 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/badge.go",
+      "declaration": "func NewProjectBadge",
+      "sha256": "24bb98072db1fb44da43bf1bf8ce09cd38026c025a0e87faf25e4ee3569d6ec3",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.101 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.65 1",
+        "12.3,15.1 3",
+        "16.2,16.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/badge.go",
+      "declaration": "func createProjectBadge",
+      "sha256": "4ff39e92bc0176461b989b9d79e092e6c1987d3fb6a2d3f717d326aca2286789",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.109 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/badge.go",
+      "declaration": "func deleteProjectBadge",
+      "sha256": "3d9c90662f755e61bdf58d064a6f52586fc3f927229881c82de54d4924119e81",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func LimitBoardList",
+      "sha256": "f8572490754064b1056817ee8ff2c76b981dbd4e768861a22b92156ba1aec53c",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.83 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func NewGroupBoard",
+      "sha256": "3ac26d56105879e8045aeacfc6daa191c0ed2a0778b24a05c07d717dbe66b742",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.16 3",
+        "8.2,8.49 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func boardIDFromGID",
+      "sha256": "f6d9bbaf984fdc723c0db2525d980d6c402215dc8660065b5c29b5aa57685ee9",
+      "reached": [
+        "1.2,2.12 2",
+        "5.2,6.27 2",
+        "9.2,9.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func createBoard",
+      "sha256": "6ebace779a67e48b5b1549ebadb52bc2035f554998ba6de3ee6baf3c2e1dcaf0",
+      "reached": [
+        "1.2,8.1 1",
+        "9.2,9.87 1",
+        "12.2,12.55 1",
+        "15.2,15.76 1",
+        "18.2,20.16 3",
+        "23.2,23.21 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func createProjectBoard",
+      "sha256": "94f1d0be53bfd9ce8e80ce6847889f27889922d3875da1ccaca5e8c6e752c1ac",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.46 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/board.go",
+      "declaration": "func limitBoardList",
+      "sha256": "6880ca3150de1f1560afa5e5a52c9cb419f5d0994c509953a0243116e8e5261d",
+      "reached": [
+        "1.2,2.37 2",
+        "3.3,4.1 1",
+        "5.2,14.1 1",
+        "15.2,20.1 1",
+        "21.2,21.93 1",
+        "24.2,25.28 2",
+        "28.2,28.24 1",
+        "31.2,31.39 1",
+        "34.2,34.96 1",
+        "38.2,38.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/client_access.go",
+      "declaration": "func AwaitClientProjectAccess",
+      "sha256": "530daf1517965b3774d98821574a10106cc931b1f3f8f3fe2051016f979a028e",
+      "reached": [
+        "1.2,3.35 3",
+        "4.3,5.1 1",
+        "6.2,7.141 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/deploy_key.go",
+      "declaration": "func createDeployKey",
+      "sha256": "0d74677439b592085b180bdf5f1d6b195e39dc7f2c2aa8dbce71ff1a93228dd0",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.79 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/deployment.go",
+      "declaration": "func NewEnvironment",
+      "sha256": "047b9b16a5c4e2d3451374661e03e45ab03b913caefe56777365770c18b42f74",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.111 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "10.2,10.20 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/deployment.go",
+      "declaration": "func createDeployment",
+      "sha256": "aabe277a1081d834fb5066965f3d24cf1b9e525423378817da9a10173d8694cb",
+      "reached": [
+        "1.2,8.16 2",
+        "11.2,11.108 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/deployment.go",
+      "declaration": "func createEnvironment",
+      "sha256": "c12a23767dd9e4bf673afd95f8f9345157a22be5d744869ad3c402d031bcadcb",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.61 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/epic.go",
+      "declaration": "func NewEpic",
+      "sha256": "24062983bc40acdfb396441a5fd03d40ef67806c94e6669980c710d5616fd460",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.91 1",
+        "4.3,6.17 2",
+        "9.3,9.98 1",
+        "11.2,11.16 1",
+        "14.2,14.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/epic.go",
+      "declaration": "func NewEpicNote",
+      "sha256": "c65f118b81f7cbedebbd03df32585da84028737e146b18a07e2f589aa0d7685f",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,13.1 1",
+        "14.2,18.16 2",
+        "21.2,21.62 1",
+        "24.2,25.43 2",
+        "29.2,30.21 2",
+        "33.2,33.94 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/epic.go",
+      "declaration": "func discussionHex",
+      "sha256": "41788a5d10d59d06cde3e1cb5ab0bfb4c1fa79b0595db8d61170a032271df8f7",
+      "reached": [
+        "1.2,2.38 2",
+        "5.2,5.22 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/epic.go",
+      "declaration": "func gidNumber",
+      "sha256": "e7c1690fead703819f056774fd435c8508ca2ed44c0475a066d2788b0e91b70e",
+      "reached": [
+        "1.2,2.38 2",
+        "5.2,5.48 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/epic.go",
+      "declaration": "func workItemGID",
+      "sha256": "589636b118724a7a1778129eebe1f57e9227678bb983fe58279b607cb31121e8",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/external_status_check.go",
+      "declaration": "func NewExternalStatusCheck",
+      "sha256": "6fff21eaa5dd8434a2aef98cc50cd6e4525ab87280919acb46169968d7cfd2d3",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.123 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.73 1",
+        "12.3,15.1 3",
+        "16.2,16.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/external_status_check.go",
+      "declaration": "func createExternalStatusCheck",
+      "sha256": "2303b0ff18586aaa30bafab4b5984d28cc98a7165d693a5a4e7ea6e7507a4887",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.103 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/external_status_check.go",
+      "declaration": "func deleteExternalStatusCheck",
+      "sha256": "01bda370220909a30ee07e2586a3f83e79bb0fb5e05f3742180e4d0fb57e7707",
+      "reached": [
+        "1.2,3.55 2",
+        "6.2,6.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/facts.go",
+      "declaration": "func LegacyEpicRESTRemoved",
+      "sha256": "7ce60ba6c23e2ba5154662f4b48ff5bd59d3f5aa4977d1d27f7c46aa4e25385a",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/facts.go",
+      "declaration": "func MajorVersion",
+      "sha256": "918821897118d9db45241c21be73635f612e27c8b50124ee85ad61c69b6a50d1",
+      "reached": [
+        "1.2,3.30 3",
+        "6.2,6.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func (FeatureState) On",
+      "sha256": "92193175cab4dedd13b0c331d4585b65deb6f38118c08b53fd677fd4f3fa80f3",
+      "reached": [
+        "0.35,0.76 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func (FeatureState) Restorable",
+      "sha256": "f2a24f9d30dbdf5411b1118b45bd26ecd1b65334e905bceb484908849c48a8e9",
+      "reached": [
+        "0.43,0.74 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func FeatureDefined",
+      "sha256": "fca68c677189c5d91716eeaca56bd02d672484697b6fe375bd1a0ea52bf76af4",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,7.37 1",
+        "8.3,8.51 1",
+        "9.4,10.1 1",
+        "12.2,12.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func PinFeature",
+      "sha256": "eeea088cedbb1bb2b7ecf05005619ccc966e3f47bdc1c3e969552e60bfa463a6",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.26 2",
+        "9.2,9.64 1",
+        "13.3,15.1 2",
+        "17.2,17.58 1",
+        "20.2,21.73 2",
+        "24.2,24.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func ReadFeature",
+      "sha256": "29f38911e341b61651c2270a5fe15d0990d32a7844e9cbea4feaad788b5f398a",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.73 1",
+        "6.2,7.16 2",
+        "10.2,10.37 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func awaitFlagSettled",
+      "sha256": "b6d14d2118eadb6911ba611674533f416e1ff6f32c721282d7229fa5adeae4ee",
+      "reached": [
+        "1.2,4.15 4",
+        "5.3,6.1 1",
+        "7.2,8.15 2",
+        "9.3,10.1 1",
+        "11.2,13.9 3",
+        "17.3,17.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func featureStateOf",
+      "sha256": "23612590f6f95a2f89c772de6fed38bf0ee730f86dca18b9255703b34a3a554d",
+      "reached": [
+        "1.2,1.30 1",
+        "2.3,2.39 1",
+        "3.4,3.12 1",
+        "15.2,15.23 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func noteFlagChange",
+      "sha256": "2519e38cab2ace2a612b7dc23bb6592e2aaddd90c8d56030f48a67f379b0aad9",
+      "reached": [
+        "1.2,4.1 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func restoreFeature",
+      "sha256": "c4577e77a00b56dd91d92e1b38152fa492647082a93b0fc4043b9d02202f50aa",
+      "reached": [
+        "1.2,1.20 1",
+        "2.3,2.98 1",
+        "5.3,5.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature.go",
+      "declaration": "func setFeature",
+      "sha256": "49fb1509909e4d05696bc9d421ee3fe9c3b619d5155e0d643e71fbef82b33aff",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature_flag.go",
+      "declaration": "func createProjectFeatureFlag",
+      "sha256": "14e5a17a26393f238bd78ec304078b9744213fb4f19f7d90f374de6853205e0e",
+      "reached": [
+        "1.2,5.1 2",
+        "6.2,13.16 2",
+        "16.2,16.76 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/feature_flag.go",
+      "declaration": "func featureFlagNameFrom",
+      "sha256": "3d99608e7bad94feef855cfea3cc6624ae0da808fcd1868e6098c90908caa5bf",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func (fineGrainedTokenRequest) options",
+      "sha256": "2b3907324889908b4f5dac97a4c25f464a43820d22b23a0901b8494d9e492f90",
+      "reached": [
+        "1.2,2.41 2",
+        "3.3,9.1 1",
+        "10.2,14.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func AwaitProjectAccess",
+      "sha256": "93bccd6b8fc86a4409421d9e12bebadd9c1931f9eea5cb407b9564f73b11f444",
+      "reached": [
+        "1.2,4.16 4",
+        "7.2,8.35 2",
+        "9.3,10.1 1",
+        "11.2,11.66 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func NewFineGrainedToken",
+      "sha256": "a675a6cb988fb008f2659b1bfd3bbdf23f27814984d1fdf235a08c882234702f",
+      "reached": [
+        "1.2,4.16 4",
+        "13.2,14.1 1",
+        "15.2,18.106 4",
+        "19.3,20.1 1",
+        "21.2,21.16 1",
+        "24.2,25.1 1",
+        "26.2,26.76 1",
+        "27.3,30.68 4",
+        "33.3,33.13 1",
+        "35.2,35.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func StartupScopes",
+      "sha256": "ce54a858912c4972c5c5865e339345f2a77c9d8efdadb7ced0649941c3913c9d",
+      "reached": [
+        "1.2,4.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func awaitAccess",
+      "sha256": "69054899cca81c0b37aa04109f4106f0eaff43c8866e5c74bcdbbe0284bbe223",
+      "reached": [
+        "1.2,3.113 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func createFineGrainedToken",
+      "sha256": "ccc4f49d80c325799dcc9bbece87331192760c08574163af73422828190cfc4a",
+      "reached": [
+        "1.2,3.16 3",
+        "6.2,6.25 1",
+        "11.2,11.97 1",
+        "14.2,14.77 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func mergeScopes",
+      "sha256": "82282e372e28cd683a07c827835992868160b814565ad562753e709513687951",
+      "reached": [
+        "1.2,3.47 3",
+        "4.3,5.12 2",
+        "6.4,9.1 3",
+        "10.3,10.48 1",
+        "11.4,11.63 1",
+        "12.5,13.1 1",
+        "16.2,16.31 1",
+        "17.3,17.98 1",
+        "18.4,19.12 2",
+        "21.3,21.39 1",
+        "22.4,23.1 1",
+        "24.3,24.37 1",
+        "25.4,26.1 1",
+        "28.2,28.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/fine_grained_token.go",
+      "declaration": "func waitForGrantedAccess",
+      "sha256": "763aee496a259c5a2961008058bef525c7f2aac685b7ec2bd583fc003ca0f5df",
+      "reached": [
+        "1.2,1.31 1",
+        "2.3,2.39 1",
+        "3.4,3.90 1",
+        "4.5,4.95 1",
+        "7.5,7.25 1",
+        "12.3,12.37 1",
+        "13.4,13.90 1",
+        "14.5,14.91 1",
+        "17.5,17.25 1",
+        "23.2,23.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func GPGPublicKey",
+      "sha256": "950ec7620ccffd9efb76d8361db82bc9f6c0253df1c37c6f16a7becc5f9994ef",
+      "reached": [
+        "1.2,2.16 2",
+        "6.2,9.1 3",
+        "10.2,11.16 2",
+        "15.2,18.28 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func appendBigEndian",
+      "sha256": "d67435bc89df02e3165d4a84ae57a24bbfa91f7819dce2ed3b3e72d6fd6056f0",
+      "reached": [
+        "1.2,1.55 1",
+        "2.3,3.1 1",
+        "4.2,4.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func appendPacket",
+      "sha256": "d8f80554a4d5256602172ddc574fea7e680baed7f01f270b2336b4c1e5eeab5e",
+      "reached": [
+        "1.2,2.30 2",
+        "4.3,4.40 1",
+        "6.3,7.51 2",
+        "12.2,12.29 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func armor",
+      "sha256": "451d9fdac4ba1fadba51c3fd13745edf8f4940a05d967d21d01d3adbe318fd1c",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.64 3",
+        "6.3,8.1 2",
+        "9.2,12.23 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func certifyUserID",
+      "sha256": "8506510de33425e79b7074883f4d06d17a2f0914d115db43653bf3a6dea1d671",
+      "reached": [
+        "1.2,5.1 1",
+        "8.2,9.1 1",
+        "10.2,17.1 7",
+        "18.2,19.16 2",
+        "23.2,25.1 2",
+        "27.2,28.68 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func crc24",
+      "sha256": "55ac5b00833f107bead13e61553e25b73772b02f58b2df53454656a2fb556022",
+      "reached": [
+        "1.2,2.29 2",
+        "3.3,4.15 2",
+        "5.4,6.26 2",
+        "7.5,8.1 1",
+        "11.2,11.46 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func fingerprint",
+      "sha256": "79a57d384402acd50e34b9a3d8c9617df6c88a64242bccb5f446393f72cc32ca",
+      "reached": [
+        "1.2,4.1 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func hashablePublicKey",
+      "sha256": "366d865e12e9daf17407872b8c09e7df1e46672df600e243f7bb9a09eb318d2c",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func keyID",
+      "sha256": "50201dd2a4f6da12969840984fb4e771a0edc2083b865049b16f742f76b0b1bb",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func mpi",
+      "sha256": "4d160d6d92eb95089975305d68684cf8af3616a133e0f7d3a85fd9884779d664",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func publicKeyPacketBody",
+      "sha256": "542da39e4e11099652954a7770065da059830ec2c461dfd91524821b7bc593d7",
+      "reached": [
+        "1.2,6.1 5"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func subpacket",
+      "sha256": "c73744a06e1ec708a0652561272a3f60573e6017bff3c98ad4642ed45cce4ff2",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/gpg.go",
+      "declaration": "func subpackets",
+      "sha256": "f1410084e5c471dc31911111822cf474d44f4722369a31ae5c0b2b69cd0b9880",
+      "reached": [
+        "1.2,2.29 2",
+        "3.3,4.1 1",
+        "5.2,5.64 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func (Group) IDParam",
+      "sha256": "969ae44ba35a17c544027c43eb22a004d651bec37b65202804810ae3e983a68b",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func AddGroupMember",
+      "sha256": "16d7ea5870e027f09cfaeb47ebbd70f471e3598c0fc30cc2d0bdd216dd6630c9",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.105 1",
+        "4.3,9.1 2",
+        "10.2,10.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func DeleteGroup",
+      "sha256": "fb1aee255a12e4ab3091c055d2ed6522324d73f710d1d961b4122fedd7ea60c3",
+      "reached": [
+        "1.2,3.41 2",
+        "4.4,6.1 2",
+        "8.4,9.18 2",
+        "12.4,12.32 1",
+        "15.4,20.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func NewGroup",
+      "sha256": "2dae21b3ee560a6204e8eaae647e4df530a29bcd727962ded362905c6ed8c839",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func NewSubgroup",
+      "sha256": "2a5027a5bbe9ca379c5c1b46edddb09f9109a252645b3389b653d8681ebd7594",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func WithGroupNamePrefix",
+      "sha256": "7304c8ce74b73a2416697a7d4cf7e22793c05ee8d422adaafec43d088af3d9d5",
+      "reached": [
+        "1.2,1.31 1",
+        "1.33,1.53 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func WithGroupVisibility",
+      "sha256": "dc813943db8e8c51e3d95d9ffafb7dc7b08c421c1e6cb0386fcb0347cb9579c0",
+      "reached": [
+        "1.2,1.31 1",
+        "1.33,1.63 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func createGroup",
+      "sha256": "1e577810ad170bdd00331c8e789cd2bd2e462d605d5e2301918846d2ce390c8d",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.24 2",
+        "7.4,12.1 2",
+        "13.4,13.26 1",
+        "14.5,15.1 1",
+        "16.4,17.18 2",
+        "20.4,20.32 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func groupOf",
+      "sha256": "8bbc5c980b81550bd941e1cc5b31d7ba420fde8ec1fd60756adb42bc5d636f3b",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group.go",
+      "declaration": "func newGroup",
+      "sha256": "f5f8f12ad8c5ff5370b293c1dbb7d22194202acd16fc3e1861431391d3167f9a",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.27 2",
+        "6.3,7.1 1",
+        "9.2,9.51 1",
+        "9.53,9.79 1",
+        "10.2,10.16 1",
+        "13.2,13.63 1",
+        "14.3,15.1 1",
+        "16.2,16.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func NewGroupWikiPage",
+      "sha256": "a5ce8d7c560c76a9adf2751009eb798d0b712162ea8662acf0e4ffafcd776ea1",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.106 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.72 1",
+        "12.3,15.1 3",
+        "16.2,16.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func NewMemberRole",
+      "sha256": "c8ecd6090a28a15d3144824f01bde8d65025445a3f073e9014477976b0585b75",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.112 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.72 1",
+        "12.3,15.1 3",
+        "16.2,16.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func createGroupWikiPage",
+      "sha256": "b1b75e9545361e9c316229d8d47dd858180013e4e1631cfaba15a35cd83f70c3",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.90 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func createInstanceMemberRole",
+      "sha256": "ec1db344ec81ef720f25d947bc3216e8c1f53963294fd64ff888d0323f04a8bb",
+      "reached": [
+        "1.2,7.16 2",
+        "10.2,10.60 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func deleteGroupWikiPage",
+      "sha256": "228f289cad5aef7c12e672953e4aff8e52cb595980a6930bc171a3f0aa3023b1",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_credential.go",
+      "declaration": "func deleteInstanceMemberRole",
+      "sha256": "a9ee9173732d1a880261365b4beed07f8fe73d4cb1d0c9b1700da8a8efbc8335",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_tracker.go",
+      "declaration": "func NewGroupLabel",
+      "sha256": "76a167d66fead70d3dffaf4a55ddfd2143276915bfa2d1283902868e525c5972",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.104 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "10.2,10.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_tracker.go",
+      "declaration": "func NewGroupMilestone",
+      "sha256": "5622f4caee015b2c05446743f1860c789ce3e96c743230698364af681b093733",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.117 3",
+        "6.3,7.1 1",
+        "8.2,8.16 1",
+        "11.2,11.18 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_tracker.go",
+      "declaration": "func createGroupLabel",
+      "sha256": "5769011ff3e1d375a7bd94dc615f16c8e6b3c9c2a72d412e56e8f0e3daed98df",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.82 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/group_tracker.go",
+      "declaration": "func createGroupMilestone",
+      "sha256": "4010d54395938f9a8292f99fa5b23dd140559ad58963f542d1b724b9f7672600",
+      "reached": [
+        "1.2,9.16 4",
+        "12.2,12.84 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/hook.go",
+      "declaration": "func WaitForGroupHookEvent",
+      "sha256": "4287efaecea9dca0ca9b2f0761869e8d144352ee65da954357e71675798615ae",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,7.11 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/hook.go",
+      "declaration": "func firstGroupHookEvent",
+      "sha256": "153412852202e818a298a0a80bc4247fd8e1dbed83e12baef3d44dbaf26b9c17",
+      "reached": [
+        "1.2,2.94 2",
+        "3.3,4.17 2",
+        "9.3,9.23 1",
+        "12.3,13.23 2",
+        "15.2,15.16 1",
+        "18.2,18.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/hook.go",
+      "declaration": "func listGroupHookEvents",
+      "sha256": "6d2712ab1fda185577b1ef62fd30ae076b224294abf8448f4be891318ea6b1e8",
+      "reached": [
+        "1.2,3.16 2",
+        "6.2,7.59 2",
+        "10.2,10.20 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/issue.go",
+      "declaration": "func NewIssue",
+      "sha256": "deea74b46bdeb228cfb647ba4c9e64f26d32dbebddeaa1af15e7e20bc6a44bbe",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.87 1",
+        "4.3,8.17 2",
+        "11.3,11.76 1",
+        "13.2,13.16 1",
+        "16.2,16.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/issue.go",
+      "declaration": "func NewLabel",
+      "sha256": "f6288513a2acb09e2c2d7be5f76a75bff8daae7d03483179deca15780e8e3251",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/issue.go",
+      "declaration": "func NewMilestone",
+      "sha256": "091bb99ad072f6e31515ab678de191611829d6ac744e52cf7a8e62db1d5e8345",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/issue.go",
+      "declaration": "func createLabel",
+      "sha256": "2fa6240c403aa162ea029bc9892040fb81d167d3a5f3d74bf40c45b402a3d97a",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.93 1",
+        "4.3,9.17 2",
+        "12.3,12.78 1",
+        "14.2,14.16 1",
+        "17.2,17.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/issue.go",
+      "declaration": "func createMilestone",
+      "sha256": "613cc4b5d4a3d2fc2e073954a911390bc1e04663c1b73ec82aa87665c6365fb8",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.106 1",
+        "4.3,8.17 2",
+        "11.3,11.80 1",
+        "13.2,13.16 1",
+        "16.2,16.18 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/iteration.go",
+      "declaration": "func AssignIssueIteration",
+      "sha256": "d15cece9decfaa4c587b6efacc7acdb9d92a3571ed474cd806b6c67e7647d77c",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,12.1 1",
+        "13.2,18.16 2",
+        "21.2,21.62 1",
+        "24.2,25.86 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/iteration.go",
+      "declaration": "func NewIteration",
+      "sha256": "ec2e1cc5bf12d2ac642fd3a1b57c64445664e1c3cb4259fcafe6be590dcbe2dd",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,10.1 1",
+        "14.2,15.16 2",
+        "18.2,18.66 1",
+        "21.2,22.22 2",
+        "26.2,36.1 3",
+        "37.2,44.16 2",
+        "47.2,47.59 1",
+        "50.2,51.24 2",
+        "54.2,55.16 2",
+        "58.2,58.80 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/iteration.go",
+      "declaration": "func mutate",
+      "sha256": "d32d57c7a32cc8b0f10bc2f6c07f02b64d05b5c7f65c59c444c6932d260f0828",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/iteration.go",
+      "declaration": "func runGraphQL",
+      "sha256": "9a2f31caee3e8da4ec1c96379e34e537552f6368a7dbfbd15e2e34a3059b9e8e",
+      "reached": [
+        "1.2,2.135 2",
+        "5.2,5.30 1",
+        "12.2,12.64 1",
+        "15.2,15.60 1",
+        "18.2,18.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/license.go",
+      "declaration": "func CachedEnterpriseLicense",
+      "sha256": "33547663bb02a2cda52cf9964a26e23068eba39b143b5c158a78cdd2123c1b7e",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.40 3",
+        "8.2,8.16 1",
+        "14.2,14.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/license.go",
+      "declaration": "func licenseCachePath",
+      "sha256": "bd3dbcd12253fdb410b2d6fdbce2f252c6ac6d56b93167371d86e793eb4e7318",
+      "reached": [
+        "1.2,1.22 1",
+        "4.2,4.32 1",
+        "5.3,6.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/license.go",
+      "declaration": "func readCachedLicense",
+      "sha256": "a6f98e44f49c00086944a0366cd3fb59ccfb4d2a521f957c755042394aacdf6d",
+      "reached": [
+        "1.2,2.36 2",
+        "5.2,5.16 1",
+        "8.2,9.15 2",
+        "12.2,12.17 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/member.go",
+      "declaration": "func AddProjectMember",
+      "sha256": "ea3dd75a4a8dc3a6efa01555023cc50722c10b0588d1f09f29779e80029ac167",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.107 1",
+        "4.3,5.1 1",
+        "6.2,6.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/member.go",
+      "declaration": "func addProjectMember",
+      "sha256": "c0e91ddf698975507cefc642b03b1d0b67e9288e480fb663a2656c79256dc1f2",
+      "reached": [
+        "1.2,6.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func AllowAuthorApproval",
+      "sha256": "e5fdfd46e309a0e70f4a7704a1c80bc529dcb78c213afa67a2d014b2d1b603ab",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.16 2",
+        "6.3,6.54 1",
+        "7.4,10.1 2",
+        "13.2,13.46 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func EnableMergeTrains",
+      "sha256": "faa26e9985df3040cf77c1928ec040c58963e91166b7349b049940fa4403d203",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,7.16 2",
+        "10.2,11.16 2",
+        "14.2,14.68 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func NewMergeRequest",
+      "sha256": "6178305bae9fa1610f14215e4b9dc7fde546bc39133c914cb437cc19af7a6d88",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.140 1",
+        "4.3,9.17 2",
+        "10.4,11.1 1",
+        "17.2,17.16 1",
+        "21.2,22.11 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func WaitForMergeRequest",
+      "sha256": "19891644db549e09987831b1d2116967c74f801e370f3591986c231d32f68060",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.16 3",
+        "8.2,8.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func mergeRequestOf",
+      "sha256": "6273ac2f5165df00ddc1b50f2ef2e6432a0a84d2e9cba6656530fc3d80eb5427",
+      "reached": [
+        "1.2,8.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func transitionalMergeStatus",
+      "sha256": "5ceece0dd29fb6641c6c12b51edd7f733b79a483708403bf94e5d7c376cce95e",
+      "reached": [
+        "1.2,1.16 1",
+        "3.3,3.14 1",
+        "5.3,5.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/merge_request.go",
+      "declaration": "func waitForMergeRequestReady",
+      "sha256": "65684f2e4685a16c7c3eda319c1acc4d743715c9d76dddb2ea3f7d26770052aa",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.92 2",
+        "6.3,7.17 2",
+        "8.4,10.1 2",
+        "26.2,26.20 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/mergeable_mr.go",
+      "declaration": "func NewMergeableMergeRequest",
+      "sha256": "535a050a2ad586e8b3952e945279bcdbb65a3e758025611a6c72af64d20417f3",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.90 2",
+        "10.2,11.11 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/mergeable_mr.go",
+      "declaration": "func approvalsUnavailable",
+      "sha256": "9949fc4cf8e11a6bbca94473acd8700716092c5f02a4b731ac567fc67a65048f",
+      "reached": [
+        "1.2,4.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/mergeable_mr.go",
+      "declaration": "func clearMergeRequestApprovals",
+      "sha256": "a9ef8e730bf7e714640dc8f867c65753c674bcd483f8fafeeffc1e4b9f480c9c",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.46 2",
+        "9.2,10.16 2",
+        "11.3,11.32 1",
+        "12.4,13.1 1",
+        "16.2,16.29 1",
+        "17.3,17.65 1",
+        "18.4,18.12 1",
+        "26.2,26.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func HasFixtureService",
+      "sha256": "16bdee511d09cbc1da327d472a43b4c217405020fda8e6c9646af8ed6f96a93c",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func InternalGitLabURL",
+      "sha256": "adc60bb3b57e12c54efcc832ba2abeecd946d6d6f23edca965f341e0d6e1796b",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func MirrorTargetURL",
+      "sha256": "762990363a50e79a659a907e6ea31bf4733885d0035db42deca6c48158c4aaa1",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.17 2",
+        "7.2,8.16 2",
+        "11.2,11.18 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func RepositoryURL",
+      "sha256": "5725d8b00fea5d8c9c151094df2559495f8d71d30b81df36d950b4fbac3c7534",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func ServiceURL",
+      "sha256": "862b6b473cee1847225c3419eeb352eb814b2fe193725a6784970c6096e23570",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func fixtureServiceURL",
+      "sha256": "bd45d70762c2695626c25817f9ff0557c94453d5c5c26339a2a5eea254af6253",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func mirrorTargetURL",
+      "sha256": "516620802e0a62a7179c9429fd76017f8e6c2e9c039b553a70062e42fd774b1c",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.46 1",
+        "8.2,12.29 5"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func repositoryURL",
+      "sha256": "43cdb620bcb1cab60f1e3e2a620973c9483419407dca68dabdb87f6c9b6755aa",
+      "reached": [
+        "1.2,1.41 1",
+        "4.2,4.90 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func resolveInternalGitLabURL",
+      "sha256": "2a357b0195943b43825d58870d70f425ae54bf99d50623c143c434e47853701e",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/network.go",
+      "declaration": "func withoutTrailingSlash",
+      "sha256": "c9c569402e745096bb21059701801355aaa7257ec17cfac1ff52cbf37b54a386",
+      "reached": [
+        "1.2,2.19 2",
+        "5.2,5.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func NewNpmPackage",
+      "sha256": "c7c61f792afb713f2afe369a9469d95bf2f5d1887b49ea4fe1591133d6209227",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.102 2",
+        "5.3,6.1 1",
+        "9.2,9.63 1",
+        "10.3,13.1 3",
+        "15.2,16.16 2",
+        "19.2,19.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func deleteNpmPackages",
+      "sha256": "4123343475d3b362b8373e6a7ae015d1d54e6507f2c743903784f5041b40fda7",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.31 1",
+        "6.3,6.83 1",
+        "10.2,10.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func findNpmPackage",
+      "sha256": "62264d05c7b8006b392d9921c76d7d85c42c886c10509c4b11b85366f76a0aa4",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.31 1",
+        "6.3,6.39 1",
+        "7.4,8.1 1",
+        "10.2,10.130 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func listNpmPackages",
+      "sha256": "557428ca696dd10490b489345ce20c2d919a770fc8910e509f3acc2aa3ef4018",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,10.31 2",
+        "11.3,11.37 1",
+        "12.4,13.1 1",
+        "15.2,15.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func npmPublishDocument",
+      "sha256": "42a994616c7d3f92a7768ea5a3cc43f1044e1e9bf6df2750b6b5d1dcf1e31799",
+      "reached": [
+        "1.2,3.16 3",
+        "6.2,21.8 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func npmTarball",
+      "sha256": "2b7d91a03625da2b1c46bd19d80ec8082c67200cb2930305710eaff2d46d1899",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,9.51 5",
+        "12.2,12.53 1",
+        "15.2,15.39 1",
+        "18.2,18.38 1",
+        "21.2,21.25 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func publishNpmPackage",
+      "sha256": "627f54b7f66066ec92a95c394edc369d860f780f44346bb15f5c705e1ab8f095",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.16 3",
+        "10.2,11.12 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/npm_package.go",
+      "declaration": "func waitForNpmPackage",
+      "sha256": "edd73a7c97b498a82477bc6f35fcf8cb9fbf605005a9e28f7896dd0b7ce71ba2",
+      "reached": [
+        "1.2,2.72 2",
+        "3.3,4.45 2",
+        "5.4,6.1 1",
+        "7.3,8.29 2",
+        "10.2,10.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/package_release.go",
+      "declaration": "func deletePackage",
+      "sha256": "925301d50ec216d168c8d47e55c7fc9e170d402dd5265b1883264fdbefdb1ca6",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func CIFile",
+      "sha256": "8ce8c2c1d8c5d72fada6af67579b6a82d39a3a2c68134c8bc1346b2d7bfef168",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func DockerRunnerID",
+      "sha256": "be8a75b20ecfc02344fca7d5bc733864df52ccda1f9a3f9984c799a1f7d65658",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,7.13 1",
+        "10.2,10.11 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func IsTerminalPipelineStatus",
+      "sha256": "f9bb93373fcadcb7721e3d7048944f3b977a7fd17879c0d18903d0a5e1875382",
+      "reached": [
+        "1.2,1.16 1",
+        "3.3,3.14 1",
+        "5.3,5.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func NewPipeline",
+      "sha256": "a234d0e1cbec1baaab9da2e40e3015e6d0b87b5ef4b6f4b77553fb03501048ac",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,4.96 1",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,12.17 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func NewPipelineNoWait",
+      "sha256": "d874141362842fdb6d3d569528c3081e400aaba7e26274d010ff40b8caf2b3a9",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.96 1",
+        "4.3,5.1 1",
+        "6.2,6.16 1",
+        "9.2,9.17 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func WaitForPipeline",
+      "sha256": "0d86be94c093af7c393a86ee3fbc97de78c5c4e16bc429b7b88c89fdef3dea5c",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.18 1",
+        "4.3,5.1 1",
+        "6.2,8.16 3",
+        "12.2,13.15 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func awaitPipelineJob",
+      "sha256": "6b679505e9cf5843ee666b3aeb38ecc9b4d8fa88c1cd6fe0ab7395548e150c44",
+      "reached": [
+        "3.2,4.84 2",
+        "5.3,6.21 2",
+        "9.3,10.29 2",
+        "12.2,12.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func cancelPipeline",
+      "sha256": "2f3edf4b7629df2cdbb81373aaa886d40c5aff78e43d4f1f50ff31c99df3e214",
+      "reached": [
+        "1.2,1.116 1",
+        "4.2,4.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func createPipeline",
+      "sha256": "14683062c1d5a0c6f7b24702dabd9536130f552246c44965da745d7e9abd0f65",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,5.98 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func findPipelineJob",
+      "sha256": "095e267daf5ef72e643ab982700e74295c3a1218a7a3b50876579a7ba28de5ed",
+      "reached": [
+        "3.2,4.16 2",
+        "7.2,8.27 2",
+        "9.3,9.17 1",
+        "12.3,13.18 2",
+        "14.4,15.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func findRunner",
+      "sha256": "cdfe61f738526a42f243bac0fd9f1c33a14510a2e79b5162a89b3d254fb312e4",
+      "reached": [
+        "1.2,2.16 2",
+        "3.3,7.21 5",
+        "10.3,10.34 1",
+        "11.4,12.41 2",
+        "13.5,14.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func requireRunner",
+      "sha256": "7078154e8590ad0eec0d734976126db371ce77793460d8fa35f482c6c2c325ff",
+      "reached": [
+        "1.2,2.20 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline.go",
+      "declaration": "func waitForPipelineStatus",
+      "sha256": "c4da92f9ff61470434614a2c57f2a8d05b96969a9d35eda0543a32429771adee",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,6.91 3",
+        "7.3,8.17 2",
+        "18.3,20.139 3",
+        "22.2,22.24 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline_trigger.go",
+      "declaration": "func NewPipelineTrigger",
+      "sha256": "b586ac10b0b7834ec4952a8a5aff67d49d4bf691d7ec12259a99486f7bfc8417",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.123 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.75 1",
+        "12.3,15.1 3",
+        "16.2,16.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline_trigger.go",
+      "declaration": "func createPipelineTrigger",
+      "sha256": "cf549b113a3ccb985c58b174a82ac52fcd64a6f0091b9dbc4593f51b864c532c",
+      "reached": [
+        "1.2,4.16 2",
+        "7.2,7.101 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/pipeline_trigger.go",
+      "declaration": "func deletePipelineTrigger",
+      "sha256": "1bbc4d615ec1ea4649876c4db8cc682256fe241de0a272c052d9889935f9ba5e",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/probe.go",
+      "declaration": "func ProbeGraphQL",
+      "sha256": "9f76aacf479860a061cde53d62832bc325d914f896ec7850613588a376375d31",
+      "reached": [
+        "1.2,3.23 3",
+        "4.3,5.57 2",
+        "10.2,11.16 2",
+        "14.2,14.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/probe.go",
+      "declaration": "func ProbeREST",
+      "sha256": "4e2c4328d0eae111004473edd281e4e3ae5f0044ef2c78519e9edcba763640ef",
+      "reached": [
+        "1.2,3.16 3",
+        "7.2,8.16 2",
+        "11.2,11.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/probe.go",
+      "declaration": "func probeGraphQL",
+      "sha256": "10cbcbdf5954c089d0f4b841ffec1f04e4fd4c7854ab0121e0575d657182f119",
+      "reached": [
+        "1.2,6.1 1",
+        "7.2,7.138 1",
+        "10.2,11.42 2",
+        "12.3,13.1 1",
+        "14.2,14.20 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/probe.go",
+      "declaration": "func probeREST",
+      "sha256": "c9c40401fcc378adccd91f1430ef70a4b2afc5d0bebd0a900e7fcfc6e1c9d7c4",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,6.17 2",
+        "9.2,10.76 2",
+        "11.3,12.1 1",
+        "13.2,13.20 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func (Project) IDParam",
+      "sha256": "657d7dd65662744675904b5e61597abff5470e7be927290a9cf3da634ab1038f",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func DeleteProject",
+      "sha256": "793b9ced887e5ae27936eee992083289c40fa5f313bced358bc7653be4a05cc8",
+      "reached": [
+        "1.2,3.41 2",
+        "4.4,6.1 2",
+        "8.4,9.18 2",
+        "12.4,12.41 1",
+        "15.4,20.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func DrainSidekiq",
+      "sha256": "ccf63c6a30f734155023e577f67c8eef2cfb39841b155c5d7daf23a22988692f",
+      "reached": [
+        "1.2,1.76 1",
+        "2.3,3.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func DrainSidekiqWithin",
+      "sha256": "e641eac5a29de088f13a5030cab60438373fa92f0680e5a148f6f391c7347854",
+      "reached": [
+        "1.2,2.34 2",
+        "3.3,4.17 2",
+        "7.3,7.47 1",
+        "8.4,9.1 1",
+        "10.3,10.10 1",
+        "13.43,13.43 0",
+        "16.2,16.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func InGroup",
+      "sha256": "169d7012cf5ae46f96b6b5fb6f7e22fe38427affe9d54a8ba1b6716c4880e060",
+      "reached": [
+        "1.2,1.33 1",
+        "1.35,1.64 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func NewProject",
+      "sha256": "30ecad1d9d532934ef14fb27e218a69f820cff78a34456eeda0d6d3dc7cdcf62",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.27 2",
+        "6.3,7.1 1",
+        "9.2,9.55 1",
+        "9.57,9.83 1",
+        "10.2,10.16 1",
+        "13.2,13.67 1",
+        "14.3,15.1 1",
+        "17.2,17.17 1",
+        "18.3,19.1 1",
+        "20.2,20.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func OwnedBy",
+      "sha256": "abc4ae5579b8ab81d2f58388b19f1e81af72bca7db8db9747a833d841ca54743",
+      "reached": [
+        "1.2,1.33 1",
+        "1.35,1.59 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func WithNamePrefix",
+      "sha256": "7693fcacc8455801fe1669705766d72a7d57cd394204771a5dee2b584513feba",
+      "reached": [
+        "1.2,1.33 1",
+        "1.35,1.55 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func WithVisibility",
+      "sha256": "da5f524309b03c8f0307d937fa0b4507ccce9b9623aa213227d68518c982dd10",
+      "reached": [
+        "1.2,1.33 1",
+        "1.35,1.65 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func WithoutReadme",
+      "sha256": "86c9201d9cb71cdd83cbad551a79a8eb755223fdf43854f8b70c7b6466ad5f0c",
+      "reached": [
+        "1.2,1.33 1",
+        "1.35,1.56 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func createProject",
+      "sha256": "a81b90aae8ede937b148751191b89d58f6a560c4a125c7c04aa067699e65cdcc",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.24 2",
+        "7.4,13.1 2",
+        "14.4,14.19 1",
+        "15.5,16.1 1",
+        "17.4,17.29 1",
+        "18.5,19.1 1",
+        "20.4,22.25 3",
+        "23.5,25.1 2",
+        "26.5,27.1 1",
+        "28.4,28.18 1",
+        "31.4,31.34 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func deletePermanently",
+      "sha256": "63c13ae7ad4b93a41a3bf7503cdd4d879d65c0bd0732558b9b369b4da8423c8f",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.24 2",
+        "8.2,9.1 1",
+        "10.2,11.120 2",
+        "20.2,20.67 1",
+        "21.3,21.116 1",
+        "31.4,32.1 1",
+        "35.2,35.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func markAndReread",
+      "sha256": "53f6d856b38d3aeed7369b16a3af66ec3edbd2357a9228e018ba0380825b48c2",
+      "reached": [
+        "1.2,2.24 2",
+        "5.2,6.9 2",
+        "8.3,8.26 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func markForDeletion",
+      "sha256": "f0defadc08eba0552bc309ec8e3994375b50c2627cd44a02627c3268f98246a9",
+      "reached": [
+        "1.2,1.95 1",
+        "2.3,3.10 2",
+        "5.4,5.24 1",
+        "10.4,10.24 1",
+        "17.2,17.16 1",
+        "20.2,20.18 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func projectOf",
+      "sha256": "ca336ec1a601e32f4bd17ff6a1f59facc9359191dcac20d49c8181153436e7d0",
+      "reached": [
+        "1.2,7.1 1",
+        "8.2,8.24 1",
+        "9.3,10.1 1",
+        "11.2,11.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func waitForBranch",
+      "sha256": "a30b1d42ab4d8a92bcc622835d28b178694efdb76feca12ad66bb57aa9fea11d",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,4.86 1",
+        "5.3,6.17 2",
+        "7.4,8.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project.go",
+      "declaration": "func waitForDefaultBranch",
+      "sha256": "9fc3b5fa3a5832f9b94d30b3ec2a7261ab69218439574fa5f2b918d7079a0077",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.137 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project_snippet.go",
+      "declaration": "func NewProjectSnippet",
+      "sha256": "9f308f2d6e2a03dddab60e19421818d665ff63e6fb9b2de07800a7c61286cce2",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.115 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "10.2,10.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project_snippet.go",
+      "declaration": "func createProjectSnippet",
+      "sha256": "e62286fdefa00d25ed9200f30bc14a6a538d576cec401088150e3bc5cecef473",
+      "reached": [
+        "1.2,9.16 2",
+        "12.2,12.50 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/project_snippet.go",
+      "declaration": "func projectSnippetOf",
+      "sha256": "fe6bf00ac3072cf7a11d94a48667f068e42999da2131a823cfeb6e85ee102677",
+      "reached": [
+        "1.2,2.48 2",
+        "5.2,5.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/release.go",
+      "declaration": "func NewRelease",
+      "sha256": "ba0145b2193101c08c34a5d86bc31dbae0fee36c0ba0e642b41206394f7fe55f",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.102 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "10.2,10.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/release.go",
+      "declaration": "func createRelease",
+      "sha256": "ac536336570ff2b09a7f83481dee075284e5d7b1e0d6c04fba0969fcac021aad",
+      "reached": [
+        "1.2,5.1 1",
+        "8.2,8.68 1",
+        "12.2,18.1 2",
+        "23.2,23.71 1",
+        "30.2,30.16 1",
+        "33.2,33.67 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func CommitFile",
+      "sha256": "7c1e2237a773ad7fa537f28c1f9f17f6771c48727f646103e712c6e44bf8aa10",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "5.3,6.1 1",
+        "7.2,7.71 1",
+        "11.2,12.16 2",
+        "15.2,15.32 1",
+        "19.2,20.86 2",
+        "23.2,23.16 1",
+        "26.2,26.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func NewBranch",
+      "sha256": "368f649ea318e2400a1ebeda6f457d84f92b3d06a7dcdb48c400c1b33755fc5f",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func NewBranchFrom",
+      "sha256": "7ef83d6609cd46eb94fb34cebe6dc0a6963c5be1e440dd21dea661b0bcbd61fb",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.96 1",
+        "4.3,8.17 2",
+        "11.3,11.32 1",
+        "13.2,13.16 1",
+        "16.2,16.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func PNG",
+      "sha256": "1d6a84a60ae86c3f46f03362a8b4f786a23666c05f44cb0330a0129c0cfca53a",
+      "reached": [
+        "1.2,2.80 2",
+        "5.2,5.25 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func PNGBase64",
+      "sha256": "14518b2ca4a3f73563502ac5e714c53db2a5e1d7461945f0103780f6bd05b16f",
+      "reached": [
+        "1.2,3.16 3",
+        "6.2,6.48 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func RetryWhileBranchSettles",
+      "sha256": "04061edf5b68b7f9c65a2b953f53678f6a0feac0a8fcbc30735a8ef7dc4e756b",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func ShortSHA",
+      "sha256": "dfa96bcabef04e498469901f0fc4c4d34b147e157d98a025e5779d7cd3253e9b",
+      "reached": [
+        "1.2,1.19 1",
+        "4.2,4.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func branchOf",
+      "sha256": "29ba11cb57a9bbb2bec02b1513a150c2a84511f14a765481581919891ab43039",
+      "reached": [
+        "1.2,2.21 2",
+        "3.3,4.1 1",
+        "5.2,5.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func commitAction",
+      "sha256": "952b0aa2471817edd1f528c5a74587c4948fb596ffa5b781f05d177a343881ee",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.122 2",
+        "5.3,11.1 1",
+        "12.3,12.57 1",
+        "15.3,16.17 2",
+        "17.4,18.1 1",
+        "19.3,19.104 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func commitRetryReason",
+      "sha256": "81e6270781303a9a43785eb01d52d16174e18ac17ce02f9d536b6ddeee21bf97",
+      "reached": [
+        "1.2,1.9 1",
+        "7.3,7.35 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func commitRetryable",
+      "sha256": "4e322e0bc860baed0be755ab2839f99763ce15d01d92e2e328802b8d702b7e05",
+      "reached": [
+        "1.2,1.9 1",
+        "9.3,9.33 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/repository.go",
+      "declaration": "func readFile",
+      "sha256": "e2aea7a7d89a3854d9d90e22680e38d50746077361b680d2757d3fa96a926453",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,8.16 2",
+        "11.2,11.131 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func IsStatus",
+      "sha256": "3790fa2edda4749666500b8b5545e421219592d3d966856c7818dd70b2ed8d92",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func IsTransientNetwork",
+      "sha256": "0131de4fa57cb50948190bbaf379294c25b402491530ebbaeae15e0e12a46856",
+      "reached": [
+        "1.2,1.16 1",
+        "4.2,8.50 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func branchNotReady",
+      "sha256": "c531d3e52c6fd914f304fa6804e3c9b0c8c182d3d6e4fe59671bde5a9113998a",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func budget",
+      "sha256": "620d08fa7296d1acecc549f6a5828d3c6ec5bf34920e859e05cf68e32299058b",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func budgetFor",
+      "sha256": "96dc1ebd6f4ac97780cfc5422f09d12b0f9780f211facf525c0b0498efa202db",
+      "reached": [
+        "1.2,1.35 1",
+        "2.3,3.1 1",
+        "4.2,4.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func retryTransient",
+      "sha256": "602a9bfbeac7d7094c04b063ee6257821c2942dcbcbcffb4d067fbd6c039b67a",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func retryWhen",
+      "sha256": "b3c7ba56642fe154f89e04be7d9c39b5fc69b27ca56898cb3a9cdcb4901404a4",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func retryWhenIn",
+      "sha256": "09af5f7ebb8e09872c05a553dd5983455a1c35dd49ecc98ce86960621d1bc822",
+      "reached": [
+        "1.2,2.108 2",
+        "3.3,4.17 2",
+        "5.4,6.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/retry.go",
+      "declaration": "func withCleanupTimeout",
+      "sha256": "fd19e1988aabc9c326fbdafd89740a40892aa6f14d2c93c12d2517a5b2d37b22",
+      "reached": [
+        "1.2,1.35 1",
+        "2.3,3.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/runner.go",
+      "declaration": "func NewProjectRunner",
+      "sha256": "5fdf602325191b1fd86396bfb69e66e1f23729039e88e2b70fa77cbaa67fe485",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.103 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.65 1",
+        "12.3,15.1 3",
+        "16.2,16.15 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/runner.go",
+      "declaration": "func createProjectRunner",
+      "sha256": "f700c0aa556c214221b31017f8183ec5e64afef2c36109dd196852a1347513dd",
+      "reached": [
+        "1.2,10.16 3",
+        "13.2,13.84 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/runner.go",
+      "declaration": "func deleteRunner",
+      "sha256": "9e38d6d15ee20961cbeae005ee4840e18f9b2166ff1d4221fc29888b985feac4",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func DBMigrationVersion",
+      "sha256": "23214d7914ec1b12009841018f6420567c4f4011ee48736e30f5681a8b8d7a5e",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.19 2",
+        "7.2,7.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func PendingApprovalUsers",
+      "sha256": "9cc59932645ee8c7401d7079c7f624cd9783fbe22360d1dcd919d4b6c86f20bc",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,6.1 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func RegistryProject",
+      "sha256": "12fb409c1ba16c51e87b8073fabc3ef1aafd4a5e903d8bf0c29a0145dd1d80d1",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func RequireSeed",
+      "sha256": "9976165a9dc4c03a9bfd8467878fb252ff8887047dadd6ae07de40873b3a9c51",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.18 2",
+        "7.2,7.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func SeedValue",
+      "sha256": "0af79846c5bba235620248416125f75c51308f7bab081cc78382470faab87303",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func seedID",
+      "sha256": "ea6dcb0461f91be4ffda678d4eba28cb2497371abdf91f494514f596dd47ef96",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.16 3",
+        "8.2,8.11 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func seedKey",
+      "sha256": "8d0a76eee069e7c0af70a5ae8c8036d02921d9ae01931f8294139bd98176b79e",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/seeds.go",
+      "declaration": "func slotSuffix",
+      "sha256": "215d30d1a33b10e510c0d5fb07eca5153f60b19350241c3fe3c1d1419ede0b10",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func NewGroupServiceAccount",
+      "sha256": "8685b8cbfe39106ea05b8350061405c5703f9fc168aac98dee5a9f956e6292bb",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.124 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.77 1",
+        "12.3,15.1 3",
+        "16.2,16.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func NewProjectServiceAccount",
+      "sha256": "80d7f3d8e6a9ae145b6edb7081301ae40a8d38754b5f5691a38b1c849c5f4f72",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.126 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.79 1",
+        "12.3,15.1 3",
+        "16.2,16.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func ReserveServiceAccountUsername",
+      "sha256": "2ef6a848d3da5a63217bbdef97d376d06ccd12796e7d18dc2c6259c3a2700371",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func createGroupServiceAccount",
+      "sha256": "ad08cb106656fe38d80136836d149bd8e11fe82e89adfb74d4520c9c065b5df6",
+      "reached": [
+        "1.2,5.16 2",
+        "9.2,17.21 3",
+        "20.2,20.91 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func createProjectServiceAccount",
+      "sha256": "25d07701069da7b9dcff95130cc02887f5f04ec058efb0a02b5e7096047bfc76",
+      "reached": [
+        "1.2,5.16 2",
+        "9.2,17.21 3",
+        "20.2,20.91 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func deleteGroupServiceAccount",
+      "sha256": "8b80bafa96b42e20f94fd15179c92ba1d68f7831fae87ba1d89a0fdd9220e2da",
+      "reached": [
+        "1.2,3.55 2",
+        "6.2,6.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/service_account.go",
+      "declaration": "func deleteProjectServiceAccount",
+      "sha256": "de13ec86316fa6c03a28fee1f8b7ee0fe20615e5ba424040b370386768df51f9",
+      "reached": [
+        "1.2,3.55 2",
+        "6.2,6.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/snippet.go",
+      "declaration": "func NewSnippet",
+      "sha256": "0d8eb3fef4a456607f2b6697afdabb142e42dbc4932b99bab595ba48e3dce49c",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.100 2",
+        "6.3,7.1 1",
+        "8.2,8.16 1",
+        "12.2,12.60 1",
+        "13.3,16.1 3",
+        "17.2,17.16 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/snippet.go",
+      "declaration": "func createPersonalSnippet",
+      "sha256": "541ffd9a0a141601d597529fe327378ed35255a3f423b8c3281a8b3e674ced18",
+      "reached": [
+        "1.2,8.16 2",
+        "11.2,11.59 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/snippet.go",
+      "declaration": "func deletePersonalSnippet",
+      "sha256": "4a40cebae6fe08fedb95cf960ea442c7928f79285049672495695cbc6cfc01af",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/sweep.go",
+      "declaration": "func ArmRunSweep",
+      "sha256": "206762868cf63922873c235a879462d9f7cb703308b4479f155eb1f148584964",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/sweep.go",
+      "declaration": "func armSweep",
+      "sha256": "c25be93701ca0156159f7b8278c094cbee414bac4779911e896143f3a5809c46",
+      "reached": [
+        "1.2,1.22 1",
+        "2.3,3.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/sweep.go",
+      "declaration": "func exitSweep",
+      "sha256": "3817feb43f921b6aed3fd293d01530a96b9988585ae99b3981fbb79522d0abd8",
+      "reached": [
+        "1.2,1.22 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/tag.go",
+      "declaration": "func createTag",
+      "sha256": "9d5818eee583e27ac9d67eb83ebe1bcdc34c11f142d4d20da39ca2994cafb89f",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.47 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/terraform.go",
+      "declaration": "func PushTerraformState",
+      "sha256": "7266051724fe67645b72ed1289735775fe01680bd3de08dc86af232d1b1519c0",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.17 2",
+        "7.2,10.1 3",
+        "11.2,14.16 4",
+        "17.2,19.1 2",
+        "20.2,23.1 1",
+        "24.2,25.16 2",
+        "28.2,28.15 1",
+        "28.17,28.40 1",
+        "29.2,30.38 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/terraform.go",
+      "declaration": "func terraformBasicAuth",
+      "sha256": "384449a249119419ec6a69b72b770c3cb617111a124847ecccf34f7bc87c063f",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/terraform.go",
+      "declaration": "func terraformStateBody",
+      "sha256": "5c12b002d45d80c1209c3b3d8854da8bb8959d44a44e25955fe0a08360ce2ae3",
+      "reached": [
+        "1.2,5.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/terraform.go",
+      "declaration": "func terraformStateURL",
+      "sha256": "f7f155df27984135980480f92262db9dc7c2ab20cb6771d85730f62b9a40ff2d",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/transport.go",
+      "declaration": "func requireConfidentialTransport",
+      "sha256": "e32f7a1ccdb72bafb22a7feed2de41e0c48a27edfafba3b63d9003baa13f3bc0",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,7.30 1",
+        "10.2,10.29 1",
+        "13.2,13.59 1",
+        "14.3,15.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func DeleteUser",
+      "sha256": "4383c56b61e60b5f789736b519b763bc65f1071cf21c7ecabc2382ca3f4c6137",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,5.55 2",
+        "8.2,8.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func NewGroupToken",
+      "sha256": "9e09f4b9c860590284e3e737cad6ecf55fe52c50f9404e7efa6da7c670c4c190",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.22 1",
+        "4.3,5.1 1",
+        "6.2,8.1 2",
+        "9.2,9.104 1",
+        "10.3,16.17 2",
+        "19.3,19.26 1",
+        "22.3,22.106 1",
+        "24.2,24.16 1",
+        "28.2,28.63 1",
+        "29.3,32.68 4",
+        "35.3,35.13 1",
+        "37.2,37.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func NewToken",
+      "sha256": "4807c91a1cbdc23e865e03282f94fd7b833b0f75a7ea489ab6c3f4079b40b80e",
+      "reached": [
+        "1.2,3.1 2",
+        "4.2,4.22 1",
+        "5.3,6.1 1",
+        "7.2,9.1 2",
+        "10.2,10.93 1",
+        "11.3,16.17 2",
+        "19.3,19.26 1",
+        "22.3,22.95 1",
+        "24.2,24.16 1",
+        "28.2,28.63 1",
+        "29.3,32.68 4",
+        "35.3,35.13 1",
+        "37.2,37.14 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func NewUser",
+      "sha256": "3f3f24b3d366196a10463f4fd076cdcf5176ff652cc1d4f78a81f730af629088",
+      "reached": [
+        "1.2,4.1 3",
+        "5.2,11.1 2",
+        "15.2,15.110 1",
+        "16.3,17.28 2",
+        "18.4,19.1 1",
+        "20.3,21.17 2",
+        "24.3,24.117 1",
+        "26.2,26.16 1",
+        "30.2,30.65 1",
+        "31.3,32.1 1",
+        "33.2,33.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func SSHPublicKey",
+      "sha256": "b600ccd7cbac32a0d20f78a12e4e86507111291c1210f0da0634cbb3e1ab0a35",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,6.16 2",
+        "9.2,9.57 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/user.go",
+      "declaration": "func requireAdmin",
+      "sha256": "8b075255a762b8a5cc4f1b029fffd89b5c7da068dbb9c08b118d3fc44aa9eb29",
+      "reached": [
+        "1.2,2.24 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/wiki.go",
+      "declaration": "func NewWikiPage",
+      "sha256": "7384fcefdcc09e16b223b0a6c3fdfa50fe3fb1d0734435970d0d4265d8773f6b",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.100 2",
+        "5.3,6.1 1",
+        "7.2,7.16 1",
+        "11.2,11.66 1",
+        "12.3,15.1 3",
+        "16.2,16.13 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/wiki.go",
+      "declaration": "func createWikiPage",
+      "sha256": "695b846a28419b55c67503b16abeb407379467594aae1d7434ee2324af0107b0",
+      "reached": [
+        "1.2,6.16 2",
+        "9.2,9.90 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/wiki.go",
+      "declaration": "func deleteWikiPage",
+      "sha256": "e48019b3c64e35eeda9e8a305400af5e582080b859269c82e0d18d0641d3ecb3",
+      "reached": [
+        "1.2,2.55 2",
+        "5.2,5.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func (*World) Bind",
+      "sha256": "d8535627f17c8635fb25d2821a5a77423544fe250084e6fc04eef39371310ed4",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func (*World) BindPromptArgument",
+      "sha256": "846b893393727939645493504dab051bcb95c1ea6760ebd68f25fb7a633a8a9d",
+      "reached": [
+        "1.2,3.1 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func (*World) Bindings",
+      "sha256": "4d9a3f4bbee94f6efecb1fd0f701b885304c01ed5d17b3ef8359f22829b6e9ca",
+      "reached": [
+        "1.2,21.1 1",
+        "22.2,22.48 1",
+        "23.3,23.44 1",
+        "24.4,25.1 1",
+        "27.2,27.17 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func (*World) PromptBindings",
+      "sha256": "5a0fe12f65ca21d93b63eed8a62c9de0a8b6101489c59087551b131c10798e43",
+      "reached": [
+        "1.2,13.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func Digest",
+      "sha256": "15d927694cb3918f715d3cea5d3a62c3e94f9cf526aa0f74b9f6d07f048434df",
+      "reached": [
+        "1.2,2.25 2",
+        "3.3,4.1 1",
+        "5.2,6.1 1",
+        "7.2,8.27 2",
+        "9.3,10.1 1",
+        "11.2,11.42 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func SharedWorld",
+      "sha256": "807096a290820c3626158a636704faf92589de61166803be35861b8a0c80fe97",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.24 1",
+        "4.3,7.1 3",
+        "8.3,10.1 2",
+        "12.3,12.31 1",
+        "14.3,15.19 2",
+        "18.2,18.23 1",
+        "21.2,21.21 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func buildWorld",
+      "sha256": "d1cbd689bb303f5edfef39183e0f84c62d5a6d4e8f625434d7de99e4751699c2",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,5.16 3",
+        "8.2,9.1 1",
+        "10.2,12.16 3",
+        "15.2,17.1 2",
+        "18.2,24.1 6",
+        "26.2,27.1 1",
+        "28.2,29.16 2",
+        "32.2,34.105 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readBranchState",
+      "sha256": "190206f4eb7db5014616c0f0e5a091661c1e3222100f760883c868a1803b2d17",
+      "reached": [
+        "1.2,1.80 1",
+        "2.3,3.17 2",
+        "6.3,7.24 2",
+        "8.4,9.1 1",
+        "10.3,10.37 1",
+        "12.2,12.12 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readGroupState",
+      "sha256": "42fbd936a35fd8d0b69b3ffe2f7f9cd524a9b1cd782ed2a91f00116e094a0e8a",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,9.12 5"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readIssueState",
+      "sha256": "3eb13ae33721ab9a7a0bed1ea06cd9a8f277499014a3822ebfea3003b6d290fb",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,10.12 6"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readLabelState",
+      "sha256": "85481460ff434d95345f986da74834474a75997769cb44adda7355d187b362fc",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,8.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readMergeRequestState",
+      "sha256": "11693c38be31a26efda924a9219b2d330bd85d9cdc8a9709e015f27591ec6494",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,11.12 7"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readMilestoneState",
+      "sha256": "e2a6ce5148a44435568f64431fd9b75dce4e243894234515774d5f8184c10175",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,8.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func readProjectState",
+      "sha256": "8fff89e28885e29e80f70c2ccb1edf339320169f20fccbd056d533cadb09811e",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,12.12 8"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func sortedCopy",
+      "sha256": "5ef4b956bfcd26f1e1e38e4cde4202735b9da04ccf2aead413e54524371bf3be",
+      "reached": [
+        "1.2,4.1 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func worldName",
+      "sha256": "df31ff27cb2e9ea268b51e8c2b7b67565a10e811698a9865acd4977b3645300c",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func worldNames",
+      "sha256": "f4659529e702bc622ea298464cb633c1572671032e5bef188ddf84daed2fc3d4",
+      "reached": [
+        "1.2,2.23 2",
+        "3.3,4.19 2",
+        "5.4,6.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world.go",
+      "declaration": "func worldState",
+      "sha256": "1522a0630d6aaff3fa26e4747ab4503bc95a51b34a6f5a6547b2aecd3427503c",
+      "reached": [
+        "1.2,3.16 2",
+        "3.18,3.74 1",
+        "4.18,4.78 1",
+        "5.18,5.69 1",
+        "6.18,6.75 1",
+        "7.18,7.68 1",
+        "8.18,8.68 1",
+        "9.18,9.72 1",
+        "11.2,11.36 1",
+        "12.3,12.24 1",
+        "13.4,13.43 1",
+        "13.45,13.91 1",
+        "16.2,16.31 1",
+        "17.3,17.32 1",
+        "21.2,21.19 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func (*World) BindActionParam",
+      "sha256": "c85d620e26e67834d2c48e8fe1431a8675986b2eac80885f3881830b258c1ae0",
+      "reached": [
+        "1.2,1.58 1",
+        "2.3,3.1 1",
+        "4.2,5.61 2",
+        "6.3,7.1 1",
+        "8.2,8.26 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func (*World) BindParam",
+      "sha256": "f51a2adc53b4fac11406b5580dcf4f4ba9fc9da0bf4884463ca34976487e2c4d",
+      "reached": [
+        "1.2,1.56 1",
+        "2.3,3.1 1",
+        "4.2,4.55 1",
+        "7.2,7.59 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func (*World) BindTemplate",
+      "sha256": "bdb12178e361ae12a7d54a42488b964f6097caa2a7b1eedb515fed29c22471fd",
+      "reached": [
+        "1.2,1.68 1",
+        "4.2,4.69 1",
+        "5.3,6.1 1",
+        "7.2,7.30 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func (*World) bindExtra",
+      "sha256": "a3109a04a2e3acbfa7981defa40367bb27945bb9e8c53dccff21f5de6a6156a9",
+      "reached": [
+        "1.2,1.42 1",
+        "2.3,3.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func (*World) makeExtra",
+      "sha256": "39999fa9672a1be99f0563321adc7873d2c77d8175acb8a97c110bf0827ad352",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,3.54 1",
+        "7.2,9.69 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func buildWorldExtras",
+      "sha256": "bcc5e522d3574ef9b8daed926cc5d0d56154620c2b7f99b17fa73190ebe57009",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.36 2",
+        "5.3,6.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func commitWorldCIFile",
+      "sha256": "d55e685151ba5463c200c782d519a932523cb1dd6e2b0cc4accf839c82ffd874",
+      "reached": [
+        "2.2,9.16 2",
+        "12.2,12.116 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldBoard",
+      "sha256": "0b3197532bc78eee127f063377357bc75408095575284a81e3fff4c04c15bdff",
+      "reached": [
+        "1.2,2.86 2",
+        "3.3,4.1 1",
+        "4.32,4.53 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldDeployKey",
+      "sha256": "dd1046647c9afe59b81106b789ad6f4f68b71c68aaeab4eed3a638f53c781291",
+      "reached": [
+        "1.2,3.16 3",
+        "6.2,6.80 1",
+        "7.3,8.1 1",
+        "8.27,8.50 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldDeployment",
+      "sha256": "3c9f7d57f0433ec9dc74cdcb4efd67127103aefc95714e041354a491e0c41fe6",
+      "reached": [
+        "1.2,2.81 2",
+        "3.3,4.1 1",
+        "4.35,4.66 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldEnvironment",
+      "sha256": "e69b29f77d170b8b4025d895686ba9ad5da9a66542532b8c08d715b7435112ff",
+      "reached": [
+        "1.2,2.83 2",
+        "3.3,4.1 1",
+        "4.37,4.70 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldFeatureFlag",
+      "sha256": "2cddbd0ca16b503cbafb921d3d2c5ebb2b9f31f1615985ea414c80ac1eecaf3a",
+      "reached": [
+        "1.2,2.91 2",
+        "3.3,4.1 1",
+        "4.37,4.63 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldGroupLabel",
+      "sha256": "b94f77a6c34e0bb13822a447ce2b66e63b9a3c82ac30db98cef1a7c495954386",
+      "reached": [
+        "1.2,2.82 2",
+        "3.3,4.1 1",
+        "4.30,4.56 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldGroupMilestone",
+      "sha256": "83ffa5a6a37e586e3de1e448b0c51553c38ce0088a21cd7bbb02d6936d5eae95",
+      "reached": [
+        "1.2,3.90 3",
+        "4.3,5.1 1",
+        "5.38,5.72 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldPipeline",
+      "sha256": "ddb4cc0e117785c6de51348776c03d761e9a679b7492def336ae8c90da964fd2",
+      "reached": [
+        "1.2,3.129 3",
+        "4.3,5.1 1",
+        "6.2,6.16 1",
+        "9.2,9.122 1",
+        "10.3,11.1 1",
+        "12.2,12.16 1",
+        "15.2,17.16 3",
+        "20.2,20.89 1",
+        "23.2,24.16 2",
+        "28.2,31.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldProjectSnippet",
+      "sha256": "3f7a077a53334fe41b95d2509b1d126d4db8176582563ead34ea8f3aa469a30e",
+      "reached": [
+        "1.2,2.90 2",
+        "3.3,4.1 1",
+        "4.36,4.68 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldRelease",
+      "sha256": "9476ffb6cce780ece77ee91745ddf6ec8e23b9f2853a1f8204bb23235a32c8ae",
+      "reached": [
+        "1.2,2.75 2",
+        "3.3,4.1 1",
+        "4.29,4.54 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldSnippet",
+      "sha256": "d77e93e0a7c3c267a4b2507b67397050d9bee61c010dfce6131781b031bcabd7",
+      "reached": [
+        "1.2,2.84 2",
+        "3.3,4.1 1",
+        "4.29,4.54 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldTag",
+      "sha256": "590bb8fcacfdc25050e1e84decd9f984a260ff388a438157a073812bfa1366e1",
+      "reached": [
+        "1.2,2.67 2",
+        "3.3,4.1 1",
+        "4.21,4.38 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func createWorldWikiPage",
+      "sha256": "5b74bd16a375fd4429ac7d2b30710ca1fd3ee53ac3c42e00bc9e8638bb731b31",
+      "reached": [
+        "1.2,2.78 2",
+        "3.3,4.1 1",
+        "4.27,4.50 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func isWorldJob",
+      "sha256": "3d947724e9bfc81182bc48a8d80502bb86baf5dc3ce1fbbbf13ad26d71a5d8f7",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func keep",
+      "sha256": "418f7b0d4448bfc283ca3727fb4de97887c65ff57877b58365b1a3d3f52ef173",
+      "reached": [
+        "1.2,2.1 1",
+        "3.2,4.16 2",
+        "7.2,8.12 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readBoardState",
+      "sha256": "608a6bd156332cc6d44ea8412d6d3a7aff636f1c574d94043a41f60706c63b5c",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,6.12 2"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readDeployKeyState",
+      "sha256": "cae0be1c91b3295cf411076af378532da4a2abbc558404529922693974a17158",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readDeploymentState",
+      "sha256": "6ce9fcb7519c6ddd8bffed567aad1f6d070c033ea30f0f90fe4a2d1f102a60c1",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readEnvironmentState",
+      "sha256": "c8aaa1af9460d34d467a2a11d4ff7584af1bb56fc2f493c958ac967e7894092f",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readFeatureFlagState",
+      "sha256": "805e42b7f5d08d53aa9f20a1994ed8d8aee41c641d00cdbba0925e2a9ed0de93",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readGroupLabelState",
+      "sha256": "f4c1a604cc2d91a9d2e0009dd3087bc9a7dd4078a740dd0c8bb8a2e26a514749",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,8.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readGroupMilestoneState",
+      "sha256": "8cec409364eebf8f45dbd623afc7be9cfc12ba624b9154f2b3f142e535b9d3aa",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,8.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readPipelineState",
+      "sha256": "c87a476387fa41f46b2ea67e8b0e7a3a5302afedfda0736331f1e9de5d2fbae9",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,6.16 2",
+        "9.2,13.12 5"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readProjectSnippetState",
+      "sha256": "a79613a37b1194bb70a0c502e28befcdf6fb3f18c2ba4614b9e453f8612b117f",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,8.12 4"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readReleaseState",
+      "sha256": "3c97793beca09025a9ea29b755e8c09599fe4c295aa6189c7fc5f1457204b55c",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readSnippetState",
+      "sha256": "72ebdebdbb45a924211a2b86a218e37437acc817644ec6ee9801e4108bbdb959",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readTagState",
+      "sha256": "db50a30b337428451ede01796fcedc2f57126feeca8c3c9105e92407fea71dc7",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func readWikiPageState",
+      "sha256": "edf23c4bd466a5ffec8f0a99e2451178832c7d94362f9aaec7793936a446b912",
+      "reached": [
+        "1.2,2.16 2",
+        "5.2,7.12 3"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "func worldDescription",
+      "sha256": "d289764700d33a9001ddafb99894e142e305744650d8fd24b7bd153599961e40",
+      "reached": [
+        "1.2,2.1 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "var plainExtraBindings",
+      "sha256": "7943c1c7efdcb8bb559cbfecdcd79507a1c35eea27f8f6be6923eebe6d484c57",
+      "reached": [
+        "1.70,1.112 1",
+        "2.70,2.100 1",
+        "3.65,3.102 1",
+        "4.73,4.121 1",
+        "5.72,5.118 1",
+        "6.71,6.115 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "var releaseTagBinding",
+      "sha256": "70bf90aae1cf991be353a576731b6b520464fb090fa51eaf047f1583cc541b40",
+      "reached": [
+        "0.86,0.137 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "var templateBindings",
+      "sha256": "7626523afe0f8ad69d876b6bf0613425ecd9692e19e4d7de37dca64071710b1c",
+      "reached": [
+        "2.62,2.98 1",
+        "5.64,5.117 1",
+        "8.61,8.108 1",
+        "11.43,11.73 1",
+        "17.73,17.127 1",
+        "20.66,20.106 1",
+        "23.67,23.113 1",
+        "26.76,26.132 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "var templateNeeds",
+      "sha256": "ae4dfc75773eb03011e5b6a198614539524cf6b4eeaf49babcaf8b048ff8d68b",
+      "reached": [
+        "3.32,3.56 1"
+      ]
+    },
+    {
+      "file": "test/e2e/internal/fixture/world_extras.go",
+      "declaration": "var worldExtras",
+      "sha256": "7f967e968c8bacdcb564e1f16de97175bf8d3265cc6b3924e39abc95c4d81084",
+      "reached": [
+        "1.76,1.101 1",
+        "4.31,4.63 1",
+        "8.31,8.61 1",
+        "12.31,12.60 1",
+        "16.31,16.64 1",
+        "20.31,20.59 1",
+        "22.80,22.104 1",
+        "25.31,25.64 1",
+        "27.84,27.110 1",
+        "30.31,30.61 1",
+        "34.31,34.60 1",
+        "38.31,38.64 1",
+        "42.31,42.58 1"
+      ]
+    }
+  ]
+}

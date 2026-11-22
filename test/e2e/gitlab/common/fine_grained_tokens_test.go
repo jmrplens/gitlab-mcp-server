@@ -237,9 +237,11 @@ func TestFineGrained_WithoutMetadataRead_StartsWithTheGrantUnjudged(t *testing.T
 		// The arguments never reach GitLab: the refusal comes before any
 		// handler runs, so the project is a placeholder.
 		expectDeniedWithheld(e, s, actionBranchRuleList, map[string]any{"project_path": "a/b"}, wordsMetadataRead)
-		expectDeniedWithheld(e, s, actionWorkItemCreate, map[string]any{
-			"full_path": "a/b", "work_item_type_id": "gid://gitlab/WorkItems::Type/1", "title": "must not be created",
-		}, "WorkItemType")
+		// The work item creation stood here while WorkItemType declared no
+		// fine-grained permission; GitLab 19.6 declares it, so the catalog
+		// listing, whose CiCatalogResource still declares none, takes its
+		// place.
+		expectDeniedWithheld(e, s, actionCICatalogList, map[string]any{"search": "must not be read"}, "CiCatalogResource")
 	})
 }
 
@@ -545,12 +547,20 @@ type publicProjectFixture struct {
 	token          fixture.Token
 }
 
-// TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold reads the issue
-// links of a public project with a token granted nothing past the startup
-// scopes: where the grant decides the listing the read is not listed for it,
-// since the grant does not hold Work Item: Read, and in every phase it is
-// served, since GitLab answers it on a public project whoever asks, and
-// GitLab answers it with the link.
+// TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold reads a public
+// project's issue with a token granted nothing past the startup scopes: where
+// the grant decides the listing the read is not listed for it, since the
+// grant does not hold Work Item: Read, and in every phase it is served, since
+// GitLab answers it on a public project whoever asks.
+//
+// From GitLab 19.6 a request the public access rule alone admits is served as
+// an anonymous one (API::Helpers#current_user), so a route that authenticates
+// refuses it with the fine-grained permission it lacks rather than serving
+// it. The issue links, which stood here up to 19.5, are such a route: the
+// server passes the read to GitLab as before, and the session is answered
+// GitLab's own refusal naming the permission. On an older instance, which the
+// suite still runs against in phase A, the links are served with the link, as
+// they were.
 func TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 
@@ -558,12 +568,21 @@ func TestFineGrained_PublicProject_ServesAReadTheGrantDoesNotHold(t *testing.T) 
 		s := e.Session(harness.ServerConfig{Surface: surface, Token: f.token.Value})
 		// Phase A lists every action GitLab may serve, this one included, so
 		// only a grant that decides the listing leaves it out.
-		if expectPhase(e, s).Listing && slices.Contains(s.Actions(), actionIssueLinkList) {
-			e.T.Errorf("%s is listed for a token whose grant does not hold %s", actionIssueLinkList, wordsWorkItemRead)
+		if expectPhase(e, s).Listing && slices.Contains(s.Actions(), actionIssueGet) {
+			e.T.Errorf("%s is listed for a token whose grant does not hold %s", actionIssueGet, wordsWorkItemRead)
 		}
-		listed := harness.Do[issuelinks.ListOutput](s, actionIssueLinkList, map[string]any{
+		read := harness.Do[issues.Output](s, actionIssueGet, map[string]any{
 			"project_id": f.project.IDParam(), "issue_iid": f.source.IID,
 		})
+		if read.IID != f.source.IID {
+			e.T.Errorf("the public issue read answered #%d, want #%d", read.IID, f.source.IID)
+		}
+		links := map[string]any{"project_id": f.project.IDParam(), "issue_iid": f.source.IID}
+		if e.GitLabAtLeast(19, 6) {
+			expectRefusedByGitLab(e, s, actionIssueLinkList, links, wordsWorkItemRead)
+			return
+		}
+		listed := harness.Do[issuelinks.ListOutput](s, actionIssueLinkList, links)
 		if len(listed.Relations) != 1 || int64(listed.Relations[0].IID) != f.target.IID {
 			e.T.Errorf("the public issue's relations are %+v, want the one link to #%d", listed.Relations, f.target.IID)
 		}
@@ -798,12 +817,16 @@ func TestFineGrainedProbes_CustomEmojiCreate_CommitsAndAnswersNull(t *testing.T)
 		map[string]any{"group": group.Path}, "group", `"`+name+`"`)
 }
 
-// TestFineGrainedProbes_AchievementCreate_CommitsAndAnswersNull measures the
-// same of achievementsCreate, which the achievement.create row rests on: a
-// token granted Achievement: Create on a group creates the achievement, and
-// GitLab then answers the payload's Achievement, a type that declares no
-// fine-grained permission, null with no error (issue 1103).
-func TestFineGrainedProbes_AchievementCreate_CommitsAndAnswersNull(t *testing.T) {
+// TestFineGrainedProbes_AchievementCreate_AnswersTheAchievement measures what
+// the achievement.create row rests on: a token granted Achievement: Create on
+// a group creates the achievement and is answered it. Up to GitLab 19.5 the
+// payload's Achievement declared no fine-grained permission and came back null
+// with no error after the write had run (issue 1103); 19.6 declares it, which
+// is why the table recorded from 19.6.1 serves the action and no longer
+// expects its object to go missing. An older instance, which the suite still
+// runs against in phase A, is held to the null it answers and to the classic
+// read that finds the achievement committed.
+func TestFineGrainedProbes_AchievementCreate_AnswersTheAchievement(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("fgachieve"))
 	user := fixture.NewUser(e, "fgachieve")
@@ -815,20 +838,44 @@ func TestFineGrainedProbes_AchievementCreate_CommitsAndAnswersNull(t *testing.T)
   achievementsCreate(input: {namespaceId: $namespace, name: $name}) { achievement { id name } errors }
 }`, map[string]any{"namespace": "gid://gitlab/Namespace/" + strconv.FormatInt(group.ID, 10), "name": name})
 
-	expectCommittedWithoutObject(e, written, "achievementsCreate", "achievement", "")
-	expectReadBack(e, `query($group: ID!) { group(fullPath: $group) { achievements { nodes { name } } } }`,
-		map[string]any{"group": group.Path}, "group", `"`+name+`"`)
+	if !e.GitLabAtLeast(19, 6) {
+		expectCommittedWithoutObject(e, written, "achievementsCreate", "achievement", "")
+		expectReadBack(e, `query($group: ID!) { group(fullPath: $group) { achievements { nodes { name } } } }`,
+			map[string]any{"group": group.Path}, "group", `"`+name+`"`)
+		return
+	}
+	expectAnsweredWithObject(e, written, "achievementsCreate", "achievement", `"`+name+`"`)
 }
 
-// TestFineGrainedProbes_WorkItemCreate_CommitsAndNullsTheWorkItem measures the
-// non-null form of the same answer, which the issue.work_item_create row
-// rests on: a token granted Work Item: Create and Read on a project creates
-// the work item, and GitLab then checks its workItemType, a non-null field of
-// the type WorkItemType, which at 19.4.1 declares no fine-grained permission,
-// so the null takes the work item with it and GitLab's GraphQL library writes
-// the error that says so (issue 1103). It flips once GitLab declares
-// WorkItemType, which its own merge request 251840 proposes.
-func TestFineGrainedProbes_WorkItemCreate_CommitsAndNullsTheWorkItem(t *testing.T) {
+// expectAnsweredWithObject holds a write's answer to a fine-grained token to
+// the payload with no errors and the object at objectField carrying want,
+// which is the answer once GitLab declares the object's type and the grant
+// reaches it.
+func expectAnsweredWithObject(e *harness.Env, written fixture.GraphQLAnswer, field, objectField, want string) {
+	e.T.Helper()
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(written.Data[field], &payload); err != nil || payload == nil {
+		e.T.Fatalf("the fine-grained write answered %s at %s, want its payload: %v (errors %v)", written.Data[field], field, err, written.Errors)
+	}
+	if string(payload["errors"]) != "[]" || len(written.Errors) > 0 {
+		e.T.Errorf("the fine-grained write answered payload errors %s and errors %v, want none", payload["errors"], written.Errors)
+	}
+	if !strings.Contains(string(payload[objectField]), want) {
+		e.T.Errorf("the fine-grained write answered %s at %s.%s, want the object, carrying %s", payload[objectField], field, objectField, want)
+	}
+}
+
+// TestFineGrainedProbes_WorkItemCreate_AnswersTheWorkItem measures what the
+// issue.work_item_create row rests on: a token granted Work Item: Create and
+// Read on a project creates the work item and is answered it, its
+// workItemType included. Up to GitLab 19.5 WorkItemType declared no
+// fine-grained permission, so the null of that non-null field took the work
+// item with it after the write had run and GitLab's GraphQL library wrote the
+// error that said so (issue 1103); 19.6 declares it, the flip this probe was
+// written to see. An older instance, which the suite still runs against in
+// phase A, is held to that error and to the classic read that finds the work
+// item committed.
+func TestFineGrainedProbes_WorkItemCreate_AnswersTheWorkItem(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 	project := fixture.NewProject(e, fixture.WithNamePrefix("fgworkitem"))
 	user := developerOf(e, "fgworkitem", project)
@@ -839,9 +886,13 @@ func TestFineGrainedProbes_WorkItemCreate_CommitsAndNullsTheWorkItem(t *testing.
   workItemCreate(input: {namespacePath: $path, title: $title, workItemTypeId: $type}) { workItem { id title workItemType { name } } errors }
 }`, map[string]any{"path": project.Path, "title": title, "type": string(gl.WorkItemTypeIssue)})
 
-	expectCommittedWithoutObject(e, written, "workItemCreate", "workItem", "Cannot return null for non-nullable field WorkItem.workItemType")
-	expectReadBack(e, `query($path: ID!) { project(fullPath: $path) { workItems(first: 20) { nodes { title } } } }`,
-		map[string]any{"path": project.Path}, "project", strconv.Quote(title))
+	if !e.GitLabAtLeast(19, 6) {
+		expectCommittedWithoutObject(e, written, "workItemCreate", "workItem", "Cannot return null for non-nullable field WorkItem.workItemType")
+		expectReadBack(e, `query($path: ID!) { project(fullPath: $path) { workItems(first: 20) { nodes { title } } } }`,
+			map[string]any{"path": project.Path}, "project", strconv.Quote(title))
+		return
+	}
+	expectAnsweredWithObject(e, written, "workItemCreate", "workItem", strconv.Quote(title))
 }
 
 // TestFineGrainedProbes_UndeclaredMutation_IsRefusedWithTheGenericError
@@ -878,15 +929,18 @@ func TestFineGrainedProbes_UndeclaredMutation_IsRefusedWithTheGenericError(t *te
 	}
 }
 
-// TestFineGrainedProbes_CatalogListing_AnswersEachResourceNull measures the
-// list-of-nulls answer of issue 1103, which the ci_catalog.list row rests on:
-// CiCatalogResource declares neither an ability nor a fine-grained
-// permission, so GitLab redacts nothing from the listing and checks each
-// resource as it answers it, and a fine-grained token, granted Project: Read
-// on the resource's project, reads one null per resource the classic token
-// reads, with no error. Publishing the version needs a runner, as the catalog
+// TestFineGrainedProbes_CatalogListing_AnswersAnEmptyList measures what the
+// ci_catalog.list row rests on: CiCatalogResource declares no fine-grained
+// permission, so a fine-grained token, granted Project: Read on the
+// resource's project, reads none of the resources the classic token reads,
+// with no error. Up to GitLab 19.5 the type declared no ability either, so
+// GitLab redacted nothing and answered one null per resource (issue 1103);
+// 19.6 declares read_catalog_resource, so the listing redacts each resource
+// and answers an empty list, the other form of the same withholding. An older
+// instance, which the suite still runs against in phase A, is held to the
+// null per resource. Publishing the version needs a runner, as the catalog
 // read's own scenario does.
-func TestFineGrainedProbes_CatalogListing_AnswersEachResourceNull(t *testing.T) {
+func TestFineGrainedProbes_CatalogListing_AnswersAnEmptyList(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.NeedRunner), harness.Locks(harness.LockRunner))
 	if !e.DockerMode() {
 		e.Skipf("publishing a catalog version needs the compose-internal GitLab URL and a runner, which only the Docker stack provides")
@@ -911,8 +965,12 @@ func TestFineGrainedProbes_CatalogListing_AnswersEachResourceNull(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("the classic token never listed the published resource: %v", err)
 	}
+	want, wanted := `"nodes":[]`, "no resource"
+	if !e.GitLabAtLeast(19, 6) {
+		want, wanted = `"nodes":[null]`, "one null resource"
+	}
 	fine := fixture.ProbeGraphQL(e, token, document, variables)
-	if len(fine.Errors) > 0 || !strings.Contains(string(fine.Data["ciCatalogResources"]), `"nodes":[null]`) {
-		t.Errorf("the fine-grained listing answered %s %v, want one null resource and no error", fine.Data["ciCatalogResources"], fine.Errors)
+	if len(fine.Errors) > 0 || !strings.Contains(string(fine.Data["ciCatalogResources"]), want) {
+		t.Errorf("the fine-grained listing answered %s %v, want %s and no error", fine.Data["ciCatalogResources"], fine.Errors, wanted)
 	}
 }

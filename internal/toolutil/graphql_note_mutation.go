@@ -50,8 +50,8 @@ type GraphQLNoteMutation struct {
 	// Variables holds the mutation variables.
 	Variables map[string]any
 	// Authority is the fine-grained authority of the client that sends the
-	// mutation, nil for any other credential. Only an updateNote answered
-	// with neither note nor status reads it: see [ExecGraphQLNoteMutation].
+	// mutation, nil for any other credential. Only a mutation answered with
+	// neither note nor status reads it: see [ExecGraphQLNoteMutation].
 	Authority *finegrained.Authority
 }
 
@@ -62,6 +62,13 @@ type GraphQLNoteMutation struct {
 // rather than a concatenation, which the mutation tool reports as not covered
 // since a constant expression carries no statement counter.
 const noteEditOrDeletion = " If the new body held only quick actions, GitLab ran them and deleted the note instead of editing it: a fine-grained token is not shown the quick actions status that tells the two apart, so read the item again either way."
+
+// noteCreateOrCommands is what a fine-grained session is told beside the
+// probably committed answer of a note creation that came back with neither
+// note nor status: a body of commands alone, which runs them and keeps no
+// note, comes back the same way for such a session, since the status declares
+// no fine-grained permission either.
+const noteCreateOrCommands = " If the body held only quick actions, GitLab ran them and kept no note: a fine-grained token is not shown the quick actions status that tells the two apart, so read the item again either way."
 
 // QuickActionsStatusOutput mirrors GitLab's QuickActionsStatus, what a note
 // mutation reports about the quick actions its body carried: the commands it
@@ -147,7 +154,11 @@ type GraphQLNoteMutationResult[N any] struct {
 // read_note, the edited note is checked against the token only after the edit
 // ran, and the status declares no fine-grained permission, so such a session
 // never sees one. It is told the edit probably committed, with the deletion as
-// the other reading, since both ran (issue 1103). A refusal GitLab answers at
+// the other reading, since both ran (issue 1103). A creation answered with
+// neither is the same for such a session: a grant can pass createNote without
+// the permission the note it made is read with, so it is told the note was
+// probably created, with a body of commands alone as the other reading, and
+// any other credential is told no note came back. A refusal GitLab answers at
 // the top level leaves the payload null, and is checked first so that neither
 // reading is ever given to a refusal.
 //
@@ -181,17 +192,30 @@ func ExecGraphQLNoteMutation[N any](ctx context.Context, gql gl.GraphQLInterface
 		if status != nil {
 			return GraphQLNoteMutationResult[N]{QuickActions: status}, nil
 		}
-		if m.PayloadKey == updateNotePayloadKey {
-			if m.Authority != nil {
-				return GraphQLNoteMutationResult[N]{}, fmt.Errorf("%w%s", m.Authority.UnconfirmedWrite(m.Op, "note", nil), noteEditOrDeletion)
-			}
-			return GraphQLNoteMutationResult[N]{}, errors.New(m.Op + ": GitLab deleted the note instead of editing it. " +
-				"A new body holding only quick actions is run against the item the note is on and the note is removed, " +
-				"and GitLab reports nothing about what the commands did, so read the item again to see what they changed")
-		}
-		return GraphQLNoteMutationResult[N]{}, errors.New(m.Op + ": no note returned")
+		return GraphQLNoteMutationResult[N]{}, missingNoteError(m)
 	}
 	return GraphQLNoteMutationResult[N]{Note: payload.Note, QuickActions: status}, nil
+}
+
+// missingNoteError is what a note mutation answered with neither note nor
+// status returns, as [ExecGraphQLNoteMutation] describes: for a fine-grained
+// session the write probably committed, with the body of commands alone as
+// the other reading, and otherwise the deletion an edit of commands alone
+// makes or the note a creation did not return.
+func missingNoteError(m GraphQLNoteMutation) error {
+	update := m.PayloadKey == updateNotePayloadKey
+	switch {
+	case m.Authority != nil && update:
+		return fmt.Errorf("%w%s", m.Authority.UnconfirmedWrite(m.Op, "note", nil), noteEditOrDeletion)
+	case m.Authority != nil:
+		return fmt.Errorf("%w%s", m.Authority.UnconfirmedWrite(m.Op, "note", nil), noteCreateOrCommands)
+	case update:
+		return errors.New(m.Op + ": GitLab deleted the note instead of editing it. " +
+			"A new body holding only quick actions is run against the item the note is on and the note is removed, " +
+			"and GitLab reports nothing about what the commands did, so read the item again to see what they changed")
+	default:
+		return errors.New(m.Op + ": no note returned")
+	}
 }
 
 // quickActionFailuresOnly reports whether every payload error is a quick

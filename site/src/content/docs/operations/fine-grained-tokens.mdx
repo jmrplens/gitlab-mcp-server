@@ -4,11 +4,11 @@ description: "Run GitLab MCP Server with a GitLab fine-grained personal access t
 datePublished: "2026-10-02"
 faq:
   - q: "Does GitLab MCP Server work with a fine-grained personal access token?"
-    a: "Yes, in every mode. The server reads a fine-grained token as unknown authority rather than read-only, reads its grant with the token itself, and shows each session the actions the grant reaches, judged against the permissions GitLab 19.5.0 declares. A call to any other action is answered with the permission it needs, in the words GitLab's token creation page uses."
+    a: "Yes, in every mode. The server reads a fine-grained token as unknown authority rather than read-only, reads its grant with the token itself, and shows each session the actions the grant reaches, judged against the permissions GitLab 19.6.1 declares. A call to any other action is answered with the permission it needs, in the words GitLab's token creation page uses."
   - q: "Which permissions does a fine-grained token need for the server to start?"
     a: "User: Read and Namespace: Read and Personal Access Token: Read at the user boundary, and Metadata: Read at the instance. Without Personal Access Token: Read or Metadata: Read the server still starts, but it cannot judge the grant, so it withholds only what no fine-grained token can reach and leaves the rest to GitLab. In HTTP mode a token without User: Read is refused at the door with 403."
   - q: "Why does an action say it is not available to a fine-grained token?"
-    a: "At GitLab 19.5.0, 55 actions of 1106 are refused or emptied for every fine-grained token whatever its grant, all of them over GraphQL, because they go through types or mutations that declare no fine-grained permission. Among them are the epic, work item and achievement actions. The answer names the type and the release, and the way out is a classic token."
+    a: "At GitLab 19.6.1, 14 actions of 1106 are refused or emptied for every fine-grained token whatever its grant, all of them over GraphQL, because they go through types or mutations that declare no fine-grained permission. Among them are the CI/CD catalog, branch rule, security attribute and security scan profile actions. The answer names the type and the release, and the way out is a classic token."
   - q: "I am missing a permission. Can I add it to my token?"
     a: "No. GitLab fixes a fine-grained token's grant when the token is created, and rotating a token gives the new token the same grant, as GitLab's [rotation API](https://docs.gitlab.com/api/personal_access_tokens/#rotate-a-personal-access-token) documents. Create a new token that grants what the answer names."
 ---
@@ -23,7 +23,7 @@ judges every request against the grant.
 
 Two facts about the grant decide most of this page:
 
-- **A grant cannot be changed after the token is created.** Nothing at GitLab 19.5
+- **A grant cannot be changed after the token is created.** Nothing at GitLab 19.6
   edits one: no route, GraphQL mutation or settings page. A missing permission
   therefore always means a new token.
 - **A grant is judged per request.** A token can be refused one call and served the
@@ -40,8 +40,8 @@ records why).
 
 :::note[GitLab release]
 Fine-grained tokens are generally available from GitLab 19.2, and were a beta from
-GitLab 18.10. The permissions this server knows are the ones GitLab 19.5.0 declares,
-and the grant is judged on an instance that reports a 19.5 release
+GitLab 18.10. The permissions this server knows are the ones GitLab 19.6.1 declares,
+and the grant is judged on an instance that reports a 19.6 release
 ([GitLab.com and other releases](#gitlabcom-and-other-releases)).
 :::
 
@@ -80,7 +80,7 @@ what is lost without it.
 On GitLab.com the tier is also read from the top-level groups the token is a member of,
 and no grant lets a fine-grained token answer that step: GitLab declares no fine-grained
 permission for whether a group's plan carries a licensed feature (the
-`LicensedFeatureAvailability` type, at GitLab 19.5), so it refuses that answer to every
+`LicensedFeatureAvailability` type, at GitLab 19.6.1), so it refuses that answer to every
 fine-grained token and the tier stays what the namespace plans said. A fine-grained token
 on GitLab.com that administers no paid namespace is therefore served the Free catalog;
 set `GITLAB_MCP_TIER` (`--tier` in HTTP mode) to the plan of the group you work in.
@@ -178,7 +178,7 @@ permissions above.
 Some pairings are GitLab's rather than this server's: a note on an issue or a merge
 request (`issue.note_create`, `mr_review.note_create`) is created with Work Item:
 Create, and a merge request discussion (`mr_review.discussion_create`) with Merge
-Request: Create, because that is what the routes declare at GitLab 19.5.0.
+Request: Create, because that is what the routes declare at GitLab 19.6.1.
 
 The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
 lists what every action needs, and `gitlab://tools/{id}` serves the same for one action
@@ -202,7 +202,7 @@ rule.
 
 ### The grant decides
 
-When the token may read its own grant and the instance runs GitLab 19.5, the release
+When the token may read its own grant and the instance runs GitLab 19.6, the release
 the server's permission table records, the server reads the grant with the token
 itself and judges every action against it. A session is then **listed** the actions
 its grant reaches, on every surface (`tools/list`, the dynamic surface's
@@ -211,7 +211,10 @@ the permission it needs, in the words the token creation page uses, without a re
 to GitLab. Two kinds of call are let through even though the listing leaves them out,
 so GitLab judges them: a read GitLab would serve on a public project or group whatever
 the grant, and, on the prerelease instance [below](#gitlabcom-and-other-releases),
-every call that is not withheld from all fine-grained tokens.
+every call that is not withheld from all fine-grained tokens. From GitLab 19.6 GitLab
+serves such a public read as an anonymous request, so a route that requires a signed-in
+user, such as an issue's links, refuses it with the permission the grant lacks, and the
+answer quotes that refusal.
 
 The grant is read once when the session starts and again on every revalidation: every
 15 minutes by default in HTTP mode (`--revalidate-interval`), and on a timer of the
@@ -237,15 +240,15 @@ The session falls back to withholding only what no fine-grained token can reach
 ([below](#what-no-fine-grained-token-can-reach)) and lets GitLab judge the rest, and
 every refusal says why the grant was not evaluated:
 
-| What the refusal says                                                                     | Cause                                                                                                                                    | What to do                                                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `The token cannot read its own grant`                                                     | The token lacks Personal Access Token: Read                                                                                              | Create a token that also grants it                                                                                                                                                                                                               |
-| `The instance did not report a version this server can read`                              | The token lacks Metadata: Read, or the instance answered with no release number this server can read                                     | Without Metadata: Read, create a token that also grants it. With it, check what `GET /api/v4/version` answers: only a GitLab release number of at most 64 bytes is read, so report a genuine release that is refused as an issue of this project |
-| `The instance reports GitLab x.y and the permissions are recorded for 19.5 only`          | The instance runs a release the table does not record                                                                                    | Nothing on your side; the table moves with the server's releases                                                                                                                                                                                 |
-| `The token's grant names a permission GitLab 19.5.0 does not define`                      | A permission GitLab renamed or added after 19.5                                                                                          | As above                                                                                                                                                                                                                                         |
-| `The token's grant is larger than this server reads`                                      | More than 1 MiB or 1000 scopes                                                                                                           | Grant at a group rather than project by project                                                                                                                                                                                                  |
-| `The token's grant holds a scope this server cannot read without guessing`                | An access level GitLab 19.5 does not define, a scope naming both a project and a group, or a `selected_memberships` scope naming neither | Report it as an issue of this project, quoting the reason the log line names                                                                                                                                                                     |
-| `The instance did not answer the request for the token's grant`, or `... for its version` | GitLab was unreachable at that moment                                                                                                    | Nothing; the next re-read asks again                                                                                                                                                                                                             |
+| What the refusal says                                                                     | Cause                                                                                                                                      | What to do                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `The token cannot read its own grant`                                                     | The token lacks Personal Access Token: Read                                                                                                | Create a token that also grants it                                                                                                                                                                                                               |
+| `The instance did not report a version this server can read`                              | The token lacks Metadata: Read, or the instance answered with no release number this server can read                                       | Without Metadata: Read, create a token that also grants it. With it, check what `GET /api/v4/version` answers: only a GitLab release number of at most 64 bytes is read, so report a genuine release that is refused as an issue of this project |
+| `The instance reports GitLab x.y and the permissions are recorded for 19.6 only`          | The instance runs a release the table does not record                                                                                      | Nothing on your side; the table moves with the server's releases                                                                                                                                                                                 |
+| `The token's grant names a permission GitLab 19.6.1 does not define`                      | A permission GitLab renamed or added after 19.6.1                                                                                          | As above                                                                                                                                                                                                                                         |
+| `The token's grant is larger than this server reads`                                      | More than 1 MiB or 1000 scopes                                                                                                             | Grant at a group rather than project by project                                                                                                                                                                                                  |
+| `The token's grant holds a scope this server cannot read without guessing`                | An access level GitLab 19.6.1 does not define, a scope naming both a project and a group, or a `selected_memberships` scope naming neither | Report it as an issue of this project, quoting the reason the log line names                                                                                                                                                                     |
+| `The instance did not answer the request for the token's grant`, or `... for its version` | GitLab was unreachable at that moment                                                                                                      | Nothing; the next re-read asks again                                                                                                                                                                                                             |
 
 The server writes one line at `INFO` when a session starts in this state, naming the
 reason (`grant-unreadable`, `version-unreadable`, `version-outside-record` and so on)
@@ -299,15 +302,15 @@ and on each accepted revalidation, as legacy mode does.
 ### What no fine-grained token can reach
 
 Some of what this server offers goes through GitLab GraphQL types or mutations that
-declare no fine-grained permission at GitLab 19.5.0, and GitLab refuses or empties
-those for every fine-grained token, whatever its grant. At 19.5.0 that is 55 actions of
+declare no fine-grained permission at GitLab 19.6.1, and GitLab refuses or empties
+those for every fine-grained token, whatever its grant. At 19.6.1 that is 14 actions of
 1106, all through GraphQL, each in one of three ways:
 
-| How GitLab answers                                                              | Actions | Examples                                                                                                                                                   |
-| ------------------------------------------------------------------------------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A type on the answer's path declares nothing: null, or a list emptied or nulled |      33 | the epic, work item and saved view reads (`group.epic_get`, `issue.work_item_list`), `branch.rule_list`, `ci_catalog.list`, `vulnerability.severity_count` |
-| The write commits, and the answer is null                                       |      19 | the achievement writes, `group.epic_create`, `issue.work_item_create`, `security_attribute.create`                                                         |
-| The mutation declares nothing and is refused                                    |       3 | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                                                           |
+| How GitLab answers                                                              | Actions | Examples                                                                                                         |
+| ------------------------------------------------------------------------------- | ------: | ---------------------------------------------------------------------------------------------------------------- |
+| A type on the answer's path declares nothing: null, or a list emptied or nulled |       7 | `branch.rule_list`, `ci_catalog.list`, `security_finding.list`, `vulnerability.severity_count`                   |
+| The write commits, and the answer is null                                       |       4 | `security_attribute.create`, `security_attribute.update`, `security_category.create`, `security_category.update` |
+| The mutation declares nothing and is refused                                    |       3 | `security_attribute.bulk_update`, `security_scan_profile.attach`, `security_scan_profile.detach`                 |
 
 These are withheld from every fine-grained session, with the reason, the GitLab release
 the verdict comes from and the way out, which is a classic token. The second row is
@@ -315,26 +318,33 @@ withheld for a reason beyond the empty answer: an assistant that reads a null as
 done" and tries again repeats a write GitLab already committed. The custom emoji
 actions left this set with GitLab 19.5, which declares Custom Emoji: Read, and so did
 the case of an epic GitLab declared at the project boundary only, which 19.5 also
-declares at the group boundary. One more
-action, `group.epic_list`, runs over REST and is served; with an input that makes it
-send its GraphQL request instead, GitLab answers that request empty, and the answer
-carries a note saying so.
+declares at the group boundary. 41 more left it with GitLab 19.6, which declares the
+namespace, achievement and target branch rule types among others: the epic, work item,
+saved view and achievement actions and the target branch rules.
 
 The [fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/)
 names the reason for each. An action leaves this set once a GitLab release declares
 the permission it lacks and this server records its table from that release, as the
-custom emoji actions did with 19.5; until then the way out is a classic token, and serving
+custom emoji actions did with 19.5 and the epic and work item actions with 19.6; until then the way out is a classic token, and serving
 over REST what GraphQL cannot reach is
 [issue 1054](https://github.com/jmrplens/gitlab-mcp-server/issues/1054).
 
 ### GitLab.com and other releases
 
-The permission table is recorded from GitLab 19.5.0, and the grant is judged only on an
-instance that reports a 19.5 release. An instance on another release, 19.4 included,
+The permission table is recorded from GitLab 19.6.1, and the grant is judged only on an
+instance that reports a 19.6 release. An instance on another release, 19.5 included,
 falls back as [above](#when-the-grant-is-not-evaluated), naming the version it reported
-and the one recorded. One exception is made for the prerelease of the minor right after
-the recorded one (`19.6.0-pre`), which is what GitLab.com reports: a session on an
-instance that reports it is **listed** what its grant reaches at 19.5.0, and every call
+and the one recorded. Such a session is withheld only what no fine-grained token reaches
+at 19.6.1, so on 19.5 the epic, work item, saved view and achievement actions are listed
+and passed to GitLab, which answers them empty or null for every fine-grained token as it
+did before 19.6. A read emptied that way comes without the
+[note](#what-an-empty-answer-can-mean) that says empty may not mean there is nothing,
+since the note reads the 19.6.1 table, where those types declare a permission; a write
+GitLab answers there without its object is still answered as
+[probably committed](#a-write-answered-without-its-object). One exception is made for
+the prerelease of the minor right after the recorded one (`19.7.0-pre`), which is what
+GitLab.com reports: a session on an instance that reports it is **listed** what its
+grant reaches at 19.6.1, and every call
 the fallback would allow is passed to GitLab, so a permission GitLab changed in that one
 milestone surfaces as GitLab's own refusal rather than as a refusal here with a stale
 name. Once GitLab.com moves past that prerelease, it falls back like any other release
@@ -349,7 +359,7 @@ It names the action by its canonical ID and opens with one of two stable texts. 
 the grant does not reach the action:
 
 ```text
-action "branch.create" exists but this fine-grained personal access token was not granted what it needs: the project permission [Branch: Create], as GitLab 19.5.0 declares it. Create a fine-grained token that grants it, or use a classic token with the api scope (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+action "branch.create" exists but this fine-grained personal access token was not granted what it needs: the project permission [Branch: Create], as GitLab 19.6.1 declares it. Create a fine-grained token that grants it, or use a classic token with the api scope (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
 ```
 
 The permissions are the ones the token creation page offers, grouped by the boundary
@@ -357,7 +367,7 @@ they are held at. When no fine-grained token reaches the action at that GitLab
 release:
 
 ```text
-action "ci_catalog.list" exists but is not available to a fine-grained personal access token: GitLab 19.5.0 declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, and answers such a read with null. Use a classic personal access token with read_api for reads or api for writes (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
+action "ci_catalog.list" exists but is not available to a fine-grained personal access token: GitLab 19.6.1 declares no fine-grained permission on the GraphQL type CiCatalogResource this action reads, and removes the items from such a list. Use a classic personal access token with read_api for reads or api for writes (an existing one, on an instance that no longer lets you create them), where the group does not refuse classic tokens. Do not report the capability as missing.
 ```
 
 When the grant was not evaluated, this second form also says why, in the words of the
@@ -410,7 +420,7 @@ A list can also answer an item as `null` where it sits rather than leave it out,
 the item's type declares neither a permission check of its own nor a fine-grained
 permission. Those items are left out of the answer rather than shown as rows with
 nothing in them. The CI/CD catalog listing counts them in its heading and says why in
-its next steps. At GitLab 19.5.0 that listing is itself withheld from a fine-grained
+its next steps. At GitLab 19.6.1 that listing is itself withheld from a fine-grained
 session ([above](#what-no-fine-grained-token-can-reach)), so the count is for a session
 it is served to anyway, such as one whose token kind the server could not learn
 ([above](#when-the-server-cannot-tell-what-kind-of-token-it-holds)).
@@ -433,21 +443,26 @@ Two kinds of write are answered this way:
   `vulnerability.confirm`, `vulnerability.resolve` and `vulnerability.revert`), since
   Vulnerability: Update does not grant Vulnerability: Read, the epic note edits
   (`group.epic_note_update` and `group.epic_discussion_update_note`), since Work Item:
-  Update does not grant Work Item: Read, and from GitLab 19.5 the custom emoji creation
-  (`custom_emoji.create`), since Custom Emoji: Create does not grant Custom Emoji: Read.
-  A session reaches one with a grant that holds
-  the write without the read, when the grant was not evaluated, or when it holds the
-  read on another project or group than the one written to. An edited note answered
+  Update does not grant Work Item: Read, from GitLab 19.5 the custom emoji creation
+  (`custom_emoji.create`), since Custom Emoji: Create does not grant Custom Emoji: Read,
+  and from GitLab 19.6 the epic note creations (`group.epic_note_create`,
+  `group.epic_discussion_create` and `group.epic_discussion_add_note`), whose note is read
+  with a permission Work Item: Create does not grant. An epic note created this way may
+  also be a body of quick actions alone, which GitLab runs without keeping a note, and the
+  answer says so. A session reaches one with a grant that holds the write without the
+  read, when the grant was not evaluated, or when it holds the read on another project
+  or group than the one written to. An edited note answered
   this way may also be a note GitLab deleted because its new body held only quick
   actions, and the answer says so, since a fine-grained token is not shown what told the
   two apart.
 - The writes of the second row of the
   [table above](#what-no-fine-grained-token-can-reach). With the table this server
-  records from GitLab 19.5.0 they are withheld from every session the server knows to be
-  fine-grained, whatever its grant and whatever release the instance runs. The answer is there for a table
-  recorded from a later release that stops withholding one while a grant can still leave
-  its object out, as the custom emoji creation did when GitLab 19.5 declared Custom
-  Emoji: Read.
+  records from GitLab 19.6.1 they are withheld from every session the server knows to be
+  fine-grained, whatever its grant and whatever release the instance runs. The answer
+  is there for a table recorded from a later release that stops withholding one while a
+  grant can still leave its object out, as the custom emoji creation did when GitLab
+  19.5 declared Custom Emoji: Read, and the epic and work item creations did with
+  GitLab 19.6.
 
 A token whose kind the server could not learn
 ([above](#when-the-server-cannot-tell-what-kind-of-token-it-holds)) is served as a
@@ -515,7 +530,7 @@ exactly as it would be without the flag.
 ## Further reading
 
 - [Fine-grained permissions reference](/gitlab-mcp-server/reference/fine-grained-permissions/):
-  what every action needs, generated from the handlers and from GitLab 19.5.0
+  what every action needs, generated from the handlers and from GitLab 19.6.1
 - [Troubleshooting](/gitlab-mcp-server/operations/troubleshooting/#fine-grained-tokens):
   GitLab's four refusal texts and what each means
 - [HTTP Server](/gitlab-mcp-server/operations/http-server/) and

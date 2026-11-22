@@ -1051,24 +1051,25 @@ func gitLabComReleaseProblem(version string, table *finegrained.Table) string {
 
 // TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNextPrerelease
 // holds the rule the live version test applies able to fail, against a
-// stand-in table recorded from 19.5.0: the table's own releases and the 19.6
-// prerelease pass, and an older release, a newer one, a prerelease two minors
-// ahead and a version that does not parse are each refused with the reason a
-// maintainer acts on. It needs no network and no token.
+// stand-in table recorded from 19.6.1, the release the committed table is
+// recorded from: the table's own releases and the 19.7 prerelease pass, and
+// an older release, a newer one, a prerelease two minors ahead and a version
+// that does not parse are each refused with the reason a maintainer acts on.
+// It needs no network and no token.
 func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNextPrerelease(t *testing.T) {
-	table := &finegrained.Table{Version: "19.5.0-ee", Bucket: "19.5"}
+	table := &finegrained.Table{Version: "19.6.1-ee", Bucket: "19.6"}
 	tests := []struct {
 		name    string
 		version string
 		want    string
 	}{
-		{name: "the release the table was recorded from", version: "19.5.0-ee"},
-		{name: "a patch of that release", version: "19.5.2-ee"},
-		{name: "the prerelease of that release", version: "19.5.0-pre"},
-		{name: "the prerelease of the release right after it", version: "19.6.0-pre"},
-		{name: "a prerelease two minors ahead", version: "19.7.0-pre", want: "make gen-action-grants"},
-		{name: "the release right after it", version: "19.6.0-ee", want: "make gen-api-live"},
-		{name: "an older release", version: "19.4.1-ee", want: "older than the release"},
+		{name: "the release the table was recorded from", version: "19.6.1-ee"},
+		{name: "a patch of that release", version: "19.6.3-ee"},
+		{name: "the prerelease of that release", version: "19.6.0-pre"},
+		{name: "the prerelease of the release right after it", version: "19.7.0-pre"},
+		{name: "a prerelease two minors ahead", version: "19.8.0-pre", want: "make gen-action-grants"},
+		{name: "the release right after it", version: "19.7.0-ee", want: "make gen-api-live"},
+		{name: "an older release", version: "19.5.5-ee", want: "older than the release"},
 		{name: "a version that does not parse", version: "", want: "does not start with a major.minor"},
 	}
 	for _, tt := range tests {

@@ -176,9 +176,11 @@ func TestExecGraphQLNoteMutation_UpdateToCommandsOnly_SaysTheNoteWasDeleted(t *t
 // session never sees one. The payload is then either an edit GitLab made or a
 // body of commands that deleted the note, and both ran, so the session is
 // told the write probably committed, with the deletion named as the other
-// reading, rather than that the note was deleted. The creation keeps its
-// answer: no fine-grained session reaches one, since each resolves the epic
-// through a namespace no fine-grained token can read.
+// reading, rather than that the note was deleted. A creation answered the
+// same way is told the note was probably created, with a body of commands
+// alone as the other reading: from GitLab 19.6, which declares the namespace
+// the epic is resolved through, a grant passes createNote without the read the
+// note it made needs.
 func TestExecGraphQLNoteMutation_UpdateWithoutNote_FineGrainedSessionIsToldTheEditProbablyCommitted(t *testing.T) {
 	authority := finegrained.Unevaluated(&finegrained.Table{Version: "19.4.1-ee"}, finegrained.FallbackNone, "")
 	gql := fakeGraphQL{body: `{"data":{"updateNote":{"note":null,"errors":[],"quickActionsStatus":null}}}`}
@@ -199,8 +201,14 @@ func TestExecGraphQLNoteMutation_UpdateWithoutNote_FineGrainedSessionIsToldTheEd
 	_, err = ExecGraphQLNoteMutation[testNote](context.Background(), created, GraphQLNoteMutation{
 		Op: "epicNoteCreate", PayloadKey: "createNote", Authority: authority,
 	})
-	if err == nil || err.Error() != "epicNoteCreate: no note returned" {
-		t.Errorf("creation err = %v, want the answer it always had", err)
+	if !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+		t.Fatalf("creation err = %v, want an unconfirmed write", err)
+	}
+	const createdOpening = "epicNoteCreate: GitLab answered without the note this write returns."
+	const commands = " If the body held only quick actions, GitLab ran them and kept no note: " +
+		"a fine-grained token is not shown the quick actions status that tells the two apart, so read the item again either way."
+	if !strings.HasPrefix(err.Error(), createdOpening) || !strings.HasSuffix(err.Error(), commands) {
+		t.Errorf("creation err = %q, want it to open with %q and end with %q", err, createdOpening, commands)
 	}
 }
 

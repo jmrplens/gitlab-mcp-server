@@ -1467,6 +1467,48 @@ func TestAddNote(t *testing.T) {
 // UpdateNote
 // --------------------------------------------------------------------------
 
+// TestCreateAndAddNote_NoteAnsweredNull_FineGrainedSessionIsToldTheNoteProbablyExists
+// verifies both creations hand their client's authority to the note mutation:
+// a thread or a reply answered with neither note nor status is, for a
+// fine-grained token granted Work Item: Create and not what the note is read
+// with, a note GitLab made and then hid, so that session is told it probably
+// committed, while a classic one keeps the missing note it always read there.
+func TestCreateAndAddNote_NoteAnsweredNull_FineGrainedSessionIsToldTheNoteProbablyExists(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"createNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[],"quickActionsStatus":null}}`)
+		},
+	})
+	for _, tc := range []struct {
+		name string
+		call func(*gitlabclient.Client) error
+	}{
+		{name: "create", call: func(c *gitlabclient.Client) error {
+			_, err := Create(context.Background(), c, CreateInput{FullPath: testFullPath, IID: 5, Body: "new thread"})
+			return err
+		}},
+		{name: "add_note", call: func(c *gitlabclient.Client) error {
+			_, err := AddNote(context.Background(), c, AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "a reply"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fineClient := testutil.NewTestClient(t, handler)
+			fineClient.SetAuthority(finegrained.Unevaluated(&finegrained.Table{Version: "19.6.1-ee"}, finegrained.FallbackNone, ""))
+			if err := tc.call(fineClient); !errors.Is(err, finegrained.ErrUnconfirmedWrite) {
+				t.Errorf("fine-grained %s error = %v, want an unconfirmed write", tc.name, err)
+			}
+			err := tc.call(testutil.NewTestClient(t, handler))
+			if errors.Is(err, finegrained.ErrUnconfirmedWrite) || err == nil || !strings.Contains(err.Error(), "no note returned") {
+				t.Errorf("classic %s error = %v, want the missing note it always read", tc.name, err)
+			}
+		})
+	}
+}
+
 // TestUpdateNote_NoteAnsweredNull_FineGrainedSessionIsToldTheEditProbablyCommitted
 // verifies the handler hands its client's authority to the note mutation: an
 // edit answered with neither note nor status is, for a fine-grained token
