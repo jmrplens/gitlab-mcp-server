@@ -17,6 +17,13 @@ const toolName = "release_packages"
 const usage = `usage: release_packages mcpb VERSION [DIST]
        release_packages mcpb-manifest PLATFORM [MANIFEST]
        release_packages server-json-packages [SERVER_JSON]
+       release_packages npm --binaries DIR --version VERSION [--out DIR] [--allow-unverified]
+       release_packages npm --sync-only --version VERSION
+       release_packages pypi --binaries DIR --version VERSION [--out DIR] [--allow-unverified]
+       release_packages nuget --binaries DIR --version VERSION [--out DIR] [--allow-unverified]
+       release_packages validate-npm --version VERSION [--packages DIR] [--main DIR] [--no-install]
+       release_packages validate-pypi --version VERSION [--wheels DIR] [--no-install]
+       release_packages validate-nuget --version VERSION [--packages DIR] [--no-install]
 `
 
 // exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
@@ -57,6 +64,18 @@ func runIn(root string, args []string, stdout, stderr io.Writer, getenv func(str
 			break
 		}
 		return newServerJSONCheck(root, optional(rest, 0, "server.json"), stdout, stderr, getenv).run()
+	case "npm":
+		return runNpm(root, rest, stdout, stderr)
+	case "pypi":
+		return runPypi(root, rest, stdout, stderr)
+	case "nuget":
+		return runNuget(root, rest, stdout, stderr)
+	case "validate-npm":
+		return runValidateNpm(root, rest, stdout, stderr)
+	case "validate-pypi":
+		return runValidatePypi(root, rest, stdout, stderr)
+	case "validate-nuget":
+		return runValidateNuget(root, rest, stdout, stderr)
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0

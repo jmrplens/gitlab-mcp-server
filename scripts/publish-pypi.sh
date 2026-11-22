@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # publish-pypi.sh assembles, validates and publishes the PyPI distribution for
-# one release: the six platform wheels scripts/build_pypi.py writes.
+# one release: the six platform wheels cmd/release_packages writes.
 #
 # Usage:
 #   scripts/publish-pypi.sh <binaries-dir> <version> [--dry-run] [--no-assemble] [--trusted-publishing]
@@ -97,9 +97,9 @@ elif [ "$DRY_RUN" = 0 ] && [ -z "$PYPI_TOKEN_VALUE" ]; then
   exit 1
 fi
 
-# The six platform tags scripts/build_pypi.py builds a wheel for, and so the
+# The six platform tags cmd/release_packages builds a wheel for, and so the
 # only wheels a publish uploads, named here as publish-npm.sh names its
-# PLATFORM_KEYS. validate_pypi.py's EXPECTED_TAGS holds the same six; they are
+# PLATFORM_KEYS. Its releasePlatforms table holds the same six; they are
 # listed in the order of their file names, the order twine and the signer are
 # handed the wheels in. The list is built with a loop rather than a pattern
 # substitution, which bash 5.2 would apply to an & in the checkout's path.
@@ -118,8 +118,8 @@ done
 
 # assert_wheelhouse holds pypi/dist to what is about to be uploaded: the six
 # wheels of $VERSION, each a regular file, and nothing else, a hidden file
-# included. build_pypi.py stops at the first release binary it cannot find and
-# leaves the wheels it built before it, and a published file name is burned
+# included. A wheelhouse can be short of a wheel (a build interrupted, a file
+# removed by hand), and a published file name is burned
 # forever, so a missing platform is refused here rather than found by the
 # read-back once the others are permanent. A wheel of another tag or version
 # would be published with this one, and an attestation left behind would be
@@ -195,8 +195,18 @@ mask() {
 }
 
 if [ "$ASSEMBLE" = 1 ]; then
-  python3 "$ROOT/scripts/build_pypi.py" --binaries "$BINARIES" --version "$VERSION" --out "$WHEELHOUSE"
-  python3 "$ROOT/scripts/validate_pypi.py" --wheels "$WHEELHOUSE" --version "$VERSION"
+  # The wheels are built and validated by cmd/release_packages, at the path
+  # RELEASE_PACKAGES names (the make targets build it and set it). It reads
+  # the repository from its working directory, so it runs in ROOT, with the
+  # two paths it is given made absolute first.
+  if [ -z "${RELEASE_PACKAGES:-}" ]; then
+    echo "ERROR: set RELEASE_PACKAGES to a build of cmd/release_packages, as the Makefile's publish targets do, or pass --no-assemble" >&2
+    exit 1
+  fi
+  TOOL="$(cd "$(dirname "$RELEASE_PACKAGES")" && pwd)/$(basename "$RELEASE_PACKAGES")"
+  BINARIES_ABS="$(cd "$BINARIES" && pwd)"
+  (cd "$ROOT" && "$TOOL" pypi --binaries "$BINARIES_ABS" --version "$VERSION" --out "$WHEELHOUSE")
+  (cd "$ROOT" && "$TOOL" validate-pypi --wheels "$WHEELHOUSE" --version "$VERSION")
 fi
 assert_wheelhouse
 

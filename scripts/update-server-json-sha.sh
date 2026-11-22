@@ -281,13 +281,16 @@ else
 fi
 
 # 8. Update the npm launcher package version and its optionalDependency pins.
-# The generator owns the whole mapping (version + all six pins move together),
-# so this stays the single source rather than a jq edit that could pin the
-# version while leaving the dependency specs behind. The per-platform packages
-# are built from the release binaries at publish time, not stamped here.
+# The npm builder owns the whole mapping (version + all six pins move
+# together), so this stays the single source rather than a jq edit that could
+# pin the version while leaving the dependency specs behind. It is
+# cmd/release_packages, at the path RELEASE_PACKAGES names, which the release
+# job that commits the manifests builds from its own checkout of main. The
+# per-platform packages are built from the release binaries at publish time,
+# not stamped here.
 NPM_MAIN="npm/gitlab-mcp-server/package.json"
-if [[ -f "$NPM_MAIN" ]] && command -v node >/dev/null 2>&1; then
-  node scripts/build-npm.mjs --sync-only --version "$VERSION"
+if [[ -f "$NPM_MAIN" && -n "${RELEASE_PACKAGES:-}" ]]; then
+  "$RELEASE_PACKAGES" npm --sync-only --version "$VERSION"
 else
-  echo "NOTE: $NPM_MAIN not found or node unavailable, skipping npm manifest update"
+  echo "NOTE: $NPM_MAIN not found or RELEASE_PACKAGES not set, skipping npm manifest update"
 fi

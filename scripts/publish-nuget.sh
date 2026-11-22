@@ -26,8 +26,9 @@
 # refuses a tree that is missing or built for another version rather than
 # letting the flag turn a skipped build into a stale publish.
 #
-# Needs python3 for the packer and validator and the .NET 10 SDK on PATH for
-# the install check and the push. Without an SDK on the machine, run the whole
+# Needs cmd/release_packages, at the path RELEASE_PACKAGES names (the make
+# targets build it and set it), to pack and validate, and the .NET 10 SDK on
+# PATH for the install check and the push. Without an SDK on the machine, run the whole
 # thing from the SDK container: `make validate-nuget NUGET_BINARIES=dist`
 # covers everything but the push.
 set -euo pipefail
@@ -92,8 +93,17 @@ assert_assembled() {
 
 if [ "$ASSEMBLE" -eq 1 ]; then
   echo "Assembling NuGet distribution for v$VERSION"
-  python3 "$ROOT/scripts/build_nuget.py" --binaries "$BINARIES_DIR" --version "$VERSION" --out "$OUT"
-  python3 "$ROOT/scripts/validate_nuget.py" --packages "$OUT" --version "$VERSION"
+  # cmd/release_packages reads the repository from its working directory, so
+  # it runs in ROOT, with the paths it is given made absolute first.
+  if [ -z "${RELEASE_PACKAGES:-}" ]; then
+    echo "ERROR: set RELEASE_PACKAGES to a build of cmd/release_packages, as the Makefile's publish targets do, or pass --no-assemble" >&2
+    exit 1
+  fi
+  TOOL="$(cd "$(dirname "$RELEASE_PACKAGES")" && pwd)/$(basename "$RELEASE_PACKAGES")"
+  BINARIES_ABS="$(cd "$BINARIES_DIR" && pwd)"
+  OUT_ABS="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
+  (cd "$ROOT" && "$TOOL" nuget --binaries "$BINARIES_ABS" --version "$VERSION" --out "$OUT_ABS")
+  (cd "$ROOT" && "$TOOL" validate-nuget --packages "$OUT_ABS" --version "$VERSION")
 else
   echo "Publishing the NuGet distribution already assembled in $OUT"
   assert_assembled

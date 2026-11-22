@@ -32,6 +32,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -100,11 +101,16 @@ var packagesDifferences = map[string]struct {
 	// Every asset is read before any package is written, and an absent
 	// binary is named, where node threw its ENOENT.
 	"npm: refuses a missing binary": {1, "release_packages: missing release binary dist/gitlab-mcp-server-windows-amd64.exe\n"},
-	// The licence is named by its path in the repository, where the
+	// The license is named by its path in the repository, where the
 	// scripts printed the path they built from their own location.
-	"npm: refuses a missing LICENSE":   {1, "release_packages: licence file LICENSE not found at LICENSE\n"},
-	"pypi: refuses a missing LICENSE":  {1, "release_packages: licence file LICENSE not found at LICENSE\n"},
-	"nuget: refuses a missing LICENSE": {1, "release_packages: licence file LICENSE not found at LICENSE\n"},
+	"npm: refuses a missing LICENSE":   {1, "release_packages: license file LICENSE not found at LICENSE\n"},
+	"pypi: refuses a missing LICENSE":  {1, "release_packages: license file LICENSE not found at LICENSE\n"},
+	"nuget: refuses a missing LICENSE": {1, "release_packages: license file LICENSE not found at LICENSE\n"},
+	// An asset checksums.txt does not list is named with the file's path,
+	// as build-npm.mjs named it, where the Python builders named the file
+	// alone.
+	"pypi: refuses a binary checksums.txt does not list":  {1, "release_packages: gitlab-mcp-server-windows-amd64.exe is not listed in dist/checksums.txt\n"},
+	"nuget: refuses a binary checksums.txt does not list": {1, "release_packages: gitlab-mcp-server-windows-amd64.exe is not listed in dist/checksums.txt\n"},
 }
 
 // packageStandIn is the bytes a scratch dist/ holds for a release asset,
@@ -141,15 +147,15 @@ func layOutPackagesTree(t *testing.T, record *packagesRecord, ops []treeOp) stri
 		file := filepath.Join(root, filepath.FromSlash(op.Path))
 		switch op.Op {
 		case "remove":
-			if err := os.Remove(file); err != nil {
-				t.Fatal(err)
+			if stepErr := os.Remove(file); stepErr != nil {
+				t.Fatal(stepErr)
 			}
 		case "write":
 			writeFile(t, root, op.Path, []byte(op.Content))
 		case "append":
-			data, err := os.ReadFile(file)
-			if err != nil {
-				t.Fatal(err)
+			data, readErr := os.ReadFile(file)
+			if readErr != nil {
+				t.Fatal(readErr)
 			}
 			writeFile(t, root, op.Path, append(data, op.Content...))
 		default:
@@ -173,7 +179,7 @@ func snapshotTree(t *testing.T, root string) map[string][]byte {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		data, err := os.ReadFile(file)
+		data, err := os.ReadFile(file) //#nosec G122 -- a scratch tree the test wrote
 		if err != nil {
 			return err
 		}
@@ -216,7 +222,7 @@ func expectedStdout(recorded string) string {
 // where the scripts named themselves, and no em dash.
 func expectedStderr(recorded string) string {
 	var lines []string
-	for _, line := range strings.Split(recorded, "\n") {
+	for line := range strings.SplitSeq(recorded, "\n") {
 		switch {
 		case strings.HasPrefix(line, "Error: "):
 			lines = append(lines, toolName+": "+strings.TrimPrefix(line, "Error: "))
@@ -230,7 +236,7 @@ func expectedStderr(recorded string) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	return strings.ReplaceAll(strings.Join(lines, "\n")+"\n", " — ", ": ")
+	return strings.ReplaceAll(strings.Join(lines, "\n")+"\n", " "+string(rune(0x2014))+" ", ": ")
 }
 
 // TestPackages_BuildersRecord_PacksWhatTheScriptsPacked verifies that every
@@ -249,47 +255,48 @@ func TestPackages_BuildersRecord_PacksWhatTheScriptsPacked(t *testing.T) {
 	for _, run := range record.Runs {
 		t.Run(run.Name, func(t *testing.T) {
 			t.Parallel()
-
-			root := layOutPackagesTree(t, &record, run.Ops)
-			before := snapshotTree(t, root)
-			var stdout, stderr bytes.Buffer
-			code := runIn(root, append([]string{run.Tool}, run.Args...), &stdout, &stderr, noEnv)
-			after := snapshotTree(t, root)
-
-			wantExit, wantStderr := run.Exit, expectedStderr(run.Stderr)
-			if difference, declared := packagesDifferences[run.Name]; declared {
-				wantExit, wantStderr = difference.exit, difference.stderr
-			}
-			if code != wantExit {
-				t.Errorf("exit = %d, want %d (stderr %q)", code, wantExit, stderr.String())
-			}
-			if stderr.String() != wantStderr {
-				t.Errorf("stderr:\n got %q\nwant %q", stderr.String(), wantStderr)
-			}
-			changed := changedOutputs(before, after)
-			if run.Exit != 0 {
-				if stdout.Len() != 0 || len(changed) != 0 {
-					t.Errorf("a refused run printed %q and left %q, want nothing", stdout.String(), changed)
-				}
-				return
-			}
-			if want := expectedStdout(run.Stdout); stdout.String() != want {
-				t.Errorf("stdout:\n got %q\nwant %q", stdout.String(), want)
-			}
-			var recorded []string
-			for rel := range run.Files {
-				recorded = append(recorded, rel)
-			}
-			sort.Strings(recorded)
-			if !slices.Equal(changed, recorded) {
-				t.Errorf("the run left %q, want %q", changed, recorded)
-			}
-			for _, rel := range recorded {
-				if got, made := after[rel]; made {
-					comparePackageOutput(t, root, rel, got, run.Files[rel])
-				}
-			}
+			repeatPackagesRun(t, &record, run)
 		})
+	}
+}
+
+// repeatPackagesRun runs one recorded run again and holds it to the record.
+func repeatPackagesRun(t *testing.T, record *packagesRecord, run packagesRun) {
+	t.Helper()
+	root := layOutPackagesTree(t, record, run.Ops)
+	before := snapshotTree(t, root)
+	var stdout, stderr bytes.Buffer
+	code := runIn(root, append([]string{run.Tool}, run.Args...), &stdout, &stderr, noEnv)
+	after := snapshotTree(t, root)
+
+	wantExit, wantStderr := run.Exit, expectedStderr(run.Stderr)
+	if difference, declared := packagesDifferences[run.Name]; declared {
+		wantExit, wantStderr = difference.exit, difference.stderr
+	}
+	if code != wantExit {
+		t.Errorf("exit = %d, want %d (stderr %q)", code, wantExit, stderr.String())
+	}
+	if stderr.String() != wantStderr {
+		t.Errorf("stderr:\n got %q\nwant %q", stderr.String(), wantStderr)
+	}
+	changed := changedOutputs(before, after)
+	if run.Exit != 0 {
+		if stdout.Len() != 0 || len(changed) != 0 {
+			t.Errorf("a refused run printed %q and left %q, want nothing", stdout.String(), changed)
+		}
+		return
+	}
+	if want := expectedStdout(run.Stdout); stdout.String() != want {
+		t.Errorf("stdout:\n got %q\nwant %q", stdout.String(), want)
+	}
+	recorded := slices.Sorted(maps.Keys(run.Files))
+	if !slices.Equal(changed, recorded) {
+		t.Errorf("the run left %q, want %q", changed, recorded)
+	}
+	for _, rel := range recorded {
+		if got, made := after[rel]; made {
+			comparePackageOutput(t, root, rel, got, run.Files[rel])
+		}
 	}
 }
 
@@ -311,6 +318,13 @@ func comparePackageOutput(t *testing.T, root, rel string, got []byte, want recor
 		}
 		return
 	}
+	compareArchive(t, rel, got, want.Entries)
+}
+
+// compareArchive holds a wheel or a NuGet package to the recorded entries.
+func compareArchive(t *testing.T, rel string, got []byte, entries []recordedEntry) {
+	t.Helper()
+	want := recordedOutput{Entries: entries}
 	archive, err := zip.NewReader(bytes.NewReader(got), int64(len(got)))
 	if err != nil {
 		t.Fatalf("%s: %v", rel, err)
@@ -330,7 +344,7 @@ func comparePackageOutput(t *testing.T, root, rel string, got []byte, want recor
 		entry := want.Entries[index]
 		data := readEntry(t, file)
 		attrs := fmt.Sprintf("mode 0o%o, system %d, date %#x time %#x, method %d, descriptor %t, extra %d bytes",
-			file.ExternalAttrs>>16, file.CreatorVersion>>8, file.ModifiedDate, file.ModifiedTime, file.Method, file.Flags&0x8 != 0, len(file.Extra)) //nolint:staticcheck // the MS-DOS fields are what the record holds
+			file.ExternalAttrs>>16, file.CreatorVersion>>8, file.ModifiedDate, file.ModifiedTime, file.Method, file.Flags&0x8 != 0, len(file.Extra))
 		wantAttrs := fmt.Sprintf("mode %s, system %d, date %#x time %#x, method %d, descriptor %t, extra %d bytes",
 			entry.Mode, entry.CreateSystem, zipEpochDate, zipEpochTime, entry.CompressType, entry.DataDescriptor, len(entry.Extra))
 		if entry.DateTime != "1980-01-01 00:00:00" {
@@ -347,7 +361,12 @@ func comparePackageOutput(t *testing.T, root, rel string, got []byte, want recor
 			wheelLine = fmt.Sprintf("%s,sha256=%s,%d", entry.Name, base64.RawURLEncoding.EncodeToString(sum[:]), len(data))
 			data = bytes.Replace(data, []byte("Generator: gitlab-mcp-server release_packages"), []byte("Generator: gitlab-mcp-server build_pypi.py"), 1)
 		case strings.HasSuffix(entry.Name, ".dist-info/RECORD"):
-			data = []byte(expectedRecord(t, want.Entries, wheelLine))
+			// The script's RECORD with the WHEEL line as this command
+			// writes it; every other line is held to the recorded entries.
+			if record := expectedRecord(t, want.Entries, wheelLine); string(data) != record {
+				t.Errorf("%s: RECORD:\n%s", rel, firstDifference(string(data), record))
+			}
+			continue
 		}
 		if sha256Hex(data) != entry.SHA256 || len(data) != entry.Size {
 			t.Errorf("%s: %s is %d bytes, sha256 %s, want %d and %s%s", rel, entry.Name, len(data), sha256Hex(data), entry.Size, entry.SHA256, textDiff(data, entry.Text))
@@ -387,4 +406,83 @@ func textDiff(got []byte, want *string) string {
 		return ""
 	}
 	return "\n" + firstDifference(string(got), *want)
+}
+
+// TestBuilders_RefuseACommandLineTheyCannotUse covers the flags the three
+// builders share: a flag they do not know, an argument beside the flags, a
+// missing version and, for PyPI and NuGet, missing release assets are usage
+// errors that write nothing.
+func TestBuilders_RefuseACommandLineTheyCannotUse(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"npm", "--nope"}, want: "flag provided but not defined: -nope"},
+		{args: []string{"pypi", "--version", "1.0.0", "--binaries", "dist", "extra"}, want: `release_packages pypi: unexpected argument "extra"`},
+		{args: []string{"nuget", "--binaries", "dist"}, want: "release_packages nuget: --version <x.y.z> is required"},
+		{args: []string{"pypi", "--version", "1.0.0"}, want: "release_packages pypi: --binaries <dir> is required"},
+		{args: []string{"nuget", "--version", "1.0.0"}, want: "release_packages nuget: --binaries <dir> is required"},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			var stdout, stderr bytes.Buffer
+			if code := runIn(root, tc.args, &stdout, &stderr, noEnv); code != 2 || !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("exit %d, stderr %q, want 2 and %q", code, stderr.String(), tc.want)
+			}
+			if entries, _ := os.ReadDir(root); len(entries) != 0 {
+				t.Errorf("a refused command line left %d files", len(entries))
+			}
+		})
+	}
+}
+
+// TestBuilders_RefuseAChecksumFileTheyCannotRead covers a checksums.txt
+// that is there and malformed: refused with the line named, where the
+// scripts skipped any line they could not read.
+func TestBuilders_RefuseAChecksumFileTheyCannotRead(t *testing.T) {
+	t.Parallel()
+
+	for _, tool := range []string{"npm", "pypi", "nuget"} {
+		t.Run(tool, func(t *testing.T) {
+			t.Parallel()
+
+			root := releaseTree(t)
+			writeFile(t, root, "dist/checksums.txt", []byte("not a checksum line\n"))
+			var stdout, stderr bytes.Buffer
+			code := runIn(root, []string{tool, "--binaries", "dist", "--version", "9.8.7"}, &stdout, &stderr, noEnv)
+			if code != 1 || !strings.Contains(stderr.String(), "is not a SHA-256 and a file name separated by two spaces") {
+				t.Errorf("exit %d, stderr %q, want 1 and the line refused", code, stderr.String())
+			}
+		})
+	}
+}
+
+// TestSyncNpmMain_RefusesALauncherItCannotRead covers --sync-only over a
+// launcher package.json that is not there or not a JSON object.
+func TestSyncNpmMain_RefusesALauncherItCannotRead(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, content string
+	}{
+		{name: "absent"},
+		{name: "not an object", content: "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			if tc.content != "" {
+				writeFile(t, root, npmMainDir+"/package.json", []byte(tc.content))
+			}
+			var stdout, stderr bytes.Buffer
+			if code := runIn(root, []string{"npm", "--sync-only", "--version", "9.8.7"}, &stdout, &stderr, noEnv); code != 1 {
+				t.Errorf("exit %d, want 1 (stderr %q)", code, stderr.String())
+			}
+		})
+	}
 }

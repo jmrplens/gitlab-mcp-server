@@ -119,13 +119,8 @@ distribution:
           - npm/**
           - pypi/**
           - nuget/**
-          - scripts/build-npm.mjs
-          - scripts/build_pypi.py
-          - scripts/build_nuget.py
+          - cmd/release_packages/**
           - scripts/publish-*
-          - scripts/validate-npm.mjs
-          - scripts/validate_pypi.py
-          - scripts/validate_nuget.py
           - scripts/update-homebrew-tap.sh
           - scripts/update-server-json-sha.sh
           - scripts/fetch-release-assets.sh
