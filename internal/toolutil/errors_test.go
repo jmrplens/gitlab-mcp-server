@@ -3387,6 +3387,45 @@ func TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus(t *testing.T) {
 	})
 }
 
+// TestClassifyError_GraphQLRefusalAnsweredWith200_IsNoTransportFailure
+// verifies that a GraphQL refusal GitLab answered with HTTP 200 is described
+// as GitLab's refusal, whatever words its messages use.
+//
+// client-go hands such a refusal over with no response, so the classifier
+// found no status and went on to the network branches, two of which match the
+// text of the error: a refusal naming a "certificate" field read as a failed
+// TLS handshake and one quoting "connection refused" as an unreachable
+// server, sending the caller to check GITLAB_URL or turn verification off for
+// a request GitLab answered. Three client-go writes hand it over matching the
+// not-found sentinel as well, which described every one of them as a 404
+// until the refusal was read first (issue 1784).
+func TestClassifyError_GraphQLRefusalAnsweredWith200_IsNoTransportFailure(t *testing.T) {
+	refusalOf := func(t *testing.T, message string) error {
+		t.Helper()
+		refusal := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+		if err := json.Unmarshal([]byte(graphQLErrorsBody(t, message)), &refusal.Errors); err != nil {
+			t.Fatalf("decode the refusal's errors: %v", err)
+		}
+		return fmt.Errorf("create security attributes: %w", refusal)
+	}
+	_, matching := refusalMatchingNotFound(t, graphQLErrorsBody(t, `Field "certificate" doesn't exist on type "SecurityCategory"`))
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "a message naming a certificate", err: refusalOf(t, `Field "certificate" doesn't exist on type "SecurityAttribute"`)},
+		{name: "a message quoting a refused connection", err: refusalOf(t, "the scanner reported connection refused")},
+		{name: "a refusal matching the not-found sentinel", err: matching},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyError(tt.err); got != graphQLRefusalDescription {
+				t.Errorf("ClassifyError() = %q, want %q", got, graphQLRefusalDescription)
+			}
+		})
+	}
+}
+
 // TestSanitizeError_GraphQLRefusalAnsweredWith200_BoundsItsMessages verifies
 // that the messages of a GraphQL refusal GitLab answered with HTTP 200 are
 // bounded the way those of one answered with any other status are.
