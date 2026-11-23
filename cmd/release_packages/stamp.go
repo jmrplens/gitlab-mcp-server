@@ -6,6 +6,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -117,7 +118,7 @@ func (s *stamp) run(checksums, mcpbFiles string) int {
 		if code := step(server); code != 0 {
 			return code
 		}
-		if err = writeFileMode(serverFile, server.pretty(), 0o644); err != nil {
+		if err = replaceFile(serverFile, server.pretty()); err != nil {
 			return s.errorf("%v", err)
 		}
 	}
@@ -126,7 +127,7 @@ func (s *stamp) run(checksums, mcpbFiles string) int {
 		return s.errorf("%v", err)
 	}
 	updated += s.declareBundles(server, bundles, mcpbFiles != "")
-	if err = writeFileMode(serverFile, server.pretty(), 0o644); err != nil {
+	if err = replaceFile(serverFile, server.pretty()); err != nil {
 		return s.errorf("%v", err)
 	}
 	s.sayf("Updated %d of %d package entries", updated, len(server.field("packages").items))
@@ -135,6 +136,29 @@ func (s *stamp) run(checksums, mcpbFiles string) int {
 			"identifier, and no .mcpb bundle was passed as the third argument.")
 	}
 	return s.stampOthers()
+}
+
+// replaceFile writes a manifest as the script's jq > tmp.$$.json && mv did:
+// the whole document to a new file beside it, which then takes its name, so
+// a write that fails part way, a full disk for one, leaves the manifest it
+// was replacing intact and no temporary file behind. The new file is 0644,
+// what the script's redirection made.
+func replaceFile(file string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(file), "."+filepath.Base(file)+".*") //#nosec G304,G703 -- beside a manifest of the repository
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	_, err = tmp.Write(data)
+	err = errors.Join(err, tmp.Chmod(0o644), tmp.Close())
+	if err == nil {
+		err = os.Rename(name, file) //#nosec G703 -- the file CreateTemp made, over the manifest it replaces
+	}
+	if err != nil {
+		_ = os.Remove(name) //#nosec G703 -- the file CreateTemp made for this write
+		return err
+	}
+	return nil
 }
 
 // isRegularFile reports whether name is a regular file, following links, as
@@ -173,7 +197,8 @@ func (s *stamp) readBundles(list string) ([]stampBundle, error) {
 		name := filepath.Base(file)
 		data, err := os.ReadFile(localPath(s.root, file)) //#nosec G304,G703 -- a bundle the release built
 		if err != nil {
-			return nil, err
+			s.errorf("mcpb bundle %s cannot be read: %v", file, err)
+			return nil, errRefused
 		}
 		platforms, ok := bundlePlatforms(data)
 		if !ok {
@@ -467,7 +492,7 @@ func (s *stamp) stampOthers() int {
 			return s.errorf("%v", err)
 		}
 		doc.set("version", jsonText(s.version))
-		if err = writeFileMode(file, doc.pretty(), 0o644); err != nil {
+		if err = replaceFile(file, doc.pretty()); err != nil {
 			return s.errorf("%v", err)
 		}
 		s.sayf("%s version set to %s", manifest[0], s.version)
