@@ -136,13 +136,19 @@ func TestRenderRecordPage_EmptyRecord_StillAPage(t *testing.T) {
 // promised `yes` on 19.6 contradicted such a row drawn right above it.
 func TestRenderRecordPage_TierConfirmed_SaysWhichRunsReadYes(t *testing.T) {
 	page := renderRecordPage(pageFixture(t))
-	for _, want := range []string{
-		"so a run recorded by the probe that reads it shows `yes` in the `ce` half",
-		"a run recorded before issue 1491, on any release, shows `no`",
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the provenance sentence does not say %q:\n%s", want, page)
-		}
+	cases := []struct {
+		name string
+		want string
+	}{
+		{name: "a run recorded by the probe", want: "so a run recorded by the probe that reads it shows `yes` in the `ce` half"},
+		{name: "a run recorded before it", want: "a run recorded before issue 1491, on any release, shows `no`"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(page, tc.want) {
+				t.Errorf("the provenance sentence does not say %q:\n%s", tc.want, page)
+			}
+		})
 	}
 }
 
