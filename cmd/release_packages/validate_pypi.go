@@ -331,8 +331,15 @@ func (v *validation) twineCheck(wheels []string) {
 
 // pypiHandshake installs the wheel into a throwaway virtual environment and
 // drives both console scripts, the binary under its own name and the one
-// named after the distribution.
+// named after the distribution. pip runs in the temporary directory, so the
+// wheel reaches it as an absolute path: the release names the wheelhouse
+// relative to the checkout.
 func (v *validation) pypiHandshake(wheel string) {
+	wheel, err := filepath.Abs(wheel)
+	if err != nil {
+		v.failf("handshake: %v", err)
+		return
+	}
 	tmp, err := os.MkdirTemp("", "pypi-validate-")
 	if err != nil {
 		v.failf("handshake: %v", err)
