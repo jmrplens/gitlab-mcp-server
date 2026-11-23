@@ -21,6 +21,8 @@ const (
 	npmMainName   = npmScope + "/gitlab-mcp-server"
 	npmMainDir    = "npm/gitlab-mcp-server"
 	npmPackageDir = "npm/packages"
+	// npmManifest is the manifest every npm package carries.
+	npmManifest = "package.json"
 )
 
 // npmPlatformName is the npm name of a platform package.
@@ -172,7 +174,7 @@ func (b *packageBuild) buildNpm(version, out string) error {
 			{p.binary(), in.binaries[p.key], 0o755},
 			{licensePath, license, 0o644},
 			{noticesName, in.notices, 0o644},
-			{"package.json", npmPlatformManifest(p, version), 0o644},
+			{npmManifest, npmPlatformManifest(p, version), 0o644},
 			{"README.md", []byte(npmPlatformReadme(p)), 0o644},
 		}
 		for _, f := range files {

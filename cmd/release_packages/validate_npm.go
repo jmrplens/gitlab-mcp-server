@@ -158,7 +158,7 @@ type packageJSON struct {
 // readPackageJSON reads dir/package.json, or reports why it cannot.
 func (n *npmValidation) readPackageJSON(label, dir string) (packageJSON, bool) {
 	var pkg packageJSON
-	data, err := os.ReadFile(filepath.Join(dir, "package.json")) //#nosec G304 -- a package the npm subcommand wrote
+	data, err := os.ReadFile(filepath.Join(dir, npmManifest)) //#nosec G304 -- a package the npm subcommand wrote
 	if err == nil {
 		err = json.Unmarshal(data, &pkg)
 	}
@@ -190,7 +190,7 @@ func (n *npmValidation) structural() {
 		}
 	}
 	if entries, ok := n.packed(label, n.main); ok {
-		n.checkFileSet(label, entries, []string{"cli.js", "package.json", "README.md", licensePath, noticesName}, license)
+		n.checkFileSet(label, entries, []string{"cli.js", npmManifest, "README.md", licensePath, noticesName}, license)
 	}
 	fmt.Fprintf(n.stdout, "structural: 7 packages checked (files, license, notices, exec bit, format, sha256 vs checksums.txt, os/cpu, pins)\n")
 }
@@ -214,7 +214,7 @@ func (n *npmValidation) validatePlatform(p releasePlatform, license []byte) {
 	if !ok {
 		return
 	}
-	n.checkFileSet(label, entries, []string{p.binary(), "package.json", "README.md", licensePath, noticesName}, license)
+	n.checkFileSet(label, entries, []string{p.binary(), npmManifest, "README.md", licensePath, noticesName}, license)
 	binary, ok := entries[p.binary()]
 	if !n.check(ok, "%s: binary %s not in the tarball", label, p.binary()) {
 		return
@@ -235,22 +235,25 @@ func (n *npmValidation) install() {
 		fmt.Fprintf(n.stdout, "runtime: host is %s/%s, no matching package to run; structural checks only\n", runtime.GOOS, runtime.GOARCH)
 		return
 	}
+	// runtimeFailure is how a step of the install that could not be taken
+	// is reported.
+	const runtimeFailure = "runtime: %v"
 	platform, err := n.pack(n.validation, filepath.Join(n.packages, host.npmKey), n.work)
 	if err != nil {
-		n.failf("runtime: %v", err)
+		n.failf(runtimeFailure, err)
 		return
 	}
 	launcher, err := n.pack(n.validation, n.main, n.work)
 	if err != nil {
-		n.failf("runtime: %v", err)
+		n.failf(runtimeFailure, err)
 		return
 	}
 	project, err := os.MkdirTemp(n.work, "proj-")
 	if err == nil {
-		err = os.WriteFile(filepath.Join(project, "package.json"), []byte(`{"name":"v","version":"1.0.0","private":true}`), 0o600)
+		err = os.WriteFile(filepath.Join(project, npmManifest), []byte(`{"name":"v","version":"1.0.0","private":true}`), 0o600)
 	}
 	if err != nil {
-		n.failf("runtime: %v", err)
+		n.failf(runtimeFailure, err)
 		return
 	}
 	if out, installErr := n.run(project, nil, "npm", "install", "--no-audit", "--no-fund", platform, launcher); installErr != nil {

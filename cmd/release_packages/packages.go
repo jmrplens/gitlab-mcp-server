@@ -45,6 +45,10 @@ type releasePlatform struct {
 	rid string
 }
 
+// linuxArm64 is the name the release key, npm and .NET all give the Linux
+// arm64 platform.
+const linuxArm64 = "linux-arm64"
+
 // releasePlatforms is the whole distribution matrix, in the order every
 // package format writes and lists it.
 //
@@ -58,8 +62,8 @@ var releasePlatforms = []releasePlatform{
 		wheelTag: "manylinux_2_17_x86_64.manylinux2014_x86_64", rid: "linux-x64",
 	},
 	{
-		key: "linux-arm64", asset: "gitlab-mcp-server-linux-arm64", npmKey: "linux-arm64", npmOS: "linux", npmCPU: "arm64", npmLibc: "glibc",
-		wheelTag: "manylinux_2_17_aarch64.manylinux2014_aarch64", rid: "linux-arm64",
+		key: linuxArm64, asset: "gitlab-mcp-server-linux-arm64", npmKey: linuxArm64, npmOS: "linux", npmCPU: "arm64", npmLibc: "glibc",
+		wheelTag: "manylinux_2_17_aarch64.manylinux2014_aarch64", rid: linuxArm64,
 	},
 	{
 		key: "darwin-amd64", asset: "gitlab-mcp-server-darwin-amd64", npmKey: "darwin-x64", npmOS: "darwin", npmCPU: "x64",

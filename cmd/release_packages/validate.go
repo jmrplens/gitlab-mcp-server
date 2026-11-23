@@ -187,7 +187,9 @@ const handshakeSettle = time.Second
 // that would be refused.
 var handshakeEnv = []string{
 	"GITLAB_URL=http://127.0.0.1:1",
-	"GITLAB_TOKEN=glpat-release-packages-validate",
+	// Shorter than any token GitLab issues, so it reads as the placeholder
+	// it is.
+	"GITLAB_TOKEN=glpat-not-a-token",
 	"GITLAB_MCP_LOG_LEVEL=error",
 	// Scope detection against the unreachable instance would retry in the
 	// handshake path.
