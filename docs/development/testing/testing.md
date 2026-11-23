@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,212 |
-| Unit test functions                                   | 22,408 |
+| Total test functions                                  | 24,271 |
+| Unit test functions                                   | 22,467 |
 | E2E test functions                                    |  1,804 |
-| cmd test functions                                    |  6,070 |
+| cmd test functions                                    |  6,129 |
 | Test files (internal/)                                |    782 |
-| Test files (cmd/)                                     |    500 |
+| Test files (cmd/)                                     |    511 |
 | Test files (test/e2e/)                                |    457 |
 | Tool sub-packages tested                              |    182 |
 | Core packages tested                                  |     36 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,825 | 57.1% |
+| `TestFunc_Scenario` (2-part)           | 13,849 | 57.1% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,488 | 39.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,523 | 39.2% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (182) |         11,482 |        491 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,804 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          6,070 |        500 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,212** |  **1,739** |                                                                                                 |
+| cmd packages            |          6,129 |        511 | server entry point and developer command utilities                                              |
+| **Total**               |     **24,271** |  **1,750** |                                                                                                 |
 
 ### Core Packages
 
