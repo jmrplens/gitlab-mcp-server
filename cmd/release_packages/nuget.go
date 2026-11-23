@@ -291,7 +291,7 @@ func nugetPointerEntries(version string, readme, icon, serverDoc, license, notic
 // runNuget is the nuget subcommand: the six runtime packages and the
 // pointer, written to --out after it is emptied.
 func runNuget(root string, args []string, stdout, stderr io.Writer) int {
-	flags := newBuilderFlags("nuget", nugetOutDir, stderr)
+	flags := newBuilderFlags("nuget", nugetOutDir, "output directory, emptied first", stderr)
 	if !flags.parse(args, stderr, true) {
 		return 2
 	}

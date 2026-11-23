@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -142,6 +143,10 @@ func pypiMetadata(version string, readme []byte) []byte {
 		"Requires-Python: >=3.9",
 		"Description-Content-Type: text/markdown",
 	)
+	// The script read the README in Python's text mode, which reads every
+	// CRLF and every lone CR as LF, so a checkout that wrote it with CRLF
+	// published the same METADATA.
+	readme = bytes.ReplaceAll(bytes.ReplaceAll(readme, []byte("\r\n"), []byte("\n")), []byte("\r"), []byte("\n"))
 	return append([]byte(strings.Join(fields, "\n")+"\n\n"), readme...)
 }
 
@@ -191,7 +196,7 @@ func pypiWheelEntries(version string, p releasePlatform, binary, readme, license
 // runPypi is the pypi subcommand: one platform wheel per release binary, the
 // uv and ruff model, written to --out after it is emptied.
 func runPypi(root string, args []string, stdout, stderr io.Writer) int {
-	flags := newBuilderFlags("pypi", pypiOutDir, stderr)
+	flags := newBuilderFlags("pypi", pypiOutDir, "output directory, emptied first", stderr)
 	if !flags.parse(args, stderr, true) {
 		return 2
 	}

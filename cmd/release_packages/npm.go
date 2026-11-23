@@ -30,7 +30,7 @@ func npmPlatformName(p releasePlatform) string { return npmMainName + "-" + p.np
 // release assets, or with --sync-only rewrites the launcher's version and
 // its pins alone.
 func runNpm(root string, args []string, stdout, stderr io.Writer) int {
-	flags := newBuilderFlags("npm", npmPackageDir, stderr)
+	flags := newBuilderFlags("npm", npmPackageDir, "output directory: the six platform package directories in it are replaced, and anything else there is kept", stderr)
 	syncOnly := flags.set.Bool("sync-only", false, "rewrite only the launcher's version and its optionalDependencies pins")
 	if !flags.parse(args, stderr, false) {
 		return 2
@@ -66,17 +66,28 @@ func runNpm(root string, args []string, stdout, stderr io.Writer) int {
 // and a consumer never resolves a launcher against a binary package of
 // another release. The rest of the file keeps its members and their order.
 func syncNpmMain(root, version string) error {
-	file := localPath(root, npmMainDir+"/package.json")
-	data, err := os.ReadFile(file) //#nosec G304 -- the launcher's package.json in the repository
+	file, data, err := syncedNpmMain(root, version)
 	if err != nil {
 		return err
 	}
+	return writeFileMode(file, data, 0o644)
+}
+
+// syncedNpmMain reads the launcher's package.json and returns where it is
+// and the bytes syncNpmMain writes there, so the npm build can refuse a
+// launcher it cannot rewrite before it writes any package.
+func syncedNpmMain(root, version string) (file string, data []byte, err error) {
+	file = localPath(root, npmMainDir+"/package.json")
+	data, err = os.ReadFile(file) //#nosec G304 -- the launcher's package.json in the repository
+	if err != nil {
+		return "", nil, err
+	}
 	pkg, err := parseJSON(data)
 	if err != nil {
-		return fmt.Errorf("%s/package.json could not be read as JSON: %w", npmMainDir, err)
+		return "", nil, fmt.Errorf("%s/package.json could not be read as JSON: %w", npmMainDir, err)
 	}
 	if pkg.kind != jsonObject {
-		return fmt.Errorf("%s/package.json is not a JSON object", npmMainDir)
+		return "", nil, fmt.Errorf("%s/package.json is not a JSON object", npmMainDir)
 	}
 	pins := &jsonValue{kind: jsonObject}
 	for _, p := range releasePlatforms {
@@ -84,7 +95,7 @@ func syncNpmMain(root, version string) error {
 	}
 	pkg.set("version", jsonText(version))
 	pkg.set("optionalDependencies", pins)
-	return writeFileMode(file, pkg.pretty(), 0o644)
+	return file, pkg.pretty(), nil
 }
 
 // npmPlatformManifest is the package.json of one platform package, member
@@ -137,6 +148,10 @@ func (b *packageBuild) buildNpm(version, out string) error {
 	if err != nil {
 		return err
 	}
+	launcher, launcherData, err := syncedNpmMain(b.root, version)
+	if err != nil {
+		return err
+	}
 	outDir := localPath(b.root, out)
 	if writeErr := os.MkdirAll(outDir, 0o750); writeErr != nil {
 		return writeErr
@@ -168,7 +183,7 @@ func (b *packageBuild) buildNpm(version, out string) error {
 		dirs = append(dirs, path.Join(shown, p.npmKey))
 		digests = append(digests, jsonMember{key: p.npmKey, value: jsonText(in.binaryDigests[p.key])})
 	}
-	if writeErr := syncNpmMain(b.root, version); writeErr != nil {
+	if writeErr := writeFileMode(launcher, launcherData, 0o644); writeErr != nil {
 		return writeErr
 	}
 	mainDir := localPath(b.root, npmMainDir)

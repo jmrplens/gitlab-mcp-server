@@ -167,11 +167,16 @@ func (b *packageBuild) readRelease(warning string) (*releaseInputs, error) {
 	in := &releaseInputs{binaries: map[string][]byte{}, binaryDigests: map[string]string{}}
 	var sums releaseassets.Checksums
 	checksums := b.assetPath(checksumsName)
+	// --allow-unverified answers a manifest that is absent and nothing
+	// else: one that cannot be looked up is refused like one that cannot be
+	// read, never packaged around.
 	if _, err := os.Stat(checksums); err == nil {
 		if sums, err = releaseassets.ReadChecksums(checksums); err != nil {
 			return nil, b.refuse("%v", err)
 		}
 		in.verified = true
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, b.refuse("%v", err)
 	} else if !b.allowUnverified {
 		return nil, b.refuse("%s not found: refusing to package unverified binaries (pass --allow-unverified to override)",
 			b.assetShown(checksumsName))
@@ -265,8 +270,12 @@ func verifiedRecord(version string, verified bool, binaries []jsonMember, notice
 }
 
 // freshDir removes dir and creates it empty, so a rebuild cannot mix
-// versions.
+// versions. Something at dir that is not a directory, a file --out named by
+// mistake, is refused and left where it is.
 func freshDir(dir string) error {
+	if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+		return fmt.Errorf("%s is not a directory, so it is not replaced by one", dir)
+	}
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
@@ -360,13 +369,14 @@ type builderFlags struct {
 	allowUnverified bool
 }
 
-// newBuilderFlags declares the shared flags, out defaulting to defaultOut.
-func newBuilderFlags(name, defaultOut string, stderr io.Writer) *builderFlags {
+// newBuilderFlags declares the shared flags, out defaulting to defaultOut
+// and described by outHelp, which says what a run clears there.
+func newBuilderFlags(name, defaultOut, outHelp string, stderr io.Writer) *builderFlags {
 	f := &builderFlags{set: flag.NewFlagSet(toolName+" "+name, flag.ContinueOnError)}
 	f.set.SetOutput(stderr)
 	f.set.StringVar(&f.binaries, "binaries", "", "directory holding the release assets under their published names, and checksums.txt")
 	f.set.StringVar(&f.version, "version", "", "release version, e.g. 3.7.0")
-	f.set.StringVar(&f.out, "out", defaultOut, "output directory, emptied first")
+	f.set.StringVar(&f.out, "out", defaultOut, outHelp)
 	f.set.BoolVar(&f.allowUnverified, "allow-unverified", false, "build without a checksums.txt manifest (never in CI)")
 	return f
 }
