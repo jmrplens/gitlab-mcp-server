@@ -58,6 +58,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── coverage_recipes/   # gobco and gremlins over one package, and the gate over action specs (make coverage-conditions, coverage-mutants, check-spec-conditions)
 │   ├── measure_conditions/ # Plan, measuring loop and job summary of the on-demand condition and branch coverage workflow (conditions.yml, dispatched by hand), and the whole-tree figures (make coverage-conditions-tree)
+│   ├── sonar_scan/         # The SonarCloud analysis run locally and its quality gate (make sonar, sonar-status)
 │   ├── fuzz_targets/       # The fuzz targets the weekly fuzzing workflow (fuzz.yml) runs with go test -fuzz
 │   ├── merge_coverage/     # The e2e support packages' offline profile merged with the complete runs', their committed record and gate (make e2e-support-coverage, check-e2e-support-coverage)
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
