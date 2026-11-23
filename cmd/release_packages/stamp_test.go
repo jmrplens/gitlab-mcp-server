@@ -27,6 +27,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -236,6 +237,75 @@ func TestStamp_SecondRunWithTheSameInputs_WritesTheSameFiles(t *testing.T) {
 		if text != first[path] {
 			t.Errorf("%s moved on the second run", path)
 		}
+	}
+}
+
+// TestStamp_Manifests_AreReplacedNotRewrittenInPlace holds the stamp to the
+// script's jq > tmp && mv: each manifest is written whole to a new file that
+// then takes its name, so a write that fails part way, a full disk for one,
+// leaves the manifest it was replacing intact. A hard link taken before the
+// run tells the two apart: a replaced manifest leaves the link on the old
+// bytes, and one rewritten in place moves the link with it.
+func TestStamp_Manifests_AreReplacedNotRewrittenInPlace(t *testing.T) {
+	record := readStampRecord(t)
+	run := record.Stamps[0]
+	root, before := layOutStampTree(t, record, run)
+	links := t.TempDir()
+	written := []string{stampServerJSON}
+	for _, manifest := range stampManifests {
+		written = append(written, manifest[0])
+	}
+	held := map[string]string{}
+	for _, path := range written {
+		if _, changed := run.Changed[path]; !changed {
+			continue
+		}
+		link := filepath.Join(links, strings.ReplaceAll(path, "/", "_"))
+		if err := os.Link(filepath.Join(root, filepath.FromSlash(path)), link); err != nil {
+			t.Skipf("this filesystem takes no hard link: %v", err)
+		}
+		held[path] = link
+	}
+	if len(held) == 0 {
+		t.Fatal("the recorded run changes none of the manifests the stamp writes")
+	}
+	var out bytes.Buffer
+	if code := runIn(root, append([]string{"stamp"}, run.Args...), &out, &out, os.Getenv); code != run.Exit {
+		t.Fatalf("exit %d, the script exited %d: %s", code, run.Exit, out.String())
+	}
+	for _, path := range slices.Sorted(maps.Keys(held)) {
+		got, err := os.ReadFile(held[path])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != before[path] {
+			t.Errorf("%s was rewritten in place: a link to the file it replaced moved with it", path)
+		}
+	}
+}
+
+// TestStamp_ABundleItCannotRead_IsNamedOnStderr verifies that a bundle that
+// is there but cannot be read ends the run with the read error on stderr,
+// naming the bundle, rather than an exit code with nothing said.
+func TestStamp_ABundleItCannotRead_IsNamedOnStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps no POSIX read permission to take away")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file with no permissions on it, so the read cannot be made to fail")
+	}
+	record := readStampRecord(t)
+	run := record.Stamps[0]
+	root, _ := layOutStampTree(t, record, run)
+	bundle := filepath.Join("dist", "unreadable.mcpb")
+	writeTree(t, root, map[string][]byte{bundle: []byte("PK")})
+	if err := os.Chmod(filepath.Join(root, bundle), 0); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := runIn(root, []string{"stamp", run.Args[0], run.Args[1], filepath.ToSlash(bundle)}, &stdout, &stderr, os.Getenv)
+	if code != 1 || !strings.Contains(stderr.String(), "ERROR: ") || !strings.Contains(stderr.String(), "unreadable.mcpb") {
+		t.Errorf("exit %d, stderr %q; want 1 and an ERROR line naming the bundle", code, stderr.String())
 	}
 }
 
