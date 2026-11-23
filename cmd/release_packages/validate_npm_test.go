@@ -16,12 +16,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 // fakePack tars and gzips dir as npm pack does, below package/ and with
-// each file's mode.
+// each file's mode. Windows reports no execute bit on a regular file, so
+// there the archive gives the binary 0755 and every other file 0644, the
+// modes the npm subcommand wrote and the host could not keep.
 func fakePack(_ *validation, dir, dest string) (string, error) {
 	var out bytes.Buffer
 	gz := gzip.NewWriter(&out)
@@ -39,7 +42,14 @@ func fakePack(_ *validation, dir, dest string) (string, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, file)
-		if stepErr := tw.WriteHeader(&tar.Header{Name: "package/" + filepath.ToSlash(rel), Mode: int64(info.Mode().Perm()), Size: int64(len(data)), Typeflag: tar.TypeReg}); stepErr != nil {
+		mode := int64(info.Mode().Perm())
+		if runtime.GOOS == "windows" {
+			mode = 0o644
+			if name := filepath.Base(file); name == binaryName || name == binaryName+".exe" {
+				mode = 0o755
+			}
+		}
+		if stepErr := tw.WriteHeader(&tar.Header{Name: "package/" + filepath.ToSlash(rel), Mode: mode, Size: int64(len(data)), Typeflag: tar.TypeReg}); stepErr != nil {
 			return stepErr
 		}
 		_, err = tw.Write(data)
@@ -160,6 +170,9 @@ func TestValidateNpm_EachDefect_IsNamed(t *testing.T) {
 		}, want: "THIRD_PARTY_NOTICES is sha256"},
 		{name: "the execute bit lost", damage: func(t *testing.T, root string) {
 			t.Helper()
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows keeps no execute bit to lose, and fakePack restores the binary's")
+			}
 			if err := os.Chmod(filepath.Join(platformDir(root, linux), binaryName), 0o644); err != nil { //#nosec G302 -- the defect under test is a binary without its execute bit
 				t.Fatal(err)
 			}
