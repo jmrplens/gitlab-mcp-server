@@ -85,13 +85,17 @@ func layOutTap(t *testing.T, record stampRecord, run tapRun, env []string) strin
 // every step, a missing git or ruby fails the test rather than skipping
 // every recorded run, as the script's suite did.
 func TestHomebrew_RecordedRuns_MatchTheScript(t *testing.T) {
+	var missing error
 	for _, tool := range []string{"git", "ruby"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			if os.Getenv("CI") != "" {
-				t.Fatalf("the tap update needs %s, and CI must run these cases rather than skip them: %v", tool, err)
-			}
-			t.Skipf("%s is not installed: %v", tool, err)
+		if _, err := exec.LookPath(tool); err != nil && missing == nil {
+			missing = err
 		}
+	}
+	if missing != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("the tap update needs git and ruby, and CI must run these cases rather than skip them: %v", missing)
+		}
+		t.Skipf("the tap update needs git and ruby: %v", missing)
 	}
 	record := readStampRecord(t)
 	for _, run := range record.Taps {
