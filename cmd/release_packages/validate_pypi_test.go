@@ -8,6 +8,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"os"
@@ -108,6 +109,10 @@ func TestValidatePypi_EachDeparture_IsNamed(t *testing.T) {
 			t.Helper()
 			writeFile(t, wheels, wheel, []byte("not a zip"))
 		}, want: "not a zip archive"},
+		{name: "a module that cannot be read", before: func(t *testing.T, _, wheels string) {
+			t.Helper()
+			corruptZipEntry(t, filepath.Join(wheels, wheel), "gitlab_mcp_server/__init__.py")
+		}, want: "gitlab_mcp_server/__init__.py cannot be read"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -121,6 +126,40 @@ func TestValidatePypi_EachDeparture_IsNamed(t *testing.T) {
 			}
 			wantProblem(t, validatePypiFixture(t, root, wheels), tc.want)
 		})
+	}
+}
+
+// corruptZipEntry flips a byte in the middle of entry's stored data in the
+// archive at file, so the archive still opens and reading that entry fails.
+func corruptZipEntry(t *testing.T, file, entry string) {
+	t.Helper()
+	archive, err := zip.OpenReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offset int64 = -1
+	for _, f := range archive.File {
+		if f.Name == entry {
+			start, offsetErr := f.DataOffset()
+			if offsetErr != nil {
+				t.Fatal(offsetErr)
+			}
+			offset = start + int64(f.CompressedSize64/2)
+		}
+	}
+	if closeErr := archive.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if offset < 0 {
+		t.Fatalf("%s holds no %s", file, entry)
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data[offset] ^= 0xff
+	if err = os.WriteFile(file, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

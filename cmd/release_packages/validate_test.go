@@ -10,6 +10,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"debug/elf"
 	"debug/macho"
 	"debug/pe"
@@ -20,8 +21,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -101,10 +105,41 @@ func fakeServer(mode string, in io.Reader, out io.Writer) int {
 		answer("1.0.0")
 	case "garbage":
 		fmt.Fprintln(out, "starting gitlab-mcp-server")
+	case "otherid":
+		request.ID++
+		answer("9.8.7")
+	case "longline":
+		answer("9.8.7")
+		fmt.Fprintln(out, strings.Repeat("x", 5<<20))
+	case "holdpipes":
+		answer("9.8.7")
+		holdPipes()
+	case "hold":
+		// The descendant holdpipes leaves behind: it keeps the stdout and
+		// stderr it inherited until the test that started it kills it.
+		time.Sleep(time.Minute)
+		return 0
 	case "silent":
 	}
 	_, _ = io.Copy(io.Discard, in)
 	return 0
+}
+
+// holdPipesPIDEnv names the file holdpipes writes its descendant's process
+// ID to, so the test can kill it.
+const holdPipesPIDEnv = "RELEASE_PACKAGES_HOLD_PIDFILE"
+
+// holdPipes starts this test binary again as a stubborn hold, which inherits
+// stdout and stderr and outlives the server, as a process a launcher started
+// and did not reap would, and records its process ID.
+func holdPipes() {
+	cmd := exec.CommandContext(context.Background(), os.Args[0]) //#nosec G204 -- this test binary
+	cmd.Env = append(os.Environ(), fakeServerEnv+"=stubborn-hold")
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if cmd.Start() != nil {
+		return
+	}
+	_ = os.WriteFile(os.Getenv(holdPipesPIDEnv), []byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
 }
 
 // bufioLine reads one line without buffering past it.
@@ -143,6 +178,8 @@ func TestHandshake_HoldsTheAnswerToTheVersionAndPureJSONRPC(t *testing.T) {
 		{mode: "stray", want: "stdout carried a line that is not JSON-RPC 2.0"},
 		{mode: "wrong", want: `serverInfo.version = "1.0.0", want "9.8.7"`},
 		{mode: "garbage", want: "stdout is not pure JSON-RPC"},
+		{mode: "otherid", want: "answers id 2, not the initialize request's 1"},
+		{mode: "longline", want: "stdout could not be read to its end"},
 		{mode: "silent", want: "no answer within 500ms"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
@@ -161,6 +198,50 @@ func TestHandshake_HoldsTheAnswerToTheVersionAndPureJSONRPC(t *testing.T) {
 				t.Errorf("problems %q, want one naming %q", v.problems, tc.want)
 			}
 		})
+	}
+}
+
+// TestHandshake_ADescendantHoldingThePipes_EndsInAProblem verifies that a
+// server which leaves a process holding its stdout and stderr, one a
+// launcher started and did not reap, ends the handshake in a problem within
+// a bounded time rather than holding the release job until it times out.
+func TestHandshake_ADescendantHoldingThePipes_EndsInAProblem(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("the descendant is killed by its process ID, read back on POSIX terms")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pidFile := filepath.Join(t.TempDir(), "hold.pid")
+	t.Cleanup(func() {
+		data, readErr := os.ReadFile(pidFile)
+		if readErr != nil {
+			return
+		}
+		if pid, atoiErr := strconv.Atoi(string(data)); atoiErr == nil {
+			if process, findErr := os.FindProcess(pid); findErr == nil {
+				_ = process.Kill()
+			}
+		}
+	})
+	var stdout, stderr bytes.Buffer
+	v := newValidation("validate-test", t.TempDir(), "9.8.7", 1, &stdout, &stderr)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.handshake("stand-in", t.TempDir(), []string{fakeServerEnv + "=holdpipes", holdPipesPIDEnv + "=" + pidFile}, 5*time.Second, self)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Error("the handshake was still waiting 30s after the server was stopped")
+		return
+	}
+	if !slices.ContainsFunc(v.problems, func(p string) bool { return strings.Contains(p, "still open") }) {
+		t.Errorf("problems %q, want one saying a pipe was still open", v.problems)
 	}
 }
 
@@ -418,7 +499,13 @@ func TestReadVerified_RefusesARecordItCannotTrust(t *testing.T) {
 			v := newValidation("validate-test", dir, "9.8.7", 1, &stdout, &stderr)
 			v.readVerified(dir, true)
 			wantProblem(t, v.problems, tc.want)
-			if _, err := os.Stat(filepath.Join(dir, verifiedManifest)); err == nil {
+			// A record that does not decode stays, for the operator to read;
+			// one that decodes is taken out of the publish directory.
+			_, err := os.Stat(filepath.Join(dir, verifiedManifest))
+			switch {
+			case tc.name == "not JSON" && err != nil:
+				t.Errorf("a record that does not decode was removed: %v", err)
+			case tc.name != "not JSON" && err == nil:
 				t.Error("the record is still beside the packages after it was read")
 			}
 		})
