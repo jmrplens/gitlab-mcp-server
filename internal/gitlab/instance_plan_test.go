@@ -207,9 +207,11 @@ func TestDetectTier_InstancePlan_SettlesTheTierWithoutAnotherStep(t *testing.T) 
 				t.Errorf("client tier = %v, want %v", client.Tier(), tc.want)
 			}
 			for _, path := range []string{"/api/v4/license", "/api/v4/namespaces", "/api/graphql"} {
-				if n := instance.count(path); n != 0 {
-					t.Errorf("%s asked %d times after the instance plan answered, want none", path, n)
-				}
+				t.Run(path, func(t *testing.T) {
+					if n := instance.count(path); n != 0 {
+						t.Errorf("%s asked %d times after the instance plan answered, want none", path, n)
+					}
+				})
 			}
 			if n := instance.count(versionAPIPath); n != 1 {
 				t.Errorf("/version asked %d times, want once", n)
