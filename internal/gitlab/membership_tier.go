@@ -136,10 +136,17 @@ const (
 // 19.6, which only the license told before. A CE build, an enterprise build
 // before 18.11 and an instance whose edition is unknown are not asked, since
 // their schemas may not have the field. It reads what the version read of the
-// plan step already learned.
+// plan step already learned, and asks no second one when that read went
+// unanswered.
 func (c *Client) membershipStepApplies(ctx context.Context, plan instancePlan) bool {
 	if membershipTierApplies(c) || plan.kind == instancePlanPerNamespace {
 		return true
+	}
+	// The version read the plan step made went unanswered, so the edition is
+	// unknown, and asking the version again would spend a second read on an
+	// answer that is already provisional and will be asked again.
+	if plan.kind == instancePlanUnread {
+		return false
 	}
 	if !c.AtLeast(ctx, membershipSinceMajor, membershipSinceMinor) {
 		return false

@@ -83,6 +83,22 @@ type planInstance struct {
 	asked map[string]int
 }
 
+// serveVersion answers /version: GitLab's refusal of Metadata: Read,
+// versionStatus with its body, or versionBody.
+func (p *planInstance) serveVersion(w http.ResponseWriter) {
+	switch {
+	case p.refuseVersion:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(metadataRefusalBody))
+	case p.versionStatus != 0:
+		w.WriteHeader(p.versionStatus)
+		_, _ = w.Write([]byte(p.versionStatusBody))
+	default:
+		respondJSON(w, p.versionBody)
+	}
+}
+
 // serve answers one request. It runs on the httptest server's goroutine, so it
 // reports with Errorf and returns rather than aborting the test.
 func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
@@ -93,18 +109,7 @@ func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
 		p.mu.Unlock()
 		switch r.URL.Path {
 		case versionAPIPath:
-			if p.refuseVersion {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(metadataRefusalBody))
-				return
-			}
-			if p.versionStatus != 0 {
-				w.WriteHeader(p.versionStatus)
-				_, _ = w.Write([]byte(p.versionStatusBody))
-				return
-			}
-			respondJSON(w, p.versionBody)
+			p.serveVersion(w)
 		case "/api/v4/license":
 			if p.license != http.StatusOK {
 				w.WriteHeader(max(p.license, http.StatusForbidden))
