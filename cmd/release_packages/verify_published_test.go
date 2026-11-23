@@ -247,6 +247,54 @@ func (c *fakeClock) sleep(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
+// TestVerifyPublished_NpmAndNugetWaitingTogether_KeepTheirOwnAllowances
+// replays a run where npm and NuGet both wait, which no recorded run does:
+// the lagging npm package of one recorded run and the NuGet pointer of
+// another, together. npm spending its whole budget leaves NuGet's wait
+// untouched, and NuGet's deadline still counts from the start of the run,
+// so npm's time is part of it.
+func TestVerifyPublished_NpmAndNugetWaitingTogether_KeepTheirOwnAllowances(t *testing.T) {
+	record := readVerifyRecord(t)
+	recorded := func(name string) verifyRecordRun {
+		t.Helper()
+		for _, run := range record.Runs {
+			if run.Name == name {
+				return run
+			}
+		}
+		t.Fatalf("the record holds no run %q", name)
+		return verifyRecordRun{}
+	}
+	together := func(nuget, deadline string) verifyRecordRun {
+		run := recorded("an npm version served after a wait")
+		run.Answers = maps.Clone(run.Answers)
+		maps.Copy(run.Answers, recorded(nuget).Answers)
+		// One 30s wait is npm's whole budget.
+		run.Args = []string{"<checksums>", "--retry-budget", "30", "--retry-delay", "30", "--nuget-deadline", deadline, "--nuget-digests", "<digests>"}
+		return run
+	}
+	t.Run("npm spending its budget leaves NuGet its wait", func(t *testing.T) {
+		code, stdout, _, _, slept := replayVerify(t, record, together("the nuget pointer listed after a wait", "120"))
+		if code != 0 {
+			t.Errorf("exit %d, want 0: NuGet had no wait left after npm's\n%s", code, stdout)
+		}
+		if !slices.Equal(slept, []float64{30, 30}) {
+			t.Errorf("slept %v, want npm's one wait and then NuGet's", slept)
+		}
+	})
+	t.Run("the NuGet deadline counts npm's time", func(t *testing.T) {
+		code, stdout, _, _, slept := replayVerify(t, record, together("the nuget pointer never listed", "60"))
+		if code != 1 {
+			t.Errorf("exit %d, want 1 for a pointer never listed\n%s", code, stdout)
+		}
+		// npm's 30s are the first half of NuGet's 60, so NuGet waits once,
+		// not twice.
+		if !slices.Equal(slept, []float64{30, 30}) {
+			t.Errorf("slept %v, want npm's wait and one of NuGet's inside 60s from the start", slept)
+		}
+	})
+}
+
 // TestRetryBudget_Wait_StopsWhenTheAllowanceRunsOut holds the budget to an
 // allowance of sleep: two 4s waits fit in 10s and a third does not, and a
 // zero budget or a zero delay never waits.
