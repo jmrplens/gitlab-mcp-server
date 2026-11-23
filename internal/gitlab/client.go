@@ -1088,7 +1088,21 @@ func (c *Client) versionFailure(resp *http.Response) error {
 			return errVersionScopeRefused
 		}
 	}
-	return fmt.Errorf("gitlab ping: HTTP %d: %s", resp.StatusCode, string(body[:min(len(body), versionErrorBodyBytes)]))
+	return &versionStatusError{status: resp.StatusCode, quote: string(body[:min(len(body), versionErrorBodyBytes)])}
+}
+
+// versionStatusError is [Client.versionFailure]'s error for an answer that is
+// neither of GitLab's refusals: the status, which the tier probe reads to tell
+// an instance that answered from one that did not ([versionReadUnresolved]),
+// and the start of the body.
+type versionStatusError struct {
+	status int
+	quote  string
+}
+
+// Error names the status and quotes the start of the body.
+func (e *versionStatusError) Error() string {
+	return fmt.Sprintf("gitlab ping: HTTP %d: %s", e.status, e.quote)
 }
 
 // versionErrorBodyBytes is how much of an unexpected answer's body the version

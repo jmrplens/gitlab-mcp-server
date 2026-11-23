@@ -61,14 +61,15 @@ func TestParseInstancePlan_KeepsOnlyAPlanGitLabCouldSend(t *testing.T) {
 // /namespaces answers (403 when nil), and a request to the GraphQL endpoint
 // answers no group. refuseVersion answers /version with GitLab's refusal of
 // the fine-grained Metadata: Read permission, and versionStatus, when set,
-// answers it with that status and no body.
+// answers it with that status and versionStatusBody.
 type planInstance struct {
-	versionBody   string
-	refuseVersion bool
-	versionStatus int
-	license       int
-	licensePlan   string
-	namespaces    []map[string]any
+	versionBody       string
+	refuseVersion     bool
+	versionStatus     int
+	versionStatusBody string
+	license           int
+	licensePlan       string
+	namespaces        []map[string]any
 
 	mu    sync.Mutex
 	asked map[string]int
@@ -92,6 +93,7 @@ func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
 			}
 			if p.versionStatus != 0 {
 				w.WriteHeader(p.versionStatus)
+				_, _ = w.Write([]byte(p.versionStatusBody))
 				return
 			}
 			respondJSON(w, p.versionBody)
@@ -302,13 +304,14 @@ func TestDetectTier_NoInstancePlanAnswer_RunsTheCascade(t *testing.T) {
 // non-administrator refused the license and shown "default" namespace plans is
 // served Free provisionally, naming the step, and asked again rather than
 // settled on Free. A version read GitLab answered with a status that says
-// something, a 404 here, is no plan and leaves the cascade's answer final, as
-// a release before 19.6 does.
+// something, a 404 or GitLab's refusal of a scope here, is no plan and leaves
+// the cascade's answer final, as a release before 19.6 does.
 func TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional(t *testing.T) {
 	defaultPlans := []map[string]any{{"full_path": "acme", "kind": "group", "plan": "default"}}
 	cases := []struct {
 		name            string
 		versionStatus   int
+		statusBody      string
 		versionBody     string
 		wantProvisional bool
 	}{
@@ -316,10 +319,14 @@ func TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional(t *testing.T)
 		{name: "a 429", versionStatus: http.StatusTooManyRequests, wantProvisional: true},
 		{name: "a body that does not decode", versionBody: `{"version":`, wantProvisional: true},
 		{name: "a 404", versionStatus: http.StatusNotFound},
+		{name: "a scope refusal", versionStatus: http.StatusForbidden, statusBody: insufficientScopeBody},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			instance := &planInstance{versionStatus: tc.versionStatus, versionBody: tc.versionBody, license: http.StatusForbidden, namespaces: defaultPlans}
+			instance := &planInstance{
+				versionStatus: tc.versionStatus, versionStatusBody: tc.statusBody, versionBody: tc.versionBody,
+				license: http.StatusForbidden, namespaces: defaultPlans,
+			}
 			client := instance.client(t)
 
 			got := client.DetectTier(t.Context(), t.Context())

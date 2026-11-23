@@ -1485,13 +1485,17 @@ func TestReadEdition_TellsWhatTheVersionEndpointSaid(t *testing.T) {
 // 1782: where no step answered and the edition could not be read either, the
 // line explaining the Free said the instance was CE, which nothing had
 // shown. It says now that the edition could not be read, and warns nobody.
+// The version endpoint fails with a status that answers the read, a 404: one
+// GitLab did not answer, such as a 503, leaves the tier provisional instead,
+// since the plan the read would have carried could raise it
+// (TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional).
 func TestDetectTier_EditionUnread_IsNotCalledCE(t *testing.T) {
 	cases := []struct {
 		name   string
 		status int
 		body   string
 	}{
-		{name: "the version endpoint failed", status: http.StatusServiceUnavailable, body: `{}`},
+		{name: "the version endpoint failed", status: http.StatusNotFound, body: `{}`},
 		{name: "the answer named no edition", status: http.StatusOK, body: `{"version":"16.11.0"}`},
 	}
 	for _, tc := range cases {

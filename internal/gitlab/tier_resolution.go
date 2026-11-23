@@ -42,7 +42,7 @@ type TierResolution struct {
 	// since nothing can raise it.
 	Provisional bool
 	// Unresolved names the steps that were not read, in the order the probe
-	// asks them, for the line that reports the result: "license",
+	// asks them, for the line that reports the result: "plan", "license",
 	// "namespaces" and "membership".
 	Unresolved []string
 }
@@ -91,7 +91,9 @@ func (r *TierResolution) merge(name string, step tierStep) {
 // answers nobody, so the license is not asked and the namespace and membership
 // steps answer. An absent key, a value outside the four plans, an instance
 // before 19.6 and a version the token was refused answer nothing, and the
-// questions below are asked as they always were.
+// questions below are asked as they always were. So does a version read GitLab
+// did not answer, which also names the plan step among the unresolved ones,
+// since the plan it would have carried could raise the tier.
 //
 // It then asks up to three questions, because no one of them answers for
 // every deployment:
@@ -138,6 +140,7 @@ func (c *Client) ResolveTier(ctx, membershipBase context.Context) TierResolution
 		return TierResolution{Tier: plan.tier, Answered: true}
 	}
 	var resolution TierResolution
+	resolution.merge(tierStepPlan, tierStep{unresolved: plan.kind == instancePlanUnread})
 	if plan.kind != instancePlanPerNamespace {
 		license := c.tierFromLicense(ctx)
 		if license.answered {
@@ -205,6 +208,13 @@ func tierReadUnresolved(err error) bool {
 	if !answered {
 		return true
 	}
+	return statusLeavesStepUnread(status)
+}
+
+// statusLeavesStepUnread reports whether a status GitLab sent leaves a step of
+// the tier probe unread: a 5xx, 408, 429 or a redirect the client did not
+// follow, each its own moment rather than an answer to the question.
+func statusLeavesStepUnread(status int) bool {
 	return status >= http.StatusInternalServerError ||
 		status == http.StatusTooManyRequests ||
 		status == http.StatusRequestTimeout ||

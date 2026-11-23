@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -47,6 +48,12 @@ const (
 	// instancePlanUnrecognized is any other value, which is no answer and
 	// never Free, on ADR-0018's asymmetry.
 	instancePlanUnrecognized
+	// instancePlanUnread is a version read GitLab did not answer
+	// ([versionReadUnresolved]): the plan it would have carried is unknown and
+	// could raise the tier, so the step is unresolved, as a license or
+	// namespace read GitLab did not answer is. Only
+	// [Client.tierFromInstancePlan] returns it; a version read never keeps it.
+	instancePlanUnread
 )
 
 // instancePlan is the instance plan one version read reported.
@@ -88,19 +95,52 @@ func parseInstancePlan(raw json.RawMessage) instancePlan {
 	}
 }
 
+// versionReadUnresolved reports whether err, from [Client.versionDirect],
+// leaves the version read unanswered, on the terms [tierReadUnresolved] holds
+// the other steps to: GitLab's refusal of the fine-grained permission or of a
+// scope is an answer, and so is a status that says something about the
+// request, while no status at all, a body that names no version, and a status
+// that is its own moment ([statusLeavesStepUnread]) are not.
+func versionReadUnresolved(err error) bool {
+	if _, refused := errors.AsType[*versionRefusedError](err); refused || errors.Is(err, errVersionScopeRefused) {
+		return false
+	}
+	if answer, ok := errors.AsType[*versionStatusError](err); ok {
+		return statusLeavesStepUnread(answer.status)
+	}
+	return true
+}
+
 // tierFromInstancePlan is the tier probe's first step from GitLab 19.6 on: the
 // instance plan the version answer carries, which any token that may read the
 // metadata is told (Metadata: Read for a fine-grained one, every classic
 // scope this server admits). It reads the version this client already holds,
-// and asks /version only when no read has answered yet ([Client.AtLeast]),
+// and asks /version only when no read has answered yet and no refusal stands,
 // so a stdio start, whose Initialize read it, costs no request.
 //
-// An instance not known to run 19.6 or later answers nothing: one that
-// reported an older release, one that refused this token the version
-// (Metadata: Read, [Client.VersionRefusal]) and one that did not answer. A
-// value outside the four plans is logged at debug and answers nothing either.
+// An instance that reported an older release answers nothing, and so does one
+// that refused this token the version (Metadata: Read,
+// [Client.VersionRefusal]) or answered the read with any other status that
+// says something about it. A read GitLab did not answer is
+// [instancePlanUnread]: the plan is unknown rather than absent, which leaves
+// the tier provisional. A value outside the four plans is logged at debug and
+// answers nothing.
 func (c *Client) tierFromInstancePlan(ctx context.Context) instancePlan {
-	if !c.AtLeast(ctx, instancePlanSinceMajor, instancePlanSinceMinor) {
+	version := c.version.Load()
+	if version == nil {
+		if _, refused := c.VersionRefusal(); refused {
+			return instancePlan{}
+		}
+		if _, err := c.versionDirect(ctx); err != nil {
+			if versionReadUnresolved(err) {
+				slog.DebugContext(ctx, "the instance did not answer the version read the instance plan comes with", "error", err)
+				return instancePlan{kind: instancePlanUnread}
+			}
+			return instancePlan{}
+		}
+		version = c.version.Load()
+	}
+	if !versionAtLeast(*version, instancePlanSinceMajor, instancePlanSinceMinor) {
 		return instancePlan{}
 	}
 	plan := c.plan.Load()
