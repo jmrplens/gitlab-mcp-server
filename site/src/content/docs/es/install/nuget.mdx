@@ -210,7 +210,9 @@ entonces no encuentra nada. Recompilar desde la etiqueta con los binarios
 firmados usa el empaquetador que esa etiqueta trae. Después de v3.8.0 es
 `go run ./cmd/release_packages/ nuget --binaries <dir> --version <version>`,
 cuyo compresor es el propio de Go y da los mismos bytes en cualquier
-sistema. Hasta v3.8.0 era `scripts/build_nuget.py`, que coincide byte a
+sistema con la versión de Go que nombra el `go.mod` de la etiqueta, la
+misma con la que compila la release; otra versión de Go puede comprimir
+de otra forma. Hasta v3.8.0 era `scripts/build_nuget.py`, que coincide byte a
 byte solo con un Python enlazado contra la zlib de siempre: zlib-ng, que es
 lo que es zlib en Fedora 40 y posteriores, comprime la misma entrada en
 bytes distintos, así que allí una recompilación difiere sin decir nada de

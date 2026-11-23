@@ -199,7 +199,9 @@ archive gives other bytes, and `gh` then finds nothing. Rebuilding from the
 tag with the signed binaries uses the builder that tag carries. After
 v3.8.0 it is `go run ./cmd/release_packages/ nuget --binaries <dir>
 --version <version>`, whose compressor is Go's own and gives the same
-bytes on every system. Up to v3.8.0 it was `scripts/build_nuget.py`, which
+bytes on every system when run with the Go version the tag's `go.mod`
+names, the one the release builds with; another Go release may compress
+differently. Up to v3.8.0 it was `scripts/build_nuget.py`, which
 matches byte for byte only on a Python linked against stock zlib: zlib-ng,
 which is what zlib is on Fedora 40 and later, compresses the same input to
 different bytes, so a rebuild there differs without saying anything about
