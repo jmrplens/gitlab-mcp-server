@@ -237,6 +237,90 @@ func TestRetry_NilOperation_IsRefused(t *testing.T) {
 	}
 }
 
+// TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay
+// checks that a Pace's Wait replaces the delay that grows by baseDelay.
+//
+// The base delay is an hour and the context ends in a minute, so a retry
+// that fell back to the growing delay would be cancelled and the test would
+// see the cancellation; a retry that honors the millisecond the operation
+// named reaches the third attempt and its success. Two refusals are made so
+// the second wait is the named one too rather than a multiple of it.
+func TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	attempts := 0
+	result, err := RetryPaced(ctx, t, "paced retry test", 3, time.Hour,
+		func(int) (int, Pace, error) {
+			attempts++
+			if attempts < 3 {
+				return 0, Pace{Retry: true, Reason: "rate limited", Wait: time.Millisecond}, errors.New("429")
+			}
+			return 42, Pace{}, nil
+		})
+	if err != nil {
+		t.Fatalf("RetryPaced() error = %v, want nil after waiting the named millisecond twice", err)
+	}
+	if result != 42 {
+		t.Fatalf("result = %d, want 42", result)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+}
+
+// TestRetryPaced_PermanentFailure_StopsAtOnceWhateverTheWait checks that a
+// Pace naming a wait but not a retry ends the run at the first failure: the
+// wait says how long another attempt would need, not that one is wanted.
+func TestRetryPaced_PermanentFailure_StopsAtOnceWhateverTheWait(t *testing.T) {
+	failure := errors.New("permanent failure")
+	attempts := 0
+	_, err := RetryPaced(context.Background(), t, "paced retry test", 3, time.Millisecond,
+		func(int) (int, Pace, error) {
+			attempts++
+			return 0, Pace{Wait: time.Hour}, failure
+		})
+
+	if !errors.Is(err, failure) {
+		t.Fatalf("RetryPaced() error = %v, want the permanent failure", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+}
+
+// TestRetryPaced_ContextCancelled_StopsDuringANamedWait checks that a
+// cancelled context ends a named wait as it ends the growing delay, keeping
+// the last error beside the cancellation.
+func TestRetryPaced_ContextCancelled_StopsDuringANamedWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	_, err := RetryPaced(ctx, t, "paced retry test", 3, time.Millisecond,
+		func(int) (int, Pace, error) {
+			attempts++
+			cancel()
+			return 0, Pace{Retry: true, Wait: time.Hour}, errors.New("rate limited")
+		})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RetryPaced() error = %v, want context.Canceled", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Fatalf("RetryPaced() error = %q, want the last error beside the cancellation", err.Error())
+	}
+}
+
+// TestRetryPaced_NilOperation_IsRefused checks that a RetryPaced with nothing
+// to run reports the mistake instead of reporting success.
+func TestRetryPaced_NilOperation_IsRefused(t *testing.T) {
+	if _, err := RetryPaced[int](context.Background(), t, "paced retry test", 1, time.Millisecond, nil); err == nil {
+		t.Fatal("RetryPaced() with a nil operation returned nil, want an error")
+	}
+}
+
 // TestWaitThrough_ReportsTheFailureAsState checks the helper a condition
 // retries through: the error is folded into the state Poll keeps, and the
 // error result stays nil so the wait goes on.

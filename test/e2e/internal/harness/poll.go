@@ -9,7 +9,9 @@
 // gives up, because "timed out" without the last observation is a failure
 // nobody can act on. Retry runs an operation again after a failure the caller
 // classified as transient, which is what a GitLab that has just booted, or one
-// under the load of a parallel suite, produces.
+// under the load of a parallel suite, produces; RetryPaced does the same for
+// an operation that knows how long a failure needs, such as a rate limit's
+// window.
 
 package harness
 
@@ -150,6 +152,46 @@ func Retry[O any](
 ) (O, error) {
 	tb.Helper()
 
+	if operation == nil {
+		var output O
+		return output, errors.New("retry operation is nil")
+	}
+	return RetryPaced(ctx, tb, label, maxRetries, baseDelay, func(attempt int) (O, Pace, error) {
+		result, retryable, reason, err := operation(attempt)
+		return result, Pace{Retry: retryable, Reason: reason}, err
+	})
+}
+
+// Pace is how an operation run by [RetryPaced] answers a failed attempt:
+// whether another attempt is worth making, a short reason for the log, and
+// how long to wait before it. A zero Wait leaves the wait to the delay that
+// grows by baseDelay, as [Retry] waits.
+//
+// Wait is for a failure whose own clock is known, which the growing delay
+// cannot match: a rate limit refuses until its window ends, so a wait shorter
+// than the window spends an attempt on a refusal that was certain, and the
+// growing delay reaches the window only after several of them.
+type Pace struct {
+	Retry  bool
+	Reason string
+	Wait   time.Duration
+}
+
+// RetryPaced is [Retry] for an operation that can name the wait a failure
+// needs. It runs operation until it succeeds, reports a failure it calls
+// permanent, runs out of attempts, or ctx is cancelled, and waits after each
+// retryable failure for the Pace's Wait, or for the growing delay when the
+// Pace names none.
+func RetryPaced[O any](
+	ctx context.Context,
+	tb testing.TB,
+	label string,
+	maxRetries int,
+	baseDelay time.Duration,
+	operation func(attempt int) (O, Pace, error),
+) (O, error) {
+	tb.Helper()
+
 	var output O
 	if operation == nil {
 		return output, errors.New("retry operation is nil")
@@ -162,24 +204,31 @@ func Retry[O any](
 	}
 
 	for attempt := range maxRetries {
-		result, retryable, reason, err := operation(attempt)
+		result, pace, err := operation(attempt)
 		output = result
 		if err == nil {
 			return output, nil
 		}
-		if attempt >= maxRetries-1 || !retryable {
+		if attempt >= maxRetries-1 || !pace.Retry {
 			return output, fmt.Errorf("%s failed after %d attempt(s): %w", label, attempt+1, err)
 		}
+		reason := pace.Reason
 		if reason == "" {
 			reason = "retryable error"
 		}
+		wait := pace.Wait
+		if wait <= 0 {
+			wait = time.Duration(attempt+1) * baseDelay
+		}
 
-		tb.Logf("%s: attempt %d/%d failed (%s), retrying: %v", label, attempt+1, maxRetries, reason, err)
+		tb.Logf("%s: attempt %d/%d failed (%s), retrying in %s: %v", label, attempt+1, maxRetries, reason, wait, err)
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			stopTimer(timer)
 			return output, fmt.Errorf("%s canceled before retry after attempt %d/%d: %w (last error: %s)",
 				label, attempt+1, maxRetries, ctx.Err(), err.Error())
-		case <-time.After(time.Duration(attempt+1) * baseDelay):
+		case <-timer.C:
 		}
 	}
 
