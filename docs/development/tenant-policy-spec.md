@@ -253,10 +253,14 @@ where its value comes from, in three ways:
   carrying `read_api` and not `api` is served the actions whose requests GitLab accepts
   from `read_api`, derived per action from what each sends, which is not the operator's
   read-only surface (`AUT-001`, ADR-0026; the operator's is `AUT-004`). The one
-  exception, recorded under issue 952, is a tier neither the license, a namespace plan
-  nor, on GitLab.com, a group membership answers for, which is Free: that is the truth on
-  a CE build and on an unlicensed enterprise one, and an enterprise build that could not
-  read its tier warns, naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`, issue 900). A
+  exception, recorded under issue 952, is a tier neither the instance plan, the license, a
+  namespace plan nor, on GitLab.com, a group membership answers for, which is Free: that
+  is the truth on a CE build and on an unlicensed enterprise one, and an enterprise build
+  that could not read its tier warns, naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`,
+  issue 900). From GitLab 19.6 the version answer carries the instance plan for every
+  caller that may read the metadata, and its `free` is an answer rather than this
+  exception, so an unlicensed enterprise build resolves Free without the warning and a
+  non-administrator on a licensed one resolves the license's tier (`AUT-003`, issue 1491). A
   step of the probe GitLab did not answer is no evidence that the caller holds less: it
   lowers nothing, and leaves the tier provisional, asked again by the HTTP pool until
   GitLab answers it, kept and warned about on stdio (`AUT-003`, `AUT-010`, issue 1782). A
@@ -1082,7 +1086,8 @@ the tier, is answered by issue 952's other decision, which kept both: scopes nob
 answered for still count as write-capable (`ADM-003`), and a tier neither the license nor
 a namespace plan answers for is still Free, recorded as `INV-008`'s one exception, with
 the warning an enterprise build gives naming `GITLAB_MCP_TIER` and `--tier` (`AUT-003`,
-issue 900). `ADM-003` records ADR-0018 and issue 952, `AUT-003` issues 900 and 952, and
+issue 900); from GitLab 19.6 an instance plan of `free` is an answer and no longer reaches
+that exception (issue 1491). `ADM-003` records ADR-0018 and issue 952, `AUT-003` issues 900 and 952, and
 neither carries F-09 any longer, nor does `AUT-003` carry F-10 (below). `AUT-003` also records issue 1224,
 which gave the tier a third question on GitLab.com: GitLab.com reports a namespace's plan
 only to a caller who may administer it and serves a licensed feature to every member, so

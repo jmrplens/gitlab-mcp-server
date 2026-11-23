@@ -430,7 +430,9 @@ func shortTierRetryPause(t *testing.T) {
 // answered is taken at once, a license that answers on a later ask is asked
 // again until it does, and one GitLab keeps leaving unanswered, or a run whose
 // time ran out, is refused with the step named rather than taken as the
-// instance's Free.
+// instance's Free. A run whose time ran out could not read the version the
+// instance plan comes with either, so it names the plan step before the
+// license.
 func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
 	shortTierRetryPause(t)
 
@@ -442,12 +444,13 @@ func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
 		failures  int64
 		want      edition.Tier
 		wantErr   error
+		wantNamed string
 		wantReads int64
 	}{
 		{name: "every step answered", ctx: t.Context(), want: edition.Premium, wantReads: 1},
 		{name: "the license answered on the third ask", ctx: t.Context(), failures: tierAttempts - 1, want: edition.Premium, wantReads: tierAttempts},
-		{name: "the license never answered", ctx: t.Context(), failures: tierAttempts, want: edition.Free, wantReads: tierAttempts},
-		{name: "the time to ask again ran out", ctx: cancelled, want: edition.Free, wantErr: context.Canceled},
+		{name: "the license never answered", ctx: t.Context(), failures: tierAttempts, want: edition.Free, wantNamed: "left license", wantReads: tierAttempts},
+		{name: "the time to ask again ran out", ctx: cancelled, want: edition.Free, wantErr: context.Canceled, wantNamed: "left plan, license"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -473,9 +476,9 @@ func TestSettledTier_AStepLeftUnanswered_IsAskedAgainOrRefused(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("settledTier() = %s, want %s", got, tc.want)
 			}
-			wantRefused := tc.wantErr != nil || tc.failures >= tierAttempts
-			if (err != nil) != wantRefused || (err != nil && !strings.Contains(err.Error(), "left license")) {
-				t.Errorf("settledTier() error = %v, want refused %t naming the license", err, wantRefused)
+			wantRefused := tc.wantNamed != ""
+			if (err != nil) != wantRefused || (err != nil && !strings.Contains(err.Error(), tc.wantNamed)) {
+				t.Errorf("settledTier() error = %v, want refused %t naming %q", err, wantRefused, tc.wantNamed)
 			}
 			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 				t.Errorf("settledTier() error = %v, want it to wrap %v", err, tc.wantErr)

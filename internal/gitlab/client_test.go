@@ -1485,13 +1485,17 @@ func TestReadEdition_TellsWhatTheVersionEndpointSaid(t *testing.T) {
 // 1782: where no step answered and the edition could not be read either, the
 // line explaining the Free said the instance was CE, which nothing had
 // shown. It says now that the edition could not be read, and warns nobody.
+// The version endpoint fails with a status that answers the read, a 404: one
+// GitLab did not answer, such as a 503, leaves the tier provisional instead,
+// since the plan the read would have carried could raise it
+// (TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional).
 func TestDetectTier_EditionUnread_IsNotCalledCE(t *testing.T) {
 	cases := []struct {
 		name   string
 		status int
 		body   string
 	}{
-		{name: "the version endpoint failed", status: http.StatusServiceUnavailable, body: `{}`},
+		{name: "the version endpoint failed", status: http.StatusNotFound, body: `{}`},
 		{name: "the answer named no edition", status: http.StatusOK, body: `{"version":"16.11.0"}`},
 	}
 	for _, tc := range cases {
@@ -1515,10 +1519,11 @@ func TestDetectTier_EditionUnread_IsNotCalledCE(t *testing.T) {
 }
 
 // TestDetectTier_Provisional_AsksNoEdition checks that a provisional result
-// is warned about in its own words and asks /version nothing: the step that
-// went unanswered is why the tier may be wrong, and the budget that left it
-// unanswered is not spent again on the edition, which is how an instance came
-// to be called CE when nothing had been read (issue 1782).
+// is warned about in its own words and asks /version nothing after it: the
+// step that went unanswered is why the tier may be wrong, and the budget that
+// left it unanswered is not spent again on the edition, which is how an
+// instance came to be called CE when nothing had been read (issue 1782). The
+// one read is the probe's first step, the instance plan (issue 1491).
 func TestDetectTier_Provisional_AsksNoEdition(t *testing.T) {
 	server := &fakeGitLabDotCom{pages: []fakeMembershipPage{{status: http.StatusBadGateway}}}
 	logged := captureClientLog(t)
@@ -1526,8 +1531,8 @@ func TestDetectTier_Provisional_AsksNoEdition(t *testing.T) {
 	if got.Tier != edition.Free || !got.Provisional || got.Answered {
 		t.Errorf("DetectTier() = %+v, want Free, nothing answered, provisional", got)
 	}
-	if asked := server.versionRequests(); asked != 0 {
-		t.Errorf("/version asked %d times, want none on a provisional result", asked)
+	if asked := server.versionRequests(); asked != 1 {
+		t.Errorf("/version asked %d times, want only the plan step's read on a provisional result", asked)
 	}
 	if strings.Contains(logged.String(), "CE instance") || strings.Contains(logged.String(), "could not determine the licensing tier") {
 		t.Errorf("a provisional result logged the edition's lines:\n%s", logged)
