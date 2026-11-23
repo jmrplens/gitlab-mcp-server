@@ -37,7 +37,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -171,12 +170,27 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// snapshotTree reads every file below root, by its slash path.
-func snapshotTree(t *testing.T, root string) map[string][]byte {
+// treeFile is one file of a snapshot: its bytes and its mode.
+type treeFile struct {
+	data []byte
+	mode os.FileMode
+}
+
+// sameTreeFile reports whether two snapshots of a file agree in bytes and
+// mode.
+func sameTreeFile(a, b treeFile) bool { return a.mode == b.mode && bytes.Equal(a.data, b.data) }
+
+// snapshotTree reads every file below root, by its slash path, with its
+// mode.
+func snapshotTree(t *testing.T, root string) map[string]treeFile {
 	t.Helper()
-	files := map[string][]byte{}
+	files := map[string]treeFile{}
 	err := filepath.WalkDir(root, func(file string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
 			return err
 		}
 		data, err := os.ReadFile(file) //#nosec G122 -- a scratch tree the test wrote
@@ -184,7 +198,7 @@ func snapshotTree(t *testing.T, root string) map[string][]byte {
 			return err
 		}
 		rel, err := filepath.Rel(root, file)
-		files[filepath.ToSlash(rel)] = data
+		files[filepath.ToSlash(rel)] = treeFile{data: data, mode: info.Mode()}
 		return err
 	})
 	if err != nil {
@@ -193,20 +207,28 @@ func snapshotTree(t *testing.T, root string) map[string][]byte {
 	return files
 }
 
-// changedOutputs are the files below npm/, pypi/ and nuget/ that differ from
-// before.
-func changedOutputs(before, after map[string][]byte) []string {
+// changedOutputs are the files below npm/, pypi/ and nuget/ that a run
+// wrote, removed, or changed in bytes or mode.
+func changedOutputs(before, after map[string]treeFile) []string {
+	paths := map[string]bool{}
+	for rel := range before {
+		paths[rel] = true
+	}
+	for rel := range after {
+		paths[rel] = true
+	}
 	var changed []string
-	for rel, data := range after {
+	for _, rel := range slices.Sorted(maps.Keys(paths)) {
 		if !strings.HasPrefix(rel, "npm/") && !strings.HasPrefix(rel, "pypi/") && !strings.HasPrefix(rel, "nuget/") {
 			continue
 		}
-		if old, had := before[rel]; had && bytes.Equal(old, data) {
+		old, had := before[rel]
+		now, has := after[rel]
+		if had && has && sameTreeFile(old, now) {
 			continue
 		}
 		changed = append(changed, rel)
 	}
-	sort.Strings(changed)
 	return changed
 }
 
@@ -295,7 +317,7 @@ func repeatPackagesRun(t *testing.T, record *packagesRecord, run packagesRun) {
 	}
 	for _, rel := range recorded {
 		if got, made := after[rel]; made {
-			comparePackageOutput(t, root, rel, got, run.Files[rel])
+			comparePackageOutput(t, root, rel, got.data, run.Files[rel])
 		}
 	}
 }
@@ -433,7 +455,11 @@ func TestBuilders_RefuseACommandLineTheyCannotUse(t *testing.T) {
 			if code := runIn(root, tc.args, &stdout, &stderr, noEnv); code != 2 || !strings.Contains(stderr.String(), tc.want) {
 				t.Errorf("exit %d, stderr %q, want 2 and %q", code, stderr.String(), tc.want)
 			}
-			if entries, _ := os.ReadDir(root); len(entries) != 0 {
+			entries, err := os.ReadDir(root)
+			if err != nil {
+				t.Fatalf("the output directory cannot be read: %v", err)
+			}
+			if len(entries) != 0 {
 				t.Errorf("a refused command line left %d files", len(entries))
 			}
 		})
@@ -474,7 +500,7 @@ func TestBuildNpm_ALauncherItCannotRead_WritesNoPackage(t *testing.T) {
 	if code := runIn(root, []string{"npm", "--binaries", "dist", "--version", "9.8.7"}, &stdout, &stderr, noEnv); code != 1 {
 		t.Errorf("exit %d, want 1 (stderr %q)", code, stderr.String())
 	}
-	if after := snapshotTree(t, filepath.Join(root, "npm")); !maps.EqualFunc(before, after, bytes.Equal) {
+	if after := snapshotTree(t, filepath.Join(root, "npm")); !maps.EqualFunc(before, after, sameTreeFile) {
 		t.Errorf("a refused run changed npm/: %d files before, %d after", len(before), len(after))
 	}
 }

@@ -49,13 +49,19 @@ func runValidateNuget(root string, args []string, stdout, stderr io.Writer) int 
 	dir := localPath(root, *packages)
 	v.validateNuget(dir)
 	if !flags.noInstall && len(v.problems) == 0 {
-		if _, err := exec.LookPath(v.dotnet); err != nil {
-			v.failf("dotnet is not on PATH; install the .NET 10 SDK or pass --no-install")
-		} else {
-			v.nugetHandshake(dir)
-		}
+		v.nugetInstall(dir)
 	}
 	return v.finish("all packages")
+}
+
+// nugetInstall is the install tier: the handshake through the .NET SDK, and
+// a problem saying how to proceed when there is no SDK to run it with.
+func (v *validation) nugetInstall(dir string) {
+	if _, err := exec.LookPath(v.dotnet); err != nil {
+		v.failf("dotnet is not on PATH; install the .NET 10 SDK or pass --no-install")
+		return
+	}
+	v.nugetHandshake(dir)
 }
 
 // nugetExpected maps each package file name of the version to its platform,

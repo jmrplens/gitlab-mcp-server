@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -324,18 +323,29 @@ func TestValidateNuget_Install_DrivesTheShimAndDnx(t *testing.T) {
 	}
 }
 
-// TestRunValidateNuget_WithoutDotnet_IsAProblem covers the install tier on
-// a machine with no .NET SDK, and the subcommand's verdict.
-func TestRunValidateNuget_WithoutDotnet_IsAProblem(t *testing.T) {
+// TestNugetInstall_WithoutDotnet_IsAProblem covers the install tier on a
+// machine with no .NET SDK, over packages the offline checks pass: the one
+// problem is the missing SDK, said with how to proceed, and nothing is run.
+// It also holds the subcommand's verdict over stand-ins below the real
+// floor.
+func TestNugetInstall_WithoutDotnet_IsAProblem(t *testing.T) {
 	t.Parallel()
 
 	root, dir := nugetFixture(t)
 	var stdout, stderr bytes.Buffer
 	v := newValidation("validate-nuget", root, "9.8.7", testFloor, &stdout, &stderr)
 	v.dotnet = filepath.Join(t.TempDir(), "no-dotnet")
+	v.run = func(string, []string, string, ...string) ([]byte, error) {
+		t.Error("the install tier ran a program although there is no dotnet")
+		return nil, errors.New("not run")
+	}
 	v.validateNuget(dir)
-	if _, err := exec.LookPath(v.dotnet); err == nil {
-		t.Fatal("the stand-in path for an absent dotnet exists")
+	if len(v.problems) != 0 {
+		t.Fatalf("problems %q before the install tier, want none", v.problems)
+	}
+	v.nugetInstall(dir)
+	if len(v.problems) != 1 || !strings.Contains(v.problems[0], "dotnet is not on PATH; install the .NET 10 SDK or pass --no-install") {
+		t.Errorf("problems %q, want the missing SDK said once", v.problems)
 	}
 	var out, errOut bytes.Buffer
 	if code := runIn(root, []string{"validate-nuget", "--version", "9.8.7", "--no-install"}, &out, &errOut, noEnv); code != 1 {
