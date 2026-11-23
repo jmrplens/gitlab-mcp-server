@@ -12,6 +12,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/fileheader"
 )
 
 // The PyPI distribution. The unprefixed name gitlab-mcp-server is registered
@@ -32,9 +34,11 @@ const (
 // pypiFileHeader is the copyright and license header the two Python modules
 // of the wheel open with, and the blank line after it: the wheel publishes
 // them as source, and every source file of the project carries the header
-// (cmd/internal/fileheader). It is one interpreted string so that no line of
-// this file opens with the notice in another comment syntax.
-const pypiFileHeader = "# Copyright (c) 2026 José M. Requena Plens\n# SPDX-License-Identifier: MIT\n\n"
+// (cmd/internal/fileheader). It is built from that package's two constants,
+// as the Homebrew formula's is, so a change of holder or year reaches the
+// next wheel, and no line of this file opens with the notice in another
+// comment syntax.
+const pypiFileHeader = "# " + fileheader.CopyrightStatement + "\n# " + fileheader.LicenseStatement + "\n\n"
 
 // pypiLauncher is the wheel's gitlab_mcp_server/__init__.py, with %s the
 // version. The binary itself ships in the wheel's .data/scripts directory,
