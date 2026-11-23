@@ -6,10 +6,22 @@
 package main
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/fileheader"
 )
+
+// TestPypiMetadata_AReadmeWithCRLF_IsDescribedWithLF verifies that the
+// description embeds the README with its line endings read as Python's text
+// mode read them, every CRLF and lone CR a LF, so a checkout that wrote the
+// README with CRLF publishes the same METADATA and RECORD.
+func TestPypiMetadata_AReadmeWithCRLF_IsDescribedWithLF(t *testing.T) {
+	lf := pypiMetadata("9.8.7", []byte("# Title\n\nA line.\nAnother.\n"))
+	if got := pypiMetadata("9.8.7", []byte("# Title\r\n\r\nA line.\rAnother.\r\n")); !bytes.Equal(got, lf) {
+		t.Errorf("METADATA over a CRLF README differs from the LF one:\n%q\n%q", got, lf)
+	}
+}
 
 // TestPypiFileHeader_IsTheProjectHeaderInPythonComments verifies that the
 // header the wheel's two modules open with is the one cmd/internal/fileheader

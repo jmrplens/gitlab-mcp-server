@@ -461,6 +461,99 @@ func TestBuilders_RefuseAChecksumFileTheyCannotRead(t *testing.T) {
 	}
 }
 
+// TestBuildNpm_ALauncherItCannotRead_WritesNoPackage verifies that a
+// launcher package.json the build cannot rewrite refuses the run before the
+// first platform package is written, so a refused run leaves npm/ as it was.
+func TestBuildNpm_ALauncherItCannotRead_WritesNoPackage(t *testing.T) {
+	t.Parallel()
+
+	root := releaseTree(t)
+	writeFile(t, root, npmMainDir+"/package.json", []byte("{"))
+	before := snapshotTree(t, filepath.Join(root, "npm"))
+	var stdout, stderr bytes.Buffer
+	if code := runIn(root, []string{"npm", "--binaries", "dist", "--version", "9.8.7"}, &stdout, &stderr, noEnv); code != 1 {
+		t.Errorf("exit %d, want 1 (stderr %q)", code, stderr.String())
+	}
+	if after := snapshotTree(t, filepath.Join(root, "npm")); !maps.EqualFunc(before, after, bytes.Equal) {
+		t.Errorf("a refused run changed npm/: %d files before, %d after", len(before), len(after))
+	}
+}
+
+// TestBuilders_AChecksumFileTheyCannotLookUp_IsRefusedEvenUnverified
+// verifies that --allow-unverified covers a checksums.txt that is absent and
+// nothing else: one the build cannot look up, a link to itself here, refuses
+// the run rather than packaging the assets with no digest checked.
+func TestBuilders_AChecksumFileTheyCannotLookUp_IsRefusedEvenUnverified(t *testing.T) {
+	t.Parallel()
+
+	for _, tool := range []string{"npm", "pypi", "nuget"} {
+		t.Run(tool, func(t *testing.T) {
+			t.Parallel()
+
+			root := releaseTree(t)
+			sums := filepath.Join(root, "dist", checksumsName)
+			if err := os.Remove(sums); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(checksumsName, sums); err != nil {
+				t.Skipf("this filesystem takes no symbolic link: %v", err)
+			}
+			var stdout, stderr bytes.Buffer
+			code := runIn(root, []string{tool, "--binaries", "dist", "--version", "9.8.7", "--allow-unverified"}, &stdout, &stderr, noEnv)
+			if code != 1 || strings.Contains(stderr.String(), "WARNING") || !strings.Contains(stderr.String(), checksumsName) {
+				t.Errorf("exit %d, stderr %q; want 1 and the lookup refused, with no unverified build", code, stderr.String())
+			}
+		})
+	}
+}
+
+// TestBuilders_AnOutputPathThatIsAFile_IsRefusedAndKept verifies that --out
+// naming a regular file refuses the run and leaves the file, where the
+// directory refresh would have removed it to make a directory there.
+func TestBuilders_AnOutputPathThatIsAFile_IsRefusedAndKept(t *testing.T) {
+	t.Parallel()
+
+	for _, tool := range []string{"npm", "pypi", "nuget"} {
+		t.Run(tool, func(t *testing.T) {
+			t.Parallel()
+
+			root := releaseTree(t)
+			writeFile(t, root, "out", []byte("not a directory"))
+			var stdout, stderr bytes.Buffer
+			if code := runIn(root, []string{tool, "--binaries", "dist", "--version", "9.8.7", "--out", "out"}, &stdout, &stderr, noEnv); code != 1 {
+				t.Errorf("exit %d, want 1 (stderr %q)", code, stderr.String())
+			}
+			if data, err := os.ReadFile(filepath.Join(root, "out")); err != nil || string(data) != "not a directory" {
+				t.Errorf("the file --out named was not kept: %q, %v", data, err)
+			}
+		})
+	}
+}
+
+// TestBuilders_TheOutputHelp_SaysWhatIsReplaced verifies that each builder's
+// help says what a run clears under --out: pypi and nuget empty it, and npm
+// replaces only the platform package directories in it.
+func TestBuilders_TheOutputHelp_SaysWhatIsReplaced(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ tool, want, never string }{
+		{tool: "npm", want: "platform package directories", never: "emptied first"},
+		{tool: "pypi", want: "emptied first"},
+		{tool: "nuget", want: "emptied first"},
+	} {
+		t.Run(tc.tool, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout, stderr bytes.Buffer
+			runIn(t.TempDir(), []string{tc.tool, "-h"}, &stdout, &stderr, noEnv)
+			help := stderr.String()
+			if !strings.Contains(help, tc.want) || (tc.never != "" && strings.Contains(help, tc.never)) {
+				t.Errorf("help %q, want %q and not %q", help, tc.want, tc.never)
+			}
+		})
+	}
+}
+
 // TestSyncNpmMain_RefusesALauncherItCannotRead covers --sync-only over a
 // launcher package.json that is not there or not a JSON object.
 func TestSyncNpmMain_RefusesALauncherItCannotRead(t *testing.T) {
