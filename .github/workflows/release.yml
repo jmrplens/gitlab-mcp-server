@@ -2028,8 +2028,8 @@ jobs:
     # verify-published, like mcp-registry and commit-manifests. The formula
     # itself does not need it — it pins release-asset hashes taken from the
     # cosign-verified checksums.txt in this job, which is a stronger check than
-    # the one it now waits for, and verify_published_packages.py never looks at
-    # a Homebrew artifact. What it buys is ordering: `brew install` is the
+    # the one it now waits for, and `release_packages verify-published` never
+    # looks at a Homebrew artifact. What it buys is ordering: `brew install` is the
     # fastest path from a tag to a running binary on someone's machine, so
     # leaving this job on [release] alone made the tap the one channel that
     # advertised a version before anything had read the registries back. The
@@ -2247,7 +2247,7 @@ jobs:
     # (--nuget-deadline 2400 below), then downloads what is left: the job
     # must outlast both, or the runner cancels the check before it reports.
     timeout-minutes: 50
-    needs: [preflight, npm, pypi, nuget]
+    needs: [preflight, release-tools, npm, pypi, nuget]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
@@ -2273,6 +2273,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
+
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
 
       # Downloads what npm, PyPI and NuGet actually serve and compares the
       # embedded binaries with the signed checksums.txt. The publishers
@@ -2312,7 +2326,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$NUPKG_SHA256" > "$RUNNER_TEMP/nupkg.sha256"
-          python3 scripts/verify_published_packages.py \
+          "${RUNNER_TEMP}/tools/release_packages" verify-published \
             --retry-budget 480 --retry-delay 30 --nuget-deadline 2400 \
             --nuget-digests "$RUNNER_TEMP/nupkg.sha256" \
             "${RELEASE_TAG#v}" dist/checksums.txt

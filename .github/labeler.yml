@@ -125,7 +125,6 @@ distribution:
           - scripts/update-server-json-sha.sh
           - scripts/fetch-release-assets.sh
           - scripts/smoke-test-image.sh
-          - scripts/verify_published_packages*.py
           - scripts/install.sh
           - scripts/install.ps1
 

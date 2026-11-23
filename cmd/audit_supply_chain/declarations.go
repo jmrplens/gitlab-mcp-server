@@ -207,7 +207,6 @@ var pendingPorts = map[int]string{
 	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
 	8:  "the SonarCloud scan beside the coverage command",
-	13: "one command that builds and validates the npm, PyPI and NuGet packages and verifies what each registry published",
 	14: "the release stamp beside cmd/gen_lhm_manifest, written byte for byte as jq writes it today",
 	15: "Go tests that drive what stays through os/exec and httptest, or node:test inside site/ for the site's own steps",
 }
@@ -272,8 +271,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/update-server-json-sha.sh":             {category: scriptPortPending, item: 14},
 	"scripts/update_homebrew_tap_sh_test.py":        {category: scriptPortPending, item: 14},
 	"scripts/update_server_json_sha_sh_test.py":     {category: scriptPortPending, item: 14},
-	"scripts/verify_published_packages.py":          {category: scriptPortPending, item: 13},
-	"scripts/verify_published_packages_test.py":     {category: scriptPortPending, item: 13},
 	"scripts/ensure-playwright-chromium.sh": {
 		category: scriptJobGlue,
 		reason:   "installs the Chromium the site's build drives, in ci.yml's site jobs and pages.yml, which set up Node and pnpm and no Go",
