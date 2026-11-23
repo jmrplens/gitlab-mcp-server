@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -59,10 +60,12 @@ func TestParseInstancePlan_KeepsOnlyAPlanGitLabCouldSend(t *testing.T) {
 // (403 when zero, the plan licensePlan with 200), namespaces the list
 // /namespaces answers (403 when nil), and a request to the GraphQL endpoint
 // answers no group. refuseVersion answers /version with GitLab's refusal of
-// the fine-grained Metadata: Read permission.
+// the fine-grained Metadata: Read permission, and versionStatus, when set,
+// answers it with that status and no body.
 type planInstance struct {
 	versionBody   string
 	refuseVersion bool
+	versionStatus int
 	license       int
 	licensePlan   string
 	namespaces    []map[string]any
@@ -85,6 +88,10 @@ func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(metadataRefusalBody))
+				return
+			}
+			if p.versionStatus != 0 {
+				w.WriteHeader(p.versionStatus)
 				return
 			}
 			respondJSON(w, p.versionBody)
@@ -284,6 +291,52 @@ func TestDetectTier_NoInstancePlanAnswer_RunsTheCascade(t *testing.T) {
 			}
 			if tc.debug != "" && !strings.Contains(logged.String(), tc.debug) {
 				t.Errorf("the unrecognized plan was not logged at debug:\n%s", logged)
+			}
+		})
+	}
+}
+
+// TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional holds the plan
+// step to the rule every other step keeps (issue 1782): a version read GitLab
+// did not answer could have carried a plan that raises the tier, so a
+// non-administrator refused the license and shown "default" namespace plans is
+// served Free provisionally, naming the step, and asked again rather than
+// settled on Free. A version read GitLab answered with a status that says
+// something, a 404 here, is no plan and leaves the cascade's answer final, as
+// a release before 19.6 does.
+func TestDetectTier_UnansweredVersionRead_LeavesTheTierProvisional(t *testing.T) {
+	defaultPlans := []map[string]any{{"full_path": "acme", "kind": "group", "plan": "default"}}
+	cases := []struct {
+		name            string
+		versionStatus   int
+		versionBody     string
+		wantProvisional bool
+	}{
+		{name: "a 502", versionStatus: http.StatusBadGateway, wantProvisional: true},
+		{name: "a 429", versionStatus: http.StatusTooManyRequests, wantProvisional: true},
+		{name: "a body that does not decode", versionBody: `{"version":`, wantProvisional: true},
+		{name: "a 404", versionStatus: http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := &planInstance{versionStatus: tc.versionStatus, versionBody: tc.versionBody, license: http.StatusForbidden, namespaces: defaultPlans}
+			client := instance.client(t)
+
+			got := client.DetectTier(t.Context(), t.Context())
+			if got.Tier != edition.Free || got.Provisional != tc.wantProvisional {
+				t.Errorf("DetectTier() = %+v, want Free with Provisional %v", got, tc.wantProvisional)
+			}
+			wantUnresolved := []string(nil)
+			if tc.wantProvisional {
+				wantUnresolved = []string{tierStepPlan}
+			}
+			if !slices.Equal(got.Unresolved, wantUnresolved) {
+				t.Errorf("Unresolved = %q, want %q", got.Unresolved, wantUnresolved)
+			}
+			// A provisional answer asks no edition, so the plan step's read is
+			// the only one; the Free fallback's warning asks the edition again.
+			if n := instance.count(versionAPIPath); tc.wantProvisional && n != 1 {
+				t.Errorf("/version asked %d times, want once", n)
 			}
 		})
 	}

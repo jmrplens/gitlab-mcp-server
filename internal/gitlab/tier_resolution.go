@@ -16,6 +16,7 @@ import (
 
 // The steps of the tier probe, as [TierResolution.Unresolved] names them.
 const (
+	tierStepPlan       = "plan"
 	tierStepLicense    = "license"
 	tierStepNamespaces = "namespaces"
 	tierStepMembership = "membership"
