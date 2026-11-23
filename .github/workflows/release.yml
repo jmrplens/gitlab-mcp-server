@@ -2036,9 +2036,10 @@ jobs:
     # accepted cost is that a release whose npm, PyPI or NuGet publish failed
     # now leaves the tap on the previous version, which is the correct outcome
     # for a release that is not fully out.
-    needs: [preflight, release, verify-published]
+    needs: [preflight, release, release-tools, verify-published]
     # The formula names one version, the newest: a backport would downgrade
-    # every `brew upgrade` (issue 1323), and the script refuses that too.
+    # every `brew upgrade` (issue 1323), and `release_packages homebrew`
+    # refuses that too.
     if: needs.preflight.outputs.newest == 'true'
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
@@ -2067,6 +2068,20 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh --checksums-only "${RELEASE_TAG#v}" dist
 
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
+
       # The tap deploy key writes to another repository, so it lives in a job
       # that runs no third-party code and holds nothing else.
       - name: Update Homebrew tap formula
@@ -2080,7 +2095,7 @@ jobs:
           VERSION="${RELEASE_TAG#v}"
           if [ "$REHEARSAL" = "true" ]; then
             TAP_REPO=https://github.com/jmrplens/homebrew-tap.git \
-              bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap" --dry-run
+              "${RUNNER_TEMP}/tools/release_packages" homebrew dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap" --dry-run
             exit 0
           fi
           if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
@@ -2093,7 +2108,7 @@ jobs:
           chmod 600 "${KEY_FILE}"
           ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
           export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
-          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+          "${RUNNER_TEMP}/tools/release_packages" homebrew dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
 
   mcp-registry:
     name: "🗂️ Publish to MCP Registry"
@@ -2108,7 +2123,7 @@ jobs:
     # verify-published because this job is what points installers at the npm,
     # PyPI and NuGet packages: the listing must not advertise bytes nobody
     # compared with the signed checksums.
-    needs: [preflight, release, npm, pypi, nuget, docker, sign-attest, verify-published]
+    needs: [preflight, release, release-tools, npm, pypi, nuget, docker, sign-attest, verify-published]
     # The registry entry is the one server.json main carries, which names the
     # newest release; a backport publishes nothing here (issue 1323).
     if: needs.preflight.outputs.newest == 'true'
@@ -2146,6 +2161,20 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist gitlab-mcp-server-darwin.mcpb gitlab-mcp-server-windows.mcpb gitlab-mcp-server-linux.mcpb
 
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
+
       # Stamp the working tree only — the commit to main is a separate job with
       # a separate credential. The OCI digest comes from the docker job, so
       # server.json pins the exact image this release published rather than a
@@ -2161,7 +2190,7 @@ jobs:
             echo "::error::the docker job published no image digest; server.json cannot be pinned"
             exit 1
           fi
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${RELEASE_TAG#v}" \
+          "${RUNNER_TEMP}/tools/release_packages" stamp dist/checksums.txt "${RELEASE_TAG#v}" \
             dist/gitlab-mcp-server-darwin.mcpb,dist/gitlab-mcp-server-windows.mcpb,dist/gitlab-mcp-server-linux.mcpb \
             "${OCI_DIGEST}"
 
@@ -2169,7 +2198,7 @@ jobs:
         env:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
           # Bump when a new mcp-publisher release is verified. Server version published comes from
-          # the git tag (handled in the previous step by update-server-json-sha.sh).
+          # the git tag (handled in the previous step by `release_packages stamp`).
           MCP_PUBLISHER_VERSION: "v1.8.9"
           MCP_PUBLISHER_SHA256: "4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8"
         run: |
@@ -2443,15 +2472,16 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
-          # The script is idempotent and reads checksums.txt + version + the
+          # The stamp is idempotent and reads checksums.txt + version + the
           # three per-OS bundles, verified above against the release's cosign
           # signature and their build-provenance attestations, so re-running
           # it on the current main produces the same result without inheriting
           # anything from a dirty tree. It rebuilds the mcpb entries from the
           # bundles, so the first release to run it replaces main's single
-          # universal entry with the three.
+          # universal entry with the three. It is cmd/release_packages built
+          # from this checkout of main, which holds what main will carry.
           CGO_ENABLED=0 go build -trimpath -o "${RUNNER_TEMP}/release_packages" ./cmd/release_packages
-          RELEASE_PACKAGES="${RUNNER_TEMP}/release_packages" bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" \
+          "${RUNNER_TEMP}/release_packages" stamp dist/checksums.txt "${VERSION}" \
             dist/gitlab-mcp-server-darwin.mcpb,dist/gitlab-mcp-server-windows.mcpb,dist/gitlab-mcp-server-linux.mcpb \
             "${OCI_DIGEST}"
 

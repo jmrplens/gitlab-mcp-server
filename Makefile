@@ -1965,7 +1965,7 @@ publish-nuget: release-packages-tool
 	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## publish-lobehub: push the current version of the existing LobeHub listing.
-## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh
+## Reads lhm.plugin.json (version kept in sync by `release_packages stamp`
 ## on each release) and posts it via the @lobehub/market-cli. The CLI split its
 ## verbs: `plugin publish <gitUrl>` is for FIRST-TIME listings only and now
 ## requires the git URL; an already-published plugin is refused with "use lhm
