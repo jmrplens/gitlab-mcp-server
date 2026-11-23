@@ -263,6 +263,9 @@ func (v *validation) checkRecord(name, distInfo string, files map[string]*zip.Fi
 		}
 		data, err := readZipEntry(files[entry])
 		if err != nil {
+			// Nothing else may read this entry, so a member that cannot be
+			// read is named here rather than skipped.
+			v.failf("%s: %s cannot be read: %v", name, entry, err)
 			continue
 		}
 		got := recorded[entry]

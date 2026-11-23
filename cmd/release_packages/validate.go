@@ -120,10 +120,12 @@ type verified struct {
 }
 
 // readVerified loads the record a builder left in dir, and with remove takes
-// it out of dir once read, so the publish step never meets a file in the
-// directory it uploads that is not a package. A missing or unreadable record,
-// one written by a build that skipped the checksums, one of another version
-// and one without the notices' digest are each problems.
+// it out of dir once decoded, so the publish step never meets a file in the
+// directory it uploads that is not a package. A record that does not decode
+// stays where it is, for the operator to read, and the run fails. A missing
+// or unreadable record, one written by a build that skipped the checksums,
+// one of another version and one without the notices' digest are each
+// problems.
 func (v *validation) readVerified(dir string, remove bool) *verified {
 	file := filepath.Join(dir, verifiedManifest)
 	data, err := os.ReadFile(file) //#nosec G304 -- the record a builder wrote beside its packages
@@ -131,15 +133,15 @@ func (v *validation) readVerified(dir string, remove bool) *verified {
 		v.failf("the packages were assembled without %s: the builder did not check them against the release's checksums.txt", verifiedManifest)
 		return nil
 	}
-	if remove {
-		if err = os.Remove(file); err != nil {
-			v.failf("%s could not be removed: %v", verifiedManifest, err)
-		}
-	}
 	var record verified
 	if err = json.Unmarshal(data, &record); err != nil {
 		v.failf("%s is not the record a builder writes: %v", verifiedManifest, err)
 		return nil
+	}
+	if remove {
+		if err = os.Remove(file); err != nil {
+			v.failf("%s could not be removed: %v", verifiedManifest, err)
+		}
 	}
 	v.check(record.Verified, "%s says the binaries were packaged with --allow-unverified", verifiedManifest)
 	v.check(record.Version == v.version, "%s records version %s, but this is %s", verifiedManifest, record.Version, v.version)
@@ -205,7 +207,8 @@ func (v *validation) handshake(label, dir string, env []string, timeout time.Dur
 		return
 	}
 	var response struct {
-		JSONRPC string `json:"jsonrpc"`
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
 		Result  struct {
 			ServerInfo struct {
 				Version string `json:"version"`
@@ -214,6 +217,12 @@ func (v *validation) handshake(label, dir string, env []string, timeout time.Dur
 	}
 	if err = json.Unmarshal([]byte(lines[0]), &response); err != nil || response.JSONRPC != "2.0" {
 		v.failf("handshake (%s): stdout is not pure JSON-RPC: %q", label, lines[0][:min(len(lines[0]), 120)])
+		return
+	}
+	// Only the answer to this handshake's own initialize counts, as the npm
+	// script read the version from the response with id 1 alone.
+	if string(response.ID) != "1" {
+		v.failf("handshake (%s): the first line answers id %s, not the initialize request's 1", label, response.ID)
 		return
 	}
 	for _, line := range lines[1:] {
@@ -229,16 +238,26 @@ func (v *validation) handshake(label, dir string, env []string, timeout time.Dur
 	}
 }
 
+// pipeDrainLimit is how long the handshake waits, after the server has
+// ended, for its stdout and stderr to reach their end. A process the server
+// or its launcher started and did not reap can hold either open for good,
+// and the release job must fail rather than wait on it.
+const pipeDrainLimit = 3 * time.Second
+
 // talk runs argv, writes the initialize request and returns every line it
 // printed on stdout until it was stopped, the first being its answer. A
 // process that printed nothing within timeout is an error carrying the tail
-// of its stderr.
+// of its stderr, and so is a stdout the scanner could not read to its end
+// or one still open pipeDrainLimit after the server ended.
 func talk(dir string, env []string, timeout time.Duration, argv ...string) ([]string, error) {
 	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //#nosec G204 -- the command the package under validation installed
 	cmd.Dir = dir
 	cmd.Env = append(append(os.Environ(), handshakeEnv...), env...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	// Wait copies stderr until its end, so a descendant holding it would
+	// hold Wait too: past this delay Wait closes it and returns.
+	cmd.WaitDelay = pipeDrainLimit
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -257,6 +276,8 @@ func talk(dir string, env []string, timeout time.Duration, argv ...string) ([]st
 		return nil, fmt.Errorf("%s could not be started: %w", argv[0], err)
 	}
 	lines := make(chan string, 64)
+	// Sent before lines is closed, so it is ready once lines has drained.
+	scanned := make(chan error, 1)
 	go func() {
 		defer close(lines)
 		scanner := bufio.NewScanner(reader)
@@ -264,6 +285,7 @@ func talk(dir string, env []string, timeout time.Duration, argv ...string) ([]st
 		for scanner.Scan() {
 			lines <- scanner.Text()
 		}
+		scanned <- scanner.Err()
 	}()
 	_, _ = io.WriteString(stdin, handshakeRequest)
 	var first string
@@ -280,12 +302,27 @@ func talk(dir string, env []string, timeout time.Duration, argv ...string) ([]st
 	_ = stdin.Close()
 	stopCommand(cmd)
 	out := []string{first}
-	for line := range lines {
-		out = append(out, line)
+	drained := time.After(pipeDrainLimit)
+drain:
+	for {
+		select {
+		case line, open := <-lines:
+			if !open {
+				break drain
+			}
+			out = append(out, line)
+		case <-drained:
+			// Closing the read end ends the scanner's read.
+			_ = reader.Close()
+			return nil, fmt.Errorf("stdout was still open %s after the server ended: a process it started holds it", pipeDrainLimit)
+		}
 	}
 	if !answered {
 		tail := stderr.Bytes()
 		return nil, fmt.Errorf("no answer within %s; stderr tail: %q", timeout, tail[max(0, len(tail)-800):])
+	}
+	if err = <-scanned; err != nil {
+		return nil, fmt.Errorf("stdout could not be read to its end: %w", err)
 	}
 	return out, nil
 }
