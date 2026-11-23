@@ -258,17 +258,57 @@ func importFinished(e *harness.Env, s *harness.Session, projectID int64) error {
 // whole window.
 const importStatusFailuresAllowed = 10
 
-// importArchive imports an archive as a new project, retrying the refusal
-// GitLab's settings cache makes while the enabled source is not visible
-// yet, and registers the imported project's deletion.
+// projectImportRateWait is how long an import GitLab refused for its project
+// import rate limit waits before the next attempt.
+//
+// GitLab admits project_import_limit imports per user in a period of one
+// minute (6 by default: the application setting's default and the period of
+// the project_import rule in its Labkit rate limits), and every file import
+// counts once the source check has passed it. The counter's window opens with
+// the first import it counts and a refusal does not extend it, so a refusal
+// is answered at most a minute before the window closes, and a minute with a
+// few seconds of margin always reaches a new one. The round trip below can
+// reach the limit on its own: three surfaces each import at least once, and
+// one whose import lands while the Sidekiq job still sees the source disabled
+// imports again under a new name.
+const projectImportRateWait = 65 * time.Second
+
+// projectImportRateWaits is how many rate limit refusals one import waits
+// out. One window is enough unless something else imported as the same user
+// in the next one, and a third refusal is reported rather than waited
+// through, so a limit set lower than the scenario needs costs two windows and
+// not the whole attempt budget.
+const projectImportRateWaits = 2
+
+// importArchive imports an archive as a new project and registers the
+// imported project's deletion. It retries the refusal GitLab's settings cache
+// makes while the enabled source is not visible yet, with a delay growing by
+// ten seconds, and waits out GitLab's project import rate limit for its whole
+// window, at most projectImportRateWaits times. The six attempts therefore
+// wait at most two windows and three of the growing delays, about four
+// minutes, and usually not at all.
 func importArchive(e *harness.Env, s *harness.Session, contentBase64, name string) projectimportexport.ImportStatusOutput {
 	e.T.Helper()
 	params := map[string]any{"content_base64": contentBase64, "name": name, "path": name}
 
-	imported, err := harness.Retry(e.Ctx, e.T, "import_from_file", 6, 10*time.Second, func(int) (projectimportexport.ImportStatusOutput, bool, string, error) {
+	rateRefusals := 0
+	imported, err := harness.RetryPaced(e.Ctx, e.T, "import_from_file", 6, 10*time.Second, func(int) (projectimportexport.ImportStatusOutput, harness.Pace, error) {
 		out, tryErr := harness.Try[projectimportexport.ImportStatusOutput](s, actionProjectImportFromFile, params)
-		retryable := tryErr != nil && strings.Contains(tryErr.Error(), "403")
-		return out, retryable, "the enabled import source is not visible yet", tryErr
+		switch {
+		case tryErr == nil:
+			return out, harness.Pace{}, nil
+		case isRateLimitRefusal(tryErr):
+			rateRefusals++
+			return out, harness.Pace{
+				Retry:  rateRefusals <= projectImportRateWaits,
+				Reason: fmt.Sprintf("GitLab's project import rate limit refused it (refusal %d of the %d waited out); waiting out its one-minute window", rateRefusals, projectImportRateWaits),
+				Wait:   projectImportRateWait,
+			}, tryErr
+		case strings.Contains(tryErr.Error(), "403"):
+			return out, harness.Pace{Retry: true, Reason: "the enabled import source is not visible yet"}, tryErr
+		default:
+			return out, harness.Pace{}, tryErr
+		}
 	})
 	if err != nil {
 		e.T.Fatalf("importing the archive as %q: %v", name, err)
@@ -277,6 +317,14 @@ func importArchive(e *harness.Env, s *harness.Session, contentBase64, name strin
 		return fixture.DeleteProject(ctx, e.Client(), imported.ID, imported.PathWithNamespace)
 	})
 	return imported
+}
+
+// isRateLimitRefusal reports whether a tool error is GitLab's 429, by the
+// status and the words the server classifies a 429 with together, since a
+// bare number can sit inside a generated name or an ID.
+func isRateLimitRefusal(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "429") && strings.Contains(message, "too many requests")
 }
 
 // readImportSources reads the instance's enabled import sources.

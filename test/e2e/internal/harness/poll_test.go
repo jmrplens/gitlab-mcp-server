@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -234,6 +235,98 @@ func TestRetry_ContextCancelled_StopsBetweenAttempts(t *testing.T) {
 func TestRetry_NilOperation_IsRefused(t *testing.T) {
 	if _, err := Retry[int](context.Background(), t, "retry test", 1, time.Millisecond, nil); err == nil {
 		t.Fatal("Retry() with a nil operation returned nil, want an error")
+	}
+}
+
+// TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay
+// checks that a Pace's Wait replaces the delay that grows by baseDelay.
+//
+// It runs under synctest, so the fake clock measures each wait exactly: the
+// operation records when every attempt starts, and the gap before the second
+// and the third must be the 65 seconds it named. A retry that skipped the
+// wait would show a gap of zero, one that fell back to the growing delay an
+// hour or two, and one that scaled the named wait by the attempt 130 seconds
+// before the third. Two refusals are made so the second wait is checked too.
+func TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const named = 65 * time.Second
+		start := time.Now()
+		var started []time.Duration
+		result, err := RetryPaced(context.Background(), t, "paced retry test", 3, time.Hour,
+			func(int) (int, Pace, error) {
+				started = append(started, time.Since(start))
+				if len(started) < 3 {
+					return 0, Pace{Retry: true, Reason: "rate limited", Wait: named}, errors.New("429")
+				}
+				return 42, Pace{}, nil
+			})
+		if err != nil {
+			t.Fatalf("RetryPaced() error = %v, want nil after waiting the named wait twice", err)
+		}
+		if result != 42 {
+			t.Fatalf("result = %d, want 42", result)
+		}
+		want := []time.Duration{0, named, 2 * named}
+		if len(started) != len(want) {
+			t.Fatalf("attempts = %d, want %d", len(started), len(want))
+		}
+		for i := range want {
+			if started[i] != want[i] {
+				t.Errorf("attempt %d started at %s, want %s (every wait the named %s)", i+1, started[i], want[i], named)
+			}
+		}
+	})
+}
+
+// TestRetryPaced_PermanentFailure_StopsAtOnceWhateverTheWait checks that a
+// Pace naming a wait but not a retry ends the run at the first failure: the
+// wait says how long another attempt would need, not that one is wanted.
+func TestRetryPaced_PermanentFailure_StopsAtOnceWhateverTheWait(t *testing.T) {
+	failure := errors.New("permanent failure")
+	attempts := 0
+	_, err := RetryPaced(context.Background(), t, "paced retry test", 3, time.Millisecond,
+		func(int) (int, Pace, error) {
+			attempts++
+			return 0, Pace{Wait: time.Hour}, failure
+		})
+
+	if !errors.Is(err, failure) {
+		t.Fatalf("RetryPaced() error = %v, want the permanent failure", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+}
+
+// TestRetryPaced_ContextCancelled_StopsDuringANamedWait checks that a
+// cancelled context ends a named wait as it ends the growing delay, keeping
+// the last error beside the cancellation.
+func TestRetryPaced_ContextCancelled_StopsDuringANamedWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	_, err := RetryPaced(ctx, t, "paced retry test", 3, time.Millisecond,
+		func(int) (int, Pace, error) {
+			attempts++
+			cancel()
+			return 0, Pace{Retry: true, Wait: time.Hour}, errors.New("rate limited")
+		})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RetryPaced() error = %v, want context.Canceled", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Fatalf("RetryPaced() error = %q, want the last error beside the cancellation", err.Error())
+	}
+}
+
+// TestRetryPaced_NilOperation_IsRefused checks that a RetryPaced with nothing
+// to run reports the mistake instead of reporting success.
+func TestRetryPaced_NilOperation_IsRefused(t *testing.T) {
+	if _, err := RetryPaced[int](context.Background(), t, "paced retry test", 1, time.Millisecond, nil); err == nil {
+		t.Fatal("RetryPaced() with a nil operation returned nil, want an error")
 	}
 }
 
