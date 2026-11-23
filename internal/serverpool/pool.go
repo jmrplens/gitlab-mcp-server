@@ -1899,9 +1899,11 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, 
 // fineGrainedAuthority returns what a fine-grained token may be shown, judged
 // from its grant and the instance version, and nil for any other token.
 //
-// The reads a token that may read its grant costs, the version and, when the
-// self answer the token was described with did not carry the grant, the grant
-// by id (issue 1400), are made holding one of
+// The reads a token that may read its grant costs, the version when the tier
+// probe did not already read it (a pinned tier; issue 1491 made it the probe's
+// first read, so an entry asks /version once) and, when the self answer the
+// token was described with did not carry the grant, the grant by id (issue
+// 1400), are made holding one of
 // the pool's credential probe slots (POL-006), taken only around them, after
 // the tier was detected, and given back at once: every new minted token is a
 // new key, so these reads are as much an unauthenticated flood's lever as the
@@ -1951,7 +1953,7 @@ func (p *ServerPool) readUnderProbeSlot(ctx context.Context, client *gitlabclien
 		return finegrained.Reading{}, err
 	}
 	defer release()
-	return client.ReadFineGrained(ctx, facts), nil
+	return client.ReadFineGrainedOnce(ctx, facts), nil
 }
 
 // refreshAuthority re-reads a fine-grained entry's grant and the instance

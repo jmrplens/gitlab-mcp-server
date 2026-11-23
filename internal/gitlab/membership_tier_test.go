@@ -486,14 +486,16 @@ func TestDetectTier_NamespaceAlreadyUltimate_AsksNoMembership(t *testing.T) {
 	}
 }
 
-// TestDetectTier_SelfManaged_AsksNoMembership checks that the membership step
-// is GitLab.com's alone. A self-managed instance sells its tier as an instance
-// license, which the first step reads, and a self-managed client keeps the
-// cascade it had.
-func TestDetectTier_SelfManaged_AsksNoMembership(t *testing.T) {
+// TestDetectTier_SelfManagedCE_AsksNoMembership checks that a self-managed CE
+// build is not asked the membership step: its schema has no
+// licensedFeatureAvailability, and Free is the truth there. An enterprise
+// build from 18.11 is asked it (issue 1491,
+// TestDetectTier_MembershipStep_AskedWhereItCanAnswer).
+func TestDetectTier_SelfManagedCE_AsksNoMembership(t *testing.T) {
 	server := &fakeGitLabDotCom{
-		namespaces: []map[string]any{{"full_path": "root", "kind": "user", "plan": "default"}},
-		pages:      []fakeMembershipPage{{groups: []*fakeGroup{{path: "acme", premium: true, ultimate: true}}}},
+		versionBody: `{"version":"19.5.0","enterprise":false}`,
+		namespaces:  []map[string]any{{"full_path": "root", "kind": "user", "plan": "default"}},
+		pages:       []fakeMembershipPage{{groups: []*fakeGroup{{path: "acme", premium: true, ultimate: true}}}},
 	}
 	if got, _ := server.detect(t, true); got.Tier != edition.Free || got.Answered || got.Provisional {
 		t.Errorf("DetectTier() = %+v, want Free with no step answering and none unread", got)
@@ -801,7 +803,7 @@ func TestDetectTier_Membership_FailedRead_SaysSoAtInfo(t *testing.T) {
 			}
 			said, unresolved := false, false
 			for line := range strings.Lines(logged.String()) {
-				if strings.Contains(line, `"level":"INFO"`) && strings.Contains(line, "top-level group") && strings.Contains(line, "GITLAB_MCP_TIER") {
+				if strings.Contains(line, `"level":"INFO"`) && strings.Contains(line, "group the token is a member of") && strings.Contains(line, "GITLAB_MCP_TIER") {
 					said = true
 					unresolved = strings.Contains(line, `"unresolved":true`)
 				}
@@ -840,7 +842,7 @@ func TestMembershipPage_TellsARefusalFromAPartialAnswer(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
-			groups, err := client.membershipPage(t.Context(), "")
+			groups, err := client.membershipPage(t.Context(), MembershipTierQuery, "")
 			if (groups != nil) != tc.wantGroups {
 				t.Errorf("groups = %v, want returned: %t", groups, tc.wantGroups)
 			}
@@ -955,6 +957,118 @@ func TestDetectTier_Membership_IsRetriedOnTheClientsPolicy(t *testing.T) {
 			}
 			if asked := server.requests(); len(asked) != tc.requests {
 				t.Errorf("membership requests = %d, want %d", len(asked), tc.requests)
+			}
+		})
+	}
+}
+
+// TestDetectTier_MembershipStep_AskedWhereItCanAnswer holds where the
+// membership step is asked from issue 1491 on, besides GitLab.com: a null
+// instance plan, which is GitLab saying subscriptions are held per
+// namespace, and an enterprise build from 18.11 that reported no recognized
+// plan, where licensedFeatureAvailability answers from the instance license
+// (measured on 19.5.0 with a license and on 19.6.1 without one). It is not
+// asked of a CE build, nor of an enterprise build before 18.11, whose schemas
+// have no licensedFeatureAvailability, nor of one whose edition is unknown.
+func TestDetectTier_MembershipStep_AskedWhereItCanAnswer(t *testing.T) {
+	cases := []struct {
+		name    string
+		version string
+		asked   bool
+	}{
+		{name: "a null plan", version: `{"version":"19.6.1-ee","enterprise":true,"plan":null}`, asked: true},
+		{name: "an enterprise build before 19.6", version: `{"version":"19.5.5-ee","enterprise":true}`, asked: true},
+		{name: "the first release with the field", version: `{"version":"18.11.0-ee","enterprise":true}`, asked: true},
+		{name: "an unrecognized plan on 19.6", version: `{"version":"19.6.1-ee","enterprise":true,"plan":"gold"}`, asked: true},
+		{name: "an enterprise build before 18.11", version: `{"version":"18.10.3-ee","enterprise":true}`},
+		{name: "a CE build", version: `{"version":"19.5.5","enterprise":false}`},
+		{name: "an unknown edition", version: `{"version":"19.5.5"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := &planInstance{versionBody: tc.version}
+			client := instance.client(t)
+			client.DetectTier(t.Context(), t.Context())
+			if asked := instance.count("/api/graphql") > 0; asked != tc.asked {
+				t.Errorf("membership step asked = %t, want %t", asked, tc.asked)
+			}
+		})
+	}
+}
+
+// TestDetectTier_SelfManagedBefore196_MemberResolvesTheLicensesTier is the
+// case issue 899 recorded, on a release before the instance plan: a
+// non-administrator on a licensed enterprise instance, refused the license
+// and shown "default" for every namespace, is a member of a group whose
+// licensed features GitLab answers from the instance license, and is served
+// that tier. On an unlicensed instance the same step answers false, which is
+// an answer: Free, without the warning.
+func TestDetectTier_SelfManagedBefore196_MemberResolvesTheLicensesTier(t *testing.T) {
+	cases := []struct {
+		name     string
+		page     string
+		want     edition.Tier
+		answered bool
+	}{
+		{name: "a licensed instance", page: groupPage("acme", true, true), want: edition.Ultimate, answered: true},
+		{name: "an unlicensed instance", page: groupPage("acme", false, false), want: edition.Free, answered: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := &planInstance{
+				versionBody: `{"version":"19.5.5-ee","enterprise":true}`,
+				namespaces:  []map[string]any{{"full_path": "dev", "kind": "user", "plan": "default"}},
+				topGroups:   tc.page,
+			}
+			client := instance.client(t)
+			logged := captureClientLog(t)
+			got := client.DetectTier(t.Context(), t.Context())
+			if got.Tier != tc.want || got.Answered != tc.answered || got.Provisional {
+				t.Errorf("DetectTier() = %+v, want %v answered", got, tc.want)
+			}
+			if strings.Contains(logged.String(), `"level":"WARN"`) {
+				t.Errorf("a tier the membership step answered warned:\n%s", logged)
+			}
+		})
+	}
+}
+
+// TestDetectTier_Membership_NoTopLevelGroup_AsksTheGroupsThemselves holds the
+// second pass decided for issue 1491: a caller whose only membership is a
+// subgroup holding no project, under a private top-level group, is shown no
+// root (GitLab drops the node it may not read), so the step asks again
+// without topLevelOnly and reads the subgroup, which answers from its root's
+// plan. The pass is asked only when the first returned no node at all: one
+// that returned a group, Free included, or did not answer, asks nothing more.
+func TestDetectTier_Membership_NoTopLevelGroup_AsksTheGroupsThemselves(t *testing.T) {
+	cases := []struct {
+		name      string
+		top       string
+		all       string
+		want      edition.Tier
+		allAsked  int
+		answered  bool
+		licensePl string
+	}{
+		{name: "only a subgroup", all: groupPage("top/sub", true, true), want: edition.Ultimate, allAsked: 1, answered: true},
+		{name: "no group at all", want: edition.Free, allAsked: 1},
+		{name: "a free root", top: groupPage("acme", false, false), all: groupPage("top/sub", true, true), want: edition.Free, answered: true},
+		{name: "a root that did not answer", top: `{"data":null,"errors":[{"message":"Internal server error"}]}`, all: groupPage("top/sub", true, true), want: edition.Free},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := &planInstance{
+				versionBody: `{"version":"19.5.5-ee","enterprise":true}`,
+				topGroups:   tc.top,
+				allGroups:   tc.all,
+			}
+			client := instance.client(t)
+			got := client.DetectTier(t.Context(), t.Context())
+			if got.Tier != tc.want || got.Answered != tc.answered {
+				t.Errorf("DetectTier() = %+v, want %v answered %t", got, tc.want, tc.answered)
+			}
+			if n := instance.count(allGroupsDocument); n != tc.allAsked {
+				t.Errorf("the second pass was asked %d times, want %d", n, tc.allAsked)
 			}
 		})
 	}

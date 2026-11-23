@@ -162,7 +162,14 @@ func authorizeDecisions() []Decision {
 			// row's exception; a null plan, subscriptions held per
 			// namespace, skips the license; an absent key, a value outside
 			// the four plans, a release before 19.6 and a version the token
-			// was refused ask the questions above as before.
+			// was refused ask the questions above as before. The membership
+			// step is asked besides GitLab.com where a null plan says
+			// subscriptions are held per namespace and on an enterprise
+			// build from 18.11 with no recognized plan, whose groups answer
+			// from the instance license (true licensed, false unlicensed,
+			// both answers); a first pass that returned no group asks the
+			// groups themselves without topLevelOnly, under the same page
+			// size and bound.
 			Decided: []string{"issue 900", "issue 952", "issue 1224", "issue 956", "issue 1239", "issue 1782", "issue 1491"},
 			Refusals: []Refusal{
 				{Methods: []string{"tools/call"}, Channel: Withheld, Answer: AskOperator, At: withheld},
@@ -185,6 +192,7 @@ func authorizeDecisions() []Decision {
 				enforce(pkgGitLab, "Client.DetectTier"),
 				enforce(pkgGitLab, "Client.ResolveTier"),
 				enforce(pkgGitLab, "Client.tierFromInstancePlan"),
+				enforce(pkgGitLab, "Client.membershipStepApplies"),
 				enforce(pkgGitLab, "tierReadUnresolved"),
 				enforce(pkgServer, "warnStdioProvisionalTier"),
 				enforce(pkgTools, "TierWithheld"),

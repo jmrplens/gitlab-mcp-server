@@ -8,7 +8,9 @@
 package gitlab
 
 import (
+	"cmp"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -17,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // TestParseInstancePlan_KeepsOnlyAPlanGitLabCouldSend holds the reading of the
@@ -61,7 +64,10 @@ func TestParseInstancePlan_KeepsOnlyAPlanGitLabCouldSend(t *testing.T) {
 // /namespaces answers (403 when nil), and a request to the GraphQL endpoint
 // answers no group. refuseVersion answers /version with GitLab's refusal of
 // the fine-grained Metadata: Read permission, and versionStatus, when set,
-// answers it with that status and versionStatusBody.
+// answers it with that status and versionStatusBody. topGroups and allGroups
+// are the page the membership query answers with topLevelOnly and without it,
+// no group when empty; a request without it is also counted under
+// allGroupsDocument.
 type planInstance struct {
 	versionBody       string
 	refuseVersion     bool
@@ -70,9 +76,27 @@ type planInstance struct {
 	license           int
 	licensePlan       string
 	namespaces        []map[string]any
+	topGroups         string
+	allGroups         string
 
 	mu    sync.Mutex
 	asked map[string]int
+}
+
+// serveVersion answers /version: GitLab's refusal of Metadata: Read,
+// versionStatus with its body, or versionBody.
+func (p *planInstance) serveVersion(w http.ResponseWriter) {
+	switch {
+	case p.refuseVersion:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(metadataRefusalBody))
+	case p.versionStatus != 0:
+		w.WriteHeader(p.versionStatus)
+		_, _ = w.Write([]byte(p.versionStatusBody))
+	default:
+		respondJSON(w, p.versionBody)
+	}
 }
 
 // serve answers one request. It runs on the httptest server's goroutine, so it
@@ -85,18 +109,7 @@ func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
 		p.mu.Unlock()
 		switch r.URL.Path {
 		case versionAPIPath:
-			if p.refuseVersion {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(metadataRefusalBody))
-				return
-			}
-			if p.versionStatus != 0 {
-				w.WriteHeader(p.versionStatus)
-				_, _ = w.Write([]byte(p.versionStatusBody))
-				return
-			}
-			respondJSON(w, p.versionBody)
+			p.serveVersion(w)
 		case "/api/v4/license":
 			if p.license != http.StatusOK {
 				w.WriteHeader(max(p.license, http.StatusForbidden))
@@ -116,12 +129,56 @@ func (p *planInstance) serve(t *testing.T) http.HandlerFunc {
 			}
 			respondJSON(w, string(body))
 		case "/api/graphql":
-			respondJSON(w, `{"data":{"groups":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}`)
+			var request struct {
+				Query     string         `json:"query"`
+				Variables map[string]any `json:"variables"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decoding the membership request: %v", err)
+			}
+			if err := graphqlschema.Validate(request.Query, request.Variables); err != nil {
+				t.Errorf("GitLab would refuse the membership request: %v", err)
+			}
+			body := p.allGroups
+			if strings.Contains(request.Query, "topLevelOnly: true") {
+				body = p.topGroups
+			} else {
+				p.mu.Lock()
+				p.asked[allGroupsDocument]++
+				p.mu.Unlock()
+			}
+			respondJSON(w, cmp.Or(body, noGroupsPage))
 		default:
 			t.Errorf("the tier probe asked %s %s, which it has no reason to", r.Method, r.URL.Path)
 			http.NotFound(w, r)
 		}
 	}
+}
+
+// noGroupsPage is a membership page with no group on it, and allGroupsDocument
+// the key a membership request without topLevelOnly is counted under.
+const (
+	noGroupsPage      = `{"data":{"groups":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}`
+	allGroupsDocument = "membership without topLevelOnly"
+)
+
+// groupPage is a membership page holding one group with the two features'
+// answers.
+func groupPage(path string, premium, ultimate bool) string {
+	return fmt.Sprintf(`{"data":{"groups":{"nodes":[{"fullPath":%q,"premium":{"available":%t},"ultimate":{"available":%t}}],`+
+		`"pageInfo":{"hasNextPage":false,"endCursor":null}}}}`, path, premium, ultimate)
+}
+
+// answeredMembership answers r with a membership page holding no group when it
+// is the membership query's POST, and reports whether it did, for a stand-in
+// whose every other endpoint is a GET: an enterprise build from 18.11 is asked
+// the membership step from issue 1491 on.
+func answeredMembership(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost || r.URL.Path != "/api/graphql" {
+		return false
+	}
+	respondJSON(w, noGroupsPage)
+	return true
 }
 
 // client starts p and returns a client of it that has read nothing yet.
