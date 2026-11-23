@@ -3347,6 +3347,175 @@ func TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus(t *testing.T) {
 	}
 }
 
+// TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus verifies that a
+// GraphQL refusal client-go also hands over as its not-found sentinel reads
+// as the refusal it is: no status, since GitLab answered it with HTTP 200,
+// and never a 404.
+//
+// UpdateSecurityAttribute, CreateSecurityCategory and UpdateSecurityCategory
+// return their top-level errors that way ([refusalMatchingNotFound]). Read by
+// the sentinel, a handler's 404 branch took a refused update for a missing
+// object, the classifier described it as not found and the error card carried
+// a status GitLab never answered with (issue 1784).
+func TestIsHTTPStatus_GraphQLRefusalMatchingNotFound_IsNoStatus(t *testing.T) {
+	_, err := refusalMatchingNotFound(t, refusedCategoryUpdateBody)
+	wrapped := fmt.Errorf("update security category: %w", err)
+	for _, tc := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{name: "404", err: err, code: http.StatusNotFound},
+		{name: "404, wrapped", err: wrapped, code: http.StatusNotFound},
+		{name: "200", err: err, code: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if IsHTTPStatus(tc.err, tc.code) {
+				t.Errorf("IsHTTPStatus(%d) = true, want false", tc.code)
+			}
+		})
+	}
+	t.Run("classified", func(t *testing.T) {
+		if got, notFound := ClassifyError(wrapped), ClassifyError(gl.ErrNotFound); got == notFound {
+			t.Errorf("ClassifyError() = %q, the description of a 404", got)
+		}
+	})
+	t.Run("error card", func(t *testing.T) {
+		if de := NewDetailedError("security_category", "update", wrapped); de.GitLabStatus != 0 {
+			t.Errorf("GitLabStatus = %d, want 0", de.GitLabStatus)
+		}
+	})
+}
+
+// TestClassifyError_GraphQLRefusalAnsweredWith200_IsNoTransportFailure
+// verifies that a GraphQL refusal GitLab answered with HTTP 200 is described
+// as GitLab's refusal, whatever words its messages use.
+//
+// client-go hands such a refusal over with no response, so the classifier
+// found no status and went on to the network branches, two of which match the
+// text of the error: a refusal naming a "certificate" field read as a failed
+// TLS handshake and one quoting "connection refused" as an unreachable
+// server, sending the caller to check GITLAB_URL or turn verification off for
+// a request GitLab answered. Three client-go writes hand it over matching the
+// not-found sentinel as well, which described every one of them as a 404
+// until the refusal was read first (issue 1784).
+func TestClassifyError_GraphQLRefusalAnsweredWith200_IsNoTransportFailure(t *testing.T) {
+	refusalOf := func(t *testing.T, message string) error {
+		t.Helper()
+		refusal := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+		if err := json.Unmarshal([]byte(graphQLErrorsBody(t, message)), &refusal.Errors); err != nil {
+			t.Fatalf("decode the refusal's errors: %v", err)
+		}
+		return fmt.Errorf("create security attributes: %w", refusal)
+	}
+	_, matching := refusalMatchingNotFound(t, graphQLErrorsBody(t, `Field "certificate" doesn't exist on type "SecurityCategory"`))
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "a message naming a certificate", err: refusalOf(t, `Field "certificate" doesn't exist on type "SecurityAttribute"`)},
+		{name: "a message quoting a refused connection", err: refusalOf(t, "the scanner reported connection refused")},
+		{name: "a refusal matching the not-found sentinel", err: matching},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyError(tt.err); got != graphQLRefusalDescription {
+				t.Errorf("ClassifyError() = %q, want %q", got, graphQLRefusalDescription)
+			}
+		})
+	}
+}
+
+// TestSanitizeError_GraphQLRefusalAnsweredWith200_BoundsItsMessages verifies
+// that the messages of a GraphQL refusal GitLab answered with HTTP 200 are
+// bounded the way those of one answered with any other status are.
+//
+// client-go hands such a refusal over as a *gl.GraphQLResponseError whose Err
+// is its own words ("mutation.securityCategoryUpdate failed") and carries no
+// response, so the sanitizer, which found the list through the response,
+// left every message in the text whole: a message of any length, across
+// lines, naming a host only the operator's network knows. Three client-go
+// writes hand it over matching the not-found sentinel as well, and while that
+// sentinel was read as the response the messages were withheld behind a 404;
+// reading the refusal before the sentinel (issue 1784) is what let them
+// through. The list is capped as one message, the handler's context is kept
+// when nothing past the cap is left in it, and the whole text is replaced
+// when something is.
+func TestSanitizeError_GraphQLRefusalAnsweredWith200_BoundsItsMessages(t *testing.T) {
+	_, matching := refusalMatchingNotFound(t, graphQLErrorsBody(t, graphQLUpstreamMessage))
+	plain := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, graphQLUpstreamMessage)), &plain.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	short := &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, "Name has already\nbeen taken")), &short.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	bounded := " (GraphQL errors: " + strings.Repeat("x", 2048) + "...)"
+	noErr := &gl.GraphQLResponseError{}
+	if err := json.Unmarshal([]byte(graphQLErrorsBody(t, "Name has already been taken")), &noErr.Errors); err != nil {
+		t.Fatalf("decode the refusal's errors: %v", err)
+	}
+	unrendered := fmt.Errorf("create security attributes: %w", noErr)
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a refusal matching the not-found sentinel keeps the handler's context",
+			err:  fmt.Errorf("update security category: %w", matching),
+			want: "update security category: mutation.securityCategoryUpdate failed" + bounded,
+		},
+		{
+			name: "a refusal of its own keeps the handler's context",
+			err:  fmt.Errorf("create security attributes: %w", plain),
+			want: "create security attributes: mutation.securityAttributeCreate failed" + bounded,
+		},
+		{
+			name: "a message past the cap in the handler's text takes the whole text with it",
+			err:  fmt.Errorf("create security attributes (%s): %w", graphQLUpstreamMessage, plain),
+			want: "mutation.securityAttributeCreate failed" + bounded,
+		},
+		{
+			name: "a message within the cap is only flattened",
+			err:  fmt.Errorf("create security attributes: %w", short),
+			want: "create security attributes: mutation.securityAttributeCreate failed (GraphQL errors: Name has already been taken)",
+		},
+		{
+			name: "a refusal listing no errors keeps client-go's own words",
+			err:  fmt.Errorf("create security attributes: %w", &gl.GraphQLResponseError{Err: errors.New("mutation.securityAttributeCreate failed")}),
+			want: "create security attributes: mutation.securityAttributeCreate failed (no additional error messages)",
+		},
+		{
+			name: "a refusal whose rendering panics is left as fmt renders it",
+			err:  unrendered,
+			want: flattenErrorText(unrendered.Error()),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sanitized := SanitizeError(tt.err)
+			if got := sanitized.Error(); got != tt.want {
+				t.Errorf("SanitizeError() = %q, want %q", got, tt.want)
+			}
+			if _, found := errors.AsType[*gl.GraphQLResponseError](sanitized); !found {
+				t.Errorf("SanitizeError() = %q, want the GraphQL error still reachable through the chain", sanitized)
+			}
+		})
+	}
+	t.Run("WrapErrWithMessage", func(t *testing.T) {
+		got := WrapErrWithMessage("update security category", matching).Error()
+		if !strings.HasSuffix(got, "mutation.securityCategoryUpdate failed"+bounded) {
+			t.Errorf("WrapErrWithMessage() = %q, want it to end with the bounded list", got)
+		}
+		if strings.Contains(got, "gitlab-web-03.internal") || strings.Contains(got, "second line") {
+			t.Errorf("WrapErrWithMessage() = %q, must not carry the message past the cap", got)
+		}
+	})
+}
+
 // TestIsPermissionRefusal_ReadsWhatGitLabAnswered verifies the predicate a
 // handler keys its permission hint on, over the error client-go really hands
 // it for each answer.

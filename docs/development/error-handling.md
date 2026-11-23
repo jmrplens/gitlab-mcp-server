@@ -67,7 +67,15 @@ returns a GraphQL refusal as `*gl.GraphQLResponseError`, which keeps the
 response in a field and does not unwrap to it; `gitLabResponseOf` is the one
 way this file finds the response, and every reader (`ClassifyError`,
 `IsHTTPStatus`, `ExtractGitLabMessage`, the sanitizer) goes through it, so
-they cannot disagree about a GraphQL refusal.
+they cannot disagree about a GraphQL refusal. It reads that wrapper before
+anything else, because three client-go writes (`UpdateSecurityAttribute`,
+`CreateSecurityCategory` and `UpdateSecurityCategory`) return a refusal GitLab
+answered with HTTP 200 as an error that unwraps both to it and to the
+`ErrNotFound` sentinel, for callers written when they returned the sentinel;
+read through the sentinel, that refusal was a 404 and, for a fine-grained
+session, a write GitLab probably committed (issue 1784).
+`WriteAnsweredWithoutObject` reads such an error by its top-level messages
+alone for the same reason.
 
 ### `ClassifyHTTPStatus`
 

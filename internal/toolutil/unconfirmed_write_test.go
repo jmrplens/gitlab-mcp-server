@@ -111,6 +111,91 @@ func TestWriteAnsweredWithoutObject_EachFormOfTheAnswer_OnlyANullOnHTTP200Qualif
 	}
 }
 
+// refusedCategoryUpdateBody is what GitLab answers a security category update
+// it refused with: HTTP 200, the payload null and the reason as a top-level
+// error.
+const refusedCategoryUpdateBody = `{"data":{"securityCategoryUpdate":null},"errors":[{"message":"` + refusal + `"}]}`
+
+// nulledCategoryUpdateBody is what GitLab answers a security category update
+// it ran and then denied the category of, below a non-null position: the
+// payload null and the error a null there writes.
+const nulledCategoryUpdateBody = `{"data":{"securityCategoryUpdate":null},"errors":[{"message":"Cannot return null for non-nullable field SecurityCategory.securityAttributes"}]}`
+
+// refusalMatchingNotFound returns what client-go's UpdateSecurityCategory
+// hands a handler when GitLab answers it with body, through a real client
+// against a server that answers it.
+//
+// UpdateSecurityAttribute, CreateSecurityCategory and UpdateSecurityCategory
+// return GitLab's top-level errors as an error that unwraps both to
+// *gl.GraphQLResponseError and to the ErrNotFound sentinel (client-go's
+// notFoundGraphQLResponseError, unexported), so that callers written when the
+// three returned ErrNotFound for a refusal keep matching it. The test fails
+// here, before asserting anything, the day client-go hands over another shape,
+// since every caller of this helper is about that one.
+func refusalMatchingNotFound(t *testing.T, body string) (*gl.Response, error) {
+	t.Helper()
+	client := gitLabClientFor(t, answeringServer(t, http.StatusOK, body).URL)
+	name := "Business impact"
+	_, resp, err := client.SecurityCategories.UpdateSecurityCategory(7, 9, &gl.UpdateSecurityCategoryOptions{Name: &name})
+	if err == nil {
+		t.Fatal("UpdateSecurityCategory() error = nil, want the error client-go builds from the top-level errors")
+	}
+	if _, typed := errors.AsType[*gl.GraphQLResponseError](err); !typed || !errors.Is(err, gl.ErrNotFound) {
+		t.Fatalf("UpdateSecurityCategory() error = %T %v, want one matching both *gl.GraphQLResponseError and gl.ErrNotFound", err, err)
+	}
+	return resp, err
+}
+
+// TestWriteAnsweredWithoutObject_RefusalMatchingNotFound_IsReadByItsMessages
+// verifies that a GraphQL refusal client-go also hands over as its not-found
+// sentinel is read by the top-level errors it carries, not by the sentinel.
+//
+// The sentinel is how a write GitLab ran and answered without its object reads
+// when client-go found the object null with no error, and the refusal matches
+// it only for compatibility. Read by the sentinel, a refused update was a
+// write answered without its object, and a fine-grained session was told a
+// write GitLab never made was probably committed (issue 1784). Read by its
+// messages, a refusal is a refusal and a null below a non-null position in
+// the same shape is still the write GitLab ran.
+func TestWriteAnsweredWithoutObject_RefusalMatchingNotFound_IsReadByItsMessages(t *testing.T) {
+	refusedResp, refused := refusalMatchingNotFound(t, refusedCategoryUpdateBody)
+	nulledResp, nulled := refusalMatchingNotFound(t, nulledCategoryUpdateBody)
+	cases := []struct {
+		name string
+		resp *gl.Response
+		err  error
+		want bool
+	}{
+		{name: "a refusal", resp: refusedResp, err: refused, want: false},
+		{name: "a refusal, wrapped", resp: refusedResp, err: fmt.Errorf("update security category: %w", refused), want: false},
+		{name: "nulled below a non-null field", resp: nulledResp, err: nulled, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := WriteAnsweredWithoutObject(tc.resp, tc.err); got != tc.want {
+				t.Errorf("WriteAnsweredWithoutObject(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnconfirmedWrite_FineGrainedSession_RefusalMatchingNotFound_KeepsTheHandlersError
+// verifies the answer a fine-grained session gets for a GraphQL write GitLab
+// refused, when client-go hands the refusal over as its not-found sentinel
+// too: the handler's own error, never "probably committed", since GitLab made
+// no write.
+func TestUnconfirmedWrite_FineGrainedSession_RefusalMatchingNotFound_KeepsTheHandlersError(t *testing.T) {
+	fine := gitlabclient.NewUnboundClient("https://gitlab.example.com")
+	fine.SetAuthority(finegrained.Unevaluated(fineGrainedTable(), finegrained.FallbackNone, ""))
+	resp, err := refusalMatchingNotFound(t, refusedCategoryUpdateBody)
+	wrapped := fmt.Errorf("update security category: %w", err)
+
+	got := UnconfirmedWrite(fine, resp, "update security category", "security category", err, wrapped)
+	if errors.Is(got, finegrained.ErrUnconfirmedWrite) || got.Error() != wrapped.Error() {
+		t.Errorf("UnconfirmedWrite = %v, want the handler's own error %v unchanged", got, wrapped)
+	}
+}
+
 // TestUnconfirmedWrite_ClassicOrFineGrainedSession_OnlyFineGrainedIsToldProbablyCommitted
 // verifies the one answer a GraphQL write's handler returns for its error: a
 // classic session keeps the handler's own error whatever GitLab answered,

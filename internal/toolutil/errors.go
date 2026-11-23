@@ -73,6 +73,12 @@ const tlsFailureMessage = "TLS/SSL handshake failed. If the host has no CA certi
 	"install ca-certificates (or the instance's CA) or set SSL_CERT_FILE to a PEM bundle that holds it; " +
 	"only for a self-signed certificate nothing can be made to trust, set GITLAB_MCP_SKIP_TLS_VERIFY=true"
 
+// graphQLRefusalDescription describes a GraphQL request GitLab answered with
+// HTTP 200 and refused in the response's top-level errors, which carry the
+// reason: the request reached GitLab, so nothing about the connection is
+// wrong, and no status says more than the errors do.
+const graphQLRefusalDescription = "GitLab refused the GraphQL request; its errors say why"
+
 // RequestPathRefusedHint is the next step offered with a request path
 // refusal: the path is built from the action's arguments, so what changes the
 // outcome is the argument the segment came from, and the cause names the path
@@ -282,6 +288,16 @@ func ClassifyError(err error) string {
 		}
 	}
 
+	// GitLab answered with HTTP 200 and refused the request in the top-level
+	// errors of a GraphQL response, which client-go hands over with no
+	// response ([swapAnsweredGraphQLRefusal]). Checked before the network
+	// branches, two of which match the text of the error: a refusal naming a
+	// "certificate" field read as a failed handshake, and one quoting
+	// "connection refused" as an unreachable server (issue 1784).
+	if _, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		return graphQLRefusalDescription
+	}
+
 	// Network-level errors (connection refused, DNS, timeout, TLS)
 	if isConnectionRefused(err) {
 		return "GitLab server is unreachable (connection refused). Check GITLAB_URL and whether the server is running"
@@ -324,6 +340,16 @@ func ClassifyError(err error) string {
 // sentinel has no body to decode and arrives wrapped by fmt.Errorf like any
 // other, and over REST it arrives as it is.
 //
+// The GraphQL wrapper is read first, because one error can match both. Three
+// client-go writes (UpdateSecurityAttribute, CreateSecurityCategory and
+// UpdateSecurityCategory) return the top-level errors of a mutation GitLab
+// refused with HTTP 200 as an error that unwraps both to the wrapper and to
+// the ErrNotFound sentinel, so that callers written when they returned the
+// sentinel for a refusal keep matching it. Read through the sentinel, that
+// refusal was a 404 to every reader below (issue 1784). The wrapper's Err
+// holds a response only when GitLab answered with another status than 200,
+// and a refusal answered with 200 carries none.
+//
 // It is the one way this file finds the response, and every reader goes
 // through it: [ClassifyError], [NewDetailedError], [IsHTTPStatus],
 // [ExtractGitLabMessage] and [sanitize]. They used to disagree about a GraphQL
@@ -332,13 +358,21 @@ func ClassifyError(err error) string {
 // [WrapErrWithStatusHint] dropped the hint it was given for exactly that
 // status and the raw body was reflected past the sanitizer.
 func gitLabResponseOf(err error) (*gl.ErrorResponse, bool) {
-	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
-		return glErr, true
-	}
 	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
 		return errors.AsType[*gl.ErrorResponse](gqlErr.Err)
 	}
-	return nil, false
+	return errors.AsType[*gl.ErrorResponse](err)
+}
+
+// matchesNotFoundSentinel reports whether err is client-go's ErrNotFound
+// sentinel, the 404 it answers without reading the body, and not a GraphQL
+// refusal that matches the sentinel only for compatibility, which
+// [gitLabResponseOf] explains.
+func matchesNotFoundSentinel(err error) bool {
+	if _, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		return false
+	}
+	return errors.Is(err, gl.ErrNotFound)
 }
 
 // answeredStatus returns the status GitLab answered with, and zero for an
@@ -853,9 +887,11 @@ func ErrInvalidEnum(field, value string, validValues []string) error {
 //
 // The status is read the way [ClassifyError] reads it, so the two never
 // disagree about one error: a GraphQL refusal is looked through, and a 404
-// is recognized by client-go's sentinel, which carries no response.
+// is recognized by client-go's sentinel, which carries no response, unless
+// the error is a GraphQL refusal that matches the sentinel only for
+// compatibility and was answered with HTTP 200.
 func IsHTTPStatus(err error, code int) bool {
-	if code == http.StatusNotFound && errors.Is(err, gl.ErrNotFound) {
+	if code == http.StatusNotFound && matchesNotFoundSentinel(err) {
 		return true
 	}
 	glErr, ok := gitLabResponseOf(err)
@@ -1169,7 +1205,9 @@ func (e *sanitizedCauseError) Unwrap() error { return e.cause }
 // uncapped, and judged for authorship by nothing. The safe rendering of the
 // wrapper is the response's followed by [boundedGraphQLMessages], and a
 // message the bounded list does not carry whole counts as one that may not be
-// reflected, so the fallback above covers it too.
+// reflected, so the fallback above covers it too. A refusal GitLab answered
+// with HTTP 200 carries no response at all, and its list is bounded the same
+// way by [swapAnsweredGraphQLRefusal].
 func sanitize(err error) error {
 	if err == nil {
 		return nil
@@ -1178,6 +1216,8 @@ func sanitize(err error) error {
 	text := original
 	if glErr, ok := gitLabResponseOf(err); ok {
 		text = swapGitLabResponse(text, err, glErr)
+	} else if gqlErr, refused := errors.AsType[*gl.GraphQLResponseError](err); refused {
+		text = swapAnsweredGraphQLRefusal(text, gqlErr)
 	}
 	text = replaceUnboundRendering(text, err)
 	text = flattenErrorText(text)
@@ -1195,7 +1235,7 @@ func swapGitLabResponse(text string, err error, glErr *gl.ErrorResponse) string 
 	raw, safe := renderGitLabResponse(glErr)
 	unsafe := []string{unreflectableMessage(glErr)}
 	if gqlErr, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
-		listed, withheld := boundedGraphQLMessages(gqlErr, glErr)
+		listed, withheld := boundedGraphQLMessages(gqlErr, graphQLAuthored(glErr))
 		safe += listed
 		raw = recoveredErrorText(gqlErr)
 		if raw == "" {
@@ -1209,6 +1249,40 @@ func swapGitLabResponse(text string, err error, glErr *gl.ErrorResponse) string 
 	text = strings.ReplaceAll(text, raw, safe)
 	for _, message := range unsafe {
 		if message != "" && strings.Contains(text, message) {
+			return safe
+		}
+	}
+	return text
+}
+
+// swapAnsweredGraphQLRefusal replaces the rendering of gqlErr inside text with
+// its bounded one, for a GraphQL refusal that carries no response, and returns
+// the bounded one alone when a message the bounded list does not carry whole
+// is still in the text afterwards.
+//
+// That is how client-go hands over a refusal GitLab answered with HTTP 200:
+// the top-level errors of a body it decoded into the method's own result, and
+// an Err of its own words ("mutation.securityCategoryUpdate failed") with no
+// response, so [gitLabResponseOf] finds none and [swapGitLabResponse] never
+// saw the list. The body answered 200 and decoded as the method's GraphQL
+// result, so its messages are GitLab's and are listed, bounded as one message
+// the way a refusal answered with any other status is (issue 1784).
+func swapAnsweredGraphQLRefusal(text string, gqlErr *gl.GraphQLResponseError) string {
+	raw := recoveredErrorText(gqlErr)
+	if raw == "" {
+		return text
+	}
+	listed, withheld := boundedGraphQLMessages(gqlErr, true)
+	safe := renderRecovering(gqlErr.Err) + listed
+	if raw == safe {
+		return text
+	}
+	text = strings.ReplaceAll(text, raw, safe)
+	// boundedGraphQLMessages never withholds an empty message, since every
+	// list carries one, so no entry here needs the guard swapGitLabResponse
+	// gives the response's own message.
+	for _, message := range withheld {
+		if strings.Contains(text, message) {
 			return safe
 		}
 	}
@@ -1234,8 +1308,9 @@ var graphQLResponseKeys = map[string]bool{"data": true, "errors": true, "extensi
 // list by [boundedGitLabMessage], so the most of them a reader sees is what it
 // would see of a REST message. They are dropped altogether when the body
 // carries a key a GraphQL response does not have, since GitLab did not compose
-// that body. A body that listed no errors keeps client-go's own words.
-func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, glErr *gl.ErrorResponse) (suffix string, withheld []string) {
+// that body, which authored says. A body that listed no errors keeps
+// client-go's own words.
+func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, authored bool) (suffix string, withheld []string) {
 	if len(gqlErr.Errors.Errors) == 0 {
 		return graphQLNoMessages, nil
 	}
@@ -1244,7 +1319,7 @@ func boundedGraphQLMessages(gqlErr *gl.GraphQLResponseError, glErr *gl.ErrorResp
 		messages = append(messages, graphQLError.Message)
 	}
 	listed := ""
-	if graphQLAuthored(glErr) {
+	if authored {
 		listed = boundedGitLabMessage(strings.Join(messages, ", "))
 	}
 	// An empty message is carried by any list, so it is never withheld, and
