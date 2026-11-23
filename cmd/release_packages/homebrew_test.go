@@ -80,10 +80,16 @@ func layOutTap(t *testing.T, record stampRecord, run tapRun, env []string) strin
 
 // TestHomebrew_RecordedRuns_MatchTheScript replays every recorded tap run
 // against a local bare tap, with the record's git environment, and holds the
-// exit code, stdout, stderr, the formula and both logs to the script's.
+// exit code, stdout, stderr, the formula and both logs to the script's. The
+// release checks the formula with ruby -c, so on CI, where GitHub sets CI on
+// every step, a missing git or ruby fails the test rather than skipping
+// every recorded run, as the script's suite did.
 func TestHomebrew_RecordedRuns_MatchTheScript(t *testing.T) {
 	for _, tool := range []string{"git", "ruby"} {
 		if _, err := exec.LookPath(tool); err != nil {
+			if os.Getenv("CI") != "" {
+				t.Fatalf("the tap update needs %s, and CI must run these cases rather than skip them: %v", tool, err)
+			}
 			t.Skipf("%s is not installed: %v", tool, err)
 		}
 	}
@@ -98,7 +104,9 @@ func TestHomebrew_RecordedRuns_MatchTheScript(t *testing.T) {
 			env = append(env, "TAP_REPO="+filepath.Join(tree, "tap.git"))
 			var stdout, stderr bytes.Buffer
 			code := runHomebrew(tree, run.Args, &stdout, &stderr, env)
-			placeholder := strings.NewReplacer(tree, "<tree>")
+			// git prints the tap's path with the host's separator, a
+			// backslash on Windows, where the script ran on a slash.
+			placeholder := strings.NewReplacer(tree+string(filepath.Separator), "<tree>/", tree, "<tree>")
 			if code != run.Exit {
 				t.Errorf("exit %d, the script exited %d (stderr %q)", code, run.Exit, stderr.String())
 			}
