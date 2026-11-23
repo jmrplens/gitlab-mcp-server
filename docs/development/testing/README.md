@@ -94,9 +94,9 @@ are in that shape: `cmd/server` (`peerStdinIsNull`, `bindUnixSocket` and
 split on the race detector). Until issue 1017 the first two were covered by
 mutation testing only.
 
-`scripts/coverage-conditions.sh`, which `make coverage-conditions` calls,
-copies the module into a temporary directory, leaving out `.git`,
-`.claude/worktrees`, `node_modules` and `dist`, removes from the package's
+The recipe (`cmd/internal/conditions`), which `make coverage-conditions` runs
+through `cmd/coverage_recipes`, copies the module into a temporary directory,
+leaving out `.git`, `.claude/worktrees`, `node_modules` and `dist`, removes from the package's
 copy every file the go command does not build here, runs gobco on the package
 there, names the files it left out and removes the copy whatever happens. The
 copy is of the module rather than of the package because gobco reaches an
@@ -118,20 +118,21 @@ file runs where it is, a constraint on the platform alone included
 Measured on linux/amd64 in October 2026: `cmd/server` 2236/2236 and
 `internal/toolutil` 3870/3870, every condition of either evaluated both ways.
 
-**The report becomes a gate with `GOBCO_GATE`.** Unset, the script prints
+**The report becomes a gate with `GOBCO_GATE`.** Unset, the recipe prints
 gobco's report and passes whatever it found. `GOBCO_GATE=all` fails the run on
 any condition gobco names as never true, never false or never evaluated, which
 is the gate a touched package is held to before it is committed.
 `GOBCO_GATE=beyond:GOOS/GOARCH` fails it only on such a condition in a file
 this build compiles and the named platform does not, and prints, counts and
 passes the rest. A value it cannot read is refused before gobco runs. A run
-the gate fails exits 3, a status no other failure of the script uses, so a
-caller can tell a figure the gate held from no figure at all: every other
-failure exits 1 or 2, never 3 (1 for a package go cannot load, a failing test,
-a `0/0` report or one without the figure of its mode, 2 for a gate or a mode
-it cannot read, and 1 or 2 when a command the script runs fails on its own, as
-GNU tar, awk and a crashing go command exit 2). `make coverage-conditions`
-reports any failure of the script as its own, with status 2.
+the gate fails ends with status 3, which no other failure of the recipe uses,
+so a caller can tell a figure the gate held from no figure at all: every other
+failure is 1 or 2, never 3 (1 for a package go cannot load, a failing test, a
+`0/0` report or one without the figure of its mode and a program of the run
+that fails, 2 for a gate or a mode it cannot read). `cmd/measure_conditions`,
+which runs the recipe in its own process, is the caller that reads it; `go run`
+reports any failure as 1 and `make coverage-conditions` as its own, with
+status 2.
 `GOBCO_TEST_FLAGS` hands gobco's `go test` flags of its own (`-timeout=30m`),
 one word each.
 
@@ -151,14 +152,14 @@ different things: `return a == b || c` is two conditions and no branch, and
 `if a && b` is two conditions and one branch.
 
 **gobco runs from `PATH` once it is installed, so a run asks the module proxy
-for nothing about gobco.** The script runs the gobco `PATH` finds when it
-reports the release the script pins (`gobco -version`), and `go run` of that
+for nothing about gobco.** The recipe runs the gobco `PATH` finds when it
+reports the release the recipe pins (`gobco -version`), and `go run` of that
 release otherwise. `go run` asks the module proxy for the module's versions on
 every run, even with the module in the cache, and a macOS runner that lost
 name resolution failed CI's condition step twice in two days that way without
 measuring anything (issue 1515). The package's own dependencies still come
 from the module cache, as for any `go test`, so on a cold cache run
-`go mod download` first. `scripts/coverage-conditions.sh --install` runs `go install` of
+`go mod download` first. `go run ./cmd/coverage_recipes install-gobco` runs `go install` of
 the pinned release, up to three attempts with `GOBCO_INSTALL_PAUSE` seconds
 between them (10 unless set), and fails when `PATH` does not then find that
 release, so an install that left it where `PATH` does not look fails there
@@ -168,7 +169,7 @@ job of `conditions.yml` run it once before they measure, and locally it spares
 run from `PATH` exits 1, as one through `go run` does, so the statuses above
 hold either way. gobco runs its own `go test` without `GOPATH`, so where
 `GOPATH` names a directory other than the default that `go test` would read
-another module cache and download every dependency into it; the script hands
+another module cache and download every dependency into it; the recipe hands
 gobco `GOMODCACHE` as `go env` reports it, and the `go test` reads the cache
 `go mod download` filled until gobco passes `GOPATH` on.
 
@@ -177,7 +178,7 @@ The Windows and non-Linux halves of `cmd/server` (four source files:
 `conn_refused_windows.go`, `socket_mode_windows.go`, `probe_other.go` and
 `descriptor_limit_other.go`) and the non-Unix halves of `internal/toolutil`
 (two) build only on a platform other than Linux, so the Windows and macOS legs
-of CI's cross-platform job run the script on both packages through bash with
+of CI's cross-platform job run the recipe on both packages with
 `GOBCO_GATE=all`, which fails the leg on any condition of either package left
 one-way there, in a platform half or in a file Linux builds too. Until issue
 1212 the legs ran with `GOBCO_GATE=beyond:linux/amd64` and only printed a
@@ -225,9 +226,8 @@ were taken by hand on a Windows virtual machine, and none could be taken on
 macOS.
 [`.github/workflows/conditions.yml`](../../../.github/workflows/conditions.yml)
 takes them for any package. It runs only when dispatched, never on a push or a
-pull request, and runs `scripts/coverage-conditions.sh` through bash on each
-runner named, exactly as the CI legs and `make coverage-conditions` run it, so
-every figure in its summary is one the gate would compute on that system:
+pull request, and runs the recipe the CI legs and `make coverage-conditions`
+run on each runner named, so every figure in its summary is one the gate would compute on that system:
 
 ```bash
 gh workflow run conditions.yml \
@@ -242,17 +242,17 @@ the ones whose built files differ between two of the platforms `.goreleaser.yml`
 builds, which today are `cmd/server`, `internal/toolutil` and
 `internal/tools/packages`. `systems` takes any of `windows-latest`,
 `macos-latest` and `ubuntu-latest`, the last for comparison. `gate` is the
-`GOBCO_GATE` the script runs with, `all` or `beyond:linux/amd64`; the figures
+`GOBCO_GATE` the recipe runs with, `all` or `beyond:linux/amd64`; the figures
 are the same under either, and it decides only which of the conditions not
 evaluated both ways the summary marks as held. `mode` is the `GOBCO_MODE` the
-script runs with, `condition` or `branch` (above), and `tree` measures every
+recipe runs with, `condition` or `branch` (above), and `tree` measures every
 package below `cmd/` and `internal/` instead of the packages named, in twenty
 shards per system ([below](#the-whole-tree)). The job summary, headed by the
 mode, has one row per package and system with gobco's figure (outcomes
 evaluated of outcomes there are, two per condition or decision), then each
 system's total over the packages it measured, then every condition not
 evaluated both ways with its file and line, then, for a package that could
-not be measured, the lines of its output that say why: the script's own and
+not be measured, the lines of its output that say why: the recipe's own and
 what gobco or its `go test` printed before them (a panic, a failing test, a
 test package that did not build or set up, a compiler position). Each job's
 raw outputs and records are uploaded as an artifact, named
@@ -275,10 +275,10 @@ pull request that adds it, and the first dispatch happens after that merge.
 `TAGS=e2e` the harness compiles and its tests run. But every file of it sits
 behind `e2e`, so every constraint line is blanked, and its own
 `TestSources_EveryFile_CarriesExactlyTheE2EConstraint` fails on the blank
-lines. The run fails there, and the script says the figure it printed
+lines. The run fails there, and the recipe says the figure it printed
 (863/1162) is not a measurement and names the blanked lines as the likely
 cause. Without the blanking gobco declines every file and reports
-`Condition coverage: 0/0`, which the script refuses: that is also what gobco
+`Condition coverage: 0/0`, which the recipe refuses: that is also what gobco
 prints when no test wrote its counts, and it reads like a package with nothing
 left to test.
 
@@ -293,7 +293,7 @@ catalog, was given a bridge with an empty import path, which `go test`
 refused at setup. The first whole-tree measurement [below](#the-whole-tree)
 found twenty-seven packages in the first state, twenty-two of them among the
 149 sub-packages of `internal/tools` that carry an `action_specs.go`, and
-three in the second. The script measures both from the staged copy: each of
+three in the second. The recipe measures both from the staged copy: each of
 the package's own test files that declares no test, benchmark, fuzz test or
 example (the `export_test.go`) becomes a file of the package behind
 `//go:build gc`, which the go command builds and gobco's narrower context does
@@ -318,7 +318,7 @@ seven sub-packages, every one of which the sweep also measures separately. It
 reaches fixtures the same way, so the planted trees under a command's
 `testdata` were being mutated as though they were source.
 
-`scripts/coverage-mutants.sh` therefore passes `--exclude-files=/` unless the
+The mutation recipe therefore passes `--exclude-files=/` unless the
 caller states an exclusion of their own. That flag is a regexp over the path
 **relative to the target**, which is the one fact the rule rests on and was
 measured rather than assumed: on that package `^internal/` and `/` both leave
@@ -343,10 +343,10 @@ odd real survivors per command were being reported as kills. The giveaway is
 on the face of such a run: a mutation pass finishing faster than one run of
 the tests it claims to have run 134 times.
 
-`scripts/coverage-mutants.sh`, which `make coverage-mutants` calls, therefore
+The recipe `make coverage-mutants` runs (`cmd/coverage_recipes mutants`) therefore
 copies a package whose directory does not end with its package name into a
 sibling directory that does, runs gremlins against the copy, and removes it
-through a trap. Measured on `cmd/audit_test_names`: 88 killed, 0 lived and
+whatever happens. Measured on `cmd/audit_test_names`: 88 killed, 0 lived and
 100% efficacy before, 83 killed, 16 lived and 3 not covered after. The copy
 is a sibling rather than something tidier under `dist/` because Go's internal
 rule is about the path, and a copy of a `cmd/` command staged elsewhere cannot
@@ -427,25 +427,22 @@ gave each mutant about 269 s instead of the 30 s it printed. Nor could a parse
 of that line be kept for the new command: the run gremlins times is a `-cover`
 run, whose summary ends in a coverage figure rather than a duration.
 
-`scripts/coverage-mutants.sh` therefore runs the command gremlins' coverage step
-runs, `go test -count=1 [-tags T] [-coverpkg P] -cover -coverprofile F
+The recipe therefore runs the command gremlins' coverage step runs, `go test -count=1 [-tags T] [-coverpkg P] -cover -coverprofile F
 ./<pkg>/...` from the module root (`./...` under `--integration`). The tags and
 the `-coverpkg` come from `GREMLINS_FLAGS`, read the way pflag reads it
 (`-dte2e` included), or from gremlins' own `GREMLINS_UNLEASH_TAGS` and
-`GREMLINS_UNLEASH_COVERPKG`, and a flag the script cannot read is refused,
+`GREMLINS_UNLEASH_COVERPKG`, and a flag the recipe cannot read is refused,
 since it could be hiding a tag. `--integration` is read from the flag alone
 (`-i` in `GREMLINS_FLAGS`): gremlins v0.6.0 binds
 `GREMLINS_UNLEASH_INTEGRATION` too, but reads it back with a bool type
 assertion that the string an environment variable arrives as never passes, so
-the variable widens nothing, and the script says so when it is set. The flag
-is the only source of it the script can read: integration set in a
+the variable widens nothing, and the recipe says so when it is set. The flag
+is the only source of it the recipe can read: integration set in a
 `.gremlins.yaml`, where a YAML bool does pass that assertion, reaches gremlins
 and not the baseline, so ask for an integration run with `-i`. It runs
 the command twice: once untimed, which is the pass/fail gate and leaves the
-build cache as warm as gremlins' run will find it, and once under bash's
-`time` in the C locale (under a comma-decimal locale `time` writes `0,940`,
-which the script's positive-number check refuses, so every run there would
-stop). Between the two it runs the command gremlins runs against each mutant,
+build cache as warm as gremlins' run will find it, and once under the clock, a
+figure that is refused unless it is a positive number of seconds. Between the two it runs the command gremlins runs against each mutant,
 once, for the reason the compile paragraph below gives. Measured after a
 content edit, the timed base and gremlins' own figure now agree: 1.017 s
 against 1.045 s on `elicitationtools`, 1.026 s against 1.038 s on
@@ -462,7 +459,7 @@ covers only an importable package measured where it is: a package main, or a
 package measured through a staged copy (`<dir>.mutants-<name>`), is linked by
 no other package's test, and gremlins matches the copy's files by their own
 path, so either is refused whatever `-i` and `-coverpkg` say. A tag set only in a
-`.gremlins.yaml` reaches gremlins and not the script, and that refusal stops
+`.gremlins.yaml` reaches gremlins and not the recipe, and that refusal stops
 such a run only when it would find no test file at all: a package with some
 untagged test files passes it and is measured against a baseline that runs
 fewer tests than gremlins times. Pass the tag through `GREMLINS_FLAGS`.
@@ -471,7 +468,7 @@ fewer tests than gremlins times. Pass the tag through `GREMLINS_FLAGS`.
 applied through the coefficient because gremlins offers no other handle: a
 ceiling below the floor is raised to it and the run says so, and a baseline
 longer than half the ceiling is refused. About, because the cap is derived from
-the script's baseline while gremlins multiplies the coefficient by its own
+the recipe's baseline while gremlins multiplies the coefficient by its own
 coverage run, which can come in a few percent longer. A mutant that hangs is
 then reported TIMED OUT within about an hour rather than blocking a run for
 days, and TIMED OUT is not part of the gate: it is a reading to explain, as the
@@ -486,9 +483,9 @@ that ends into one that never does and allocates on every pass: `index + 1` to
 binaries of those two packages reached up to 24.1 GiB
 (`cmd/audit_supply_chain`) and 28.5 GiB (`cmd/audit_tenancy`) on the build host
 before the kernel's OOM killer stopped them, and another process with them. The
-script therefore runs gremlins, and every go command and test binary it starts,
+recipe therefore runs gremlins, and every go command and test binary it starts,
 under an address-space ceiling of `MUTANT_MEMORY_MAX` GiB (8 by default,
-`ulimit -v`), an environment variable rather than a fourth argument
+`RLIMIT_AS`), an environment variable rather than a fourth argument
 (`make coverage-mutants PKG=... MUTANT_MEMORY_MAX=4`). A runaway ends in
 `fatal error: out of memory` within seconds, its test fails, and gremlins
 reports it KILLED, the verdict any failing test gives a mutant, so the gate
@@ -502,21 +499,19 @@ a bound on all of them together, such as a container's memory limit. `0` sets
 no ceiling, and a tighter limit the run inherited is kept rather than raised to
 the ceiling. A value that is not a whole number of GiB written without a
 leading zero is refused before anything runs, as the coefficient is below, and
-for a like reason: bash arithmetic reads a leading zero as octal, so `010`
-would be 8 and `08` no number at all, which would leave the run with no
-ceiling and nothing but bash's own expansion error to tell of it. So is one
-over 1048576 GiB (1 PiB), which bounds nothing. Outside Linux, the kernel the
-script relies on to enforce `ulimit -v`, and wherever the shell refuses the
-limit, the run goes on without one and says so.
+for a like reason: a shell reads a leading zero as octal, so `010` would read as
+8 there and as 10 elsewhere. So is one over 1048576 GiB (1 PiB), which bounds
+nothing. Outside Linux, the kernel the recipe relies on to enforce `RLIMIT_AS`,
+and wherever the limits cannot be read, the run goes on without one and says so.
 
 A coefficient fixed in `GREMLINS_FLAGS` (`--timeout-coefficient 20`) is the one
-gremlins applies, so it is the one the script passes and announces, with the
-deadline it gives, and neither the budget nor the ceiling bounds it. The script
+gremlins applies, so it is the one the recipe passes and announces, with the
+deadline it gives, and neither the budget nor the ceiling bounds it. The recipe
 used to announce its own derived coefficient beside it, a deadline that was not
 in force (on `internal/config`, about 300 s per mutant printed while gremlins
-used 20). A value the script cannot read the way pflag and gremlins do is
+used 20). A value the recipe cannot read the way pflag and gremlins do is
 refused before the suite runs: pflag reads a leading zero as octal, and gremlins
-reads `0` as its own default of 3, which is what the script announces for it.
+reads `0` as its own default of 3, which is what the recipe announces for it.
 
 **A mutant's deadline pays for its run, not for a compile of the module.**
 gremlins copies the module into a directory per worker and runs each mutant's
@@ -537,7 +532,7 @@ by it: in issue 971, `issues`, `mergerequests`, `pipelineschedules`,
 reported between two and four timeouts each, every one among the first mutants
 a worker compiled.
 
-`scripts/coverage-mutants.sh` therefore exports `GOFLAGS=-trimpath` (with
+The recipe therefore hands `GOFLAGS=-trimpath` (with
 `-count=1`) to every go command it runs and to gremlins, which leaves the
 directory out of the key, and runs the command gremlins runs against each
 mutant (`go test -failfast [-tags T] <package>`, or `./...` under
@@ -561,9 +556,9 @@ cores of a Linux build host (the `golang:1.27.1` image), on
 | ------------------------------------------------------------------ | ---------------------------- | ------------------------------------ |
 | First mutant in a fresh copy of the module (two copies)            | 190 compiles, 28.4 s, 27.7 s | 1 compile, 1.36 s, 1.40 s            |
 | `--workers 2 --timeout-coefficient 20`: killed / lived / timed out | 23 / 0 / 4                   | 27 / 0 / 0                           |
-| the same: gremlins' own run, and the script end to end             | 92 s, 98 s                   | 30 s, 41 s                           |
+| the same: gremlins' own run, and the recipe end to end             | 92 s, 98 s                   | 30 s, 41 s                           |
 | `--workers 2`, derived coefficient: killed / lived / timed out     | 27 / 0 / 0                   | 27 / 0 / 0                           |
-| the same: gremlins' own run, and the script end to end             | 84 s, 89 s                   | 15 s, 19 s                           |
+| the same: gremlins' own run, and the recipe end to end             | 84 s, 89 s                   | 15 s, 19 s                           |
 
 The four timeouts were the first four mutants to finish, and nothing else
 moved: every figure after is the one before with the timeouts read as the
@@ -581,7 +576,7 @@ root the toolchain is installed at. The second is where `runtime.GOROOT`, and
 `go/build`'s `Default.GOROOT` after it, fall back when `GOROOT` is not set, and
 a test binary starts with the environment the go command was given, so
 `cmd/internal/golist`, `cmd/godoc_tool` and `cmd/gen_testing_docs`, which run
-the go command out of that root, exec'd `bin/go` and failed. The script exports
+the go command out of that root, exec'd `bin/go` and failed. The recipe sets
 `GOROOT` as `go env GOROOT` names it, which is the value an untrimmed build
 records. The first has no such variable: `cmd/audit_metrics` found the
 repository two directories above the path `runtime.Caller` reported for its own
@@ -591,7 +586,7 @@ walks up from its working directory to the `go.mod` instead. With both, the
 whole module's unit suite passes under `-trimpath` (274 packages, 10 without
 tests, 470 s on three cores), and so do `test/e2e/internal/fixture` and
 `test/e2e/internal/harness` under `-tags e2e`. A test that reads its own
-compiled source path again would fail the script's gate rather than be
+compiled source path again would fail the recipe's gate rather than be
 measured, and the refusal names `-trimpath` as a cause to check, with the
 command that reproduces the run: the `GOROOT`, `GOFLAGS` and tags it ran
 under, over the package where it is rather than a staged copy that is gone by
@@ -765,7 +760,7 @@ and the test that needed it still fails when the package is pointed at
 
 One narrow reading of gobco's output is a gate rather than a report, and it
 came out of this sweep. `make check-spec-conditions`, which is
-`scripts/check-spec-conditions.sh`, runs gobco over the `action_specs.go` of
+`cmd/coverage_recipes spec-conditions`, runs gobco over the `action_specs.go` of
 the packages a branch changes and fails on a condition no test evaluates
 both ways. The shape it is aimed at is the one the sweep keeps finding and
 no other gate reads: a per-action metadata table plus a dispatch on the tool
@@ -778,8 +773,9 @@ It is narrow on purpose. gobco costs 60 to 80 seconds per package and caches
 nothing, so the 149 packages it reads would be about three hours one after
 another; a condition anywhere else in a package stays the sweep's subject
 and is read with `make coverage-conditions`. It runs gobco through the same
-`scripts/coverage-conditions.sh`, so a package with a file per platform is
-staged and measured rather than reported as not measured. A condition that
+recipe, so a package with a file per platform is staged and measured rather than
+reported as not measured, with no gate of the recipe's own whatever the
+environment sets, since it reads the report itself. A condition that
 genuinely cannot take the other value is declared on its own line, and a
 declaration that answers nothing fails:
 
@@ -814,7 +810,7 @@ untaken in the same decision, and over the same packages the branch figure
 can leave out no more outcomes than the condition figure does. The converse
 does not hold: `if a && b` can take both branches while `b` is never false.
 
-The figures are taken one of two ways, through the same script and the same
+The figures are taken one of two ways, through the same recipe and the same
 summary:
 
 ```bash
@@ -887,12 +883,12 @@ limit of their own tests in gobco's copy:
   and `internal/testutil/serialtypecheck` a test that reads the imports of
   every file of its package, gobco's own files among them in the copy.
 
-The script stages the first two shapes now
+The recipe stages the first two shapes now
 ([above](#what-they-cost-and-why-the-figures-are-not-generated)),
 and the two tests read the same thing in gobco's copy as in the source. The
 31 were measured that way on 27 October 2026 on linux/amd64, over this
-branch on `main` at `8f339f4e8`, with `scripts/coverage-conditions.sh` and
-`GOBCO_GATE=all`, four packages at a time:
+branch on `main` at `8f339f4e8`, with `scripts/coverage-conditions.sh`, which
+was the recipe until issue 1114, and `GOBCO_GATE=all`, four packages at a time:
 
 | Mode      | Packages | Measured | Outcomes evaluated | Share |
 | --------- | -------: | -------: | -----------------: | ----: |
@@ -931,12 +927,12 @@ included:
 | Condition |                                   307 |      306 |     62191 of 62246 | 99.9% |
 
 The one package not measured, `cmd/internal/fileheader`, holds no condition at
-all. gobco reports it as `0/0`, which the script refuses because it cannot tell
+all. gobco reports it as `0/0`, which the recipe refuses because it cannot tell
 it from a package gobco did not instrument; that refusal also ended both runs
 red (#1667). Counting it would change neither total. Since #1667,
 `cmd/measure_conditions` counts a package's conditions by gobco's own rule
-before it runs the script, and records a package with none as measured with
-nothing to measure (0 of 0) without running the script. Its count of those
+before it runs the recipe, and records a package with none as measured with
+nothing to measure (0 of 0) without running the recipe. Its count of those
 307 packages at `1ef08b139` was 31123 conditions and 25973 branches, exactly
 half of each total gobco reported above, and only `cmd/internal/fileheader`
 counted none in either mode.
