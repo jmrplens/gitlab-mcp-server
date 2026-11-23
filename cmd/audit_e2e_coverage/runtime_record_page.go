@@ -151,8 +151,9 @@ func writeRecordProvenance(b *strings.Builder, doc *coverageRecord) {
 	b.WriteString("\nA tier that is not confirmed is the fallback rather than an answer GitLab gave " +
 		"(from 19.6 the instance plan, before it a license, a namespace or a group), which means " +
 		"the catalog the share is divided by may hold actions that instance would refuse. From " +
-		"GitLab 19.6 an unlicensed instance answers the plan `free`, so the `ce` half reads `yes` " +
-		"there and `no` on a release before it.\n\n")
+		"GitLab 19.6 an unlicensed instance answers the plan `free`, so a run recorded by the probe " +
+		"that reads it shows `yes` in the `ce` half there and `no` on a release before it, while a run " +
+		"recorded before issue 1491, on any release, shows `no`, as the commit column tells.\n\n")
 }
 
 // writeRecordFixtures writes what each package had available, and what an

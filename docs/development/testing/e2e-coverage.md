@@ -50,7 +50,7 @@ The actions behind each level are listed by id in `docs/development/e2e-coverage
 | `ee`    | `common` | any      | started | 19.6.1-ee | yes            | `ac4c6c801b9d` |
 | `ee`    | `ee`     | licensed | started | 19.6.1-ee | yes            | `ac4c6c801b9d` |
 
-A tier that is not confirmed is the fallback rather than an answer GitLab gave (from 19.6 the instance plan, before it a license, a namespace or a group), which means the catalog the share is divided by may hold actions that instance would refuse. From GitLab 19.6 an unlicensed instance answers the plan `free`, so the `ce` half reads `yes` there and `no` on a release before it.
+A tier that is not confirmed is the fallback rather than an answer GitLab gave (from 19.6 the instance plan, before it a license, a namespace or a group), which means the catalog the share is divided by may hold actions that instance would refuse. From GitLab 19.6 an unlicensed instance answers the plan `free`, so a run recorded by the probe that reads it shows `yes` in the `ce` half there and `no` on a release before it, while a run recorded before issue 1491, on any release, shows `no`, as the commit column tells.
 
 ## Fixture profile
 
