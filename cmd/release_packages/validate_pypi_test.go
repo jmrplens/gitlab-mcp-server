@@ -225,13 +225,36 @@ func TestValidatePypi_Install_DrivesBothConsoleScripts(t *testing.T) {
 	}
 }
 
+// TestValidatePypi_Install_ARelativeWheelhouse_IsFoundFromTheTemporaryDirectory
+// verifies that a wheel named relative to the working directory, as the
+// release names pypi/dist, reaches pip as a path it can open: pip runs in
+// the handshake's temporary directory, where the relative path names
+// nothing.
+func TestValidatePypi_Install_ARelativeWheelhouse_IsFoundFromTheTemporaryDirectory(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in console scripts are shell scripts")
+	}
+	var stdout, stderr bytes.Buffer
+	v := newValidation("validate-pypi", ".", "9.8.7", testFloor, &stdout, &stderr)
+	v.run = standInPython(t, "")
+	// Any file of this package's directory, the working directory of the
+	// test, stands in for the wheel: the stand-in pip only opens it.
+	v.pypiHandshake("validate_pypi.go")
+	if len(v.problems) != 0 {
+		t.Errorf("problems %q, want none", v.problems)
+	}
+}
+
 // standInPython stands in for python3 and the virtual environment's pip:
 // twine is not installed, venv makes the scripts directory, and pip lays out
-// both console scripts as the stand-in server. fail names the step that
-// fails instead, venv or pip.
+// both console scripts as the stand-in server once it can open the wheel it
+// was given, resolved from the directory it runs in as pip resolves it.
+// fail names the step that fails instead, venv or pip.
 func standInPython(t *testing.T, fail string) func(string, []string, string, ...string) ([]byte, error) {
 	t.Helper()
-	return func(_ string, _ []string, name string, args ...string) ([]byte, error) {
+	return func(dir string, _ []string, name string, args ...string) ([]byte, error) {
 		switch {
 		case args[0] == "-c":
 			return nil, errors.New("no twine")
@@ -243,6 +266,13 @@ func standInPython(t *testing.T, fail string) func(string, []string, string, ...
 		case filepath.Base(name) == "pip":
 			if fail == "pip" {
 				return []byte("no matching distribution"), errors.New("exit 1")
+			}
+			wheel := args[len(args)-1]
+			if !filepath.IsAbs(wheel) {
+				wheel = filepath.Join(dir, wheel)
+			}
+			if _, err := os.Stat(wheel); err != nil {
+				return []byte("ERROR: Invalid wheel filename or file not found"), err
 			}
 			for _, command := range []string{binaryName, pypiDist} {
 				writeScript(t, filepath.Join(filepath.Dir(name), command), standInServer(t))
