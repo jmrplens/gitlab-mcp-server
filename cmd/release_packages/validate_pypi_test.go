@@ -144,7 +144,7 @@ func corruptZipEntry(t *testing.T, file, entry string) {
 			if offsetErr != nil {
 				t.Fatal(offsetErr)
 			}
-			offset = start + int64(f.CompressedSize64/2)
+			offset = start + int64(f.CompressedSize64/2) //#nosec G115 -- an entry of a test wheel, a few KiB
 		}
 	}
 	if closeErr := archive.Close(); closeErr != nil {
@@ -158,7 +158,7 @@ func corruptZipEntry(t *testing.T, file, entry string) {
 		t.Fatal(err)
 	}
 	data[offset] ^= 0xff
-	if err = os.WriteFile(file, data, 0o600); err != nil {
+	if err = os.WriteFile(file, data, 0o600); err != nil { //#nosec G703 -- a wheel the test built in its own temporary directory
 		t.Fatal(err)
 	}
 }

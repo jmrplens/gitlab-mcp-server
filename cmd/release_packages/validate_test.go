@@ -133,13 +133,13 @@ const holdPipesPIDEnv = "RELEASE_PACKAGES_HOLD_PIDFILE"
 // stdout and stderr and outlives the server, as a process a launcher started
 // and did not reap would, and records its process ID.
 func holdPipes() {
-	cmd := exec.CommandContext(context.Background(), os.Args[0]) //#nosec G204 -- this test binary
+	cmd := exec.CommandContext(context.Background(), os.Args[0]) //#nosec G204,G702 -- this test binary
 	cmd.Env = append(os.Environ(), fakeServerEnv+"=stubborn-hold")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if cmd.Start() != nil {
 		return
 	}
-	_ = os.WriteFile(os.Getenv(holdPipesPIDEnv), []byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
+	_ = os.WriteFile(os.Getenv(holdPipesPIDEnv), []byte(strconv.Itoa(cmd.Process.Pid)), 0o600) //#nosec G703 -- a file in the temporary directory of the test that started this stand-in
 }
 
 // bufioLine reads one line without buffering past it.

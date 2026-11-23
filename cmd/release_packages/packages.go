@@ -170,17 +170,20 @@ func (b *packageBuild) readRelease(warning string) (*releaseInputs, error) {
 	// --allow-unverified answers a manifest that is absent and nothing
 	// else: one that cannot be looked up is refused like one that cannot be
 	// read, never packaged around.
-	if _, err := os.Stat(checksums); err == nil {
+	_, statErr := os.Stat(checksums)
+	switch {
+	case statErr == nil:
+		var err error
 		if sums, err = releaseassets.ReadChecksums(checksums); err != nil {
 			return nil, b.refuse("%v", err)
 		}
 		in.verified = true
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, b.refuse("%v", err)
-	} else if !b.allowUnverified {
+	case !errors.Is(statErr, fs.ErrNotExist):
+		return nil, b.refuse("%v", statErr)
+	case !b.allowUnverified:
 		return nil, b.refuse("%s not found: refusing to package unverified binaries (pass --allow-unverified to override)",
 			b.assetShown(checksumsName))
-	} else {
+	default:
 		fmt.Fprintf(b.stderr, "WARNING: --allow-unverified: %s without a checksum manifest\n", warning)
 	}
 	read := func(name string) ([]byte, string, error) {
