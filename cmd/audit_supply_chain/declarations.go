@@ -205,7 +205,6 @@ type scriptDeclaration struct {
 // it goes.
 var pendingPorts = map[int]string{
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
-	8:  "the SonarCloud scan beside the coverage command",
 	15: "Go tests that drive what stays through os/exec and httptest, or node:test inside site/ for the site's own steps",
 }
 
@@ -258,7 +257,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/site_normalize_html_test.py":           {category: scriptPortPending, item: 15},
 	"scripts/site_version_token_test.py":            {category: scriptPortPending, item: 15},
 	"scripts/smoke_test_image_sh_test.py":           {category: scriptPortPending, item: 15},
-	"scripts/sonar-scan.sh":                         {category: scriptPortPending, item: 8},
 	"scripts/ensure-playwright-chromium.sh": {
 		category: scriptJobGlue,
 		reason:   "installs the Chromium the site's build drives, in ci.yml's site jobs and pages.yml, which set up Node and pnpm and no Go",

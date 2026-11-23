@@ -134,7 +134,11 @@ func newBench(t *testing.T, run sonarRun) *bench {
 	b.session = &session{
 		dir: root, environ: environ, stdout: &b.stdout, stderr: &b.stderr, goTool: golist.Executable(), run: b.program,
 		lookPath: b.lookPath, client: b.server.Client(), now: func() time.Time { return b.clock },
-		sleep: func(wait time.Duration) { b.waited, b.clock = append(b.waited, wait), b.clock.Add(wait) },
+		// A wait of nothing still moves the clock, so a run that polls without
+		// pausing ends.
+		sleep: func(wait time.Duration) {
+			b.waited, b.clock = append(b.waited, wait), b.clock.Add(max(wait, time.Second))
+		},
 	}
 	b.write(t, "sonar-project.properties", run.Properties)
 	if run.Dotenv != nil {
@@ -342,6 +346,7 @@ func TestPipeline_WhatDotenvSets_ReachesTheScannerAlone(t *testing.T) {
 	}
 	for i, want := range []string{"", "", "secret"} {
 		t.Run(b.calls[i].Tool, func(t *testing.T) {
+			t.Parallel()
 			if got, _ := recipe.Getenv(b.environs[i], "GITLAB_TOKEN"); got != want {
 				t.Errorf("%s ran with GITLAB_TOKEN=%q, want %q", b.calls[i].Tool, got, want)
 			}
@@ -367,7 +372,7 @@ func TestPipeline_AStepThatCannotBeDone_SaysWhy(t *testing.T) {
 	}{
 		{"the tests cannot start", func(b *bench) { b.refuse = failing("test") }, "ERROR: planted\n"},
 		{"the total cannot be asked", func(b *bench) { b.refuse = failing("cover") }, "ERROR: planted\n"},
-		{"there is no total", func(b *bench) { b.run.Total = "" }, "ERROR: go tool cover gave no total: "},
+		{"there is no total", func(b *bench) { b.run.Total = "" }, "ERROR: go tool cover gave no total\n"},
 		{"there is no scanner", func(b *bench) {
 			b.session.lookPath = func(name string) (string, error) {
 				if name == "git" {
