@@ -32,7 +32,7 @@ func recordFor(pkg, system, platform string, status int) string {
 // TestRunSummarize_Usage_IsRefusedWithStatus2 verifies every way the command
 // line can be wrong: an unknown flag, an argument, each of the four flags
 // left empty, a plan that is not JSON, a plan with no run in it, and a mode
-// the script would refuse.
+// the recipe would refuse.
 func TestRunSummarize_Usage_IsRefusedWithStatus2(t *testing.T) {
 	t.Parallel()
 	plan := planOf(t, []string{"./cmd/server"}, []string{"macos-latest"})
@@ -59,8 +59,8 @@ func TestRunSummarize_Usage_IsRefusedWithStatus2(t *testing.T) {
 		{name: "a plan that is not JSON", args: full("-plan", "matrix="+plan), wantStderr: planWanted},
 		{name: "a plan with no run", args: full("-plan", `{"include":[]}`), wantStderr: planWanted},
 		{
-			name: "a mode the script would refuse", args: append(full(), "-mode", "both"),
-			wantStderr: "measure_conditions: -mode \"both\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+			name: "a mode the recipe would refuse", args: append(full(), "-mode", "both"),
+			wantStderr: "measure_conditions: -mode \"both\" is neither condition nor branch, which is what cmd/internal/conditions reads\n",
 		},
 	}
 	for _, tc := range cases {
@@ -111,7 +111,7 @@ func TestRunSummarize_BranchMode_ReadsTheBranchFigures(t *testing.T) {
 		t.Fatalf("runSummarize() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
 	want := "## Branch coverage, measured\n\n" +
-		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
+		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `cmd/internal/conditions`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
 		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
 		"| --- | --- | ---: | ---: | ---: | --- |\n" +
 		"| `./cmd/server` | `ubuntu-latest` (linux/amd64) | 7 of 8 | 0 | 0 | `gobco-ubuntu-latest-cmd-server/cmd-server` |\n" +
@@ -125,7 +125,7 @@ func TestRunSummarize_BranchMode_ReadsTheBranchFigures(t *testing.T) {
 // summary of condition coverage opens with.
 func summaryIntro(gate, commit string) string {
 	return "## Condition coverage, measured\n\n" +
-		"`GOBCO_GATE=" + gate + "` at `" + commit + "`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
+		"`GOBCO_GATE=" + gate + "` at `" + commit + "`. Every figure is the one gobco printed on the runner named, through `cmd/internal/conditions`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each condition twice, once per outcome, so a total is twice the number of conditions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
 		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
 		"| --- | --- | ---: | ---: | ---: | --- |\n"
 }
@@ -170,7 +170,7 @@ func TestRunSummarize_ShardedPlan_ReadsEveryPackageOfEveryJob(t *testing.T) {
 		"| `./internal/b` | `ubuntu-latest` | `b.go` | 1 | `x` | never evaluated | yes |\n" +
 		"\n### Not measured\n" +
 		"\n#### `./internal/c` on `ubuntu-latest`\n\n" +
-		"`scripts/coverage-conditions.sh` exited 1, which means it could not measure, and said:\n\n" +
+		"`cmd/internal/conditions` exited 1, which means it could not measure, and said:\n\n" +
 		"```text\ngobco: could not instrument\n```\n" +
 		"\n#### `./internal/d` on `ubuntu-latest`\n\n" +
 		"No record came back in `gobco-ubuntu-latest-tree-02/internal-d`: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n"
@@ -258,7 +258,7 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 	problems := []string{
 		`the record in zz-broken cannot be read: line "nonsense" is not key=value`,
 		"two records name ./cmd/server on macos-latest",
-		"the record of ./internal/toolutil on macos-latest cannot be read: the script's status says it measured, and its output carries no Condition coverage figure",
+		"the record of ./internal/toolutil on macos-latest cannot be read: the recipe's status says it measured, and its output carries no Condition coverage figure",
 		"a record names ./x on macos-latest, which the plan did not ask for",
 	}
 	want := summaryIntro("beyond:linux/amd64", "abc123") +
@@ -281,12 +281,12 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 		"| `./cmd/server` | `windows-latest` | `main.go` | 52 | `strings.Contains(s, \"x\t\")` | once true but never false | no |\n" +
 		"\n### Not measured\n" +
 		"\n#### `./cmd/server` on `ubuntu-latest`\n\n" +
-		"`scripts/coverage-conditions.sh` exited 1, which means it could not measure, and said:\n\n" +
+		"`cmd/internal/conditions` exited 1, which means it could not measure, and said:\n\n" +
 		"````text\n--- FAIL: TestX\ngobco: a line quoting ``` three backticks\ngobco: gobco exited 1 on ./cmd/server\n````\n" +
 		"\n#### `./internal/toolutil` on `windows-latest`\n\n" +
 		"No record came back in `gobco-windows-latest-internal-toolutil/internal-toolutil`: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n" +
 		"\n#### `./internal/toolutil` on `ubuntu-latest`\n\n" +
-		"`scripts/coverage-conditions.sh` exited 2, which means it could not measure, and said:\n\n" +
+		"`cmd/internal/conditions` exited 2, which means it could not measure, and said:\n\n" +
 		"```text\n" + strings.Join(tail, "\n") + "\n```\n" +
 		"\n### Records this summary could not use\n\n" +
 		"- " + strings.Join(problems, "\n- ") + "\n"
@@ -298,9 +298,9 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 	}
 }
 
-// TestReasonLines_Outputs_KeepWhatTheScriptSaid verifies the reason a run
-// that could not measure is shown with: the script's own lines, and the
-// lines gobco or its go test said the failure in before the script's verdict
+// TestReasonLines_Outputs_KeepWhatTheRecipeSaid verifies the reason a run
+// that could not measure is shown with: the recipe's own lines, and the
+// lines gobco or its go test said the failure in before the recipe's verdict
 // (a panic, a top-level failing test, a package that did not build or set
 // up, a compiler's position), each in the order printed and without the
 // conditions a report beside the failure names; and when none of those is
@@ -308,14 +308,14 @@ func TestRunSummarize_EveryOutcome_IsReportedAndProblemsFailIt(t *testing.T) {
 // failures are the three ways the tree's unmeasured packages failed: an
 // export_test.go symbol gobco cannot resolve, the bridge it writes with an
 // empty import path, and tests that read the source gobco rewrote.
-func TestReasonLines_Outputs_KeepWhatTheScriptSaid(t *testing.T) {
+func TestReasonLines_Outputs_KeepWhatTheRecipeSaid(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
 		output string
 		want   string
 	}{
-		{name: "the script's lines", output: "noise\ngobco: one\r\nmore noise\ngobco: two\n", want: "gobco: one\ngobco: two"},
+		{name: "the recipe's lines", output: "noise\ngobco: one\r\nmore noise\ngobco: two\n", want: "gobco: one\ngobco: two"},
 		{name: "a short output", output: "a\r\nb\n\n", want: "a\nb"},
 		{name: "nothing", output: "", want: ""},
 		{name: "a prefix without its space", output: "gobco:x\n", want: "gobco:x"},

@@ -166,3 +166,201 @@ func TestRecordedRuns_SpecConditions_DoesWhatTheScriptDid(t *testing.T) {
 		})
 	}
 }
+
+// oneSided is the packages of a branch that changed one, whose recipe measured
+// it and named a condition no test decides.
+func oneSided() map[string]specPackage {
+	specs := "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n"
+	return map[string]specPackage{"alpha": {Specs: &specs, Output: "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was never evaluated\n"}}
+}
+
+// TestSpecConditions_TheRecipe_IsRunWithNoGateOfItsOwn verifies that each
+// package is measured from the repository's root with the environment the gate
+// was given, but for a gate and a mode of the recipe's own: the gate reads the
+// report itself, so an exported GOBCO_GATE must not turn a measured package
+// into one that was not, nor GOBCO_MODE leave it without the figure it reads.
+func TestSpecConditions_TheRecipe_IsRunWithNoGateOfItsOwn(t *testing.T) {
+	t.Parallel()
+	b := newSpecBench(t)
+	base := b.change(t, oneSided())
+	b.session.environ = append(b.session.environ, "GOBCO_GATE=all", "GOBCO_MODE=branch", "GOBCO_TEST_FLAGS=-timeout=30m")
+	if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 1 {
+		t.Errorf("status = %d, want 1 for the finding", status)
+	}
+	if len(b.requests) != 1 {
+		t.Fatalf("measured %d package(s), want one", len(b.requests))
+	}
+	req := b.requests[0]
+	root, err := filepath.EvalSymlinks(b.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, evalErr := filepath.EvalSymlinks(req.Dir); evalErr != nil || got != root || req.Package != "./internal/tools/alpha" || req.Tags != "" {
+		t.Errorf("asked for %s with tags %q in %s (%v), want the package in %s", req.Package, req.Tags, req.Dir, evalErr, root)
+	}
+	for name, want := range map[string]string{"GOBCO_GATE": "", "GOBCO_MODE": "condition", "GOBCO_TEST_FLAGS": "-timeout=30m"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got, set := recipe.Getenv(req.Environ, name); got != want || !set {
+				t.Errorf("%s = %q (set %t), want %q", name, got, set, want)
+			}
+		})
+	}
+}
+
+// TestSpecConditions_EveryFigure_IsShown verifies that each figure of a report
+// is printed, and not the other lines of it.
+func TestSpecConditions_EveryFigure_IsShown(t *testing.T) {
+	t.Parallel()
+	b := newSpecBench(t)
+	packages := oneSided()
+	packages["alpha"] = specPackage{Specs: packages["alpha"].Specs, Output: "noise\nCondition coverage: 1/2\r\nnoise\nCondition coverage: 4/4\n"}
+	base := b.change(t, packages)
+	if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 0 {
+		t.Errorf("status = %d, want 0; stderr %q", status, b.stderr.String())
+	}
+	want := "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 1/2\nCondition coverage: 4/4\ncheck-spec-conditions: every measured condition is evaluated both ways\n"
+	if b.stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", b.stdout.String(), want)
+	}
+}
+
+// TestSpecConditions_NoBase_IsTheMainBranchOfOrigin verifies the base a branch
+// is read against when none is given, or an empty one as an unset make
+// variable is.
+func TestSpecConditions_NoBase_IsTheMainBranchOfOrigin(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"spec-conditions"}, {"spec-conditions", ""}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			b := newSpecBench(t)
+			base := b.change(t, oneSided())
+			if status := b.session.run(t.Context(), args); status != 2 || b.stderr.String() != "check-spec-conditions: no such ref: origin/main\n" {
+				t.Errorf("status = %d, stderr = %q; want 2 and the ref named", status, b.stderr.String())
+			}
+			b.stderr.Reset()
+			b.git(t, "update-ref", "refs/remotes/origin/main", base)
+			if status := b.session.run(t.Context(), args); status != 1 || len(b.requests) != 1 {
+				t.Errorf("status = %d after measuring %d package(s), want 1 after one", status, len(b.requests))
+			}
+		})
+	}
+}
+
+// TestSpecConditions_AnotherDirectory_ReadsTheSameRepository verifies that the
+// gate finds the repository's root from a directory below it.
+func TestSpecConditions_AnotherDirectory_ReadsTheSameRepository(t *testing.T) {
+	t.Parallel()
+	b := newSpecBench(t)
+	base := b.change(t, oneSided())
+	b.session.dir = filepath.Join(b.repo, "internal", "tools")
+	if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 1 || !strings.Contains(b.stderr.String(), "internal/tools/alpha/action_specs.go:4:9") {
+		t.Errorf("status = %d, stderr = %q; want the finding", status, b.stderr.String())
+	}
+}
+
+// TestSpecConditions_ChangesThatCannotBeRead_AreRefused verifies that the gate
+// passes nothing it could not read: no git, a directory that is no repository,
+// a base with no history in common with the branch, for which git diff fails
+// and the script's substitution read no change, and a changed file that cannot
+// be read.
+func TestSpecConditions_ChangesThatCannotBeRead_AreRefused(t *testing.T) {
+	t.Parallel()
+	t.Run("no git", func(t *testing.T) {
+		t.Parallel()
+		b := newSpecBench(t)
+		b.session.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+		if status := b.session.run(t.Context(), []string{"spec-conditions"}); status != 2 || !strings.HasPrefix(b.stderr.String(), "check-spec-conditions: find git: ") {
+			t.Errorf("status = %d, stderr = %q", status, b.stderr.String())
+		}
+	})
+	t.Run("no repository", func(t *testing.T) {
+		t.Parallel()
+		b := newSpecBench(t)
+		b.session.dir = t.TempDir()
+		b.session.environ = append(b.session.environ, "GIT_CEILING_DIRECTORIES="+filepath.Dir(b.session.dir))
+		if status := b.session.run(t.Context(), []string{"spec-conditions"}); status != 2 || !strings.Contains(b.stderr.String(), "check-spec-conditions: the repository's root could not be found: ") {
+			t.Errorf("status = %d, stderr = %q", status, b.stderr.String())
+		}
+	})
+	t.Run("no history in common", func(t *testing.T) {
+		t.Parallel()
+		b := newSpecBench(t)
+		base := b.change(t, oneSided())
+		b.git(t, "checkout", "-q", "--orphan", "other")
+		b.commit(t, "unrelated")
+		if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 2 || !strings.Contains(b.stderr.String(), "check-spec-conditions: the changes against "+base+" could not be read: ") {
+			t.Errorf("status = %d, stderr = %q", status, b.stderr.String())
+		}
+	})
+	t.Run("a file that cannot be read", func(t *testing.T) {
+		t.Parallel()
+		b := newSpecBench(t)
+		base := b.change(t, oneSided())
+		file := filepath.Join(b.repo, filepath.FromSlash(specsPath("alpha")))
+		if err := os.Remove(file); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(file, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 2 || !strings.HasPrefix(b.stderr.String(), "check-spec-conditions: ") || len(b.requests) != 0 {
+			t.Errorf("status = %d, stderr = %q", status, b.stderr.String())
+		}
+	})
+}
+
+// TestSpecConditions_AnInterrupt_EndsTheGate verifies that a signal while a
+// package is measured ends the gate with the status a shell gives it, measures
+// no other package and says nothing of one it did not measure.
+func TestSpecConditions_AnInterrupt_EndsTheGate(t *testing.T) {
+	t.Parallel()
+	b := newSpecBench(t)
+	packages := oneSided()
+	packages["beta"] = packages["alpha"]
+	base := b.change(t, packages)
+	ctx, interrupt := interruptible(t)
+	b.session.measure = func(_ context.Context, _ conditions.Tools, req conditions.Request) int {
+		b.requests = append(b.requests, req)
+		interrupt(os.Interrupt)
+		return 130
+	}
+	if status := b.session.run(ctx, []string{"spec-conditions", base}); status != 130 || len(b.requests) != 1 {
+		t.Errorf("status = %d after measuring %d package(s), want 130 after one", status, len(b.requests))
+	}
+	if b.stdout.String() != "check-spec-conditions: measuring internal/tools/alpha\n" || b.stderr.Len() != 0 {
+		t.Errorf("stdout = %q, stderr = %q", b.stdout.String(), b.stderr.String())
+	}
+}
+
+// TestDeclared_EachPosition_IsAnsweredByItsLineOrTheOneAbove verifies which
+// declarations answer a condition, at the first line and at the last, and that
+// a position outside the file, or one that is no line, is answered by none.
+func TestDeclared_EachPosition_IsAnsweredByItsLineOrTheOneAbove(t *testing.T) {
+	t.Parallel()
+	const answer = "x // gobco: always true"
+	cases := []struct {
+		name     string
+		lines    []string
+		position string
+		want     bool
+	}{
+		{"its line", []string{"a", answer, "b"}, "2:9: c", true},
+		{"the line above", []string{"a", answer, "b"}, "3:9: c", true},
+		{"two above", []string{answer, "a", "b"}, "3:9: c", false},
+		{"the line below", []string{"a", answer}, "1:9: c", false},
+		{"the first line", []string{answer}, "1:9: c", true},
+		{"the last line", []string{"a", "b", answer}, "3:9: c", true},
+		{"past the file", []string{answer}, "2:9: c", false},
+		{"line zero", []string{answer}, "0:9: c", false},
+		{"no line", []string{answer}, "x:9: c", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := declared(tc.lines, tc.position); got != tc.want {
+				t.Errorf("declared(%q, %q) = %t, want %t", tc.lines, tc.position, got, tc.want)
+			}
+		})
+	}
+}

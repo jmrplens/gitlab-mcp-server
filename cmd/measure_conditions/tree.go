@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/recipe"
 )
 
 // localSystem is what a tree measured on the machine at hand names its
@@ -27,15 +29,16 @@ const localSystem = "local"
 //
 // It returns 2 for a usage error, 1 when the packages could not be listed, a
 // record could not be written, or the summary found a record it could not
-// use, and 0 otherwise, whatever the figures say and however many packages
-// gobco could not measure, which the summary names with the reason.
-func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRunner) int {
+// use, a signal's status, with no summary, when one ended the run, and 0
+// otherwise, whatever the figures say and however many packages gobco could
+// not measure, which the summary names with the reason.
+func runTree(ctx context.Context, args []string, stdout, stderr io.Writer, list lister, run recipeRunner) int {
 	flags := flag.NewFlagSet("tree", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	records := flags.String("records", "", "directory each package's record and raw output are written below, one directory per package")
 	commit := flags.String("commit", "", "the commit the tree is at, which the summary names")
-	gate := flags.String("gate", "all", "the GOBCO_GATE the script runs with: all or beyond:GOOS/GOARCH")
-	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the script runs with: condition or branch")
+	gate := flags.String("gate", "all", "the GOBCO_GATE the recipe runs with: all or beyond:GOOS/GOARCH")
+	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the recipe runs with: condition or branch")
 	parallel := flags.Int("parallel", 1, "how many packages are measured at once")
 	dir := flags.String("dir", ".", "module root the packages are looked for and measured in")
 	if err := flags.Parse(args); err != nil {
@@ -46,13 +49,12 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 		return 2
 	}
 	if !gatePattern.MatchString(*gate) {
-		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n", toolName, *gate)
+		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n", toolName, *gate)
 		return 2
 	}
 	if refuseMode(stderr, *mode) {
 		return 2
 	}
-	ctx := context.Background()
 	packages, err := treePackages(ctx, *dir, list)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: the packages below cmd/ and internal/ could not be listed: %v\n", toolName, err)
@@ -64,7 +66,11 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 	}
 	fmt.Fprintf(stderr, "%s: measuring the %d packages below cmd/ and internal/, %d at a time, with GOBCO_GATE=%s and GOBCO_MODE=%s\n", toolName, len(packages), *parallel, *gate, *mode)
 	m := measurer{run: run, list: list, dir: *dir, system: localSystem, records: *records, env: []string{"GOBCO_GATE=" + *gate, "GOBCO_MODE=" + *mode}, mode: *mode}
-	if err = measureAll(ctx, m, packages, *parallel, stderr); err != nil {
+	err = measureAll(ctx, m, packages, *parallel, stderr)
+	if ended, interrupted := recipe.Status(ctx); interrupted {
+		return ended
+	}
+	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", toolName, err)
 		return 1
 	}
@@ -86,9 +92,9 @@ func runTree(args []string, stdout, stderr io.Writer, list lister, run scriptRun
 }
 
 // measureAll measures the packages with m, parallel at a time, and says on
-// progress what became of each as it finishes. Every package is measured, and
-// every one that could not be run or recorded is returned as an error at the
-// end, in the order they finished.
+// progress what became of each as it finishes. Every package is measured, but
+// for those left when ctx is done, and every one that could not be recorded is
+// returned as an error at the end, in the order they finished.
 func measureAll(ctx context.Context, m measurer, packages []string, parallel int, progress io.Writer) error {
 	var (
 		mu       sync.Mutex
@@ -99,11 +105,14 @@ func measureAll(ctx context.Context, m measurer, packages []string, parallel int
 	for range parallel {
 		wg.Go(func() {
 			for pkg := range work {
+				if ctx.Err() != nil {
+					continue
+				}
 				status, nothing, err := measurePackage(ctx, m, pkg, io.Discard)
 				mu.Lock()
 				if err != nil {
 					failures = append(failures, err)
-				} else {
+				} else if ctx.Err() == nil {
 					fmt.Fprintf(progress, "%s: %s: %s\n", toolName, pkg, verdict(status, nothing))
 				}
 				mu.Unlock()

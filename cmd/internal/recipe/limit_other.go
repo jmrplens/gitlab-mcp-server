@@ -16,11 +16,9 @@ func AddressSpace() (soft, hard uint64, err error) {
 	return 0, 0, errors.ErrUnsupported
 }
 
-// startLimited starts cmd. Outside Linux no caller asks for a limit, and one
-// that did would be refused rather than told it held.
-func startLimited(cmd *exec.Cmd, maxBytes uint64) error {
-	if maxBytes != 0 {
-		return errors.ErrUnsupported
-	}
-	return cmd.Start()
+// startLimited refuses to start a program under a limit. Outside Linux no
+// caller asks for one, and one that did would be refused rather than told it
+// held.
+func startLimited(*exec.Cmd, uint64) error {
+	return errors.ErrUnsupported
 }

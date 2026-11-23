@@ -6,7 +6,7 @@
 // 1210), and takes the same measurement of the whole tree on the machine at
 // hand.
 //
-// The condition gate is gobco, run through scripts/coverage-conditions.sh,
+// The condition gate is gobco, run through cmd/internal/conditions,
 // which is the recipe behind `make coverage-conditions`. It runs on Linux
 // before a commit, and on the Windows and macOS legs of CI over every
 // condition of cmd/server and internal/toolutil, the two packages whose files
@@ -17,20 +17,20 @@
 // came from a Windows virtual machine and nobody could repeat them on macOS at
 // all. Nor was there a figure for the tree as a whole, which is what the
 // OpenSSF Best Practices criterion test_branch_coverage80 asks for. The
-// workflow runs the same script on each runner a dispatch names, and this
-// command is everything around that script:
+// workflow runs the same recipe on each runner a dispatch names, and this
+// command is everything around that recipe:
 //
 //	measure_conditions plan -packages <list> -systems <list> -gate <gate> [-mode <mode>] [-tree]
 //	measure_conditions measure -packages <list> -system <runner> -records <dir>
 //	measure_conditions summarize -plan <json> -records <dir> -gate <gate> [-mode <mode>] -commit <sha>
 //	measure_conditions tree -records <dir> -commit <sha> [-gate <gate>] [-mode <mode>] [-parallel <n>]
 //
-// The mode is the GOBCO_MODE the script runs gobco in, condition when it is
+// The mode is the GOBCO_MODE the recipe runs gobco in, condition when it is
 // not given: condition is gobco's default, which counts every atomic
 // condition, each operand of && and || and each comparison wherever it is
 // written, and branch is gobco's -branch, which counts the whole controlling
 // condition of each if and for and each case of a switch, the branches
-// test_branch_coverage80 asks about. measure takes none, since the script
+// test_branch_coverage80 asks about. measure takes none, since the recipe
 // reads the mode from the environment the job gives it.
 //
 // plan validates what the dispatch asked for and prints the matrix the
@@ -42,36 +42,36 @@
 // (.goreleaser.yml's goos crossed with its goarch), and a package whose files
 // differ between two of them is one. A file behind a tag alone, such as the
 // race detector's or the e2e suite's, builds on no release target without
-// that tag and so differs on none of them, which keeps it out: the script is
+// that tag and so differs on none of them, which keeps it out: the recipe is
 // run without tags here, and could not measure such a package anyway. With
 // -tree the plan is every package below cmd/ and internal/ instead, dealt
 // round twenty shards so the slow packages of one directory land in
 // different jobs, each shard a job on each runner.
 //
-// measure is what each job runs: the script over each of its packages, one
+// measure is what each job runs: the recipe over each of its packages, one
 // after another, with the output streamed to the log and kept, for each
 // package, in a directory of the records named after it, beside the record of
-// what ran where and how it ended. A package the script could not measure
+// what ran where and how it ended. A package the recipe could not measure
 // fails the job once its other packages are measured. Before a package is
-// handed to the script, its conditions are counted in the mode the script
-// will run in, by the rule of the gobco release the script pins, in the
+// handed to the recipe, its conditions are counted in the mode the recipe
+// will run in, by the rule of the gobco release the recipe pins, in the
 // non-test files the go command builds of it: a package with none is not
-// handed to the script, whose gobco would report 0/0 for it, the figure the
-// script refuses because a package gobco did not instrument reports it too,
+// handed to the recipe, whose gobco would report 0/0 for it, the figure the
+// recipe refuses because a package gobco did not instrument reports it too,
 // and is recorded as measured with nothing to measure, 0 of 0, the line that
-// says so in place of the script's output (issue 1667). A package whose
-// conditions cannot be counted is handed to the script as any other, and so
-// is every package when the job's GOBCO_MODE or GOBCO_GATE is one the script
-// refuses, so that the script says why it will not measure them.
+// says so in place of the recipe's output (issue 1667). A package whose
+// conditions cannot be counted is handed to the recipe as any other, and so
+// is every package when the job's GOBCO_MODE or GOBCO_GATE is one the recipe
+// refuses, so that the recipe says why it will not measure them.
 //
 // summarize reads the records the jobs left, joins them to the plan, and
 // writes the job summary: one row per package and runner with the figure
 // gobco printed, the total of each runner over the packages it measured, and
 // one row per condition gobco names as not evaluated both ways, with its file
-// and line. Every figure is the one the script printed on that runner, but
+// and line. Every figure is the one the recipe printed on that runner, but
 // the nothing to measure (0 of 0) of a package measure did not hand to the
-// script, which stands for the line measure wrote in its place. Nothing is
-// inferred from another platform, and nothing is computed that the script
+// recipe, which stands for the line measure wrote in its place. Nothing is
+// inferred from another platform, and nothing is computed that the recipe
 // did not count but the totals, which add up its counts and round their
 // share down.
 //
@@ -81,12 +81,12 @@
 // measures every package, -parallel at a time, into -records, and writes the
 // summary to stdout, its system named local.
 //
-// It is a measurement, not a gate, and no figure fails it. The script's exit
+// It is a measurement, not a gate, and no figure fails it. The recipe's exit
 // status is read for one thing only, whether a measurement was taken: 0 when
 // it was and the gate held nothing, 3 when it was and the gate (GOBCO_GATE)
-// held at least one condition, and anything else when the script could not
+// held at least one condition, and anything else when the recipe could not
 // measure at all. A run in the third case is reported as not measured with the
-// lines of its output that say why, the script's and those gobco or its go
+// lines of its output that say why, the recipe's and those gobco or its go
 // test printed before them, and fails the job that ran it. summarize and
 // tree exit 1 only when a record cannot be read or disagrees with itself, or
 // the packages cannot be listed or measured into the records, since then the

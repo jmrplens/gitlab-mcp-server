@@ -50,7 +50,7 @@ func TestRunMain_Subcommands_DispatchOrRefuse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var stdout, stderr bytes.Buffer
-			if got := runMain(tc.args, &stdout, &stderr); got != tc.wantCode {
+			if got := runMain(t.Context(), tc.args, &stdout, &stderr); got != tc.wantCode {
 				t.Fatalf("runMain(%q) = %d, want %d; stderr:\n%s", tc.args, got, tc.wantCode, stderr.String())
 			}
 			if stdout.String() != tc.wantStdout {

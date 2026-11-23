@@ -40,8 +40,8 @@ type Runner func(ctx context.Context, call Call) (int, error)
 // A signal sent to the whole process group ends the program at once and
 // reaches this process through the runtime, which may take a moment longer,
 // and a program that failed for that reason is not a measurement that failed.
-// It is a variable so a test need not wait it out.
-var grace = 100 * time.Millisecond
+// It is a variable so a test need not wait it out, and a tenth of a second.
+var grace = time.Duration(1e8)
 
 // Exec is the [Runner] production uses. The program is not ended when ctx is
 // done: the recipe waits for it and then asks [Status] (see the package
@@ -53,7 +53,11 @@ func Exec(ctx context.Context, call Call) (int, error) {
 	cmd.Env = call.Env
 	cmd.Stdout = call.Stdout
 	cmd.Stderr = call.Stderr
-	if err := startLimited(cmd, call.AddressSpace); err != nil {
+	start := cmd.Start
+	if call.AddressSpace != 0 {
+		start = func() error { return startLimited(cmd, call.AddressSpace) }
+	}
+	if err := start(); err != nil {
 		return 0, err
 	}
 	err := cmd.Wait()

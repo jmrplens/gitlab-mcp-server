@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
@@ -337,6 +338,147 @@ func TestRecordedRuns_Mutants_DoesWhatTheScriptDid(t *testing.T) {
 			}
 			if left := fileTree(b.tmp); len(left) != 0 {
 				t.Errorf("left in the temporary directory: %q", left)
+			}
+		})
+	}
+}
+
+// refuseCall wraps a bench's runner so the program whose arguments hold every
+// word given answers as planted, writing out first.
+func refuseCall(b *mutantsBench, out string, status int, err error, words ...string) {
+	answer := b.session.Run
+	b.session.Run = func(ctx context.Context, call recipe.Call) (int, error) {
+		for _, word := range words {
+			if !slices.Contains(call.Args, word) {
+				return answer(ctx, call)
+			}
+		}
+		_, _ = call.Stdout.Write([]byte(out))
+		return status, err
+	}
+}
+
+// TestMutants_AProgramThatDoesNotAnswer_IsRefused verifies every way a program
+// of the run can fail to answer before gremlins, and gremlins failing to
+// start: each is a run that measured nothing, with the reason, and gremlins is
+// never started on it.
+func TestMutants_AProgramThatDoesNotAnswer_IsRefused(t *testing.T) {
+	files := mutantsFixture(t)
+	planted := errors.New("planted")
+	cases := []struct {
+		name   string
+		pkg    string
+		out    string
+		status int
+		err    error
+		words  []string
+		want   string
+	}{
+		{name: "go env", words: []string{"env"}, err: planted, want: "gremlins: go env failed: planted; refusing to measure\n"},
+		{name: "go list -m", words: []string{"list", "-m"}, err: planted, want: "gremlins: go list -m failed: planted; refusing to measure\n"},
+		{name: "go list", words: []string{golist.FilesFormat}, err: planted, want: "gremlins: go list could not list ./internal/pkg: planted; refusing to measure\n"},
+		{name: "go list answers something else", words: []string{golist.FilesFormat}, out: "x\n", want: "gremlins: go list could not list ./internal/pkg: unexpected go list row: \"x\"; refusing to measure\n"},
+		{name: "a pattern", pkg: "./...", words: []string{"nothing"}, want: "gremlins: ./... names 3 packages, and one is measured at a time; refusing to measure\n"},
+		{name: "go mod download cannot start", words: []string{"mod"}, err: planted, want: "gremlins: go mod download could not be started: planted; refusing to measure\n"},
+		{name: "go mod download fails", words: []string{"mod"}, status: 1, want: "gremlins: go mod download exited 1; refusing to measure\n"},
+		{name: "go test cannot start", words: []string{"test"}, err: planted, want: "gremlins: go test could not be started: planted\ngremlins: ./internal/pkg does not pass its own tests"},
+		{name: "gremlins cannot start", words: []string{"unleash"}, err: planted, want: "gremlins: gremlins could not be started: planted\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newMutantsBench(t, files)
+			refuseCall(b, tc.out, tc.status, tc.err, tc.words...)
+			pkg := tc.pkg
+			if pkg == "" {
+				pkg = "./internal/pkg"
+			}
+			status := b.session.run(t.Context(), []string{"mutants", pkg})
+			if status != 1 || !strings.HasPrefix(b.stderr.String(), tc.want) {
+				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, b.stderr.String(), tc.want)
+			}
+			for _, call := range b.calls {
+				if call.Args[0] == "run" {
+					t.Error("gremlins was started")
+				}
+			}
+		})
+	}
+}
+
+// TestMutants_ACoverpkgGoCannotResolve_IsRefusedAsSuch verifies that a
+// -coverpkg with an empty entry, which go list refuses outright, is not the
+// same answer as a pattern that resolved and missed the package, and that the
+// refusal says which it was, below go's own words.
+func TestMutants_ACoverpkgGoCannotResolve_IsRefusedAsSuch(t *testing.T) {
+	b := newMutantsBench(t, mutantsFixture(t))
+	b.prepare(t, mutantsRun{Env: map[string]string{"GREMLINS_FLAGS": "-i --coverpkg ./internal/pkg,,./cmd/tool"}, Files: map[string]*string{"internal/pkg/pkg_test.go": nil}})
+	if status := b.session.run(t.Context(), []string{"mutants", "./internal/pkg"}); status != 1 {
+		t.Errorf("status = %d, want 1", status)
+	}
+	said := b.stderr.String()
+	if !strings.Contains(said, "gremlins: go list could not resolve -coverpkg ./internal/pkg,,./cmd/tool (its own message is above); refusing to measure\n") || strings.HasPrefix(said, "gremlins:") {
+		t.Errorf("stderr = %q, want go's own message and then the refusal", said)
+	}
+	if strings.Contains(said, "does not name") || len(b.calls) != 0 {
+		t.Errorf("stderr = %q after running %+v", said, b.calls)
+	}
+}
+
+// TestMutants_ABaselineThatTookNoTime_IsRefused verifies that a clock that
+// read no time passing derives no deadline.
+func TestMutants_ABaselineThatTookNoTime_IsRefused(t *testing.T) {
+	b := newMutantsBench(t, mutantsFixture(t))
+	b.base = 0
+	if status := b.session.run(t.Context(), []string{"mutants", "./internal/pkg"}); status != 1 ||
+		b.stderr.String() != "gremlins: the timed baseline reads '0.000', which is not a positive number of seconds; refusing to derive a deadline from it\n" {
+		t.Errorf("status = %d, stderr = %q", status, b.stderr.String())
+	}
+}
+
+// TestMutants_NoTemporaryDirectory_IsRefused verifies that a profile that
+// cannot be made ends the run with the reason.
+func TestMutants_NoTemporaryDirectory_IsRefused(t *testing.T) {
+	b := newMutantsBench(t, mutantsFixture(t))
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, filepath.Join(b.scratch, "absent"))
+	}
+	if status := b.session.run(t.Context(), []string{"mutants", "./internal/pkg"}); status != 1 || !strings.Contains(b.stderr.String(), "absent") {
+		t.Errorf("status = %d, stderr = %q; want why no profile could be made", status, b.stderr.String())
+	}
+}
+
+// TestMemoryCeiling_EachLimitInherited_IsKeptOrLowered verifies the ceiling
+// gremlins is started under for each limit the run inherited: a looser one is
+// lowered to the ceiling, one at it or under it is kept, and none is set where
+// the limits cannot be read or the platform is not Linux, which the run says.
+func TestMemoryCeiling_EachLimitInherited_IsKeptOrLowered(t *testing.T) {
+	t.Parallel()
+	const gib = 1 << 30
+	cases := []struct {
+		name string
+		goos string
+		held uint64
+		err  error
+		want uint64
+		says string
+	}{
+		{"none", "linux", math.MaxUint64, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
+		{"a looser one", "linux", 16 * gib, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
+		{"one byte looser", "linux", 8*gib + 1, nil, 8 * gib, "is held to 8 GiB"},
+		{"the ceiling", "linux", 8 * gib, nil, 0, "is already held to 8192 MiB of address space, the limit this run inherited"},
+		{"a tighter one", "linux", 4 * gib, nil, 0, "is already held to 4096 MiB of address space, the limit this run inherited, which is no more than MUTANT_MEMORY_MAX=8 GiB and so is kept"},
+		{"unreadable", "linux", 0, errors.New("planted"), 0, "MUTANT_MEMORY_MAX=8 cannot be set here (planted), so a mutant that allocates without end runs until the host stops it"},
+		{"not Linux", "darwin", math.MaxUint64, nil, 0, "relies on Linux to enforce, so on darwin a mutant that allocates without end runs until the host stops it"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := &mutation{session: &session{}, knobs: knobs{memoryMax: 8}}
+			m.goos = tc.goos
+			m.limits = func() (soft, hard uint64, err error) { return tc.held, math.MaxUint64, tc.err }
+			ceiling, said := m.memoryCeiling()
+			if ceiling != tc.want || !strings.Contains(said, tc.says) {
+				t.Errorf("memoryCeiling() = %d, %q; want %d and %q", ceiling, said, tc.want, tc.says)
 			}
 		})
 	}

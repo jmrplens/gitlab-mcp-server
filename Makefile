@@ -956,13 +956,13 @@ modeleval-probe:
 	go test -tags e2e -count=1 -v -run TestProviderContract ./test/e2e/modeleval/
 
 ## coverage-conditions: report the boolean conditions of PKG never evaluated both ways (gobco). A line reported is a missing test case; `&&`, `||` and `!` operands count separately.
-# The recipe is scripts/coverage-conditions.sh. gobco parses and type-checks
-# every .go file of a directory together, whatever its build constraint says,
-# so a package declaring one function per platform (cmd/server,
-# internal/toolutil, test/e2e/internal/harness) died with a redeclaration
-# panic before measuring anything (issue 1017). The script stages such a
-# package in a copy of the module under the temporary directory, holding only
-# the files the go command builds here, and blanks the constraint lines of the
+# The recipe is cmd/internal/conditions, through cmd/coverage_recipes. gobco
+# parses and type-checks every .go file of a directory together, whatever its
+# build constraint says, so a package declaring one function per platform
+# (cmd/server, internal/toolutil, test/e2e/internal/harness) died with a
+# redeclaration panic before measuring anything (issue 1017). The recipe
+# stages such a package in a copy of the module under the temporary directory,
+# holding only the files the go command builds here, and blanks the constraint lines of the
 # kept files whose constraint names more than the platform (a tag, a release,
 # cgo, the compiler), which gobco's own narrower build context would decline
 # to instrument; it runs gobco there, names the files it left out, whose
@@ -985,14 +985,14 @@ modeleval-probe:
 # is held to (it fails on any condition not evaluated both ways), the one the
 # Windows and macOS legs of CI hold cmd/server and internal/toolutil to, and
 # GOBCO_GATE=beyond:linux/amd64 into one that holds only the files linux/amd64
-# does not build. The script exits 3 when the gate fails a run, which no other
-# failure of it uses, so the on-demand measurement
-# (.github/workflows/conditions.yml), which runs the script itself, can tell a
-# held figure from no figure; make reports any failure of this recipe as its
-# own, with status 2.
+# does not build. The recipe's status is 3 when the gate fails a run, which no
+# other failure of it uses, so the on-demand measurement
+# (.github/workflows/conditions.yml), whose command runs the recipe in its own
+# process, can tell a held figure from no figure; go run reports any failure
+# as 1, and make as its own, with status 2.
 coverage-conditions:
 	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
-	@scripts/coverage-conditions.sh $(PKG) $(TAGS)
+	@go run ./cmd/coverage_recipes conditions $(PKG) $(TAGS)
 
 # Where coverage-conditions-tree leaves each package's record and raw output,
 # how many packages it measures at once, and what gobco counts.
@@ -1001,7 +1001,7 @@ CONDITIONS_PARALLEL ?= 1
 CONDITIONS_MODE ?= condition
 
 ## coverage-conditions-tree: condition or branch coverage (gobco) of every package under cmd/ and internal/, one row each and the total, written as the summary conditions.yml's tree dispatch writes. CONDITIONS_RECORDS keeps the records (dist/conditions-tree); CONDITIONS_PARALLEL packages run at once (1); CONDITIONS_MODE is condition or branch (condition).
-# Each package is measured by scripts/coverage-conditions.sh, the recipe
+# Each package is measured by cmd/internal/conditions, the recipe
 # behind coverage-conditions, with GOBCO_GATE=all as the workflow's default,
 # which decides only which conditions the summary marks as held and moves no
 # figure, and GOBCO_MODE=$(CONDITIONS_MODE): condition is gobco's default,
@@ -1017,11 +1017,11 @@ coverage-conditions-tree:
 	@bash -o pipefail -c 'go run ./cmd/measure_conditions tree -records "$(CONDITIONS_RECORDS)" -parallel "$(CONDITIONS_PARALLEL)" -mode "$(CONDITIONS_MODE)" -commit "$$(git rev-parse HEAD)" | tee "$(CONDITIONS_RECORDS)/summary.md"'
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
-# The recipe itself is scripts/coverage-mutants.sh. It moved out of this file
-# when it gained the staging step that makes a `package main` measurable at all
+# The recipe itself is cmd/coverage_recipes. It moved out of this file when it
+# gained the staging step that makes a `package main` measurable at all
 # (issue 872): that needs a copy of the package inside the module, a run against
-# the copy and a removal that happens whatever the outcome, and a cleanup
-# guaranteed by a trap is not something a one-line make recipe can express. The
+# the copy and a removal that happens whatever the outcome, which is not
+# something a one-line make recipe can express. The
 # reasons below still describe what it does, and the reason for the staging is
 # written beside it.
 #
@@ -1046,15 +1046,15 @@ coverage-conditions-tree:
 # The baseline is a run of the same command gremlins times, timed by the clock.
 # gremlins multiplies the coefficient by the wall time of its own `go test
 # [-tags T] [-coverpkg P] -cover -coverprofile F ./<pkg>/...` from the module
-# root, so the script runs that command, with the tags and -coverpkg it reads
+# root, so the recipe runs that command, with the tags and -coverpkg it reads
 # out of GREMLINS_FLAGS or gremlins' own GREMLINS_UNLEASH_TAGS and
 # GREMLINS_UNLEASH_COVERPKG, and --integration from the flag alone, since
 # gremlins v0.6.0 never reads GREMLINS_UNLEASH_INTEGRATION as a bool. The flag
-# is the only source of it the script can read: integration set in a
+# is the only source of it the recipe can read: integration set in a
 # .gremlins.yaml, where a YAML bool does pass that assertion, reaches gremlins
 # and not the baseline, so an integration run is asked for with -i. It runs
 # it once untimed, which is the gate below and warms the build cache the way
-# gremlins' run will find it, and once under bash's `time`. It used to read the
+# gremlins' run will find it, and once under the clock. It used to read the
 # duration off go test's summary line, which is the test binary's run without
 # the build, and to guess 0.010s when that line carried none. A tag that
 # reached gremlins and not the baseline left the harness printing `[no test
@@ -1077,7 +1077,7 @@ coverage-conditions-tree:
 # all of internal/tools, needed 110 seconds for that first compile with four
 # workers at it at once, and 2 for every run after. At a 30-second budget it
 # reported 2 killed and 8 timed out; at 300 it reported all 10 killed. The
-# script now runs every go command, and gremlins, under -trimpath, which leaves
+# recipe now runs every go command, and gremlins, under -trimpath, which leaves
 # the directory out of the key, and runs the per-mutant command once before
 # gremlins starts, so a worker's copy finds everything compiled and the first
 # mutant costs what every later one does (issue 1029). A fixed coefficient
@@ -1104,19 +1104,19 @@ coverage-conditions-tree:
 # so a mutant that makes the tests hang is reported TIMED OUT within about that
 # long instead of holding a worker for as long as the coefficient allows. About,
 # because gremlins multiplies the coefficient by its own coverage run rather
-# than by the script's baseline, and a run of that command a few percent slower
+# than by the recipe's baseline, and a run of that command a few percent slower
 # gives a deadline a few percent over the ceiling. It answers to the floor as
 # the budget does, and a baseline longer than half of it is refused, since no
 # mutant could run the suite twice inside it. At an hour it binds only on a
 # baseline over 450 seconds, where the floor of 8 would otherwise exceed it.
 # All three knobs are written in seconds as a plain number; anything else is
-# refused, since awk would read 2h as 2.
+# refused rather than read as the number it opens with.
 #
 # MUTANT_MEMORY_MAX bounds a mutant's memory where the three above bound its
 # time: gremlins and every process it starts run under that many GiB of
-# address space (ulimit -v), 8 when it is unset and none at 0, so a mutant that
+# address space (RLIMIT_AS), 8 when it is unset and none at 0, so a mutant that
 # turns a loop into one that never ends and allocates on every pass fails its
-# test instead of exhausting the host. The script reads it from the
+# test instead of exhausting the host. The recipe reads it from the
 # environment rather than as an argument, so it has no default here and is set
 # on the command line like the others: make coverage-mutants
 # PKG=./cmd/audit_tenancy MUTANT_MEMORY_MAX=4. A whole number of GiB without a
@@ -1134,11 +1134,11 @@ coverage-conditions-tree:
 # fraction of a second and derives a per-mutant budget from that fraction.
 # Measured here, ./cmd/server (44s of tests) had its coverage served from cache
 # in 0.65s and reported 0 killed with every mutant TIMED OUT, which reads
-# exactly like a package nothing tests. The script exports it in GOFLAGS beside
+# exactly like a package nothing tests. The recipe sets it in GOFLAGS beside
 # -trimpath, and a go command ignores a GOFLAGS entry it does not know, so the
 # same setting is safe for every other go command it and gremlins run. Under
 # -trimpath a binary no longer records where the toolchain is installed, so the
-# script also exports GOROOT as `go env GOROOT` names it: without it the
+# recipe also sets GOROOT as `go env GOROOT` names it: without it the
 # commands that run the go command out of cmd/internal/golist failed their own
 # tests there.
 MUTANT_BUDGET ?= 300
@@ -1146,7 +1146,7 @@ MUTANT_BUDGET_FLOOR ?= 10
 MUTANT_DEADLINE_MAX ?= 3600
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_llms"; exit 2; }
-	@scripts/coverage-mutants.sh $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
+	@go run ./cmd/coverage_recipes mutants $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
@@ -2142,7 +2142,7 @@ check-surface-quality:
 ## evaluates both ways fails; a package gobco cannot instrument is reported.
 check-spec-conditions:
 	@echo === action spec conditions ===
-	./scripts/check-spec-conditions.sh $(BASE)
+	go run ./cmd/coverage_recipes spec-conditions $(BASE)
 
 ## audit-output: run MCP output quality audit on all tools.
 ## Backward-compat wrapper over audit-surface-quality -view=output.

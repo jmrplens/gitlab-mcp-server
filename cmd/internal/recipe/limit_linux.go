@@ -20,22 +20,17 @@ var (
 // limit.
 func AddressSpace() (soft, hard uint64, err error) {
 	var limit syscall.Rlimit
-	if err = getrlimit(syscall.RLIMIT_AS, &limit); err != nil {
-		return 0, 0, err
-	}
-	return limit.Cur, limit.Max, nil
+	err = getrlimit(syscall.RLIMIT_AS, &limit)
+	return limit.Cur, limit.Max, err
 }
 
 // startLimited starts cmd under a soft limit of maxBytes on its address
-// space, which everything it starts inherits; 0 sets none. The limit is this
-// process's own for the moment the program is started, since that is what a
-// child inherits, and is put back before it is waited for, so nothing this
-// process does while it waits, and the removal of what it staged above all,
-// runs under a ceiling meant for a mutant.
+// space, which everything it starts inherits. The limit is this process's own
+// for the moment the program is started, since that is what a child inherits,
+// and is put back before it is waited for, so nothing this process does while
+// it waits, and the removal of what it staged above all, runs under a ceiling
+// meant for a mutant.
 func startLimited(cmd *exec.Cmd, maxBytes uint64) error {
-	if maxBytes == 0 {
-		return cmd.Start()
-	}
 	var held syscall.Rlimit
 	if err := getrlimit(syscall.RLIMIT_AS, &held); err != nil {
 		return err

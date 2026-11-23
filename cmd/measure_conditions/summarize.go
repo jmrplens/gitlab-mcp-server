@@ -141,7 +141,7 @@ func join(runs []packageRun, recs []record, mode string) (outcomes []outcome, pr
 func render(w io.Writer, gate, mode, commit string, outcomes []outcome, problems []string) {
 	measured := coverageModes[mode]
 	fmt.Fprintf(w, "## %s, measured\n\n", measured.figure)
-	fmt.Fprintf(w, "`GOBCO_GATE=%s` at `%s`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. %s No figure fails this workflow: it is a measurement, not a gate.\n\n", gate, commit, measured.counts)
+	fmt.Fprintf(w, "`GOBCO_GATE=%s` at `%s`. Every figure is the one gobco printed on the runner named, through `cmd/internal/conditions`, the recipe behind `make coverage-conditions`; none is inferred from another platform. %s No figure fails this workflow: it is a measurement, not a gate.\n\n", gate, commit, measured.counts)
 	writeRow(w, "Package", "System", "Covered", "Not both ways", "Held by the gate", "Raw output")
 	fmt.Fprintf(w, "| --- | --- | ---: | ---: | ---: | --- |\n")
 	for _, result := range outcomes {
@@ -252,7 +252,7 @@ func writeUnmeasured(w io.Writer, outcomes []outcome) {
 			fmt.Fprintf(w, "No record came back in %s: the run ended before its measuring step wrote one (a setup step failed, or the run was cancelled, timed out or lost its runner), or it did not upload the one it wrote, and its job log says which.\n", codeSpan(result.recordPath()))
 			continue
 		}
-		fmt.Fprintf(w, "`scripts/coverage-conditions.sh` exited %d, which means it could not measure, and said:\n\n", result.rec.status)
+		fmt.Fprintf(w, "`cmd/internal/conditions` exited %d, which means it could not measure, and said:\n\n", result.rec.status)
 		reason := reasonLines(result.rec.output)
 		fence := strings.Repeat("`", max(3, longestRun(reason, '`')+1))
 		fmt.Fprintf(w, "%stext\n%s\n%s\n", fence, reason, fence)
@@ -260,9 +260,9 @@ func writeUnmeasured(w io.Writer, outcomes []outcome) {
 }
 
 // failureLine is a line of a run's output that says why it could not
-// measure: one the script wrote, which it prefixes with `gobco: `, or one
+// measure: one the recipe wrote, which it prefixes with `gobco: `, or one
 // gobco or its go test printed when either failed, which is what the
-// script's verdict that the run is not a measurement follows. Those are a
+// recipe's verdict that the run is not a measurement follows. Those are a
 // panic, which is how gobco stops on a package it cannot type-check; a
 // failing top-level test; a test package that did not build or set up; and
 // the compiler's position for either, which is the only line naming the

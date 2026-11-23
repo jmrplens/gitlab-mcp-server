@@ -42,6 +42,13 @@
 // deadline, the other runs `go test` and `go tool cover` through the same
 // runner and reports a failure with the tail of its combined output.
 //
+// A second row shape, [FilesFormat], names the files the go command builds for
+// a package, each kind apart, and what each kind imports. The coverage recipes
+// ask for it: cmd/internal/conditions stages a package gobco cannot read by the
+// files go does not build of it, and cmd/coverage_recipes decides from the
+// imports where a copy gremlins can resolve may sit. It is asked with -e, since
+// why a package cannot be loaded is what either has to say about it.
+//
 // One listing is shared whole, because it has one shape for every caller:
 // [ModuleDir] asks `go list -m` for the directory one module of the build
 // list sits in. R-ROUTE (cmd/audit_1to1 -scope=routes) reads client-go's

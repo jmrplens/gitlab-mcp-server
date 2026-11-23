@@ -13,9 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/conditions"
 )
 
 // TestCountConditions_EachConstruct_CountsAsGobcoDoes holds the count to
@@ -82,6 +83,18 @@ func TestCountConditions_EachConstruct_CountsAsGobcoDoes(t *testing.T) {
 	}
 }
 
+// TestCaseExpressions_AStatementThatIsNoClause_IsPassedOver verifies that only
+// the clauses of a switch body give expressions: the parser writes nothing
+// else there, and a body that held one would still be read.
+func TestCaseExpressions_AStatementThatIsNoClause_IsPassedOver(t *testing.T) {
+	t.Parallel()
+	first, second := ast.NewIdent("a"), ast.NewIdent("b")
+	body := &ast.BlockStmt{List: []ast.Stmt{&ast.EmptyStmt{}, &ast.CaseClause{List: []ast.Expr{first, second}}}}
+	if got := caseExpressions(body); !reflect.DeepEqual(got, []ast.Expr{first, second}) {
+		t.Errorf("caseExpressions() = %v, want the clause's two", got)
+	}
+}
+
 // TestCountConditions_SeveralFiles_AreSummed verifies that every file of a
 // package is counted, each with marks of its own.
 func TestCountConditions_SeveralFiles_AreSummed(t *testing.T) {
@@ -105,18 +118,13 @@ func TestCountConditions_SeveralFiles_AreSummed(t *testing.T) {
 	}
 }
 
-// TestGobcoRelease_IsTheOneTheScriptPins holds the release the count follows
-// to the one scripts/coverage-conditions.sh runs, so a bump of the script's
-// pin fails here until the counting rule has been read against it.
-func TestGobcoRelease_IsTheOneTheScriptPins(t *testing.T) {
+// TestGobcoRelease_IsTheOneTheRecipePins holds the release the count follows
+// to the one cmd/internal/conditions runs, so a bump of the recipe's pin fails
+// here until the counting rule has been read against it.
+func TestGobcoRelease_IsTheOneTheRecipePins(t *testing.T) {
 	t.Parallel()
-	script := readFile(t, filepath.Join("..", "..", filepath.FromSlash(coverageScript)))
-	match := regexp.MustCompile(`(?m)^readonly GOBCO="github\.com/rillig/gobco@(v[^"]+)"$`).FindStringSubmatch(script)
-	if match == nil {
-		t.Fatalf("%s pins no gobco release in the line this test reads", coverageScript)
-	}
-	if match[1] != gobcoRelease {
-		t.Errorf("%s pins gobco %s and the count follows %s; read markConds, prepareSwitchStmt and prepareTypeSwitchStmt of %s and bring countConditions and gobcoRelease to it", coverageScript, match[1], gobcoRelease, match[1])
+	if conditions.Release != gobcoRelease {
+		t.Errorf("%s pins gobco %s and the count follows %s; read markConds, prepareSwitchStmt and prepareTypeSwitchStmt of %s and bring countConditions and gobcoRelease to it", coverageRecipe, conditions.Release, gobcoRelease, conditions.Release)
 	}
 }
 
@@ -131,7 +139,7 @@ func listCallOf(out string, err error, calls *[]listCall) lister {
 
 // TestCountPackage_Listing_CountsTheFilesTheGoCommandBuilds verifies that
 // the package's files are asked of the go command in the module root, with
-// the script's environment, and that every Go and cgo file it names is read,
+// the recipe's environment, and that every Go and cgo file it names is read,
 // in the mode the measurer counts in.
 func TestCountPackage_Listing_CountsTheFilesTheGoCommandBuilds(t *testing.T) {
 	t.Parallel()

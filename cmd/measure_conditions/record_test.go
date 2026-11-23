@@ -221,7 +221,7 @@ func TestConditionsWorkflow_Triggers_AreADispatchThatOnlyReads(t *testing.T) {
 // TestConditionsWorkflow_MeasureStep_WritesTheRecordThisCommandReads holds the
 // measuring step to what summarize assumes of it: it runs this command's
 // measure over the job's packages through bash, with the dispatch's gate and
-// mode in the script's environment and the system and artifact the plan chose, writes
+// mode in the recipe's environment and the system and artifact the plan chose, writes
 // the records below the directory the upload step sends under the artifact
 // name, and fails the job with an annotation when the command says a package
 // was not measured. It also removes setup-go's problem matcher before
@@ -331,12 +331,12 @@ func TestConditionsWorkflow_PlanAndSummary_RunThisCommand(t *testing.T) {
 	}
 }
 
-// TestConditionsWorkflow_ModeInput_OffersTheModesTheScriptReads holds the
-// dispatch form's mode to the modes this command and the script read, every
+// TestConditionsWorkflow_ModeInput_OffersTheModesTheRecipeReads holds the
+// dispatch form's mode to the modes this command and the recipe read, every
 // one of them and no other, with gobco's default mode as its default, so a
 // dispatch that leaves it alone measures what every dispatch measured before
 // the mode existed.
-func TestConditionsWorkflow_ModeInput_OffersTheModesTheScriptReads(t *testing.T) {
+func TestConditionsWorkflow_ModeInput_OffersTheModesTheRecipeReads(t *testing.T) {
 	t.Parallel()
 	workflow := loadConditionsWorkflow(t)
 	dispatch, _ := workflow.On["workflow_dispatch"].(map[string]any)

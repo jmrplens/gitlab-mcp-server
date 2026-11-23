@@ -14,10 +14,7 @@ import (
 // a package go cannot load is a row whose last field says why rather than the
 // end of the listing. That field is quoted, since an error can span lines,
 // and is empty for a package that loads.
-const FilesFormat = "{{.Dir}}\t{{with .Module}}{{.Dir}}{{end}}\t{{.Name}}\t{{.ImportPath}}" +
-	"\t{{join .GoFiles \" \"}}\t{{join .CgoFiles \" \"}}\t{{join .TestGoFiles \" \"}}\t{{join .XTestGoFiles \" \"}}" +
-	"\t{{join .Imports \" \"}}\t{{join .TestImports \" \"}}\t{{join .XTestImports \" \"}}" +
-	"\t{{with .Error}}{{printf \"%q\" .Error}}{{end}}"
+const FilesFormat = `{{.Dir}}	{{with .Module}}{{.Dir}}{{end}}	{{.Name}}	{{.ImportPath}}	{{join .GoFiles " "}}	{{join .CgoFiles " "}}	{{join .TestGoFiles " "}}	{{join .XTestGoFiles " "}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}	{{with .Error}}{{printf "%q" .Error}}{{end}}`
 
 // fileRowFields is how many fields a row of [FilesFormat] holds.
 const fileRowFields = 12

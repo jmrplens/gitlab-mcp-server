@@ -18,13 +18,13 @@ import (
 )
 
 // gobcoRelease is the gobco release whose counting rule countConditions
-// follows, which is the one scripts/coverage-conditions.sh pins. A test holds
-// the two to each other, so a bump of the script's pin fails until the rule
+// follows, which is the one cmd/internal/conditions pins. A test holds
+// the two to each other, so a bump of the recipe's pin fails until the rule
 // below has been read against the new release.
 const gobcoRelease = "v1.3.4"
 
 // sourcesListing is the package the go command builds for one directory:
-// where it is, and its non-test files, which scripts/coverage-conditions.sh
+// where it is, and its non-test files, which cmd/internal/conditions
 // reads from the same listing as the files gobco instruments (its sources).
 type sourcesListing struct {
 	Dir      string
@@ -40,10 +40,10 @@ type packageConditions struct {
 }
 
 // countPackage counts the conditions gobco would instrument in pkg, in the
-// mode m measures in: it asks the go command, with the environment the script
+// mode m measures in: it asks the go command, with the environment the recipe
 // will run under, for the package's non-test files, and reads each the way
 // gobco does. An error means the count could not be taken, which is never a
-// count of zero: the script is then run, and says itself why it cannot
+// count of zero: the recipe is then run, and says itself why it cannot
 // measure, if it cannot.
 func countPackage(ctx context.Context, m measurer, pkg string) (packageConditions, error) {
 	out, err := m.list(ctx, m.dir, m.env, "list", "-json=Dir,GoFiles,CgoFiles", pkg)
@@ -177,8 +177,8 @@ func inGoFile(fset *token.FileSet, expr ast.Expr) int {
 }
 
 // nothingPattern is the line a record's output holds in place of the
-// script's for a package with no condition to measure in the mode named, and
-// the only line it holds: the script is not run for it. It is the whole line
+// recipe's for a package with no condition to measure in the mode named, and
+// the only line it holds: the recipe is not run for it. It is the whole line
 // nothingLine writes, from its opening words to its closing 0 of 0, so a line
 // cut short or carrying more is not read as one, and the record that holds it
 // is refused as an output nothing writes.
@@ -192,5 +192,5 @@ func nothingLine(pkg, mode string, counted packageConditions) string {
 		files = strings.Join(counted.files, ", ")
 	}
 	return fmt.Sprintf("%s: nothing to measure in %s mode: gobco %s counts no condition in the files the go command builds of %s on %s/%s (%s), so %s was not run, and the package is measured with nothing to measure: 0 of 0\n",
-		toolName, mode, gobcoRelease, pkg, runtime.GOOS, runtime.GOARCH, files, coverageScript)
+		toolName, mode, gobcoRelease, pkg, runtime.GOOS, runtime.GOARCH, files, coverageRecipe)
 }
