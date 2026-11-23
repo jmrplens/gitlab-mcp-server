@@ -233,6 +233,46 @@ jobs:
           git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}.git" 'v*' > "${RUNNER_TEMP}/tags.txt"
           go run ./cmd/release_checks/ order "${RELEASE_TAG}" < "${RUNNER_TEMP}/tags.txt" | tee -a "$GITHUB_OUTPUT"
 
+  # cmd/release_packages, built once from this run's commit and handed to the
+  # npm, pypi and nuget jobs, which hold publishing identities, as an artifact
+  # each checks against the SHA-256 computed here, rather than a Go toolchain
+  # in each of them (issue 1114, items 13 and 17). It imports nothing outside
+  # the standard library and this module, which cmd/audit_supply_chain rule 2
+  # holds it to, and setup-go caches nothing, so what it compiles is the
+  # checkout and the toolchain. A rehearsal builds and checks it the same way.
+  release-tools:
+    name: "🧰 Release tools"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [preflight]
+    permissions:
+      contents: read
+    outputs:
+      release_packages_sha256: ${{ steps.build.outputs.release_packages_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build cmd/release_packages
+        id: build
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o "${RUNNER_TEMP}/tools/release_packages" ./cmd/release_packages
+          echo "release_packages_sha256=$(sha256sum "${RUNNER_TEMP}/tools/release_packages" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools/release_packages
+          if-no-files-found: error
+          retention-days: 1
+
   # The same workflow a maintainer runs by hand, called rather than copied.
   # This job used to be e2e.yml pasted in line for line, so a fix to the
   # harness landed in one file and not the other; now there is one harness
@@ -1632,7 +1672,7 @@ jobs:
     name: "📮 Publish to npm"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [preflight, release]
+    needs: [preflight, release, release-tools]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
@@ -1650,8 +1690,8 @@ jobs:
 
       # This job produces no binaries of its own: it downloads what the release
       # actually published and verifies it against the cosign-signed
-      # checksums.txt before packing anything. build-npm.mjs re-checks each
-      # binary against the same manifest as it copies.
+      # checksums.txt before packing anything. cmd/release_packages re-checks
+      # each binary against the same manifest before it writes any package.
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -1681,10 +1721,27 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
+
       # A published npm version is permanent, so a broken tarball must fail the
       # release here, not after it is irreversibly on the registry.
-      - name: Validate npm packages
-        run: make validate-npm-local NPM_BINARIES=dist
+      - name: Build and validate npm packages
+        run: |
+          set -euo pipefail
+          "${RUNNER_TEMP}/tools/release_packages" npm --binaries dist --version "${RELEASE_TAG#v}"
+          "${RUNNER_TEMP}/tools/release_packages" validate-npm --version "${RELEASE_TAG#v}"
 
       # --no-assemble publishes the tree the previous step validated instead of
       # building an equivalent one. Both builds verify every binary against the
@@ -1730,7 +1787,7 @@ jobs:
     name: "🐍 Publish to PyPI"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [preflight, release]
+    needs: [preflight, release, release-tools]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: ${{ github.event_name == 'workflow_dispatch' && 'release-rehearsal' || 'release' }}
@@ -1759,11 +1816,29 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist
 
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
+
       # One wheel per platform with the native binary in .data/scripts (the
       # uv/ruff model), validated before upload because a published PyPI file
-      # name is burned forever even if the release is deleted.
+      # name is burned forever even if the release is deleted. The install
+      # check drives the runner's python3 venv and pip.
       - name: Build and validate PyPI wheels
-        run: make validate-pypi-local PYPI_BINARIES=dist
+        run: |
+          set -euo pipefail
+          "${RUNNER_TEMP}/tools/release_packages" pypi --binaries dist --version "${RELEASE_TAG#v}"
+          "${RUNNER_TEMP}/tools/release_packages" validate-pypi --version "${RELEASE_TAG#v}"
 
       # Steps of our own rather than pypa/gh-action-pypi-publish, whose
       # generated container action runs an image pypa names by a registry tag,
@@ -1795,7 +1870,7 @@ jobs:
     name: "🟪 Publish to NuGet"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [preflight, release]
+    needs: [preflight, release, release-tools]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       # The SDK's first-use banner and telemetry notice go to stdout, which
@@ -1851,6 +1926,20 @@ jobs:
         with:
           dotnet-version: "10.0.404"
 
+      - name: Take cmd/release_packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-packages-tool
+          path: ${{ runner.temp }}/tools
+
+      - name: Check cmd/release_packages against the digest it was built with
+        env:
+          TOOL_SHA256: ${{ needs.release-tools.outputs.release_packages_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "${TOOL_SHA256}  ${RUNNER_TEMP}/tools/release_packages" | sha256sum -c -
+          chmod 0755 "${RUNNER_TEMP}/tools/release_packages"
+
       # A pointer package plus six runtime-identifier packages, each carrying
       # the native binary as the tool's entry point (the .NET 10 tool layout).
       # Validated before the push because a pushed NuGet version can be
@@ -1858,7 +1947,10 @@ jobs:
       # and executable bit for all six, then a real `dotnet tool install`, a
       # `dnx` run and an MCP handshake for the runner's own platform.
       - name: Build and validate NuGet packages
-        run: make validate-nuget-local NUGET_BINARIES=dist
+        run: |
+          set -euo pipefail
+          "${RUNNER_TEMP}/tools/release_packages" nuget --binaries dist --version "${RELEASE_TAG#v}"
+          "${RUNNER_TEMP}/tools/release_packages" validate-nuget --version "${RELEASE_TAG#v}"
 
       # SLSA build provenance over the seven packages as packed and validated,
       # before anything is pushed, so a failed attestation stops the push the
@@ -2289,6 +2381,16 @@ jobs:
           REHEARSAL_ARCHIVE: ${{ env.REHEARSAL == 'true' && format('{0}/rehearsal/rehearsal-assets.tar', runner.temp) || '' }}
         run: bash scripts/fetch-release-assets.sh "${RELEASE_TAG#v}" dist gitlab-mcp-server-darwin.mcpb gitlab-mcp-server-windows.mcpb gitlab-mcp-server-linux.mcpb
 
+      # The stamp syncs the npm launcher's version and pins through
+      # cmd/release_packages, built in the step below from this checkout of
+      # main rather than taken from another job, so that nothing another job
+      # produced shapes what the deploy key pushes (issue 1114, item 14). No
+      # Actions cache, as in the release job.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
       - name: Commit updated server.json and plugin.json to main
         env:
           # Withheld from a rehearsal: the commit is shown, not pushed, so the
@@ -2334,7 +2436,8 @@ jobs:
           # anything from a dirty tree. It rebuilds the mcpb entries from the
           # bundles, so the first release to run it replaces main's single
           # universal entry with the three.
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" \
+          CGO_ENABLED=0 go build -trimpath -o "${RUNNER_TEMP}/release_packages" ./cmd/release_packages
+          RELEASE_PACKAGES="${RUNNER_TEMP}/release_packages" bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" \
             dist/gitlab-mcp-server-darwin.mcpb,dist/gitlab-mcp-server-windows.mcpb,dist/gitlab-mcp-server-linux.mcpb \
             "${OCI_DIGEST}"
 

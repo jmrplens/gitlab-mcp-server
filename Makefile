@@ -31,7 +31,7 @@
 	gen-action-grants check-action-grants check-action-grants-derivation \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	gen-tool-reference check-tool-reference \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-footprint check-footprint gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb release-packages-tool release-packages-tool-linux gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-footprint check-footprint gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness bench-held bench-sessions \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -1794,64 +1794,86 @@ mcpb:
 		dist/local_windows_amd64/gitlab-mcp-server.exe; \
 	go run ./cmd/release_packages/ mcpb "$$VER"
 
+## The npm, PyPI and NuGet packages are built and validated by
+## cmd/release_packages, built here from this checkout: RELEASE_PACKAGES_BIN
+## for this machine, and RELEASE_PACKAGES_LINUX for Linux on this machine's
+## architecture, which the validation containers mount and run. The release
+## jobs take the same command as an artifact built once per run instead.
+RELEASE_PACKAGES_BIN=dist/tools/release_packages
+RELEASE_PACKAGES_LINUX=dist/tools/linux/release_packages
+
+## release-packages-tool: build cmd/release_packages into RELEASE_PACKAGES_BIN.
+release-packages-tool:
+	go build -o $(RELEASE_PACKAGES_BIN) ./cmd/release_packages
+
+## release-packages-tool-linux: build cmd/release_packages for Linux into
+## RELEASE_PACKAGES_LINUX, statically linked, for the validation containers.
+release-packages-tool-linux:
+	CGO_ENABLED=0 GOOS=linux go build -o $(RELEASE_PACKAGES_LINUX) ./cmd/release_packages
+
 ## gen-npm: assemble the npm distribution (launcher + 6 per-platform packages).
 ## Reads release binaries from a directory of assets named as published
 ## (gitlab-mcp-server-linux-amd64, ...). Version defaults to VERSION.
 ##   make gen-npm NPM_BINARIES=dist
-gen-npm:
-	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
+gen-npm: release-packages-tool
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	node scripts/build-npm.mjs --binaries "$(NPM_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+	$(RELEASE_PACKAGES_BIN) npm --binaries "$(NPM_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
 
 ## sync-npm-version: rewrite npm/gitlab-mcp-server/package.json version + pins to VERSION.
 ## Run by the release version-stamp; safe to run anytime, needs no binaries.
 sync-npm-version:
-	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
-	node scripts/build-npm.mjs --sync-only --version "$$(tr -d '[:space:]' < VERSION)"
+	go run ./cmd/release_packages/ npm --sync-only --version "$$(tr -d '[:space:]' < VERSION)"
 
 ## validate-npm: build the npm packages and validate them inside a clean
 ## node:24 container, so the check never installs anything on the host. Runs
 ## structural checks on all 7 packages plus a real install + MCP handshake for
 ## the container's native platform (linux-x64).
 ##   make validate-npm NPM_BINARIES=dist
-validate-npm:
+validate-npm: release-packages-tool-linux
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-npm-local)"; exit 1; }
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	@VER=$$(tr -d '[:space:]' < VERSION); BINARIES=$$(CDPATH= cd -- "$(NPM_BINARIES)" && pwd) || exit 1; 	docker run --rm 		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" 		-w /work node:24 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	BINARIES=$$(CDPATH= cd -- "$(NPM_BINARIES)" && pwd) || exit 1; \
+	docker run --rm \
+		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
+		-w /work node:24 sh -euc ' \
+			$(RELEASE_PACKAGES_LINUX) npm --binaries /binaries --version '"$$VER"' && \
+			$(RELEASE_PACKAGES_LINUX) validate-npm --version '"$$VER"
 
-## validate-npm-local: same validation without Docker, for the ephemeral CI
-## runner (already disposable). Builds packages from NPM_BINARIES, then validates.
-validate-npm-local:
-	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
+## validate-npm-local: same validation without Docker, for a disposable
+## machine. Builds packages from NPM_BINARIES, then validates.
+validate-npm-local: release-packages-tool
+	@command -v npm >/dev/null || { echo "ERROR: npm is required"; exit 1; }
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	@VER=$$(tr -d '[:space:]' < VERSION); 	node scripts/build-npm.mjs --binaries "$(NPM_BINARIES)" --version "$$VER" && 	node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version "$$VER"
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	$(RELEASE_PACKAGES_BIN) npm --binaries "$(NPM_BINARIES)" --version "$$VER" && \
+	$(RELEASE_PACKAGES_BIN) validate-npm --version "$$VER"
 
 ## publish-npm-dry: assemble and validate the npm publish set without publishing.
-publish-npm-dry:
+publish-npm-dry: release-packages-tool
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-npm: assemble and publish the npm distribution (platform packages, then launcher).
 ## Auth via npm login or NPM_TOKEN. See docs/development/release-process.md.
-publish-npm:
+publish-npm: release-packages-tool
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## gen-pypi: assemble the PyPI wheelhouse (six platform wheels) from release
 ## binaries. The wheels carry the native binary in .data/scripts, the uv/ruff
 ## model: the installer puts it on the scripts path as the command itself.
 ##   make gen-pypi PYPI_BINARIES=dist
-gen-pypi:
-	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+gen-pypi: release-packages-tool
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
-	python3 scripts/build_pypi.py --binaries "$(PYPI_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+	$(RELEASE_PACKAGES_BIN) pypi --binaries "$(PYPI_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
 
 ## validate-pypi: build the wheels and validate them inside a clean
 ## python:3.14-slim container: RECORD hashes, metadata, ownership token,
 ## binary magic and glibc floor for all six, plus a real venv install and MCP
 ## initialize handshake for the container's native platform.
 ##   make validate-pypi PYPI_BINARIES=dist
-validate-pypi:
+validate-pypi: release-packages-tool-linux
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-pypi-local)"; exit 1; }
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
@@ -1859,44 +1881,44 @@ validate-pypi:
 	docker run --rm \
 		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-w /work python:3.14-slim sh -euc ' \
-			python3 scripts/build_pypi.py --binaries /binaries --version '"$$VER"' && \
-			python3 scripts/validate_pypi.py --wheels pypi/dist --version '"$$VER"
+			$(RELEASE_PACKAGES_LINUX) pypi --binaries /binaries --version '"$$VER"' && \
+			$(RELEASE_PACKAGES_LINUX) validate-pypi --version '"$$VER"
 
-## validate-pypi-local: same validation without Docker, for the ephemeral CI
-## runner (already disposable). Builds wheels from PYPI_BINARIES, then validates.
-validate-pypi-local:
-	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+## validate-pypi-local: same validation without Docker, for a disposable
+## machine with python3, whose venv and pip the install check drives. Builds
+## wheels from PYPI_BINARIES, then validates.
+validate-pypi-local: release-packages-tool
+	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required for the install check"; exit 1; }
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
-	python3 scripts/build_pypi.py --binaries "$(PYPI_BINARIES)" --version "$$VER" && \
-	python3 scripts/validate_pypi.py --wheels pypi/dist --version "$$VER"
+	$(RELEASE_PACKAGES_BIN) pypi --binaries "$(PYPI_BINARIES)" --version "$$VER" && \
+	$(RELEASE_PACKAGES_BIN) validate-pypi --version "$$VER"
 
 ## publish-pypi-dry: assemble and validate the PyPI wheelhouse, install twine
 ## from the hash-pinned .github/requirements/pypi-publish.txt and run its
 ## check, without uploading.
-publish-pypi-dry:
+publish-pypi-dry: release-packages-tool
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-pypi: assemble, validate and publish the PyPI wheels out of band.
 ## Auth via PYPI_TOKEN, and no attestation is made. The release workflow runs
 ## the same script with --trusted-publishing, which mints the upload token
 ## from the job's identity and attests each wheel; this target is for
 ## bootstrap/manual publishes.
-publish-pypi:
+publish-pypi: release-packages-tool
 	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## gen-nuget: assemble the NuGet distribution (a pointer package plus six
 ## runtime-identifier packages) from release binaries. The .NET 10 tool
 ## layout: the pointer names a package per runtime identifier, each of which
-## carries the native binary as the command's entry point. Packs with the
-## standard library, so no .NET SDK is needed here.
+## carries the native binary as the command's entry point. No .NET SDK is
+## needed to pack.
 ##   make gen-nuget NUGET_BINARIES=dist
-gen-nuget:
-	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+gen-nuget: release-packages-tool
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
-	python3 scripts/build_nuget.py --binaries "$(NUGET_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+	$(RELEASE_PACKAGES_BIN) nuget --binaries "$(NUGET_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
 
 ## validate-nuget: build the packages and validate them inside a clean .NET
 ## SDK container: OPC layout, nuspec metadata, tool manifests, ownership
@@ -1907,7 +1929,7 @@ gen-nuget:
 ## digest deliberately.
 ##   make validate-nuget NUGET_BINARIES=dist
 NUGET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.404@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb
-validate-nuget:
+validate-nuget: release-packages-tool-linux
 	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-nuget-local)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
@@ -1916,33 +1938,31 @@ validate-nuget:
 		-v "$(CURDIR):/work" -v "$$BINARIES:/binaries:ro" \
 		-e DOTNET_NOLOGO=1 -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
 		-w /work $(NUGET_SDK_IMAGE) sh -euc ' \
-			apt-get -qq update && apt-get -qq install -y --no-install-recommends python3 >/dev/null && \
-			python3 scripts/build_nuget.py --binaries /binaries --version '"$$VER"' && \
-			python3 scripts/validate_nuget.py --packages nuget/dist --version '"$$VER"
+			$(RELEASE_PACKAGES_LINUX) nuget --binaries /binaries --version '"$$VER"' && \
+			$(RELEASE_PACKAGES_LINUX) validate-nuget --version '"$$VER"
 
-## validate-nuget-local: same validation without Docker, for the ephemeral CI
-## runner (already disposable; the .NET 10 SDK must be on PATH). Builds the
-## packages from NUGET_BINARIES, then validates.
-validate-nuget-local:
-	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+## validate-nuget-local: same validation without Docker, for a disposable
+## machine (the .NET 10 SDK must be on PATH). Builds the packages from
+## NUGET_BINARIES, then validates.
+validate-nuget-local: release-packages-tool
 	@command -v dotnet >/dev/null || { echo "ERROR: the .NET 10 SDK is required (or use validate-nuget)"; exit 1; }
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
-	python3 scripts/build_nuget.py --binaries "$(NUGET_BINARIES)" --version "$$VER" && \
-	python3 scripts/validate_nuget.py --packages nuget/dist --version "$$VER"
+	$(RELEASE_PACKAGES_BIN) nuget --binaries "$(NUGET_BINARIES)" --version "$$VER" && \
+	$(RELEASE_PACKAGES_BIN) validate-nuget --version "$$VER"
 
 ## publish-nuget-dry: assemble and validate the NuGet packages without pushing.
-publish-nuget-dry:
+publish-nuget-dry: release-packages-tool
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
 
 ## publish-nuget: assemble, validate and push the NuGet packages out of band.
 ## Auth via NUGET_API_KEY (an API key from nuget.org). The release workflow
 ## pushes under the nuget.org trusted publishing policy instead, with a
 ## one-hour key minted from its OIDC identity; this is the only tokened path.
-publish-nuget:
+publish-nuget: release-packages-tool
 	@test -n "$(NUGET_BINARIES)" || { echo "ERROR: set NUGET_BINARIES=<dir of release binaries>"; exit 1; }
-	scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
+	RELEASE_PACKAGES=$(RELEASE_PACKAGES_BIN) scripts/publish-nuget.sh "$(NUGET_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## publish-lobehub: push the current version of the existing LobeHub listing.
 ## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh

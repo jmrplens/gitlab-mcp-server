@@ -11,6 +11,13 @@
 // testdata/platform_jq.json and testdata/server_json_packages.json, taken at
 // fe8773534, the revision of main this port started from).
 //
+// It also builds and validates the npm, PyPI and NuGet packages a release
+// publishes (npm, pypi, nuget, and validate-npm, validate-pypi and
+// validate-nuget), item 13 of issue 1114: scripts/build-npm.mjs,
+// scripts/build_pypi.py, scripts/build_nuget.py and their three validators,
+// moved into Go, the builders held by their tests to a record of what the
+// scripts packed (testdata/build_packages.json, taken at 1c26b3b04).
+//
 // # mcpb
 //
 // One run builds four bundles from the release binaries GoReleaser produced,
@@ -126,18 +133,86 @@
 // the script ended the whole run under set -e with no line naming it. And
 // the warning about a mutable release carries no em dash.
 //
+// # npm, pypi and nuget
+//
+// Each builds one registry's packages from a directory of release assets
+// under their published names (gitlab-mcp-server-linux-amd64, ...), the
+// release's notices and its checksums.txt, which cosign signed at build time.
+// Every asset is held to the digest checksums.txt names, through
+// cmd/internal/releaseassets, before any package is written, so a refused run
+// leaves nothing behind; a dist without checksums.txt is refused unless
+// --allow-unverified is given, and never is in a release. What was verified
+// is recorded beside the packages, in verified-binaries.json, for the
+// validator to hold the packed bytes to. The six platforms meet their four
+// vocabularies (GOOS and GOARCH, Node's platform and architecture, the wheel
+// tag, the runtime identifier) in one table, releasePlatforms.
+//
+//	npm     npm/packages/<platform>/ for the six platform packages, the
+//	        launcher's version and pins synced in npm/gitlab-mcp-server, and
+//	        the license texts copied in beside it; --sync-only syncs alone
+//	pypi    pypi/dist/, one wheel per platform with the binary in
+//	        .data/scripts (the uv and ruff model) and PEP 639 license metadata
+//	nuget   nuget/dist/, a pointer package and six runtime-identifier
+//	        packages in the .NET 10 tool layout, with .mcp/server.json derived
+//	        from server.json
+//
+// Every package is equal to the script's file for file and entry for entry.
+// The wheels and the NuGet packages are zips whose entries are regular Unix
+// files at the zip epoch, deflated, with their sizes in the local header and
+// no data descriptor, which nuget.org's repository signature needs to be
+// removable byte for byte; the deflated bytes are compress/flate's, so the
+// archives differ from the ones Python's zipfile wrote. On purpose, too: no
+// message carries an em dash, a missing flag is a usage error, an
+// unreadable line in checksums.txt is refused rather than skipped, and the
+// wheels name this command as their generator.
+//
+// # validate-npm, validate-pypi and validate-nuget
+//
+// Each checks what a builder wrote before the irreversible publish: a
+// published npm version is permanent, a PyPI file name is burned forever, and
+// a NuGet version can be unlisted but never replaced. Every problem is
+// collected and named, rather than the first ending the run. The structural
+// checks open what ships (the tarball npm pack makes, the wheels, the
+// packages): the exact file set, the license texts (the repository's LICENSE
+// byte for byte, the notices by the generator's header and the recorded
+// digest), every binary's execute bit, size floor, format and machine as
+// debug/elf, debug/macho or debug/pe read them, and its recorded digest, which
+// is what tells a wrong but plausible file apart for the five platforms
+// nothing runs. Each registry adds its own: package.json gates and pins; the
+// wheel's RECORD, METADATA, license declaration, Project-URLs, regular-file
+// modes and glibc floor, and twine check --strict when twine is installed;
+// the OPC skeleton, nuspec, tool settings, ownership token, .mcp/server.json
+// and the layout nuget.org's signature leaves intact. Without --no-install
+// each then installs the package for the host the way a user does (npm
+// install, a virtual environment's pip, dotnet tool install and dnx), drives
+// an MCP initialize handshake that must answer with the version over pure
+// JSON-RPC, and on Linux checks that a SIGTERM to npx alone ends the server
+// in stdio and HTTP mode. The validators shell out to npm, pip and dotnet for
+// that tier, which is what they check.
+//
 // # The standard library and this module only
 //
 // The mcpb subcommand runs in release.yml's release job, which holds the
-// release's signing identity, so rule 2 of cmd/audit_supply_chain allows the
-// command the standard library and this module and nothing else. That is why
-// it carries its own ordered JSON reader and printer rather than a library.
+// release's signing identity, and the package subcommands run in the npm,
+// pypi and nuget jobs, which hold the registries' publishing identities, so
+// rule 2 of cmd/audit_supply_chain allows the command the standard library
+// and this module and nothing else. That is why it carries its own ordered
+// JSON reader and printer rather than a library. The package jobs take the
+// command as an artifact built once per run and checked against its
+// SHA-256.
 //
 // # Usage
 //
 //	go run ./cmd/release_packages/ mcpb 3.4.0 [dist]
 //	go run ./cmd/release_packages/ mcpb-manifest linux [mcpb/manifest.json]
 //	go run ./cmd/release_packages/ server-json-packages [server.json]
+//	go run ./cmd/release_packages/ npm --binaries dist --version 3.4.0
+//	go run ./cmd/release_packages/ npm --sync-only --version 3.4.0
+//	go run ./cmd/release_packages/ pypi --binaries dist --version 3.4.0
+//	go run ./cmd/release_packages/ nuget --binaries dist --version 3.4.0
+//	go run ./cmd/release_packages/ validate-npm --version 3.4.0
+//	go run ./cmd/release_packages/ validate-pypi --version 3.4.0
+//	go run ./cmd/release_packages/ validate-nuget --version 3.4.0
 //
 // Each runs from the repository root and exits 0 when everything passes, 1
 // when something does not or could not be checked, and 2 for arguments it

@@ -85,8 +85,18 @@ assert_assembled() {
 }
 
 if [ "$ASSEMBLE" -eq 1 ]; then
+  # The packages are built by cmd/release_packages, at the path
+  # RELEASE_PACKAGES names (the make targets build it and set it). It reads
+  # the repository from its working directory, so it runs in ROOT, with the
+  # two paths it is given made absolute first.
+  if [ -z "${RELEASE_PACKAGES:-}" ]; then
+    echo "ERROR: set RELEASE_PACKAGES to a build of cmd/release_packages, as the Makefile's publish targets do, or pass --no-assemble" >&2
+    exit 1
+  fi
+  TOOL="$(cd "$(dirname "$RELEASE_PACKAGES")" && pwd)/$(basename "$RELEASE_PACKAGES")"
+  BINARIES_ABS="$(cd "$BINARIES_DIR" && pwd)"
   echo "Assembling npm distribution for v$VERSION"
-  node "$ROOT/scripts/build-npm.mjs" --binaries "$BINARIES_DIR" --version "$VERSION" --out "$OUT"
+  (cd "$ROOT" && "$TOOL" npm --binaries "$BINARIES_ABS" --version "$VERSION" --out "$OUT")
 else
   echo "Publishing the npm distribution already assembled in $OUT"
   assert_assembled

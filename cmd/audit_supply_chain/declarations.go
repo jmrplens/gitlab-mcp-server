@@ -46,12 +46,7 @@ type declaration struct {
 // reference that resolves to no file is never declared either, since there is
 // nothing behind it to excuse. An entry that excuses nothing is reported, on
 // the terms every declaration table in this repository is held to.
-var declaredRunTimeCode = map[string]declaration{
-	"scripts/validate-npm.mjs npx": {
-		category: categoryHeldOffline,
-		reason:   "stopUnderNpx starts the launcher the way a client configured with npx does, to prove a SIGTERM sent to npx alone ends the server, and passes --offline in the arguments it spawns npx with, so npx resolves the package from the project the job installed from the tarballs it just packed and cannot fetch a published one; serverUnder then holds the process to that project's binary. The other matches are comments and the child process variable named after the tool",
-	},
-}
+var declaredRunTimeCode = map[string]declaration{}
 
 // categoryGeneratedAtRunTime is the one reason a uses: of a directory that
 // holds no action may be accepted: the action that names it writes that
@@ -248,9 +243,6 @@ var declaredScripts = map[string]scriptDeclaration{
 		category: scriptDistributionEntryPoint,
 		reason:   "the npm package's bin, which npx runs with Node to choose the platform package's binary",
 	},
-	"scripts/build-npm.mjs":                         {category: scriptPortPending, item: 13},
-	"scripts/build_nuget.py":                        {category: scriptPortPending, item: 13},
-	"scripts/build_pypi.py":                         {category: scriptPortPending, item: 13},
 	"scripts/check-spec-conditions.sh":              {category: scriptPortPending, item: 4},
 	"scripts/check_spec_conditions_sh_test.py":      {category: scriptPortPending, item: 4},
 	"scripts/coverage-conditions.sh":                {category: scriptPortPending, item: 4},
@@ -268,8 +260,8 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/mcpb_launch_sh_test.py":                {category: scriptPortPending, item: 15},
 	"scripts/mcpb_manifest_test.py":                 {category: scriptPortPending, item: 15},
 	"scripts/npm_cli_js_test.py":                    {category: scriptPortPending, item: 15},
-	"scripts/packaging_checksums_test.py":           {category: scriptPortPending, item: 13},
 	"scripts/publish_npm_sh_test.py":                {category: scriptPortPending, item: 15},
+	"scripts/publish_nuget_sh_test.py":              {category: scriptPortPending, item: 15},
 	"scripts/publish_pypi_sh_test.py":               {category: scriptPortPending, item: 15},
 	"scripts/site_check_i18n_code_test.py":          {category: scriptPortPending, item: 15},
 	"scripts/site_normalize_html_test.py":           {category: scriptPortPending, item: 15},
@@ -280,12 +272,6 @@ var declaredScripts = map[string]scriptDeclaration{
 	"scripts/update-server-json-sha.sh":             {category: scriptPortPending, item: 14},
 	"scripts/update_homebrew_tap_sh_test.py":        {category: scriptPortPending, item: 14},
 	"scripts/update_server_json_sha_sh_test.py":     {category: scriptPortPending, item: 14},
-	"scripts/validate-npm.mjs":                      {category: scriptPortPending, item: 13},
-	"scripts/validate_npm_test.py":                  {category: scriptPortPending, item: 13},
-	"scripts/validate_nuget.py":                     {category: scriptPortPending, item: 13},
-	"scripts/validate_nuget_test.py":                {category: scriptPortPending, item: 13},
-	"scripts/validate_pypi.py":                      {category: scriptPortPending, item: 13},
-	"scripts/validate_pypi_test.py":                 {category: scriptPortPending, item: 13},
 	"scripts/verify_published_packages.py":          {category: scriptPortPending, item: 13},
 	"scripts/verify_published_packages_test.py":     {category: scriptPortPending, item: 13},
 	"scripts/ensure-playwright-chromium.sh": {
@@ -306,15 +292,15 @@ var declaredScripts = map[string]scriptDeclaration{
 	},
 	"scripts/publish-npm.sh": {
 		category: scriptJobGlue,
-		reason:   "wraps npm publish in release.yml's npm job and make publish-npm; item 13 rewires it to the package command",
+		reason:   "wraps npm publish in release.yml's npm job and make publish-npm, assembling with cmd/release_packages when it is not handed a validated tree",
 	},
 	"scripts/publish-nuget.sh": {
 		category: scriptJobGlue,
-		reason:   "wraps dotnet nuget push in release.yml's nuget job and make publish-nuget; item 13 rewires it to the package command",
+		reason:   "wraps dotnet nuget push in release.yml's nuget job and make publish-nuget, assembling and validating with cmd/release_packages when it is not handed a validated tree",
 	},
 	"scripts/publish-pypi.sh": {
 		category: scriptJobGlue,
-		reason:   "wraps twine and pypi-attestations, installed from the hash-pinned .github/requirements/pypi-publish.txt, in release.yml's pypi job, which mints the upload token from the job's identity, and in make publish-pypi; item 13 rewires it to the package command",
+		reason:   "wraps twine and pypi-attestations, installed from the hash-pinned .github/requirements/pypi-publish.txt, in release.yml's pypi job, which mints the upload token from the job's identity, and in make publish-pypi, assembling and validating with cmd/release_packages when it is not handed a validated wheelhouse",
 	},
 	"scripts/smoke-test-image.sh": {
 		category: scriptJobGlue,

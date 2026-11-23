@@ -45,10 +45,10 @@ Run with:
     python3 -m unittest discover -s scripts -p 'publish_pypi_sh_test.py'
 """
 
-import ast
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -129,6 +129,21 @@ if ROLE == "dirname":
     print(os.path.dirname(ARGS[-1].rstrip("/") or "/") or ".")
     sys.exit(0)
 
+if ROLE == "release_packages":
+    # cmd/release_packages: pypi writes the six wheels, validate-pypi passes
+    # unless the case says otherwise.
+    if ARGS[0] == "pypi":
+        out = ARGS[ARGS.index("--out") + 1]
+        version = ARGS[ARGS.index("--version") + 1]
+        os.makedirs(out, exist_ok=True)
+        for tag in {tags!r}:
+            with open(os.path.join(out, "{dist}-" + version + "-py3-none-" + tag + ".whl"), "wb") as fh:
+                fh.write(b"a wheel")
+        sys.exit(0)
+    if ARGS[0] == "validate-pypi":
+        sys.exit(int(os.environ.get("STANDIN_VALIDATE_EXIT", "0")))
+    sys.exit("stand-in release_packages: unexpected " + " ".join(ARGS))
+
 if ROLE == "python3":
     if ARGS[:2] == ["-m", "venv"]:
         os.makedirs(os.path.join(ARGS[2], "bin"))
@@ -180,26 +195,6 @@ if ROLE == "curl":
 sys.exit("stand-in: unknown role " + ROLE)
 '''
 
-BUILD = """import argparse
-import os
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--binaries", required=True)
-parser.add_argument("--version", required=True)
-parser.add_argument("--out", required=True)
-args = parser.parse_args()
-os.makedirs(args.out, exist_ok=True)
-for tag in {tags!r}:
-    with open(os.path.join(args.out, "{dist}-" + args.version + "-py3-none-" + tag + ".whl"), "wb") as fh:
-        fh.write(b"a wheel")
-"""
-
-VALIDATE = """import os
-import sys
-
-sys.exit(int(os.environ.get("STANDIN_VALIDATE_EXIT", "0")))
-"""
-
 # What the job's environment may carry that the script reads, cleared from
 # every run so that a case passes on a runner whose own job sets one.
 INHERITED = ("GITHUB_ACTIONS", "ACTIONS_ID_TOKEN_REQUEST_URL", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "PYPI_TOKEN",
@@ -219,10 +214,7 @@ class PublishPypiTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.work, True)
         os.makedirs(os.path.join(self.work, "scripts"))
         shutil.copy(SCRIPT, os.path.join(self.work, "scripts", "publish-pypi.sh"))
-        with open(os.path.join(self.work, "scripts", "build_pypi.py"), "w", encoding="utf-8") as fh:
-            fh.write(BUILD.format(tags=TAGS, dist=DIST))
-        with open(os.path.join(self.work, "scripts", "validate_pypi.py"), "w", encoding="utf-8") as fh:
-            fh.write(VALIDATE)
+        os.makedirs(os.path.join(self.work, "dist"))
         self.requirements = os.path.join(self.work, ".github", "requirements", "pypi-publish.txt")
         os.makedirs(os.path.dirname(self.requirements))
         shutil.copy(REQUIREMENTS, self.requirements)
@@ -230,8 +222,8 @@ class PublishPypiTest(unittest.TestCase):
         bin_dir = os.path.join(self.work, "bin")
         os.makedirs(bin_dir)
         program = STANDIN.format(python=sys.executable, identity=IDENTITY, request_token=REQUEST_TOKEN,
-                                 oidc_token=OIDC_TOKEN, minted=MINTED)
-        for role in ("python3", "curl", "dirname"):
+                                 oidc_token=OIDC_TOKEN, minted=MINTED, tags=TAGS, dist=DIST)
+        for role in ("python3", "curl", "dirname", "release_packages"):
             path = os.path.join(bin_dir, role)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(program)
@@ -241,7 +233,7 @@ class PublishPypiTest(unittest.TestCase):
         self.calls_log = os.path.join(self.work, "calls.jsonl")
         self.env = {name: value for name, value in os.environ.items() if name not in INHERITED}
         self.env.update(PATH=bin_dir + os.pathsep + os.environ.get("PATH", ""), PYPI_CALLS=self.calls_log,
-                        TMPDIR=temporary)
+                        TMPDIR=temporary, RELEASE_PACKAGES=os.path.join(bin_dir, "release_packages"))
 
     def write_wheels(self, version=VERSION, extra=()):
         os.makedirs(self.wheelhouse, exist_ok=True)
@@ -292,6 +284,8 @@ class PublishPypiTest(unittest.TestCase):
             return " ".join(argv[1:3])
         if call["tool"] == "dirname":
             return "dirname"
+        if call["tool"] == "release_packages":
+            return "release_packages " + argv[0]
         if argv[:1] == ["-c"]:
             return "python3 -c"
         return "python3 " + (" ".join(argv[:2]) if argv[:1] == ["-m"] else os.path.basename(argv[0]))
@@ -529,11 +523,18 @@ class PublishPypiTest(unittest.TestCase):
     def test_without_no_assemble_the_wheelhouse_is_built_and_validated_first(self):
         result = self.run_script("--dry-run")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.steps(), ["python3 build_pypi.py", "python3 validate_pypi.py", "python3 -m venv",
-                                        "pip install", "twine check"])
+        self.assertEqual(self.steps(), ["release_packages pypi", "release_packages validate-pypi",
+                                        "python3 -m venv", "pip install", "twine check"])
         build, validate = self.non_json_calls()[:2]
-        self.assertEqual(build["argv"][1:], ["--binaries", "dist", "--version", VERSION, "--out", self.wheelhouse])
+        self.assertEqual(build["argv"][1:], ["--binaries", os.path.join(self.work, "dist"), "--version", VERSION,
+                                             "--out", self.wheelhouse])
         self.assertEqual(validate["argv"][1:], ["--wheels", self.wheelhouse, "--version", VERSION])
+
+    def test_without_no_assemble_and_without_the_tool_nothing_runs(self):
+        result = self.run_script("--dry-run", env={"RELEASE_PACKAGES": ""})
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("set RELEASE_PACKAGES to a build of cmd/release_packages", result.stderr)
+        self.assertEqual(self.non_json_calls(), [])
 
     def test_a_wheelhouse_that_fails_validation_installs_nothing(self):
         result = self.run_script("--dry-run", env={"STANDIN_VALIDATE_EXIT": "1"})
@@ -598,11 +599,9 @@ class PublishPypiTest(unittest.TestCase):
                 self.assertIn(f"holds no wheel {os.path.basename(wheel)} as a regular file", result.stderr)
                 self.assertEqual(self.calls(), [])
 
-    def test_the_platform_tags_are_the_six_validate_pypi_requires(self):
-        with open(os.path.join(ROOT, "scripts", "validate_pypi.py"), encoding="utf-8") as fh:
-            tree = ast.parse(fh.read())
-        required = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
-                        and any(getattr(target, "id", None) == "EXPECTED_TAGS" for target in node.targets))
+    def test_the_platform_tags_are_the_six_release_packages_builds(self):
+        with open(os.path.join(ROOT, "cmd", "release_packages", "packages.go"), encoding="utf-8") as fh:
+            required = re.findall(r'wheelTag: "([^"]+)"', fh.read())
         self.assertEqual(sorted(TAGS), sorted(required))
 
     def test_an_unknown_option_is_refused(self):

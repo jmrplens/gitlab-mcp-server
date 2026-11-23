@@ -155,12 +155,12 @@ test/e2e/.bitbucket-admin-pass
 .playwright-mcp/
 
 # Generated npm per-platform packages: each carries a release binary and is
-# assembled at publish time by scripts/build-npm.mjs. The launcher package
+# assembled at publish time by cmd/release_packages. The launcher package
 # under npm/gitlab-mcp-server/ is checked in; the built distribution is not.
 /npm/packages/
 /npm/**/node_modules/
 /npm/**/*.tgz
-# The launcher's licence texts are copied in by scripts/build-npm.mjs at
+# The launcher's licence texts are copied in by cmd/release_packages at
 # assembly time, so the repository holds each text once; the third-party
 # notices are generated with the release and held in no commit at all.
 /npm/gitlab-mcp-server/LICENSE
@@ -179,10 +179,10 @@ test/e2e/.bitbucket-admin-pass
 # than committed.
 /bench/
 
-# PyPI wheelhouse assembled by scripts/build_pypi.py (generated per release)
+# PyPI wheelhouse assembled by cmd/release_packages (generated per release)
 /pypi/dist/
 
-# NuGet packages assembled by scripts/build_nuget.py (generated per release)
+# NuGet packages assembled by cmd/release_packages (generated per release)
 /nuget/dist/
 
 # Python bytecode. Committed bytecode is code nobody reviews that the
