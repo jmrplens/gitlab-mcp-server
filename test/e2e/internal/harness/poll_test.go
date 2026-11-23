@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -240,33 +241,41 @@ func TestRetry_NilOperation_IsRefused(t *testing.T) {
 // TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay
 // checks that a Pace's Wait replaces the delay that grows by baseDelay.
 //
-// The base delay is an hour and the context ends in a minute, so a retry
-// that fell back to the growing delay would be cancelled and the test would
-// see the cancellation; a retry that honors the millisecond the operation
-// named reaches the third attempt and its success. Two refusals are made so
-// the second wait is the named one too rather than a multiple of it.
+// It runs under synctest, so the fake clock measures each wait exactly: the
+// operation records when every attempt starts, and the gap before the second
+// and the third must be the 65 seconds it named. A retry that skipped the
+// wait would show a gap of zero, one that fell back to the growing delay an
+// hour or two, and one that scaled the named wait by the attempt 130 seconds
+// before the third. Two refusals are made so the second wait is checked too.
 func TestRetryPaced_FailureNamingAWait_WaitsThatLongInsteadOfTheGrowingDelay(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	attempts := 0
-	result, err := RetryPaced(ctx, t, "paced retry test", 3, time.Hour,
-		func(int) (int, Pace, error) {
-			attempts++
-			if attempts < 3 {
-				return 0, Pace{Retry: true, Reason: "rate limited", Wait: time.Millisecond}, errors.New("429")
+	synctest.Test(t, func(t *testing.T) {
+		const named = 65 * time.Second
+		start := time.Now()
+		var started []time.Duration
+		result, err := RetryPaced(context.Background(), t, "paced retry test", 3, time.Hour,
+			func(int) (int, Pace, error) {
+				started = append(started, time.Since(start))
+				if len(started) < 3 {
+					return 0, Pace{Retry: true, Reason: "rate limited", Wait: named}, errors.New("429")
+				}
+				return 42, Pace{}, nil
+			})
+		if err != nil {
+			t.Fatalf("RetryPaced() error = %v, want nil after waiting the named wait twice", err)
+		}
+		if result != 42 {
+			t.Fatalf("result = %d, want 42", result)
+		}
+		want := []time.Duration{0, named, 2 * named}
+		if len(started) != len(want) {
+			t.Fatalf("attempts = %d, want %d", len(started), len(want))
+		}
+		for i := range want {
+			if started[i] != want[i] {
+				t.Errorf("attempt %d started at %s, want %s (every wait the named %s)", i+1, started[i], want[i], named)
 			}
-			return 42, Pace{}, nil
-		})
-	if err != nil {
-		t.Fatalf("RetryPaced() error = %v, want nil after waiting the named millisecond twice", err)
-	}
-	if result != 42 {
-		t.Fatalf("result = %d, want 42", result)
-	}
-	if attempts != 3 {
-		t.Fatalf("attempts = %d, want 3", attempts)
-	}
+		}
+	})
 }
 
 // TestRetryPaced_PermanentFailure_StopsAtOnceWhateverTheWait checks that a
