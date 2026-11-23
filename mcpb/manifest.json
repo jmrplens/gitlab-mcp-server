@@ -109,7 +109,7 @@
     "gitlab_tier": {
       "type": "string",
       "title": "GitLab tier",
-      "description": "Force the licensing tier (\"free\", \"premium\" or \"ultimate\") and skip detection. Leave empty to detect it from the instance license, then from the plans of the namespaces your token administers, then, on GitLab.com, from the top-level groups your token is a member of, falling back to free.",
+      "description": "Force the licensing tier (\"free\", \"premium\" or \"ultimate\") and skip detection. Leave empty to detect it from the instance plan (GitLab 19.6 and later), then from the instance license, then from the plans of the namespaces your token administers, then from the groups your token is a member of (on GitLab.com, and on Enterprise Edition from 18.11), falling back to free.",
       "default": "",
       "required": false
     },

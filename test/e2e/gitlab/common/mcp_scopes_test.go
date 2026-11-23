@@ -52,15 +52,19 @@ const (
 // The session runs in the default mode: the narrowing is the credential's and
 // never a protective mode.
 //
-// The session's tier is Free on every runtime, licensed ones included: the
-// server detects its tier from the license endpoint with the token it was
-// started with, and that endpoint answers administrators only. The first
-// licensed run of this test found that, when the harness expected the run's
-// tier for the session and the server had registered no licensed group.
+// The session's tier is the run's on GitLab 19.6 or later and Free before it.
+// From 19.6 the instance reports its plan to every token that may read the
+// metadata, read_api included (issue 1491), so a non-administrator detects
+// the license's tier. Before 19.6 the license endpoint answers administrators
+// only and this user is a member of no group the membership step could read,
+// so the session resolves Free on every runtime, licensed ones included; the
+// first licensed run of this test found that, when the harness expected the
+// run's tier for the session and the server had registered no licensed group.
 //
 // Replaces: TestScopeFilter_NonAdminToken
 func TestScope_ReadAPIToken_IsServedWhatReadAPIReaches(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
+	wantTier := nonAdministratorTier(e)
 
 	harness.SurfacesWith(e, func(e *harness.Env) fixture.Token {
 		user := fixture.NewUser(e, "scope")
@@ -74,8 +78,8 @@ func TestScope_ReadAPIToken_IsServedWhatReadAPIReaches(t *testing.T) {
 		if !s.ReadAPIOnly() {
 			e.T.Errorf("a %s session on a read_api token is not recorded as narrowed to what read_api reaches", surface)
 		}
-		if got := s.Tier(); got != edition.Free {
-			e.T.Errorf("a %s session on a token that cannot read the license detected tier %s, want %s", surface, got, edition.Free)
+		if got := s.Tier(); got != wantTier {
+			e.T.Errorf("a %s session on a non-administrator's token detected tier %s, want %s", surface, got, wantTier)
 		}
 
 		me := harness.Do[users.Output](s, actionUserCurrent, nil)
@@ -167,4 +171,16 @@ func TestScope_AdminModeToken_IsServedTheAdminGroup(t *testing.T) {
 			e.T.Errorf("metadata enterprise = %t, want %t", out.Enterprise, rt.Enterprise)
 		}
 	})
+}
+
+// nonAdministratorTier is the tier a session started on the token of a user
+// who administers nothing and is a member of no group detects on this run's
+// instance: the run's tier from GitLab 19.6 on, where the instance reports
+// its plan to every token that may read the metadata (issue 1491), and Free
+// before it, where only an administrator may read the license.
+func nonAdministratorTier(e *harness.Env) edition.Tier {
+	if e.GitLabAtLeast(19, 6) {
+		return e.Runtime().Tier
+	}
+	return edition.Free
 }

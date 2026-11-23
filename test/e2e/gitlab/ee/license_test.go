@@ -107,3 +107,25 @@ func TestLicense_InstalledLicenseMatchesTier(t *testing.T) {
 		}
 	})
 }
+
+// TestLicense_NonAdministratorToken_DetectsTheLicensesTier is the case issue
+// 899 recorded and issue 1491 settles: a read_api token of a user who is not
+// an administrator, and is a member of no group, detects the tier the
+// instance is licensed for. GET /license answers administrators only, so
+// before GitLab 19.6 such a token resolved Free on a licensed instance; from
+// 19.6 the instance plan the version answer carries tells every token that may
+// read the metadata, read_api included.
+func TestLicense_NonAdministratorToken_DetectsTheLicensesTier(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.NeedAdmin, harness.GitLabAtLeast(19, 6)))
+	want := e.Runtime().Tier
+
+	harness.SurfacesWith(e, func(e *harness.Env) fixture.Token {
+		user := fixture.NewUser(e, "tierplan")
+		return fixture.NewToken(e, user, "read_api")
+	}, func(e *harness.Env, surface harness.Surface, token fixture.Token) {
+		s := e.Session(harness.ServerConfig{Surface: surface, Token: token.Value})
+		if got := s.Tier(); got != want {
+			e.T.Errorf("a %s session on a non-administrator's read_api token detected tier %s, want the license's %s", surface, got, want)
+		}
+	})
+}

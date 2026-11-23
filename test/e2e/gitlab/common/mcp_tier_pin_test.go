@@ -77,33 +77,36 @@ func TestTierPin_ServesTheCatalogOfThePinnedTier(t *testing.T) {
 // a licensed instance and on a Community Edition one alike.
 //
 // The two answers come from different places and have to agree: the harness
-// probes once at bootstrap with the run's own token, and the child reads GET
-// /license for itself at startup. A disagreement would mean the catalog the
+// probes once at bootstrap with the run's own token, and the child detects
+// its tier for itself at startup. A disagreement would mean the catalog the
 // suite expects is not the catalog the binary built, and every tier assertion
 // in this package would be measuring the wrong server.
 //
 // It is asserted wherever the probe's tier is a reading rather than a guess,
-// which is two cases. A license the probe read is one. A Community Edition
-// image is the other: it cannot hold a license, so Free is the only tier it
-// has whatever the token may read, and both the probe and the binary have to
-// say Free. This is the case the unlicensed Docker run is, and it used to be
-// skipped along with the next one, so the CE run held the server's tier to
-// nothing at all.
+// which is two cases. A step that answered for the tier is one
+// (TierConfirmed): from GitLab 19.6 the instance plan, which answers every
+// token that may read the metadata, free included (issue 1491), and before
+// it a license an administrator's token read. A Community Edition image is
+// the other: it cannot hold a license, so Free is the only tier it has
+// whatever the token may read, and both the probe and the binary have to say
+// Free. That is the case the unlicensed Docker run was before 19.6, and it
+// used to be skipped along with the next one, so the CE run held the server's
+// tier to nothing at all.
 //
-// What is left is an Enterprise image whose license the token did not read.
-// That endpoint answers administrators only, so a non-administrator token
-// reads no license and falls back to Free, and so does an administrator's on
-// an image nobody licensed; the harness cannot tell those apart, and comparing
-// the fallback would be comparing two guesses rather than two readings. No
-// Docker run is that case: the licensed one is licensed and the unlicensed one
-// is Community Edition.
+// What is left is an Enterprise image before 19.6 whose license the token did
+// not read. That endpoint answers administrators only, so a non-administrator
+// token reads no license and falls back to Free, and so does an
+// administrator's on an image nobody licensed; the harness cannot tell those
+// apart, and comparing the fallback would be comparing two guesses rather
+// than two readings. From 19.6 the instance plan tells them apart, so the
+// skip is left for releases before it, which no Docker run is.
 func TestTierPin_DetectionAgreesWithTheRuntimeProbe(t *testing.T) {
 	e := harness.New(t)
 	runtime := e.Runtime()
 	want := runtime.Tier
 	switch {
 	case runtime.TierConfirmed:
-		// The license the probe read is the answer the binary must give.
+		// The answer the probe read is the answer the binary must give.
 	case !runtime.Enterprise:
 		if runtime.Tier != edition.Free {
 			t.Errorf("the probe read tier %s on a Community Edition image, which can hold no license", runtime.Tier)

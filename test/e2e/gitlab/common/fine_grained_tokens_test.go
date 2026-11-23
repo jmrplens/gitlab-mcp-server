@@ -191,8 +191,11 @@ func expectStartedOn(e *harness.Env, transport harness.TransportKind, token fixt
 	if got := s.Serves(actionBranchCreate); got == judgement.Calls {
 		e.T.Errorf("over %s the session serves %s = %t, want %t in %s", transport, actionBranchCreate, got, !judgement.Calls, phaseName(judgement))
 	}
-	if got := s.Tier(); got != edition.Free {
-		e.T.Errorf("over %s a token that cannot read the license detected tier %s, want %s", transport, got, edition.Free)
+	// The startup grant holds Metadata: Read, so from GitLab 19.6 the token
+	// reads the instance plan and detects the run's tier (issue 1491); before
+	// it, a token that cannot read the license resolves Free.
+	if want := nonAdministratorTier(e); s.Tier() != want {
+		e.T.Errorf("over %s a non-administrator's token holding Metadata: Read detected tier %s, want %s", transport, s.Tier(), want)
 	}
 }
 
@@ -211,8 +214,10 @@ func phaseName(judgement harness.FineGrainedJudgement) string {
 // TestFineGrained_WithoutMetadataRead_StartsWithTheGrantUnjudged starts a
 // server on a token granted everything at the user boundary it needs and not
 // Metadata: Read: the server cannot read the instance's version, so it does
-// not evaluate the grant (phase A, whatever the release), still detects its
-// tier from the namespaces the user holds, answers as the token's user, and
+// not evaluate the grant (phase A, whatever the release), cannot read the
+// instance plan either and so detects its tier from the namespaces the user
+// holds, Free on every release (the case that proves the fallback from GitLab
+// 19.6 on, issue 1491), answers as the token's user, and
 // withholds what no fine-grained token can reach, saying it could not read the
 // version and what would let it.
 func TestFineGrained_WithoutMetadataRead_StartsWithTheGrantUnjudged(t *testing.T) {

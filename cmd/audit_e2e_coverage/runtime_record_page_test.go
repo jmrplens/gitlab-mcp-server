@@ -129,6 +129,29 @@ func TestRenderRecordPage_EmptyRecord_StillAPage(t *testing.T) {
 	}
 }
 
+// TestRenderRecordPage_TierConfirmed_SaysWhichRunsReadYes verifies that the
+// sentence under the provenance table ties the `ce` half's `yes` on GitLab
+// 19.6 to the runs recorded by the probe that reads the instance plan (issue
+// 1491): a run recorded before it reads `no` on any release, and a page that
+// promised `yes` on 19.6 contradicted such a row drawn right above it.
+func TestRenderRecordPage_TierConfirmed_SaysWhichRunsReadYes(t *testing.T) {
+	page := renderRecordPage(pageFixture(t))
+	cases := []struct {
+		name string
+		want string
+	}{
+		{name: "a run recorded by the probe", want: "so a run recorded by the probe that reads it shows `yes` in the `ce` half"},
+		{name: "a run recorded before it", want: "a run recorded before issue 1491, on any release, shows `no`"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(page, tc.want) {
+				t.Errorf("the provenance sentence does not say %q:\n%s", tc.want, page)
+			}
+		})
+	}
+}
+
 // TestRenderRecordPage_NoCapabilities_DrawsNoCapabilityTable verifies that a
 // runtime measured before the capability cells existed draws its surface
 // table and nothing under it: a header introducing an empty table would read

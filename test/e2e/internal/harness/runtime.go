@@ -99,10 +99,12 @@ type runtimeFacts struct {
 	// true whether or not a license is installed, which is why it is kept
 	// apart from Tier.
 	Enterprise bool
-	// Tier is what the license resolves to, Free when there is none.
+	// Tier is what the tier probe resolved, Free when nothing answered.
 	Tier edition.Tier
-	// TierConfirmed says the tier came from a license rather than from the
-	// fallback, so a report can tell "Free" from "we could not ask".
+	// TierConfirmed says a step of the probe answered for the tier (the
+	// instance plan from GitLab 19.6, the license, a namespace or a group)
+	// rather than the tier being the fallback, so a report can tell "Free"
+	// from "we could not ask".
 	TierConfirmed bool
 	// Admin says the token's user is an instance administrator.
 	Admin bool
@@ -132,12 +134,12 @@ func (f runtimeFacts) editionToken() string {
 	return "community"
 }
 
-// tierDescription says what the tier is and whether a license confirmed it.
+// tierDescription says what the tier is and whether GitLab answered for it.
 func (f runtimeFacts) tierDescription() string {
 	if f.TierConfirmed {
-		return f.Tier.String() + " (license)"
+		return f.Tier.String() + " (answered)"
 	}
-	return f.Tier.String() + " (no license found)"
+	return f.Tier.String() + " (nothing answered)"
 }
 
 // instance is everything the bootstrap resolved: what the run was configured
@@ -192,18 +194,25 @@ var tierRetryPause = 2 * time.Second
 // which a complete run reports as undeclared skips rather than as the probe
 // that caused them.
 func settledTier(ctx context.Context, client *gitlabclient.Client) (edition.Tier, error) {
+	got, err := settledResolution(ctx, client)
+	return got.Tier, err
+}
+
+// settledResolution is [settledTier] with the whole resolution, for the probe,
+// which records whether a step answered for the tier.
+func settledResolution(ctx context.Context, client *gitlabclient.Client) (gitlabclient.TierResolution, error) {
 	for attempt := 1; ; attempt++ {
 		got := client.DetectTier(ctx, ctx)
 		if !got.Provisional {
-			return got.Tier, nil
+			return got, nil
 		}
 		if attempt == tierAttempts {
-			return got.Tier, fmt.Errorf("the tier probe left %s unanswered %d times in a row, and would read %s",
+			return got, fmt.Errorf("the tier probe left %s unanswered %d times in a row, and would read %s",
 				strings.Join(got.Unresolved, ", "), tierAttempts, got.Tier)
 		}
 		select {
 		case <-ctx.Done():
-			return got.Tier, fmt.Errorf("the tier probe left %s unanswered and the time to ask again ran out: %w",
+			return got, fmt.Errorf("the tier probe left %s unanswered and the time to ask again ran out: %w",
 				strings.Join(got.Unresolved, ", "), ctx.Err())
 		case <-time.After(tierRetryPause):
 		}
@@ -223,12 +232,17 @@ func probe(ctx context.Context, client *gitlabclient.Client, url string, skipTLS
 	// image, licensed or not. The harness wants the two facts apart.
 	facts.Enterprise = instanceIsEnterprise(ctx, url, token, skipTLSVerify)
 
-	facts.Tier, err = settledTier(ctx, client)
+	resolution, err := settledResolution(ctx, client)
+	facts.Tier = resolution.Tier
 	if err != nil {
 		return facts, err
 	}
 	client.SetTier(facts.Tier)
-	facts.TierConfirmed = facts.Tier.IsEnterprise()
+	// A tier a step answered for is a reading, Free included: from GitLab
+	// 19.6 the instance plan answers every token that may read the metadata
+	// (issue 1491), so a Community Edition image's free and an unlicensed
+	// Enterprise image's are confirmed, where before only a paid license was.
+	facts.TierConfirmed = resolution.Answered
 
 	user, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {

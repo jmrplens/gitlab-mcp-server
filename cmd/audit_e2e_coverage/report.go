@@ -84,8 +84,9 @@ type runRow struct {
 	Commit string `json:"commit,omitempty"`
 	// GitLabVersion is the version the instance reported.
 	GitLabVersion string `json:"gitlab_version,omitempty"`
-	// TierConfirmed is whether the tier came from the instance license rather
-	// than from a setting, which decides whether the catalog the figures are
+	// TierConfirmed is whether a step of the tier probe answered for the tier
+	// (from GitLab 19.6 the instance plan, free included) rather than the
+	// tier being the fallback, which decides whether the catalog the figures are
 	// divided by is the one the instance would really serve.
 	TierConfirmed bool                    `json:"tier_confirmed"`
 	Fixtures      e2ecalls.FixtureProfile `json:"fixtures"`
