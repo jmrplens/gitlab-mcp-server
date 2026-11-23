@@ -7,7 +7,10 @@
 // deleting the category records that group GitLab security attributes. Handlers
 // validate namespace and category identifiers, optional update fields, and
 // GraphQL mutation responses before returning MCP-friendly output with nested
-// attribute summaries.
+// attribute summaries. The create and the update go through client-go's
+// SecurityCategories service; the delete sends a document of its own, because
+// client-go's DestroySecurityCategory does not select the attributes GitLab
+// deleted with the category.
 //
 // Security categories are GraphQL-backed GitLab security taxonomy objects. This
 // package keeps those mutations and conversions together so meta-tools, dynamic

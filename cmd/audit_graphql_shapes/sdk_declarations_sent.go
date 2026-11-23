@@ -18,11 +18,13 @@ const jointMergeRequest = "gitlab-org/api/client-go!3063 (closed unmerged on 202
 
 // The client-go services whose findings these tables answer.
 var (
-	achievementsService = sdkService("Achievements")
-	scanProfilesService = sdkService("SecurityScanProfiles")
-	terraformService    = sdkService("TerraformStates")
-	savedViewsService   = sdkService("WorkItemSavedViews")
-	workItemsService    = sdkService("WorkItems")
+	achievementsService       = sdkService("Achievements")
+	scanProfilesService       = sdkService("SecurityScanProfiles")
+	securityAttributesService = sdkService("SecurityAttributes")
+	securityCategoriesService = sdkService("SecurityCategories")
+	terraformService          = sdkService("TerraformStates")
+	savedViewsService         = sdkService("WorkItemSavedViews")
+	workItemsService          = sdkService("WorkItems")
 )
 
 // sdkReference is why an object a client-go document names by a field or
@@ -93,6 +95,7 @@ func declaredSDKSent() []sentDeclaration {
 	return slices.Concat(
 		achievementsSDKSent(),
 		scanProfilesSDKSent(),
+		securitySDKSent(),
 		terraformSDKSent(),
 		savedViewsSDKSent(),
 		workItemsSDKSent(),
@@ -125,6 +128,48 @@ func achievementsSDKSent() []sentDeclaration {
 				"creation time; the award and revoke documents select the id until that client-go change)",
 			"the users surface, which gitlab_user publishes"),
 	)
+}
+
+// securitySDKSent answers the security attribute and category services, whose
+// documents the seven mutations other than the category delete send since
+// issue 1784. They carried these four answers when the handlers sent documents
+// of their own selecting the same fields.
+func securitySDKSent() []sentDeclaration {
+	return []sentDeclaration{
+		{
+			Package: securityAttributesService, SchemaType: "SecurityAttributeDestroyPayload", Field: "deletedAttributeGid",
+			Category: categoryRestated,
+			Reason: "The global id of the deleted attribute, which is the id the caller sent: " +
+				"Mutations::Security::Attributes::Destroy finds the attribute by that argument and hands its id back " +
+				"on success, and nil only beside the errors client-go reads. The confirmation already names the " +
+				"attribute by that id.",
+		},
+		{
+			Package: securityAttributesService, SchemaType: "SecurityAttributeProjectUpdatePayload", Field: "project",
+			Category: categoryRestated,
+			Reason: "The whole Project the caller named by project_id, handed back by " +
+				"Mutations::Security::Attributes::ProjectUpdate on success. What the call answers is how many " +
+				"attributes it added and removed, which is published; the project's own fields are the project " +
+				"domain's surface, published by gitlab_project.",
+		},
+		{
+			Package: securityAttributesService, SchemaType: "SecurityCategory", Field: "securityAttributes",
+			Category: categoryNotThisResponse,
+			Reason: "The category is selected so the caller knows which category the created or updated attribute " +
+				"belongs to, and its attribute list is the category's own content: securitycategories publishes it " +
+				"as security_attributes when a category is created or updated. Every attribute this call created " +
+				"or updated is already in the response, and selecting the list would walk back from the category " +
+				"to the attributes the response carries.",
+		},
+		{
+			Package: securityCategoriesService, SchemaType: "SecurityAttribute", Field: "securityCategory",
+			Category: categoryRestated,
+			Reason: "Each attribute in a category's security_attributes belongs to that category, which is the " +
+				"object the response is: SecurityAttribute.securityCategory walks from the child back to the parent " +
+				"the same payload carries, so selecting it would publish the category a second time under each of " +
+				"its attributes.",
+		},
+	}
 }
 
 // scanProfilesSDKSent answers the scan profile service, whose status
