@@ -1,0 +1,3626 @@
+{
+ "note": "every run of scripts/coverage-conditions.sh at 02a41e35d over the module in files, with go run, go install and gobco answered by a stand-in and everything else by the go command",
+ "files": {
+  "internal/plain/doc.go": "// Package plain is a fixture.\npackage plain\n",
+  "internal/plain/plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/plain/plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n",
+  "cmd/tool/main.go": "package main\n\nfunc main() {}\n",
+  "cmd/tool/proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+  "cmd/tool/proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+  "cmd/tool/main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+  "cmd/tool/proc_windows_test.go": "//go:build windows\n\npackage main\n",
+  "cmd/tool/proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n",
+  "cmd/tool/embedded.txt": "embedded\n",
+  "cmd/tool/testdata/fixture.txt": "fixture\n",
+  "internal/release/release.go": "//go:build go1.22\n\npackage release\n\nfunc h(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/release/legacy.go": "// +build linux,integration\n\npackage release\n",
+  "internal/release/platform.go": "//go:build linux && amd64\n\npackage release\n",
+  "internal/release/release_test.go": "package release\n\nimport \"testing\"\n\nfunc TestH(t *testing.T) { h(1) }\n",
+  "internal/unixonly/stream.go": "package unixonly\n\nfunc u(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/unixonly/stream_unix_test.go": "//go:build !windows\n\npackage unixonly\n\nimport \"testing\"\n\nfunc TestU(t *testing.T) { u(1) }\n",
+  "internal/scratch/scratch.go": "package scratch\n\nfunc k() bool { return true }\n",
+  "internal/scratch/scratch_test.go": "package scratch\n",
+  "internal/scratch/_a_draft.go": "package scratch\n\nfunc k() bool { return false }\n",
+  "internal/scratch/.b_backup.go": "package scratch\n\nfunc k() bool { return false }\n",
+  "test/tagged/doc.go": "// Package tagged is a fixture.\npackage tagged\n",
+  "test/tagged/harness.go": "//go:build e2e\n\npackage tagged\n",
+  "test/tagged/harness_test.go": "//go:build e2e\n\npackage tagged\n",
+  "test/tagged/server_race.go": "//go:build e2e && race\n\npackage tagged\n\nfunc s() {}\n",
+  "test/tagged/server_norace.go": "//go:build e2e && !race\n\npackage tagged\n\nfunc s() {}\n",
+  "internal/untested/untested.go": "package untested\n",
+  "internal/untested/untested_windows.go": "package untested\n\nfunc w() {}\n",
+  "internal/winonly/w_windows.go": "package winonly\n\nfunc w(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/winonly/w_windows_test.go": "package winonly\n",
+  "internal/exported/exported.go": "package exported\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/exported/export_test.go": "// export_test.go hands f to the external tests.\npackage exported\n\n// F is f, for the tests.\nvar F = f\n",
+  "internal/exported/norace_test.go": "//go:build !race\n\npackage exported\n\nconst raced = false\n",
+  "internal/exported/internal_test.go": "package exported\n\nimport \"testing\"\n\nfunc TestInternal(t *testing.T) { f(2) }\n",
+  "internal/exported/exported_test.go": "package exported_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/exported\"\n)\n\nfunc TestF(t *testing.T) { exported.F(1) }\n",
+  "internal/unimported/unimported.go": "package unimported\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/unimported/unimported_test.go": "package unimported_test\n\nimport \"testing\"\n\nfunc TestCatalog(t *testing.T) {}\n",
+  "internal/blackbox/blackbox.go": "package blackbox\n\n// B is b.\nfunc B(c int) bool {\n\treturn c == 1\n}\n",
+  "internal/blackbox/blackbox_test.go": "package blackbox_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/blackbox\"\n)\n\nfunc TestB(t *testing.T) { blackbox.B(1) }\n",
+  "docs/guide.md": "guide\n",
+  "docs/dist/kept.md": "a dist below the root is not the build output\n",
+  "server.json": "{}\n",
+  "site/page.md": "page\n",
+  ".claude/settings.json": "{}\n",
+  ".git/HEAD": "ref: refs/heads/main\n",
+  ".claude/worktrees/other/stray.go": "package stray\n",
+  "node_modules/pkg/index.js": "module.exports = 1\n",
+  "site/node_modules/pkg/index.js": "module.exports = 1\n",
+  "dist/gitlab-mcp-server": "binary\n",
+  "go.mod": "module example.com/m\n\ngo 1.27\n"
+ },
+ "runs": [
+  {
+   "name": "where it is",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was once true but never false"
+    ]
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was once true but never false\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "where it is, tags",
+   "args": [
+    "./internal/plain",
+    "e2e"
+   ],
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was once true but never false"
+    ]
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was once true but never false\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-test=-tags=e2e"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "platform pair",
+   "args": [
+    "./cmd/tool"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "never built files",
+   "args": [
+    "./internal/scratch"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./internal/scratch holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (.b_backup.go _a_draft.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/scratch",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "scratch.go": "package scratch\n\nfunc k() bool { return true }\n",
+      "scratch_test.go": "package scratch\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "constraint beyond the platform",
+   "args": [
+    "./internal/release"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./internal/release holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (legacy.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of release.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/release",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "platform.go": "//go:build linux && amd64\n\npackage release\n",
+      "release.go": "\n\npackage release\n\nfunc h(c int) bool {\n\treturn c == 1\n}\n",
+      "release_test.go": "package release\n\nimport \"testing\"\n\nfunc TestH(t *testing.T) { h(1) }\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "constraint beyond the platform, integration tag",
+   "args": [
+    "./internal/release",
+    "integration"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./internal/release builds legacy.go release.go under a build constraint naming more than the platform, which gobco's own narrower build context would decline to instrument; measuring it in a staged copy of the module with those lines blanked, line for line, so gobco instruments every file the go command builds here\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-test=-tags=integration"
+     ],
+     "dir": "$STAGED/module/internal/release",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "legacy.go": "\n\npackage release\n",
+      "platform.go": "//go:build linux && amd64\n\npackage release\n",
+      "release.go": "\n\npackage release\n\nfunc h(c int) bool {\n\treturn c == 1\n}\n",
+      "release_test.go": "package release\n\nimport \"testing\"\n\nfunc TestH(t *testing.T) { h(1) }\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "support files",
+   "args": [
+    "./internal/exported"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./internal/exported builds norace_test.go under a build constraint naming more than the platform, which gobco's own narrower build context would decline to instrument; measuring it in a staged copy of the module with those lines blanked, line for line, so gobco instruments every file the go command builds here\ngobco: ./internal/exported has an external test package, which gobco type-checks against the package's non-test files alone, and test files of its own that declare no test (export_test.go norace_test.go), whose names that package may use; measuring it in a staged copy of the module in which those files are part of the package, behind //go:build gc, which the go command builds and gobco's own build context does not instrument, so they are compiled into the test binary as before and stay out of the report as a test file does\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/exported",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "export_gobco.go": "//go:build gc\n\n// export_test.go hands f to the external tests.\npackage exported\n\n// F is f, for the tests.\nvar F = f\n",
+      "exported.go": "package exported\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "exported_test.go": "package exported_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/exported\"\n)\n\nfunc TestF(t *testing.T) { exported.F(1) }\n",
+      "internal_test.go": "package exported\n\nimport \"testing\"\n\nfunc TestInternal(t *testing.T) { f(2) }\n",
+      "norace_gobco.go": "//go:build gc\n\n\n\npackage exported\n\nconst raced = false\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_gobco.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_gobco.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "external test package without an import",
+   "args": [
+    "./internal/unimported"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./internal/unimported has an external test package that does not import it, and gobco bridges that package to the instrumented one through an import it finds there; measuring it in a staged copy of the module with a test file in that package that imports it, beside a file of the package behind //go:build gc that declares the one name the import reads\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/unimported",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "gobco_staged_import_gobco.go": "//go:build gc\n\npackage unimported\n\n// GobcoStagedImport is what gobco_staged_import_test.go reads.\nvar GobcoStagedImport struct{}\n",
+      "gobco_staged_import_test.go": "package unimported_test\n\nimport unimported \"example.com/m/internal/unimported\"\n\nvar _ = unimported.GobcoStagedImport\n",
+      "unimported.go": "package unimported\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "unimported_test.go": "package unimported_test\n\nimport \"testing\"\n\nfunc TestCatalog(t *testing.T) {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/gobco_staged_import_gobco.go",
+      "internal/unimported/gobco_staged_import_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "external test package gobco can read",
+   "args": [
+    "./internal/blackbox"
+   ],
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/blackbox",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "blackbox.go": "package blackbox\n\n// B is b.\nfunc B(c int) bool {\n\treturn c == 1\n}\n",
+      "blackbox_test.go": "package blackbox_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/blackbox\"\n)\n\nfunc TestB(t *testing.T) { blackbox.B(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "platform constraint alone",
+   "args": [
+    "./internal/unixonly"
+   ],
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/unixonly",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "stream.go": "package unixonly\n\nfunc u(c int) bool {\n\treturn c == 1\n}\n",
+      "stream_unix_test.go": "//go:build !windows\n\npackage unixonly\n\nimport \"testing\"\n\nfunc TestU(t *testing.T) { u(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "tagged package without its tag",
+   "args": [
+    "./test/tagged"
+   ],
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: ./test/tagged keeps no test file on linux/amd64 under build tags (none): its tests are among the files the go command leaves out here (harness.go harness_test.go server_norace.go server_race.go), so no test would run and gobco would measure nothing; refusing to measure\ngobco: a package behind a build tag is measured with TAGS=<tag>, which reaches go list and gobco's go test alike\n",
+   "calls": []
+  },
+  {
+   "name": "tagged package with its tag",
+   "args": [
+    "./test/tagged",
+    "e2e"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./test/tagged holds 1 .go file(s) the go command does not build on linux/amd64 under build tags e2e (server_race.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of harness.go server_norace.go harness_test.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-test=-tags=e2e"
+     ],
+     "dir": "$STAGED/module/test/tagged",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package tagged is a fixture.\npackage tagged\n",
+      "harness.go": "\n\npackage tagged\n",
+      "harness_test.go": "\n\npackage tagged\n",
+      "server_norace.go": "\n\npackage tagged\n\nfunc s() {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "two tags",
+   "args": [
+    "./test/tagged",
+    "e2e,integration"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./test/tagged holds 1 .go file(s) the go command does not build on linux/amd64 under build tags e2e,integration (server_race.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of harness.go server_norace.go harness_test.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-test=-tags=e2e,integration"
+     ],
+     "dir": "$STAGED/module/test/tagged",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package tagged is a fixture.\npackage tagged\n",
+      "harness.go": "\n\npackage tagged\n",
+      "harness_test.go": "\n\npackage tagged\n",
+      "server_norace.go": "\n\npackage tagged\n\nfunc s() {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "0/0 where it is",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "figure": "0/0"
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 0/0\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/plain (Condition coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "no figure",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "figure": "none"
+   },
+   "status": 1,
+   "stdout": "\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/plain (Condition coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "staged package with no test",
+   "args": [
+    "./internal/untested"
+   ],
+   "gobco": {
+    "figure": "0/0"
+   },
+   "status": 1,
+   "stdout": "gobco: ./internal/untested holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (untested_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 0/0\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/untested (Condition coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/untested",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "untested.go": "package untested\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "missing package",
+   "args": [
+    "./internal/missing"
+   ],
+   "load_error": {
+    "package": "./internal/missing"
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: go cannot load ./internal/missing under build tags (none): $LOADERROR; refusing to measure\ngobco: a package behind a build tag is measured with TAGS=<tag>, which reaches go list and gobco's go test alike\n",
+   "calls": []
+  },
+  {
+   "name": "package that does not parse",
+   "args": [
+    "./internal/plain"
+   ],
+   "files": {
+    "internal/plain/bad.go": "pakage plain\n"
+   },
+   "load_error": {
+    "package": "./internal/plain"
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: go cannot load ./internal/plain under build tags (none): $LOADERROR; refusing to measure\ngobco: a package behind a build tag is measured with TAGS=<tag>, which reaches go list and gobco's go test alike\n",
+   "calls": []
+  },
+  {
+   "name": "module root",
+   "args": [
+    "."
+   ],
+   "files": {
+    "root.go": "package m\n",
+    "root_windows.go": "package m\n",
+    "root_test.go": "package m\n"
+   },
+   "status": 0,
+   "stdout": "gobco: . holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (root_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "root.go": "package m\n",
+      "root_test.go": "package m\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "root.go",
+      "root_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gobco fails where it is",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "status": 1
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on ./internal/plain, so any figure above is not a measurement: its go test failed, or it could not instrument the package\ngobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH, and a run from there needs none\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gobco fails staged",
+   "args": [
+    "./cmd/tool"
+   ],
+   "gobco": {
+    "status": 1
+   },
+   "status": 1,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on the staged copy of ./cmd/tool, so any figure above is not a measurement: its go test failed there, or it could not instrument the copy\ngobco: a test that reads something the copy leaves out (.git, .claude/worktrees, node_modules, dist) fails there too, and the package's own tests run where it is are what to compare against\ngobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH, and a run from there needs none\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gobco fails staged and blanked",
+   "args": [
+    "./test/tagged",
+    "e2e"
+   ],
+   "gobco": {
+    "status": 1
+   },
+   "status": 1,
+   "stdout": "gobco: ./test/tagged holds 1 .go file(s) the go command does not build on linux/amd64 under build tags e2e (server_race.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of harness.go server_norace.go harness_test.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on the staged copy of ./test/tagged, so any figure above is not a measurement: its go test failed there, or it could not instrument the copy\ngobco: the copy blanked the build constraint lines of harness.go server_norace.go harness_test.go, so a test that reads its own files' headers finds them blank there and fails; that is the likeliest cause (the e2e harness's source checks fail this way), and a package whose tests do that cannot be measured this way until gobco honors build tags (issue 1017)\ngobco: a test that reads something the copy leaves out (.git, .claude/worktrees, node_modules, dist) fails there too, and the package's own tests run where it is are what to compare against\ngobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH, and a run from there needs none\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-test=-tags=e2e"
+     ],
+     "dir": "$STAGED/module/test/tagged",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package tagged is a fixture.\npackage tagged\n",
+      "harness.go": "\n\npackage tagged\n",
+      "harness_test.go": "\n\npackage tagged\n",
+      "server_norace.go": "\n\npackage tagged\n\nfunc s() {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gobco fails staged, left out and blanked beside support files",
+   "args": [
+    "./internal/mixed"
+   ],
+   "files": {
+    "internal/mixed/mixed.go": "//go:build go1.22\n\npackage mixed\n\nfunc F() {}\n",
+    "internal/mixed/mixed_windows.go": "package mixed\n",
+    "internal/mixed/export_test.go": "package mixed\n\nvar G = F\n",
+    "internal/mixed/mixed_test.go": "package mixed_test\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) {}\n"
+   },
+   "gobco": {
+    "status": 1
+   },
+   "status": 1,
+   "stdout": "gobco: ./internal/mixed holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (mixed_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of mixed.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\ngobco: ./internal/mixed has an external test package, which gobco type-checks against the package's non-test files alone, and test files of its own that declare no test (export_test.go), whose names that package may use; measuring it in a staged copy of the module in which those files are part of the package, behind //go:build gc, which the go command builds and gobco's own build context does not instrument, so they are compiled into the test binary as before and stay out of the report as a test file does\ngobco: ./internal/mixed has an external test package that does not import it, and gobco bridges that package to the instrumented one through an import it finds there; measuring it in a staged copy of the module with a test file in that package that imports it, beside a file of the package behind //go:build gc that declares the one name the import reads\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on the staged copy of ./internal/mixed, so any figure above is not a measurement: its go test failed there, or it could not instrument the copy\ngobco: the copy blanked the build constraint lines of mixed.go, so a test that reads its own files' headers finds them blank there and fails; that is the likeliest cause (the e2e harness's source checks fail this way), and a package whose tests do that cannot be measured this way until gobco honors build tags (issue 1017)\ngobco: a test that reads something the copy leaves out (.git, .claude/worktrees, node_modules, dist) fails there too, and the package's own tests run where it is are what to compare against\ngobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH, and a run from there needs none\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/internal/mixed",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "export_gobco.go": "//go:build gc\n\npackage mixed\n\nvar G = F\n",
+      "gobco_staged_import_gobco.go": "//go:build gc\n\npackage mixed\n\n// GobcoStagedImport is what gobco_staged_import_test.go reads.\nvar GobcoStagedImport struct{}\n",
+      "gobco_staged_import_test.go": "package mixed_test\n\nimport mixed \"example.com/m/internal/mixed\"\n\nvar _ = mixed.GobcoStagedImport\n",
+      "mixed.go": "\n\npackage mixed\n\nfunc F() {}\n",
+      "mixed_test.go": "package mixed_test\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/mixed/export_gobco.go",
+      "internal/mixed/gobco_staged_import_gobco.go",
+      "internal/mixed/gobco_staged_import_test.go",
+      "internal/mixed/mixed.go",
+      "internal/mixed/mixed_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "without a gate a one-way condition passes",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was never evaluated"
+    ]
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, never false",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was 3 times true but never false"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was 3 times true but never false\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was 3 times true but never false\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, never true",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was once false but never true"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was once false but never true\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was once false but never true\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, never evaluated",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was never evaluated"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, carriage return",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was never evaluated\r"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was never evaluated\r\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, both ways",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was once true and once false"
+    ]
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was once true and once false\ngobco: GOBCO_GATE=all: every condition in the files of ./internal/plain measured on linux/amd64 under build tags (none) was evaluated both ways\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, none",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": []
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\ngobco: GOBCO_GATE=all: every condition in the files of ./internal/plain measured on linux/amd64 under build tags (none) was evaluated both ways\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate all, two held",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was 3 times true but never false",
+     "noise",
+     "plain.go:4:9: condition \"c == 1\" was never evaluated"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was 3 times true but never false\nnoise\nplain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 2 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was 3 times true but never false\n  plain.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, in the Windows half",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "proc_windows.go:5:9: condition \"c == 2\" was once true but never false"
+    ]
+   },
+   "status": 3,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\nproc_windows.go:5:9: condition \"c == 2\" was once true but never false\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) were not evaluated both ways:\n  proc_windows.go:5:9: condition \"c == 2\" was once true but never false\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, with a Windows path",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "cmd\\tool\\proc_windows.go:5:9: condition \"c == 2\" was never evaluated"
+    ]
+   },
+   "status": 3,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\ncmd\\tool\\proc_windows.go:5:9: condition \"c == 2\" was never evaluated\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) were not evaluated both ways:\n  cmd\\tool\\proc_windows.go:5:9: condition \"c == 2\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, with a slash path",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "cmd/tool/proc_windows.go:5:9: condition \"c == 2\" was never evaluated"
+    ]
+   },
+   "status": 3,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\ncmd/tool/proc_windows.go:5:9: condition \"c == 2\" was never evaluated\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) were not evaluated both ways:\n  cmd/tool/proc_windows.go:5:9: condition \"c == 2\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, in a shared file",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "main.go:3:9: condition \"x\" was never evaluated"
+    ]
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\nmain.go:3:9: condition \"x\" was never evaluated\ngobco: GOBCO_GATE=beyond:linux/amd64: every condition in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) was evaluated both ways; 1 condition(s) in files linux/amd64 also builds were not, and are left to a run there\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, one of each",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "main.go:3:9: condition \"x\" was never evaluated",
+     "proc_windows.go:5:9: condition \"c == 2\" was once false but never true"
+    ]
+   },
+   "status": 3,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\nmain.go:3:9: condition \"x\" was never evaluated\nproc_windows.go:5:9: condition \"c == 2\" was once false but never true\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) were not evaluated both ways:\n  proc_windows.go:5:9: condition \"c == 2\" was once false but never true\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond, none",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": []
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on windows/amd64 under build tags (none) (proc_unix.go proc_unix_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\ngobco: GOBCO_GATE=beyond:linux/amd64: every condition in the files of ./cmd/tool that windows/amd64 under build tags (none) builds and linux/amd64 does not (proc_windows.go) was evaluated both ways\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_windows.go": "//go:build windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 2\n}\n",
+      "proc_windows_test.go": "//go:build windows\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond the reference itself",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "main.go:3:9: condition \"x\" was never evaluated"
+    ]
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\nmain.go:3:9: condition \"x\" was never evaluated\ngobco: GOBCO_GATE=beyond:linux/amd64: linux/amd64 under build tags (none) builds no source of ./cmd/tool that linux/amd64 does not, so the gate holds nothing here; 1 condition(s) in files linux/amd64 also builds were not, and are left to a run there\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond the reference itself, none left",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\ngobco: GOBCO_GATE=beyond:linux/amd64: linux/amd64 under build tags (none) builds no source of ./cmd/tool that linux/amd64 does not, so the gate holds nothing here\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "gate beyond a package the reference builds nothing of",
+   "args": [
+    "./internal/winonly"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "gobco": {
+    "conditions": [
+     "w_windows.go:4:9: condition \"c == 1\" was never evaluated"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nCondition coverage: 3/4\nw_windows.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=beyond:linux/amd64: 1 condition(s) in the files of ./internal/winonly that windows/amd64 under build tags (none) builds and linux/amd64 does not (w_windows.go) were not evaluated both ways:\n  w_windows.go:4:9: condition \"c == 1\" was never evaluated\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/winonly",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "windows",
+     "files": {
+      "w_windows.go": "package winonly\n\nfunc w(c int) bool {\n\treturn c == 1\n}\n",
+      "w_windows_test.go": "package winonly\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gate reference go cannot load",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOOS": "windows",
+    "GOBCO_GATE": "beyond:linux/amd64"
+   },
+   "files": {
+    "internal/plain/bad_linux.go": "pakage plain\n"
+   },
+   "load_error": {
+    "package": "./internal/plain",
+    "env": {
+     "GOOS": "linux",
+     "CGO_ENABLED": "1"
+    }
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: go cannot load ./internal/plain for linux/amd64 under build tags (none), which GOBCO_GATE=beyond:linux/amd64 compares this build with: $LOADERROR; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate some",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "some"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=some is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate beyond:linux",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "beyond:linux"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=beyond:linux is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate beyond:",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "beyond:"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=beyond: is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate beyond:linux/amd64/v3",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "beyond:linux/amd64/v3"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=beyond:linux/amd64/v3 is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate Beyond:linux/amd64",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "Beyond:linux/amd64"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=Beyond:linux/amd64 is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate ALL",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": "ALL"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_GATE=ALL is neither all nor beyond:GOOS/GOARCH; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "gate empty",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_GATE": ""
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode empty",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": ""
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode condition",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "condition"
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode branch",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch"
+   },
+   "status": 0,
+   "stdout": "\nBranch coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode branch with tags and test flags",
+   "args": [
+    "./internal/plain",
+    "e2e"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch",
+    "GOBCO_TEST_FLAGS": " -timeout=30m  -v "
+   },
+   "status": 0,
+   "stdout": "\nBranch coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch",
+      "-test=-tags=e2e",
+      "-test=-timeout=30m",
+      "-test=-v"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode branch staged",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch"
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nBranch coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "mode 'Branch'",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "Branch"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_MODE=Branch is neither condition nor branch; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "mode 'branches'",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branches"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_MODE=branches is neither condition nor branch; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "mode 'both'",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "both"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_MODE=both is neither condition nor branch; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "mode ' branch'",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": " branch"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_MODE= branch is neither condition nor branch; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "mode 'branch,condition'",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch,condition"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_MODE=branch,condition is neither condition nor branch; refusing to measure\n",
+   "calls": []
+  },
+  {
+   "name": "mode branch, 0/0",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch"
+   },
+   "gobco": {
+    "figure": "0/0"
+   },
+   "status": 1,
+   "stdout": "\nBranch coverage: 0/0\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/plain (Branch coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode branch, a condition figure",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch"
+   },
+   "gobco": {
+    "kind": "Condition coverage"
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/plain (Branch coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode condition, a branch figure",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "kind": "Branch coverage"
+   },
+   "status": 1,
+   "stdout": "\nBranch coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: the report above measured no condition of ./internal/plain (Condition coverage: 0/0, or no such figure at all), which is what gobco prints when no test wrote its counts or when it declined to instrument every file; refusing to pass it on as a measurement\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "mode branch gated",
+   "args": [
+    "./internal/plain"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch",
+    "GOBCO_GATE": "all"
+   },
+   "gobco": {
+    "conditions": [
+     "plain.go:4:9: condition \"c == 1\" was once true but never false"
+    ]
+   },
+   "status": 3,
+   "stdout": "\nBranch coverage: 3/4\nplain.go:4:9: condition \"c == 1\" was once true but never false\n",
+   "stderr": "gobco's own standard error\ngobco: GOBCO_GATE=all: 1 condition(s) in the files of ./internal/plain measured on linux/amd64 under build tags (none) were not evaluated both ways:\n  plain.go:4:9: condition \"c == 1\" was once true but never false\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4",
+      "-branch"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "from PATH where it is",
+   "args": [
+    "./internal/plain"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "from PATH staged",
+   "args": [
+    "./cmd/tool"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "from PATH with everything",
+   "args": [
+    "./test/tagged",
+    "e2e"
+   ],
+   "env": {
+    "GOBCO_MODE": "branch",
+    "GOBCO_TEST_FLAGS": "-timeout=30m"
+   },
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "status": 0,
+   "stdout": "gobco: ./test/tagged holds 1 .go file(s) the go command does not build on linux/amd64 under build tags e2e (server_race.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\ngobco: the copy blanks the build constraint lines of harness.go server_norace.go harness_test.go, line for line, since each names more than the platform and gobco's own narrower build context would decline to instrument it\n\nBranch coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-branch",
+      "-test=-tags=e2e",
+      "-test=-timeout=30m"
+     ],
+     "dir": "$STAGED/module/test/tagged",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package tagged is a fixture.\npackage tagged\n",
+      "harness.go": "\n\npackage tagged\n",
+      "harness_test.go": "\n\npackage tagged\n",
+      "server_norace.go": "\n\npackage tagged\n\nfunc s() {}\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/proc_windows.go",
+      "cmd/tool/proc_windows_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "another release on PATH",
+   "args": [
+    "./internal/plain"
+   ],
+   "planted": {
+    "gobin": "1.3.3"
+   },
+   "status": 0,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "no gobco and no network",
+   "args": [
+    "./internal/plain"
+   ],
+   "gobco": {
+    "unreachable": true,
+    "figure": "none"
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "planted: the proxy is unreachable\ngobco: gobco exited 1 on ./internal/plain, so any figure above is not a measurement: its go test failed, or it could not instrument the package\ngobco: it ran through go run, which asks the module proxy on every run and fails without the network (issue 1515); scripts/coverage-conditions.sh --install puts gobco v1.3.4 on PATH, and a run from there needs none\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "from PATH exits 1",
+   "args": [
+    "./internal/plain"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "gobco": {
+    "status": 1
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on ./internal/plain, so any figure above is not a measurement: its go test failed, or it could not instrument the package\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "from PATH exits 2",
+   "args": [
+    "./internal/plain"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "gobco": {
+    "status": 2
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on ./internal/plain, so any figure above is not a measurement: its go test failed, or it could not instrument the package\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "from PATH exits 3",
+   "args": [
+    "./internal/plain"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "gobco": {
+    "status": 3
+   },
+   "status": 1,
+   "stdout": "\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\ngobco: gobco exited 1 on ./internal/plain, so any figure above is not a measurement: its go test failed, or it could not instrument the package\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$ROOT/internal/plain",
+     "gomodcache": "$SCRATCH/modcache",
+     "goos": "linux",
+     "files": {
+      "doc.go": "// Package plain is a fixture.\npackage plain\n",
+      "plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+      "plain_test.go": "package plain\n\nimport \"testing\"\n\nfunc TestF(t *testing.T) { f(1) }\n"
+     }
+    }
+   ]
+  },
+  {
+   "name": "module cache from GOPATH, through go run",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOPATH": "$SCRATCH/gopath"
+   },
+   "unset": [
+    "GOMODCACHE"
+   ],
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "run",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/gopath/pkg/mod",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "module cache from GOPATH, from PATH",
+   "args": [
+    "./cmd/tool"
+   ],
+   "env": {
+    "GOPATH": "$SCRATCH/gopath"
+   },
+   "unset": [
+    "GOMODCACHE"
+   ],
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "status": 0,
+   "stdout": "gobco: ./cmd/tool holds 2 .go file(s) the go command does not build on linux/amd64 under build tags (none) (proc_windows.go proc_windows_test.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them. The conditions of the files left out are not measured by this run: only a run on a platform that builds them could measure them\n\nCondition coverage: 3/4\n",
+   "stderr": "gobco's own standard error\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [],
+     "dir": "$STAGED/module/cmd/tool",
+     "gomodcache": "$SCRATCH/gopath/pkg/mod",
+     "goos": "linux",
+     "files": {
+      "main.go": "package main\n\nfunc main() {}\n",
+      "main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestG(t *testing.T) { g(1) }\n",
+      "proc_unix.go": "//go:build !windows\n\npackage main\n\nfunc g(c int) bool {\n\treturn c == 1\n}\n",
+      "proc_unix_test.go": "// Copyright line above the constraint.\n\n//go:build unix\n// +build unix\n\npackage main\n"
+     },
+     "module_files": [
+      ".claude/settings.json",
+      "cmd/tool/embedded.txt",
+      "cmd/tool/main.go",
+      "cmd/tool/main_test.go",
+      "cmd/tool/proc_unix.go",
+      "cmd/tool/proc_unix_test.go",
+      "cmd/tool/testdata/fixture.txt",
+      "docs/dist/kept.md",
+      "docs/guide.md",
+      "go.mod",
+      "internal/blackbox/blackbox.go",
+      "internal/blackbox/blackbox_test.go",
+      "internal/exported/export_test.go",
+      "internal/exported/exported.go",
+      "internal/exported/exported_test.go",
+      "internal/exported/internal_test.go",
+      "internal/exported/norace_test.go",
+      "internal/plain/doc.go",
+      "internal/plain/plain.go",
+      "internal/plain/plain_test.go",
+      "internal/release/legacy.go",
+      "internal/release/platform.go",
+      "internal/release/release.go",
+      "internal/release/release_test.go",
+      "internal/scratch/.b_backup.go",
+      "internal/scratch/_a_draft.go",
+      "internal/scratch/scratch.go",
+      "internal/scratch/scratch_test.go",
+      "internal/unimported/unimported.go",
+      "internal/unimported/unimported_test.go",
+      "internal/unixonly/stream.go",
+      "internal/unixonly/stream_unix_test.go",
+      "internal/untested/untested.go",
+      "internal/untested/untested_windows.go",
+      "internal/winonly/w_windows.go",
+      "internal/winonly/w_windows_test.go",
+      "server.json",
+      "site/page.md",
+      "test/tagged/doc.go",
+      "test/tagged/harness.go",
+      "test/tagged/harness_test.go",
+      "test/tagged/server_norace.go",
+      "test/tagged/server_race.go"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "install, 0 failures",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "install_failures": 0,
+   "status": 0,
+   "stdout": "gobco: installed github.com/rillig/gobco@v1.3.4 at $SCRATCH/gobin/gobco, which every measurement runs without the network\n",
+   "stderr": "",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, 1 failures",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "install_failures": 1,
+   "status": 0,
+   "stdout": "gobco: installed github.com/rillig/gobco@v1.3.4 at $SCRATCH/gobin/gobco, which every measurement runs without the network\n",
+   "stderr": "planted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed (attempt 1 of 3); trying again in 0s\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, 2 failures",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "install_failures": 2,
+   "status": 0,
+   "stdout": "gobco: installed github.com/rillig/gobco@v1.3.4 at $SCRATCH/gobin/gobco, which every measurement runs without the network\n",
+   "stderr": "planted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed (attempt 1 of 3); trying again in 0s\nplanted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed (attempt 2 of 3); trying again in 0s\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, 3 failures",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "install_failures": 3,
+   "status": 1,
+   "stdout": "",
+   "stderr": "planted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed (attempt 1 of 3); trying again in 0s\nplanted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed (attempt 2 of 3); trying again in 0s\nplanted: the proxy is unreachable\ngobco: go install github.com/rillig/gobco@v1.3.4 failed 3 times; giving up\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, already pinned",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "planted": {
+    "gobin": "1.3.4"
+   },
+   "status": 0,
+   "stdout": "gobco: PATH already finds github.com/rillig/gobco@v1.3.4 at $SCRATCH/gobin/gobco; nothing to install\n",
+   "stderr": "",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, another release",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "planted": {
+    "gobin": "1.3.3"
+   },
+   "status": 0,
+   "stdout": "gobco: installed github.com/rillig/gobco@v1.3.4 at $SCRATCH/gobin/gobco, which every measurement runs without the network\n",
+   "stderr": "",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, GOBIN off PATH",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0",
+    "GOBIN": "$SCRATCH/elsewhere"
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: go install github.com/rillig/gobco@v1.3.4 succeeded, but PATH finds no gobco: put GOBIN, or GOPATH/bin when GOBIN is unset, on PATH ahead of any other gobco, or every measurement runs gobco through go run and needs the network again\n",
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, another release found first",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "0"
+   },
+   "planted": {
+    "bin": "1.3.3"
+   },
+   "status": 1,
+   "stdout": "",
+   "stderr": "gobco: go install github.com/rillig/gobco@v1.3.4 succeeded, but PATH finds $SCRATCH/bin/gobco, which reports 1.3.3: put GOBIN, or GOPATH/bin when GOBIN is unset, on PATH ahead of any other gobco, or every measurement runs gobco through go run and needs the network again\n",
+   "calls": [
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "install",
+      "github.com/rillig/gobco@v1.3.4"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "gobco",
+     "args": [
+      "-version"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "install, pause 'soon'",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "soon"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_INSTALL_PAUSE=soon is not a whole number of seconds; refusing to install\n",
+   "calls": []
+  },
+  {
+   "name": "install, pause '-1'",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "-1"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_INSTALL_PAUSE=-1 is not a whole number of seconds; refusing to install\n",
+   "calls": []
+  },
+  {
+   "name": "install, pause '1.5'",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": "1.5"
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_INSTALL_PAUSE=1.5 is not a whole number of seconds; refusing to install\n",
+   "calls": []
+  },
+  {
+   "name": "install, pause ''",
+   "args": [
+    "--install"
+   ],
+   "env": {
+    "GOBCO_INSTALL_PAUSE": ""
+   },
+   "status": 2,
+   "stdout": "",
+   "stderr": "gobco: GOBCO_INSTALL_PAUSE= is not a whole number of seconds; refusing to install\n",
+   "calls": []
+  }
+ ]
+}

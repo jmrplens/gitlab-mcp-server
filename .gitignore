@@ -58,8 +58,7 @@ cov_*/
 cover_*
 coverage_*
 !coverage_test.go
-!scripts/coverage_mutants_sh_test.py
-!scripts/coverage_conditions_sh_test.py
+!cmd/coverage_recipes/
 
 # Temporary output/result files
 *-results.txt
