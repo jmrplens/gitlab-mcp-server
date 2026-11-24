@@ -132,7 +132,7 @@ failure is 1 or 2, never 3 (1 for a package go cannot load, a failing test, a
 that fails, 2 for a gate or a mode it cannot read). `cmd/measure_conditions`,
 which runs the recipe in its own process, is the caller that reads it; `go run`
 reports any failure as 1 and `make coverage-conditions` as its own, with
-status 2.
+status 2, naming the recipe's in the line it prints.
 `GOBCO_TEST_FLAGS` hands gobco's `go test` flags of its own (`-timeout=30m`),
 one word each.
 

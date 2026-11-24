@@ -21,6 +21,12 @@
 // The recipe asks [Status] once it has ended, starts nothing more, removes
 // what it staged, and exits with the status a shell gives the signal.
 //
+// A program is handed the environment the recipe was given, its locale
+// included. The scripts exported LC_ALL=C to everything they ran, for their own
+// awk, which reads a decimal point by the locale, and glob, which sorts by it.
+// Nothing here reads a locale, so the tests of a measured package run under the
+// one a plain go test would run them under.
+//
 // The programs are reached through a [Runner], so a test answers for the go
 // command, gobco and gremlins without starting any.
 package recipe

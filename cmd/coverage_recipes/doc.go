@@ -72,6 +72,10 @@
 // run once beforehand, so a worker's copy finds everything it needs already
 // compiled. See issue 1029.
 //
-// A signal ends any of them with the status a shell gives it, once the program
-// that is running has ended and what was staged is gone (cmd/internal/recipe).
+// A signal this process receives ends any of them with the status a shell
+// gives it, once the program that is running has ended and what was staged is
+// gone (cmd/internal/recipe). `go run` ends on a SIGTERM without passing it on,
+// so the make targets build this command and run it in place of the shell make
+// started, which is the process make passes a signal to; one started through
+// `go run` is ended by a signal to its process group, or to itself.
 package main

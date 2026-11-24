@@ -156,8 +156,8 @@
 // that only asks whether the run passed reads any non-zero status as a
 // failure; cmd/measure_conditions, which calls [Measure] in its own process,
 // reads 3 as a figure taken and the rest as no figure at all, which is the
-// one difference it needs. Through `go run`, as the Makefile and CI run
-// cmd/coverage_recipes, every failure reads as 1.
+// one difference it needs. Through `go run`, as CI runs cmd/coverage_recipes,
+// every failure reads as 1, and through make, as 2.
 //
 // GOBCO_TEST_FLAGS carries go test flags for gobco's go test, separated by
 // spaces and each written in one word (-timeout=30m), since gobco runs it

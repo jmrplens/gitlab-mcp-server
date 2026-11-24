@@ -294,6 +294,14 @@ else
   RM_F=rm -f "$1"
 endif
 
+# RUN_BUILT builds cmd/$1 below dist and runs it in place of the recipe line's
+# shell, for a command a SIGTERM sent to make has to reach: make passes one on
+# to the process it started and to nothing below that one, and `go run` ends on
+# a signal without handing it to the program it runs, which then goes on by
+# itself. Nothing is stamped into it, as nothing is by `go run`, so a checkout
+# git will not answer for builds too.
+RUN_BUILT=go build -buildvcs=false -o dist/tools/$1$(BINARY_EXT) ./cmd/$1 && exec dist/tools/$1$(BINARY_EXT)
+
 # Analysis output directory
 ANALYSIS_DIR=dist/analysis
 PKGSITE ?= $(shell command -v pkgsite 2>/dev/null || printf "%s/bin/pkgsite" "$$(go env GOPATH 2>/dev/null)")
@@ -988,11 +996,11 @@ modeleval-probe:
 # does not build. The recipe's status is 3 when the gate fails a run, which no
 # other failure of it uses, so the on-demand measurement
 # (.github/workflows/conditions.yml), whose command runs the recipe in its own
-# process, can tell a held figure from no figure; go run reports any failure
-# as 1, and make as its own, with status 2.
+# process, can tell a held figure from no figure; make reports any failure as
+# its own, with status 2, naming the recipe's in the line it prints.
 coverage-conditions:
 	@test -n "$(PKG)" || { echo "usage: make coverage-conditions PKG=./cmd/gen_llms [TAGS=e2e]"; exit 2; }
-	@go run ./cmd/coverage_recipes conditions $(PKG) $(TAGS)
+	@$(call RUN_BUILT,coverage_recipes) conditions $(PKG) $(TAGS)
 
 # Where coverage-conditions-tree leaves each package's record and raw output,
 # how many packages it measures at once, and what gobco counts.
@@ -1146,7 +1154,7 @@ MUTANT_BUDGET_FLOOR ?= 10
 MUTANT_DEADLINE_MAX ?= 3600
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_llms"; exit 2; }
-	@go run ./cmd/coverage_recipes mutants $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
+	@$(call RUN_BUILT,coverage_recipes) mutants $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
@@ -2142,7 +2150,7 @@ check-surface-quality:
 ## evaluates both ways fails; a package gobco cannot instrument is reported.
 check-spec-conditions:
 	@echo === action spec conditions ===
-	go run ./cmd/coverage_recipes spec-conditions $(BASE)
+	$(call RUN_BUILT,coverage_recipes) spec-conditions $(BASE)
 
 ## audit-output: run MCP output quality audit on all tools.
 ## Backward-compat wrapper over audit-surface-quality -view=output.
