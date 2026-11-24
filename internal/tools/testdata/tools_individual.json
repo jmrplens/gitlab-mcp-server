@@ -7322,7 +7322,7 @@
   },
   {
     "name": "gitlab_board_list_create",
-    "description": "Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
+    "description": "Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -7335,7 +7335,7 @@
           "type": "integer"
         },
         "iteration_id": {
-          "description": "Iteration ID to create an iteration list",
+          "description": "Iteration ID to create an iteration list, only in a project that belongs to a group",
           "type": "integer"
         },
         "label_id": {
@@ -7352,6 +7352,10 @@
             "string",
             "integer"
           ]
+        },
+        "status_id": {
+          "description": "Work item status ID to create a status list (GitLab 19.6 and later, only in a project that belongs to a group): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate",
+          "type": "integer"
         }
       },
       "required": [
@@ -7659,7 +7663,7 @@
   },
   {
     "name": "gitlab_board_list_get",
-    "description": "Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, position, and issue limits. See also: gitlab_board_list_lists, gitlab_board_list_update, gitlab_board_list_delete.",
+    "description": "Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: gitlab_board_list_lists, gitlab_board_list_update, gitlab_board_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -7919,7 +7923,7 @@
   },
   {
     "name": "gitlab_board_list_lists",
-    "description": "List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_create, gitlab_board_get.",
+    "description": "List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_create, gitlab_board_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -23801,7 +23805,7 @@
           ]
         },
         "slug": {
-          "description": "Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)",
+          "description": "Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)",
           "type": "string"
         }
       },
@@ -46728,7 +46732,7 @@
   },
   {
     "name": "gitlab_get_integration",
-    "description": "Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).\n\nReturns: JSON with integration details.\n\nSee also: gitlab_list_integrations, gitlab_delete_integration.",
+    "description": "Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).\n\nReturns: JSON with integration details.\n\nSee also: gitlab_list_integrations, gitlab_delete_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -46740,7 +46744,7 @@
           ]
         },
         "slug": {
-          "description": "Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)",
+          "description": "Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)",
           "type": "string"
         }
       },
@@ -57458,7 +57462,7 @@
   },
   {
     "name": "gitlab_group_board_list_create",
-    "description": "Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope and position. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
+    "description": "Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status. Returns: the created list with its scope and position. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -57487,6 +57491,10 @@
         },
         "milestone_id": {
           "description": "Milestone ID to create a milestone list",
+          "type": "integer"
+        },
+        "status_id": {
+          "description": "Work item status ID to create a status list (GitLab 19.6 and later): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate",
           "type": "integer"
         }
       },
@@ -57795,7 +57803,7 @@
   },
   {
     "name": "gitlab_group_board_list_get",
-    "description": "Get a single list (column) of a group issue board. Returns: the list with its assignee, label, iteration, and milestone scope. See also: gitlab_group_board_list_lists, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
+    "description": "Get a single list (column) of a group issue board. Returns: the list with its label, assignee, milestone, iteration, or work item status scope. See also: gitlab_group_board_list_lists, gitlab_group_board_list_update, gitlab_group_board_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -58055,7 +58063,7 @@
   },
   {
     "name": "gitlab_group_board_list_lists",
-    "description": "List the lists (columns) of a group issue board with pagination. Returns: each list with its assignee, label, iteration, and milestone scope plus pagination metadata. See also: gitlab_group_board_list_get, gitlab_group_board_list_create, gitlab_group_board_get.",
+    "description": "List the lists (columns) of a group issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, or work item status scope plus pagination metadata. See also: gitlab_group_board_list_get, gitlab_group_board_list_create, gitlab_group_board_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

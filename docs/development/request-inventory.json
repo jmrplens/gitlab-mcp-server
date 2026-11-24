@@ -3337,7 +3337,8 @@
         "assignee_id",
         "iteration_id",
         "label_id",
-        "milestone_id"
+        "milestone_id",
+        "status_id"
       ],
       "identifiers": {
         ":board_id": 1,
@@ -7633,7 +7634,8 @@
         "assignee_id",
         "iteration_id",
         "label_id",
-        "milestone_id"
+        "milestone_id",
+        "status_id"
       ],
       "identifiers": {
         ":board_id": 1,
@@ -10752,6 +10754,24 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/integrations/matrix",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/integrations",
+      "kind": "rest",
+      "method": "DELETE",
+      "path": "/projects/:project_id/integrations/packagist",
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/integrations",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/integrations/packagist",
       "identifiers": {
         ":project_id": 1
       }
