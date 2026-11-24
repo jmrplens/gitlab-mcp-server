@@ -505,7 +505,7 @@ Make excludes `plan/` because it contains working drafts that are not versioned 
 
 ## SonarCloud (local)
 
-`make sonar` (`go run ./cmd/sonar_scan`) reproduces the CI SonarCloud pipeline
+`make sonar` (`cmd/sonar_scan`) reproduces the CI SonarCloud pipeline
 locally: it runs the unit tests with coverage
 (`go test -coverpkg=./cmd/...,./internal/...`), uploads the analysis with
 `sonar-scanner` (configuration from `sonar-project.properties`), polls the

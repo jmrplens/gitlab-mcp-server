@@ -17,6 +17,12 @@
 // status being the command's: 0 when the gate is OK, and 1 when it is not.
 // -no-scan does the last step alone.
 //
+// A signal ends the command where it stands: it starts nothing more, so a run
+// ended during its tests uploads nothing, and leaves the program it was running
+// to finish. `go run` ends on a SIGTERM without passing it on, so the make
+// targets build this command and run it in place of the shell make started,
+// which is the process make passes a signal to.
+//
 // SONARQUBE_TOKEN is read from the .env at the repository's root, which has to
 // be there, or from the environment when the file does not set it. The other
 // settings come from the environment:
