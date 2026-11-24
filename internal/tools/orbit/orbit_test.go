@@ -90,6 +90,14 @@ func TestOrbitHandlers_CancelledOnArrival_ReturnCanceled(t *testing.T) {
 			_, err := NamedQuery(ctx, client, NamedQueryInput{Name: "recent_merges", ResponseFormat: "llm"})
 			return err
 		}},
+		{name: "context", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := EntityContext(ctx, client, EntityContextInput{Tokens: []string{"Job[1]"}})
+			return err
+		}},
+		{name: "context in the llm format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := EntityContext(ctx, client, EntityContextInput{Tokens: []string{"Job[1]"}, ResponseFormat: "llm"})
+			return err
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -750,6 +758,10 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		{name: "graph status", call: func() error { return callGraphStatus(ctx, client) }},
 		{name: "named query", call: func() error {
 			_, err := NamedQuery(ctx, client, NamedQueryInput{Name: "recent_merges"})
+			return err
+		}},
+		{name: "context", call: func() error {
+			_, err := EntityContext(ctx, client, EntityContextInput{Tokens: []string{"Job[1]"}})
 			return err
 		}},
 		{name: "query templates", call: func() error { _, err := QueryTemplates(ctx, client, QueryTemplatesInput{}); return err }},

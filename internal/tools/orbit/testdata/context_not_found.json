@@ -1,0 +1,15 @@
+{
+  "version": "1.3.0",
+  "entities": [
+    {
+      "token": "acme-group&1",
+      "type": null,
+      "id": null,
+      "found": false,
+      "error": {
+        "code": "not_found"
+      },
+      "expansion": null
+    }
+  ]
+}

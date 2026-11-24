@@ -1,0 +1,52 @@
+{
+  "version": "1.3.0",
+  "entities": [
+    {
+      "token": "acme-group/orbit-fixtures/kg-fixtures#1",
+      "resolved_token": "WorkItem[207153944]",
+      "type": "WorkItem",
+      "id": "207153944",
+      "found": true,
+      "summary": {
+        "namespace_path": "acme-group/orbit-fixtures",
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "title": "Add reserve_stock seed helper",
+        "state": "opened",
+        "iid": 1,
+        "work_item_type": "issue",
+        "web_url": "https://gitlab.com/acme-group/orbit-fixtures/kg-fixtures/-/work_items/1",
+        "labels": [
+          "enhancement",
+          "good first issue"
+        ],
+        "assignees": [],
+        "milestone": null,
+        "linked_merge_requests": [],
+        "description": "Fixture issue for Knowledge Graph coverage. Used by gitlab-mcp-server Orbit tool",
+        "discussions": [],
+        "truncated": []
+      },
+      "expansion": {
+        "result": {
+          "format_version": "6.0.0",
+          "query_type": "neighbors",
+          "nodes": [],
+          "edges": [],
+          "pagination": {
+            "has_more": false,
+            "truncated": false
+          }
+        },
+        "query": {
+          "name": "context_for_issue",
+          "parameters": {
+            "node_ids": [
+              207153944
+            ],
+            "limit": 100
+          }
+        }
+      }
+    }
+  ]
+}
