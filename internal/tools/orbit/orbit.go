@@ -759,8 +759,9 @@ const orbitUnavailableHint = "Orbit is served on GitLab.com only, to a token tha
 // Orbit's general availability). The hint names an access gate, so the
 // refusal is read with [toolutil.IsPermissionRefusal] rather than by its
 // status: a 403 refusing the account itself, as a blocked user's is, says
-// nothing about Orbit. 400 hints at the query/format/scope parameters; 429
-// and 503 hint at backoff; everything else uses the generic wrap.
+// nothing about Orbit. 400 hints at the query/format/scope parameters; a 422
+// asks for the group Orbit bills ([wrapUnprocessable]); 429 and 503 hint at
+// backoff; everything else uses the generic wrap.
 func wrapOrbitErr(op string, err error) error {
 	if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsPermissionRefusal(err) {
 		return toolutil.WrapErrWithHint(op, err, orbitUnavailableHint)
@@ -768,6 +769,9 @@ func wrapOrbitErr(op string, err error) error {
 	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 		return toolutil.WrapErrWithHint(op, err,
 			"check the Orbit query, response_format, and graph_status scope parameters")
+	}
+	if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+		return wrapUnprocessable(op, err)
 	}
 	if toolutil.IsHTTPStatus(err, http.StatusTooManyRequests) {
 		return toolutil.WrapErrWithHint(op, err,

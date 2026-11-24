@@ -29,6 +29,7 @@ const (
 	orbitActionSkillList      = "orbit.skill_list"
 	orbitActionSkillGet       = "orbit.skill_get"
 	orbitActionSkillFile      = "orbit.skill_file"
+	orbitActionNamedQuery     = "orbit.named_query"
 )
 
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
@@ -72,7 +73,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		orbitReadSpec("query_templates", orbitReadRoute(client, QueryTemplates, "GitLab Orbit Query Templates", "query templates"), "gitlab_orbit_query_templates",
 			"List the GitLab Orbit (Knowledge Graph) query templates GitLab.com renders for the token's user: the name, description and GQL text of each. "+
 				"The text binds the user's own id where a template asks about the user, so it is that user's alone. The named queries that take parameters are not listed.",
-			[]string{orbitActionQuery, orbitActionDSL},
+			[]string{orbitActionNamedQuery, orbitActionQuery, orbitActionDSL},
 			[]string{"kg.templates", "knowledge_graph.templates", "orbit.templates", "kg.query_templates"}, orbitInput{}),
 		orbitReadSpec("response_format", orbitReadRoute(client, QueryResponseFormat, "GitLab Orbit Response Format", "response format"), "gitlab_orbit_response_format",
 			"Read the JSON Schema of the raw answer a GitLab Orbit (Knowledge Graph) query returns, with its version, or the same schema as compact text.",
@@ -95,6 +96,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Read one file of a deployed GitLab Orbit (Knowledge Graph) skill, by skill name and the file's path relative to the skill root, as GitLab.com serves it.",
 			[]string{orbitActionSkillGet},
 			[]string{"kg.skill_file", "knowledge_graph.skill_file", "orbit.skill_content", "kg.skill_content"}, skillFileInput()),
+		orbitReadSpec("named_query", orbitReadRoute(client, NamedQuery, "GitLab Orbit Named Queries", "named query service"), "gitlab_orbit_named_query",
+			"Run one of GitLab Orbit's (Knowledge Graph) named queries by name: a template orbit.query_templates lists, which takes no parameters, "+
+				"or one of the queries that take node ids, an entity, a file path or search text, which the description of parameters lists with what each takes. The answer is the envelope orbit.query returns.",
+			[]string{orbitActionQueryTemplates, orbitActionQuery},
+			[]string{"kg.named_query", "knowledge_graph.named_query", "orbit.run_template", "kg.run_template"}, namedQueryInput()),
 	}
 }
 

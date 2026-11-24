@@ -307,8 +307,9 @@ var upstreamWaits = []Entry{
 		Predicates: []Predicate{
 			NoMethodFor{Route: "GET /orbit/skills"},
 			NoMethodFor{Route: "GET /orbit/skills/:"},
+			NoMethodFor{Route: "POST /orbit/query/:"},
 		},
-		Reason: "client-go has no method for the Orbit skill routes, GET /orbit/skills, /orbit/skills/:name and /orbit/skills/:name/*path, so orbit.skill_list, orbit.skill_get and orbit.skill_file send the GET through restResponse",
+		Reason: "client-go has no method for the Orbit skill routes, GET /orbit/skills, /orbit/skills/:name and /orbit/skills/:name/*path, nor for POST /orbit/query/:name, so orbit.skill_list, orbit.skill_get, orbit.skill_file and orbit.named_query send their request through restResponse",
 	},
 	{
 		Category:   CategoryUpstream,

@@ -990,12 +990,12 @@ var gitLabErrorBodyKeys = map[string]bool{"message": true, "error": true, "error
 var workhorseQueryRefusalCodes = map[string]bool{"compile_error": true, "validation_error": true}
 
 // orbitQueryPath is the path of the Orbit query, POST /api/v4/orbit/query,
-// the one route this server calls that Workhorse answers with
-// [isWorkhorseQueryRefusal]'s shape. It is matched as a suffix, so an
-// instance served under a relative URL root
-// (https://host/gitlab/api/v4/orbit/query) is matched too, while a named
-// query (POST /api/v4/orbit/query/:name), which Workhorse answers the same way
-// and this server never sends, is not.
+// the one route whose answer is reflected here in [isWorkhorseQueryRefusal]'s
+// shape. It is matched as a suffix, so an instance served under a relative URL
+// root (https://host/gitlab/api/v4/orbit/query) is matched too, while a named
+// query (POST /api/v4/orbit/query/:name), which Workhorse answers the same
+// way, is not: internal/tools/orbit reads its refusal itself, for its route
+// alone, and bounds it with [BoundedGitLabMessage].
 const orbitQueryPath = "/api/v4/orbit/query"
 
 // gitLabAuthoredMessage returns the response message when the body it was
@@ -1010,10 +1010,13 @@ const orbitQueryPath = "/api/v4/orbit/query"
 // evidence that something else composed the body; the status and the
 // classification still describe what happened.
 //
-// The one other shape GitLab writes that is reflected is Workhorse's refusal
-// of an Orbit query, and only on the Orbit query route
+// The one other shape GitLab writes that is reflected here is Workhorse's
+// refusal of an Orbit query, and only on the Orbit query route
 // ([isWorkhorseQueryRefusal]): it is the only account of what was wrong with
-// the query, and a model that is not told cannot correct it.
+// the query, and a model that is not told cannot correct it. The two others
+// that reach a caller, a named Orbit query's refusal and the billing group
+// Orbit asks for, are read by internal/tools/orbit for their own routes and
+// rendered by [BoundedGitLabMessage].
 //
 // A response with no body at all is trusted, because client-go fills Message
 // and Body together: an ErrorResponse carrying a message and no body was
@@ -1054,8 +1057,8 @@ func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
 // schema violation: ...}", which is what a caller is shown.
 //
 // The match is on the request as well as on the body: the request has to be
-// the Orbit query, POST [orbitQueryPath], the one route this server calls
-// whose refusal Workhorse writes in this shape. A JSON-speaking gateway or WAF
+// the Orbit query, POST [orbitQueryPath], the one route this package knows to
+// be refused by Workhorse in this shape. A JSON-speaking gateway or WAF
 // that happened to answer another route with the same two keys would otherwise
 // have its message reflected, which is the case [gitLabAuthoredMessage]
 // exists to withhold. A request that cannot be read, as in an error built by
@@ -1151,6 +1154,16 @@ func ExtractGitLabMessage(err error) string {
 // which is why the bound is more than twice the longest list rather than
 // just above it.
 const maxGitLabMessageLen = 2048
+
+// BoundedGitLabMessage renders text a handler read out of GitLab's answer
+// itself the way every reflected message is rendered, on one line, without
+// control characters and capped at [maxGitLabMessageLen]. It is for a refusal
+// [ExtractGitLabMessage] does not reflect because its body is not GitLab's
+// error shape, which the handler recognizes by the route and the exact shape
+// GitLab answers there.
+func BoundedGitLabMessage(text string) string {
+	return boundedGitLabMessage(text)
+}
 
 // boundedGitLabMessage renders ErrorResponse.Message for a reader: an unparsed
 // upstream body is dropped entirely, what remains is flattened onto one line

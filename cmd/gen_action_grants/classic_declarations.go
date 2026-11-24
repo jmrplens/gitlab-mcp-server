@@ -43,6 +43,10 @@ var classicRoutes = []join.ClassicDeclaration{
 		Reason: "ee/lib/api/orbit/data.rb:24-25 at v19.4.1-ee grants read_api to every route of API::Orbit::Data, its comment calling the POST a read-only operation. Measured on a self-managed 19.4.1-ee, where Orbit is not served: read_api passed the scope check and was answered 404 like api, and read_user was refused insufficient_scope. GitLab.com, the one instance that serves Orbit, carries the same line and was not measured with a read_api token; listing the action leaves GitLab's own 403 to answer if it refuses",
 	},
 	{
+		Route: "POST /orbit/query/:name", Category: categoryReadAPIEveryMethod, Scope: finegrained.ClassicReadAPI,
+		Reason: "ee/lib/api/orbit/data.rb grants read_api to every route of API::Orbit::Data (lines 24-25 at v19.4.1-ee), the named query among them, a POST that runs a stored read-only query as POST /orbit/query runs a written one; the 19.6.1 live record lists it under read_orbit beside the query. GitLab.com, the one instance that serves Orbit, was not measured with a read_api token; listing the action leaves GitLab's own 403 to answer if it refuses",
+	},
+	{
 		Route: "POST /orbit/mcp", Category: categoryReadAPIEveryMethod, Scope: finegrained.ClassicReadAPI,
 		Reason: "ee/lib/api/orbit/mcp.rb:34 at b03c97a8 (master on 2026-10-29) grants read_api beside mcp_orbit and mcp to the Orbit MCP endpoint, a POST that carries one JSON-RPC request; orbit.tools, orbit.dsl, orbit.command_list, orbit.response_format and the llm format of orbit.schema send tools/list and tools/call through it, what the REST routes GitLab.com removed on 2026-10-27 and -28 answered. The endpoint is not in 19.4.1-ee and GitLab.com, the one instance that serves it, was not measured with a read_api token; listing the actions leaves GitLab's own 403 to answer if it refuses",
 	},

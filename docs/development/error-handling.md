@@ -382,13 +382,31 @@ msg := toolutil.ExtractGitLabMessage(err)
 
 A body is GitLab's message when it is JSON whose top-level keys are all among
 `message`, `error` and `error_description`, with one of the first two present
-(`gitLabAuthoredMessage`). One body outside that set is reflected:
-Workhorse's refusal of an Orbit query, answered to `POST /api/v4/orbit/query`
-with exactly a string `code` and a string `message`, when the code is
-`compile_error` or `validation_error` (`isWorkhorseQueryRefusal`), because it
-is the only account of what is wrong with the query. Every other code
-(`execution_error`, `internal_error`, `timeout`, `quota_exhausted`), any
-further key, and the same body answered to any other request are withheld.
+(`gitLabAuthoredMessage`). Three bodies outside that set are reflected, each on
+the routes that answer it and in exactly the shape given, because each is the
+only account of what the caller or the token's user has to change:
+
+- Workhorse's refusal of an Orbit query, answered to `POST /api/v4/orbit/query`
+  with exactly a string `code` and a string `message`, when the code is
+  `compile_error` or `validation_error` (`isWorkhorseQueryRefusal`).
+- GitLab's refusal of a named Orbit query, a 400 from
+  `POST /api/v4/orbit/query/:name` with the same two keys, when the code is
+  `invalid_request`, `compile_error` or `validation_error`
+  (`namedQueryRefusal` in `internal/tools/orbit`).
+- A 422 whose `code` is `billing_namespace_required` and which holds no key but
+  `code`, `message`, `deep_link` and `candidates`, answered to any request an
+  Orbit action sends, GitLab writing it for the two query routes: the message,
+  the link when it is an https address, and each candidate group's name and ID
+  (`billingNamespaceRefusal` in `internal/tools/orbit`).
+
+Every other code (`execution_error`, `internal_error`, `timeout`,
+`quota_exhausted`), any further key, and the same body answered to any other
+request are withheld. `internal/toolutil` reflects the first; the other two are
+read by the handlers of their own routes, which put what they read through
+`toolutil.BoundedGitLabMessage` so that it is flattened and capped as every
+reflected message is. A handler that has to reflect one more body does the
+same: it recognizes the body by its route and its exact shape, and renders it
+with that function and no other.
 
 ### `WrapErrWithMessage`
 

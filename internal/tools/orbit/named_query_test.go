@@ -190,7 +190,7 @@ func TestNamedQuery_ANumberTooLargeToBeExact_IsRefusedBeforeSending(t *testing.T
 // TestNamedQuery_GitLabsRefusals_CarryTheirHint covers the 400 invalid_request
 // GitLab.com answered on 2026-10-29: an unknown named query, which lists the
 // available ones, an unknown parameter and a missing one, each passed on with
-// GitLab's words and the hint pointing at the guidance.
+// GitLab's words and the hint pointing at the parameters' description.
 func TestNamedQuery_GitLabsRefusals_CarryTheirHint(t *testing.T) {
 	cases := []struct {
 		name    string
