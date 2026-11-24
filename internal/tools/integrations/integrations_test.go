@@ -597,7 +597,7 @@ func captureIntegrationPath(t *testing.T, method string, call func(*gitlabclient
 //
 // Nothing else checks this, and it is the whole content of these two actions:
 // the slug is the only thing the caller supplies that chooses a behavior, and
-// it selects a client-go method by hand in a map of twenty-one entries. The
+// it selects a client-go method by hand in a map of twenty-two entries. The
 // slug tests beside this one answer any request with a canned body carrying
 // the slug the test itself passed in, so an entry wired to the wrong method
 // returns a happy answer about the wrong integration, and there is no branch
@@ -653,7 +653,7 @@ func TestGet_AllSlugsSuccess(t *testing.T) {
 		"discord", "mattermost", "microsoft-teams", "telegram",
 		"datadog", "jenkins", "emails-on-push", "pipelines-email",
 		"external-wiki", "custom-issue-tracker", "drone-ci", "github",
-		"harbor", "matrix", "redmine", "youtrack",
+		"harbor", "matrix", "packagist", "redmine", "youtrack",
 		"slack-slash-commands", "mattermost-slash-commands",
 	}
 	for _, slug := range slugs {
@@ -703,7 +703,7 @@ func TestDelete_AllSlugsSuccess(t *testing.T) {
 		"jira", "slack", "discord", "mattermost", "microsoft-teams", "telegram",
 		"datadog", "jenkins", "emails-on-push", "pipelines-email",
 		"external-wiki", "custom-issue-tracker", "drone-ci", "github",
-		"harbor", "matrix", "redmine", "youtrack",
+		"harbor", "matrix", "packagist", "redmine", "youtrack",
 		"slack-slash-commands", "mattermost-slash-commands", "slack-application",
 	}
 	for _, slug := range slugs {
