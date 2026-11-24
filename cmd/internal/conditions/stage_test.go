@@ -6,7 +6,9 @@ package conditions
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -79,6 +81,79 @@ func TestStage_ACopyThatCannotBeRewritten_IsRemoved(t *testing.T) {
 			cleanup()
 			if left := b.left(t); len(left) != 0 {
 				t.Errorf("left in the temporary directory: %q", left)
+			}
+		})
+	}
+}
+
+// TestMeasure_ALinkedFile_IsRewrittenInTheCopyAlone verifies, where a tree
+// holds symbolic links, that a file of the package that links to one outside
+// the module is blanked in the staged copy and that what it links to keeps
+// its bytes: a run that only measures edits nothing of the tree it measures.
+func TestMeasure_ALinkedFile_IsRewrittenInTheCopyAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	rec := readRecord(t)
+	b := newBench(t, rec.Files)
+	const rel = "internal/release/release.go"
+	original, link := filepath.Join(b.scratch, "original.go"), filepath.Join(b.root, filepath.FromSlash(rel))
+	if err := errors.Join(os.Rename(link, original), os.Symlink(original, link)); err != nil {
+		t.Fatal(err)
+	}
+	status, _, stderr := b.measure(t.Context(), "./internal/release")
+	if status != 0 || len(b.calls) != 1 {
+		t.Fatalf("status = %d, stderr = %q, ran %+v; want one measurement", status, stderr, b.calls)
+	}
+	if got, want := b.calls[0].Files["release.go"], blankConstraints(rec.Files[rel]); got != want || got == rec.Files[rel] {
+		t.Errorf("gobco finds %q, want %q", got, want)
+	}
+	if got, err := os.ReadFile(original); err != nil || string(got) != rec.Files[rel] {
+		t.Errorf("the file linked to reads %q (%v), want %q", got, err, rec.Files[rel])
+	}
+}
+
+// TestMeasure_APackageTheCopyCannotHold_IsRefused verifies that a package
+// whose directory is reached through a symbolic link, which in the copy would
+// still lead to the original, and one in a directory the copy leaves out are
+// not staged, and that nothing of the original is removed or added.
+func TestMeasure_APackageTheCopyCannotHold_IsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	rec := readRecord(t)
+	cases := []struct {
+		name, at, measured, want string
+		linked                   bool
+	}{
+		{name: "a linked package", at: "internal/linked", measured: "internal/linked", linked: true, want: "internal/linked is a symbolic link"},
+		{name: "below a linked directory", at: "linked", measured: "linked/scratch", linked: true, want: "linked is a symbolic link"},
+		{name: "in a directory left out", at: "dist/scratch", measured: "dist/scratch", want: "dist/scratch: no such file or directory"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newBench(t, rec.Files)
+			source, at := filepath.Join(b.root, "internal"), filepath.Join(b.root, filepath.FromSlash(tc.at))
+			if tc.at == tc.measured {
+				source = filepath.Join(source, "scratch")
+			}
+			place := os.Rename
+			if tc.linked {
+				place = os.Symlink
+			}
+			if err := place(source, at); err != nil {
+				t.Fatal(err)
+			}
+			status, _, stderr := b.measure(t.Context(), "./"+tc.measured)
+			if status != NotMeasured || !strings.Contains(stderr, tc.want) || !strings.HasSuffix(stderr, "; refusing to measure\n") {
+				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, stderr, tc.want)
+			}
+			entries, err := os.ReadDir(filepath.Join(b.root, filepath.FromSlash(tc.measured)))
+			if err != nil || len(entries) != 4 {
+				t.Errorf("the package holds %v (%v), want the four files it held", entries, err)
+			}
+			if len(b.calls) != 0 || len(b.left(t)) != 0 {
+				t.Errorf("ran %+v and left %q; want nothing", b.calls, b.left(t))
 			}
 		})
 	}

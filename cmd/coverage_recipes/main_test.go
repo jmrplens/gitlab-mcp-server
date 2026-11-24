@@ -286,7 +286,7 @@ func holdInstallBefore(t *testing.T, steps []string, first int) {
 	if len(installs) != 1 || first == 0 || steps[first-1] != installs[0] {
 		t.Fatalf("the job installs gobco in %q, want once, in the step before\n%s", installs, steps[first])
 	}
-	for _, want := range []string{`(?m)^name: Install gobco$`, `(?m)^timeout-minutes: [1-9]$`} {
+	for _, want := range []string{`(?m)^name: Install gobco$`, `(?m)^shell: bash$`, `(?m)^timeout-minutes: [1-9]$`} {
 		if !regexp.MustCompile(want).MatchString(installs[0]) {
 			t.Errorf("the install step does not match %s:\n%s", want, installs[0])
 		}
