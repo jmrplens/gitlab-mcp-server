@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -104,6 +105,58 @@ func TestStage_AWindowsListing_FindsThePackageAndWhatIsBelowIt(t *testing.T) {
 			t.Errorf("the copy held %q, want %q", last.Tree, want)
 		}
 	})
+}
+
+// TestStage_AModuleReachedThroughALink_LeavesOutThePackagesBelow verifies,
+// where a tree holds symbolic links, that a run started in a directory that
+// links to the module leaves the packages below the command out of its copy,
+// wherever the copy sits. The go command names a directory through the link
+// only when PWD does, so a listing taken below the module with the PWD of the
+// module named every package by another path, none of them below the command,
+// and the copy held them all.
+func TestStage_AModuleReachedThroughALink_LeavesOutThePackagesBelow(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	cases := []struct {
+		name, imports, target string
+		want                  []string
+	}{
+		{name: "a copy beside it", target: "./cmd/tool.mutants-main", want: []string{"doc.go", "tool_test.go"}},
+		{
+			name: "a copy below it", imports: "package main\n\nimport _ \"example.com/m/cmd/tool/internal/derive\"\n",
+			target: "./cmd/tool/tool.mutants-main", want: []string{"doc.go", "imp.go", "tool_test.go"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newMutantsBench(t, mutantsFixture(t))
+			writeFile(t, b.root, "cmd/tool/sub/sub.go", "package sub\n")
+			writeFile(t, b.root, "cmd/tool/internal/derive/derive.go", "package derive\n")
+			if tc.imports != "" {
+				writeFile(t, b.root, "cmd/tool/imp.go", tc.imports)
+			}
+			before := fileTree(b.root)
+			link := filepath.Join(b.scratch, "link")
+			if err := os.Symlink(b.root, link); err != nil {
+				t.Fatal(err)
+			}
+			b.session.dir, b.session.environ = link, append(b.session.environ, "PWD="+link)
+			if status := b.session.run(t.Context(), []string{"mutants", "./cmd/tool"}); status != 0 {
+				t.Fatalf("status = %d, stderr %q", status, b.stderr.String())
+			}
+			last := b.calls[len(b.calls)-1]
+			if got := last.Args[len(last.Args)-1]; last.Dir != link || got != tc.target {
+				t.Errorf("gremlins was run in %s over %q, want %s and %q", last.Dir, got, link, tc.target)
+			}
+			if !slices.Equal(last.Tree, tc.want) {
+				t.Errorf("the copy held %q, want %q", last.Tree, tc.want)
+			}
+			if after := fileTree(b.root); !slices.Equal(after, before) {
+				t.Errorf("the module holds\n%q\nafter the run, want\n%q", after, before)
+			}
+		})
+	}
 }
 
 // TestMutants_AnInterrupt_EndsTheRunAndRemovesTheCopy verifies that a signal

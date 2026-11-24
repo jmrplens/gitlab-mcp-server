@@ -39,6 +39,8 @@ func TestMain(m *testing.M) {
 	case "address-space":
 		soft, hard, err := AddressSpace()
 		fmt.Println(soft, hard, err)
+	case "pwd":
+		fmt.Println(os.Getenv("PWD"))
 	case "signal":
 		// Killed by its own signal, so it has no exit status.
 		self, err := os.FindProcess(os.Getpid())
@@ -104,6 +106,38 @@ func TestExec_AProgram_RunsInItsDirectoryWithItsEnvironmentAndStatus(t *testing.
 			}
 			if stderr.String() != "err given\n" {
 				t.Errorf("stderr = %q, want the environment's value", stderr.String())
+			}
+		})
+	}
+}
+
+// TestExec_ADirectory_IsThePWDOfTheProgram verifies that PWD names the
+// directory a program is run in and not the one its environment was taken
+// from, whether the call names it whole or from this process's own; and that
+// a call that names none, whose program runs where this process does, hands
+// its environment on as it is.
+func TestExec_ADirectory_IsThePWDOfTheProgram(t *testing.T) {
+	root := t.TempDir()
+	below := filepath.Join(root, "below")
+	if err := os.Mkdir(below, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	cases := []struct{ name, dir, want string }{
+		{name: "named whole", dir: below, want: below},
+		{name: "named from here", dir: "below", want: below},
+		{name: "none", want: "elsewhere"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			call := helper(t, "pwd")
+			call.Dir, call.Stdout, call.Env = tc.dir, &stdout, append(call.Env, "PWD=elsewhere")
+			if status, err := Exec(t.Context(), call); err != nil || status != 0 {
+				t.Fatalf("Exec() = %d, %v; want 0", status, err)
+			}
+			if got := strings.TrimSpace(stdout.String()); got != tc.want {
+				t.Errorf("PWD = %q, want %q", got, tc.want)
 			}
 		})
 	}
