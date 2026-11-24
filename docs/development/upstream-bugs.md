@@ -186,6 +186,7 @@ The reasoning and history behind each row are in the git history of this file.
 | gobco cannot instrument a package whose `export_test.go` feeds its external test package | [rillig/gobco#42](https://github.com/rillig/gobco/issues/42), [rillig/gobco#43](https://github.com/rillig/gobco/pull/43) | PR open       | Yes, temporary: `cmd/internal/conditions` stages the package             |
 | gobco bridges a black box test package through an import it may not find                 | [rillig/gobco#33](https://github.com/rillig/gobco/issues/33), [rillig/gobco#39](https://github.com/rillig/gobco/pull/39) | Their PR open | Yes, temporary: `cmd/internal/conditions` adds the import                |
 | gobco drops `GOPATH` from the `go test` it runs                                          | Not reported                                                                                                             | Not reported  | Yes: `cmd/internal/conditions` exports `GOMODCACHE`                      |
+| gobco panics in a module reached through a symbolic link, which it copies as empty       | Not reported                                                                                                             | Not reported  | Yes: `cmd/internal/conditions` runs it in the directory behind the link  |
 
 ## Other
 
