@@ -1591,10 +1591,10 @@ jobs:
       # resolution failed this step twice in two days without measuring
       # anything (issue 1515). `go run` of the command, whose packages are this
       # module's own, asks the proxy for nothing the job has not downloaded.
-      # The install goes through the command, which holds
-      # the one pin of gobco's release, tries go install three times with a
-      # pause, and fails when PATH does not then find that release. Its
-      # timeout bounds three attempts that each wait on a resolver.
+      # The install goes through the command, which holds the one pin of
+      # gobco's release, tries go install three times with a pause, and fails
+      # when PATH does not then find that release. Its timeout bounds three
+      # attempts that each wait on a resolver.
       - name: Install gobco
         if: matrix.os != 'ubuntu-latest'
         shell: bash

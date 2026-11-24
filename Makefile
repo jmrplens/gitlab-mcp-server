@@ -962,23 +962,23 @@ modeleval-probe:
 # (cmd/server, internal/toolutil, test/e2e/internal/harness) died with a
 # redeclaration panic before measuring anything (issue 1017). The recipe
 # stages such a package in a copy of the module under the temporary directory,
-# holding only the files the go command builds here, and blanks the constraint lines of the
-# kept files whose constraint names more than the platform (a tag, a release,
-# cgo, the compiler), which gobco's own narrower build context would decline
-# to instrument; it runs gobco there, names the files it left out, whose
-# conditions this run does not measure, and removes the copy whatever
-# happens. The copy is of the module so that import paths, relative paths and
-# directory names stay the original's. A package whose external test package
-# gobco cannot read is staged too. gobco type-checks that package against the
-# package's non-test files alone, so the copy makes each test file of the
-# package that declares no test (an export_test.go) a file of the package
-# behind //go:build gc, which go builds and gobco does not instrument; and
-# gobco bridges to it through an import of the package it may not find, so an
-# external test package that imports nothing of the package is given one,
+# holding only the files the go command builds here, and blanks the constraint
+# lines of the kept files whose constraint names more than the platform (a
+# tag, a release, cgo, the compiler), which gobco's own narrower build context
+# would decline to instrument; it runs gobco there, names the files it left
+# out, whose conditions this run does not measure, and removes the copy
+# whatever happens. The copy is of the module so that import paths, relative
+# paths and directory names stay the original's. A package whose external test
+# package gobco cannot read is staged too. gobco type-checks that package
+# against the package's non-test files alone, so the copy makes each test file
+# of the package that declares no test (an export_test.go) a file of the
+# package behind //go:build gc, which go builds and gobco does not instrument;
+# and gobco bridges to it through an import of the package it may not find, so
+# an external test package that imports nothing of the package is given one,
 # until a gobco release fixes both (https://github.com/rillig/gobco/pull/43
-# and https://github.com/rillig/gobco/pull/39). A
-# package gobco could already read, a constraint on the platform alone
-# included, is run where it is, as before.
+# and https://github.com/rillig/gobco/pull/39). A package gobco could already
+# read, a constraint on the platform alone included, is run where it is, as
+# before.
 # TAGS names build tags for a package behind one (TAGS=e2e), passed to go list
 # and to gobco's go test alike, and a report that measured no condition (0/0)
 # is refused. GOBCO_GATE=all turns the report into the gate a touched package
