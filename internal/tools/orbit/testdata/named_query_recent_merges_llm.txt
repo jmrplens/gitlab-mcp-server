@@ -1,0 +1,4 @@
+query_type: traversal
+nodes:
+  MergeRequest[64]{id,merged_at,title}:
+    476666734,"2026-04-23T23:18:41Z","[FixPipeline] https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/pipelines/2470086836"

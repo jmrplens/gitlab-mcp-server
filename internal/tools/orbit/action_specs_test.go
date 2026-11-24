@@ -40,6 +40,7 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 	wantNames := []string{
 		"status", "schema", "tools", "dsl", "query", "graph_status",
 		"query_templates", "response_format", "command_list", "skill_list", "skill_get", "skill_file",
+		"named_query",
 	}
 	if len(specs) != len(wantNames) {
 		t.Fatalf("ActionSpecs() len = %d, want %d", len(specs), len(wantNames))
@@ -90,8 +91,8 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	if len(specs) != 12 {
-		t.Fatalf("ActionSpecs() len = %d, want 12", len(specs))
+	if len(specs) != 13 {
+		t.Fatalf("ActionSpecs() len = %d, want 13", len(specs))
 	}
 	for i, spec := range specs {
 		hasKGAlias := false
@@ -142,7 +143,7 @@ func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	guided := map[string]bool{"query": true, "skill_file": true}
+	guided := map[string]bool{"query": true, "skill_file": true, "named_query": true}
 	for i, spec := range specs {
 		if !guided[spec.Name] && spec.ParameterGuidance != nil {
 			t.Errorf("ActionSpecs()[%d] (%s).ParameterGuidance = %v, want none", i, spec.Name, spec.ParameterGuidance)
@@ -577,6 +578,7 @@ func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 		"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status",
 		"gitlab_orbit_query_templates", "gitlab_orbit_response_format", "gitlab_orbit_command_list",
 		"gitlab_orbit_skill_list", "gitlab_orbit_skill_get", "gitlab_orbit_skill_file",
+		"gitlab_orbit_named_query",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !containsTool(names, want) {
@@ -681,6 +683,7 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_skill_list", args: map[string]any{}},
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}},
+		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
 	}
 
 	for _, tt := range tests {
@@ -722,6 +725,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_skill_list", args: map[string]any{}},
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "no-such-skill"}},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "missing.md"}},
+		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
 	}
 
 	for _, tt := range tests {
@@ -747,6 +751,58 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 			}
 			if !strings.Contains(textContent.Text, "Not Found") || !strings.Contains(textContent.Text, "GitLab Orbit") {
 				t.Fatalf("content = %q, want Orbit not-found guidance", textContent.Text)
+			}
+		})
+	}
+}
+
+// TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind holds the card of a
+// 404 to what GitLab means by it on the route. An unknown named query is a
+// 400, so a 404 there says Orbit is not served to the token's user and the
+// card names the service. Each card keeps the two checks on Orbit being
+// served, and none of it says that what the caller sent does not exist when
+// GitLab said nothing about it.
+func TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	availability := []string{
+		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
+		"Check that the token can access a Knowledge Graph-enabled namespace or project",
+	}
+
+	tests := []struct {
+		name string
+		tool string
+		args map[string]any
+		want []string
+		not  string
+	}{
+		{
+			name: "a named query", tool: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"},
+			want: []string{"GitLab Orbit Named Queries Not Found", "**named query service**"}, not: "recent_merges",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := routes[tt.tool].Handler(t.Context(), tt.args)
+			if err != nil {
+				t.Fatalf("%s error = %v, want the not-found result", tt.tool, err)
+			}
+			card := toolutil.MarkdownForResult(result)
+			if card == nil || !card.IsError || len(card.Content) == 0 {
+				t.Fatalf("%s = %+v, want an informational error result", tt.tool, card)
+			}
+			text, ok := card.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want *mcp.TextContent", card.Content[0])
+			}
+			if lacks := missingFrom(text.Text, append(tt.want, availability...)...); len(lacks) > 0 {
+				t.Errorf("card lacks %q:\n%s", lacks, text.Text)
+			}
+			if strings.Contains(text.Text, tt.not) {
+				t.Errorf("card says %q, which GitLab's 404 says nothing about:\n%s", tt.not, text.Text)
 			}
 		})
 	}
@@ -782,6 +838,7 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_skill_list", args: map[string]any{}, wantHint: true},
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}, wantHint: true},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}, wantHint: true},
+		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}, wantHint: true},
 	}
 
 	for _, tt := range tests {

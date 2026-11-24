@@ -1797,16 +1797,16 @@ func TestWrapErrWithMessage_WorkhorseQueryRefusal_ReflectedOnlyForACorrectableCo
 // body answers any other request.
 //
 // The shape is reflected because Workhorse writes it on that route and the
-// model cannot correct a query without it. Of the routes this server calls,
-// that is the only one Workhorse answers this way, so on any other a
-// JSON-speaking gateway or WAF that answered with the same two keys would be
-// the interloper the body rule exists to withhold, with whatever internal
-// host names it carried. Each request that is not the Orbit query differs
-// from it in one way: the path (a read of a project, a project created with
-// the right method, a named query under the query's own path, which Workhorse
-// answers the same way and this server never sends), or the method (a GET of
-// the query's own path). The query is matched as a suffix of the path, so an
-// instance served under a relative URL root is still matched.
+// model cannot correct a query without it. It is the only route this package
+// knows to be answered this way, so on any other a JSON-speaking gateway or
+// WAF that answered with the same two keys would be the interloper the body
+// rule exists to withhold, with whatever internal host names it carried. Each
+// request that is not the Orbit query differs from it in one way: the path (a
+// read of a project, a project created with the right method, a named query
+// under the query's own path, whose refusal internal/tools/orbit reads
+// itself), or the method (a GET of the query's own path). The query is
+// matched as a suffix of the path, so an instance served under a relative URL
+// root is still matched.
 func TestWrapErrWithMessage_WorkhorseQueryRefusal_ReflectedOnlyFromTheOrbitQueryRoute(t *testing.T) {
 	const refusal = "schema violation at gkg-web-02.internal"
 	body := encodeJSONBody(t, map[string]any{"code": "compile_error", "message": refusal})
@@ -4458,5 +4458,30 @@ func TestSanitizeError_FineGrainedRefusal_IsDescribedOnce(t *testing.T) {
 	}
 	if SanitizeError(nil) != nil {
 		t.Error("SanitizeError(nil) is not nil")
+	}
+}
+
+// TestBoundedGitLabMessage_TextAHandlerRead_IsBoundedAsEveryMessage verifies
+// that the form a handler bounds text with is the one every reflected message
+// takes: one line without control characters, a long one cut, and an answer
+// client-go could not parse dropped.
+func TestBoundedGitLabMessage_TextAHandlerRead_IsBoundedAsEveryMessage(t *testing.T) {
+	long := strings.Repeat("a", maxGitLabMessageLen+1)
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "one line", text: "unknown\n  entity\x1b[0m", want: "unknown entity[0m"},
+		{name: "a long one", text: long, want: long[:maxGitLabMessageLen] + "..."},
+		{name: "an unparsed answer", text: unparsedBodyPrefix + " <html>", want: ""},
+		{name: "nothing", text: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BoundedGitLabMessage(tt.text); got != tt.want {
+				t.Errorf("BoundedGitLabMessage() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

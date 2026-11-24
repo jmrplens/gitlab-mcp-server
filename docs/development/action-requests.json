@@ -20460,6 +20460,34 @@
       ]
     },
     {
+      "id": "orbit.named_query",
+      "handlers": [
+        "orbit.func literal",
+        "orbit.NamedQuery"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /orbit/query/:name",
+          "placeholders": {
+            "name": "name"
+          },
+          "class": "mandatory",
+          "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
+          "sites": [
+            "orbit.restResponse"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "orbit.query",
       "handlers": [
         "orbit.func literal",
