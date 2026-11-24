@@ -896,8 +896,10 @@ const (
 	// + 1 Dependency Firewall package evaluation (Premium).
 	expectedEnterpriseDynamicCatalogActions = 1100
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1106 = 1105 + environment.stop_stale (Free, client-go v3.45.0). The
-	// 1105 was 1103 + group.group_upload and group.shared_project_delete (Free,
+	// 1112 = 1106 + orbit.query_templates, orbit.response_format,
+	// orbit.command_list, orbit.skill_list, orbit.skill_get and
+	// orbit.skill_file (GitLab.com Premium, issue 1209). The 1106 was 1105 +
+	// environment.stop_stale (Free, client-go v3.45.0). The 1105 was 1103 + group.group_upload and group.shared_project_delete (Free,
 	// client-go v3.42.0). The 1103 was 1101 + runner.reset_token_by_token and
 	// runner.router_discovery (Free, client-go v3.18.0). The 1101 was 1098 +
 	// project.milestone_promote,
@@ -909,7 +911,7 @@ const (
 	// + 12 achievement actions (Free, client-go v2.64.0), and the 1083 was
 	// 1075 + 7 work item saved view actions (Free, client-go v2.62.0)
 	// + 1 Dependency Firewall package evaluation (Premium).
-	expectedGitLabComEnterpriseCatalogActions = 1106
+	expectedGitLabComEnterpriseCatalogActions = 1112
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

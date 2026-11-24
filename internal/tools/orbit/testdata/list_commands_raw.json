@@ -1,0 +1,78 @@
+[
+  {
+    "name": "query_graph",
+    "description": "First command of this answer.",
+    "parameters": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "A required parameter."
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "llm",
+            "raw",
+            "gql"
+          ],
+          "description": "A parameter of three values."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_graph_schema",
+    "description": "Second command of this answer.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expand_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A parameter that takes a list."
+        },
+        "entity_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A second one that does."
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "llm",
+            "raw"
+          ],
+          "description": "A parameter of two values."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_response_format",
+    "description": "Third command of this answer.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "llm",
+            "raw"
+          ],
+          "description": "A parameter of two values."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

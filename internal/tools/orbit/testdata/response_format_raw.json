@@ -1,0 +1,23 @@
+{
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/query_response/v6",
+    "title": "A title",
+    "type": "object",
+    "required": [
+      "format_version",
+      "query_type",
+      "nodes",
+      "edges"
+    ],
+    "properties": {
+      "format_version": {
+        "type": "string"
+      },
+      "query_type": {
+        "type": "string"
+      }
+    }
+  },
+  "version": "6.0.0"
+}

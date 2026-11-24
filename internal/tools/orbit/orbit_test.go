@@ -58,6 +58,30 @@ func TestOrbitHandlers_CancelledOnArrival_ReturnCanceled(t *testing.T) {
 			return err
 		}},
 		{name: "graph status", call: callGraphStatus},
+		{name: "query templates", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := QueryTemplates(ctx, client, QueryTemplatesInput{})
+			return err
+		}},
+		{name: "response format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := QueryResponseFormat(ctx, client, QueryResponseFormatInput{})
+			return err
+		}},
+		{name: "command list", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := CommandList(ctx, client, CommandListInput{})
+			return err
+		}},
+		{name: "skill list", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := SkillList(ctx, client, SkillListInput{})
+			return err
+		}},
+		{name: "skill get", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := SkillGet(ctx, client, SkillGetInput{Name: "orbit"})
+			return err
+		}},
+		{name: "skill file", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := SkillFile(ctx, client, SkillFileInput{Name: "orbit", Path: "SKILL.md"})
+			return err
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -716,6 +740,15 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 			return err
 		}},
 		{name: "graph status", call: func() error { return callGraphStatus(ctx, client) }},
+		{name: "query templates", call: func() error { _, err := QueryTemplates(ctx, client, QueryTemplatesInput{}); return err }},
+		{name: "response format", call: func() error { _, err := QueryResponseFormat(ctx, client, QueryResponseFormatInput{}); return err }},
+		{name: "command list", call: func() error { _, err := CommandList(ctx, client, CommandListInput{}); return err }},
+		{name: "skill list", call: func() error { _, err := SkillList(ctx, client, SkillListInput{}); return err }},
+		{name: "skill get", call: func() error { _, err := SkillGet(ctx, client, SkillGetInput{Name: "orbit"}); return err }},
+		{name: "skill file", call: func() error {
+			_, err := SkillFile(ctx, client, SkillFileInput{Name: "orbit", Path: "SKILL.md"})
+			return err
+		}},
 	}
 
 	for _, tt := range tests {
