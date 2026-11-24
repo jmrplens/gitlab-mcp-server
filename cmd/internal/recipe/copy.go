@@ -11,12 +11,18 @@ import (
 )
 
 // CopyTree copies the directory src into dst, which it creates, with the modes
-// and times of its files and its symbolic links as links. skip is asked about
-// every entry below src by its path relative to src, written with slashes,
-// and one it answers true for is left out, a directory with everything below
-// it; dst may be such a directory. What is neither a file, a directory nor a
-// link is left out too: a socket or a pipe is nothing a package's tests read.
+// and times of its files and its symbolic links as links, but for src itself,
+// which is read through one: the go command names a module by the directory it
+// is run in, which may be a link to it. skip is asked about every entry below
+// src by its path relative to src, written with slashes, and one it answers
+// true for is left out, a directory with everything below it; dst may be such
+// a directory. What is neither a file, a directory nor a link is left out too:
+// a socket or a pipe is nothing a package's tests read.
 func CopyTree(src, dst string, skip func(rel string) bool) error {
+	// A src that cannot be resolved is the walk's to report.
+	if linked, err := filepath.EvalSymlinks(src); err == nil {
+		src = linked
+	}
 	return filepath.WalkDir(src, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err

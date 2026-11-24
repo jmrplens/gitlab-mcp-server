@@ -157,7 +157,7 @@ func TestMeasure_APackageTheCopyCannotHold_IsRefused(t *testing.T) {
 	}{
 		{name: "a linked package", at: "internal/linked", measured: "internal/linked", linked: true, want: "internal/linked is a symbolic link"},
 		{name: "below a linked directory", at: "linked", measured: "linked/scratch", linked: true, want: "linked is a symbolic link"},
-		{name: "in a directory left out", at: "dist/scratch", measured: "dist/scratch", want: "dist/scratch: no such file or directory"},
+		{name: "in a directory left out", at: "dist/scratch", measured: "dist/scratch", want: "could not be staged: lstat "},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

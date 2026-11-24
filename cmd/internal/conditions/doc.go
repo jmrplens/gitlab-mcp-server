@@ -49,10 +49,10 @@
 // which gobco would otherwise copy again into its own work directory, and it
 // lives outside the tree, so a run killed before it cleans up leaves a copy
 // in the temporary directory rather than a second copy of every package in
-// the tree. A symbolic link is copied as a link, so a file of the package
-// that is one is replaced in the copy rather than written through, and a
-// package reached through one is refused: a run that measures edits nothing
-// of what it measures.
+// the tree. A symbolic link below the module is copied as a link, so a file
+// of the package that is one is replaced in the copy rather than written
+// through, and a package reached through one is refused: a run that measures
+// edits nothing of what it measures.
 //
 // The files to remove are the complement of what go list says it builds
 // (GoFiles, CgoFiles, TestGoFiles, XTestGoFiles), not its IgnoredGoFiles:

@@ -64,13 +64,15 @@ func (m *measurement) stage() (target string, cleanup func(), err error) {
 // through a symbolic link. The copy keeps a link as it is, so what the staging
 // removes and writes there would be removed from and written to the original.
 func heldByCopy(module, rel string) error {
-	for ; rel != "."; rel = path.Dir(rel) {
-		info, err := os.Lstat(filepath.Join(module, filepath.FromSlash(rel)))
+	var at string
+	for element := range strings.SplitSeq(rel, "/") {
+		at = path.Join(at, element)
+		info, err := os.Lstat(filepath.Join(module, filepath.FromSlash(at)))
 		if err != nil {
 			return err
 		}
-		if info.Mode().Type() == os.ModeSymlink {
-			return fmt.Errorf("%s is a symbolic link, which the copy would follow back to the original", rel)
+		if info.Mode().Type() == fs.ModeSymlink {
+			return fmt.Errorf("%s is a symbolic link, which the copy would follow back to the original", at)
 		}
 	}
 	return nil
