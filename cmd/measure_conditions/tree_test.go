@@ -5,13 +5,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+
+	runs "github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/recipe"
 )
 
 // treeListing is a listing of the three packages the tree tests measure.
@@ -22,10 +26,10 @@ func treeListing() string {
 		row(module+"/internal/c", module, "c.go", "", "", "")
 }
 
-// treeScript answers for the three packages: one measured, one whose gate
-// held its one condition, and one the script could not measure.
-func treeScript() *fakeScript {
-	return &fakeScript{
+// treeRecipe answers for the three packages: one measured, one whose gate
+// held its one condition, and one the recipe could not measure.
+func treeRecipe() *fakeRecipe {
+	return &fakeRecipe{
 		outputs: map[string]string{
 			"./cmd/a":      "Condition coverage: 9/10\n",
 			"./internal/b": "Condition coverage: 3/4\n" + `b.go:7:2: condition "y" was never evaluated` + "\n" + "gobco: held:\n" + `  b.go:7:2: condition "y" was never evaluated` + "\n",
@@ -37,7 +41,7 @@ func treeScript() *fakeScript {
 
 // TestRunTree_Usage_IsRefusedWithStatus2 verifies every way the command line
 // can be wrong, before anything is listed: an unknown flag, an argument, no
-// records, no commit, a -parallel below one, and a gate or a mode the script
+// records, no commit, a -parallel below one, and a gate or a mode the recipe
 // would refuse.
 func TestRunTree_Usage_IsRefusedWithStatus2(t *testing.T) {
 	t.Parallel()
@@ -53,25 +57,25 @@ func TestRunTree_Usage_IsRefusedWithStatus2(t *testing.T) {
 		{name: "no commit", args: []string{"-records", "r"}, wantStderr: flagsWanted},
 		{name: "no parallelism", args: []string{"-records", "r", "-commit", "c", "-parallel", "0"}, wantStderr: flagsWanted},
 		{
-			name: "a gate the script would refuse", args: []string{"-records", "r", "-commit", "c", "-gate", "some"},
-			wantStderr: "measure_conditions: -gate \"some\" is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n",
+			name: "a gate the recipe would refuse", args: []string{"-records", "r", "-commit", "c", "-gate", "some"},
+			wantStderr: "measure_conditions: -gate \"some\" is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n",
 		},
 		{
-			name: "a mode the script would refuse", args: []string{"-records", "r", "-commit", "c", "-mode", "Branch"},
-			wantStderr: "measure_conditions: -mode \"Branch\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+			name: "a mode the recipe would refuse", args: []string{"-records", "r", "-commit", "c", "-mode", "Branch"},
+			wantStderr: "measure_conditions: -mode \"Branch\" is neither condition nor branch, which is what cmd/internal/conditions reads\n",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var calls []listCall
-			script := &fakeScript{}
+			recipe := &fakeRecipe{}
 			var stdout, stderr bytes.Buffer
-			if got := runTree(tc.args, &stdout, &stderr, fakeLister(nil, "", &calls), script.run); got != 2 {
+			if got := runTree(t.Context(), tc.args, &stdout, &stderr, fakeLister(nil, "", &calls), recipe.run); got != 2 {
 				t.Fatalf("runTree() = %d, want 2", got)
 			}
-			if stdout.Len() != 0 || !strings.HasPrefix(stderr.String(), tc.wantStderr) || len(calls)+len(script.calls) != 0 {
-				t.Errorf("stdout = %q, stderr = %q, %d listing(s) and %d script call(s); want nothing, %q and none", stdout.String(), stderr.String(), len(calls), len(script.calls), tc.wantStderr)
+			if stdout.Len() != 0 || !strings.HasPrefix(stderr.String(), tc.wantStderr) || len(calls)+len(recipe.calls) != 0 {
+				t.Errorf("stdout = %q, stderr = %q, %d listing(s) and %d recipe call(s); want nothing, %q and none", stdout.String(), stderr.String(), len(calls), len(recipe.calls), tc.wantStderr)
 			}
 		})
 	}
@@ -99,13 +103,13 @@ func TestRunTree_Listing_FailuresStopBeforeMeasuring(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			script := &fakeScript{}
+			recipe := &fakeRecipe{}
 			var stdout, stderr bytes.Buffer
-			if got := runTree([]string{"-records", t.TempDir(), "-commit", "c"}, &stdout, &stderr, tc.list, script.run); got != 1 {
+			if got := runTree(t.Context(), []string{"-records", t.TempDir(), "-commit", "c"}, &stdout, &stderr, tc.list, recipe.run); got != 1 {
 				t.Fatalf("runTree() = %d, want 1", got)
 			}
-			if stdout.Len() != 0 || stderr.String() != tc.wantStderr || len(script.calls) != 0 {
-				t.Errorf("stdout = %q, stderr = %q after %d script call(s); want nothing, %q and none", stdout.String(), stderr.String(), len(script.calls), tc.wantStderr)
+			if stdout.Len() != 0 || stderr.String() != tc.wantStderr || len(recipe.calls) != 0 {
+				t.Errorf("stdout = %q, stderr = %q after %d recipe call(s); want nothing, %q and none", stdout.String(), stderr.String(), len(recipe.calls), tc.wantStderr)
 			}
 		})
 	}
@@ -116,23 +120,23 @@ func TestRunTree_Listing_FailuresStopBeforeMeasuring(t *testing.T) {
 // once, in the module root, with the gate in its environment; the summary is
 // the workflow's, a row per package in the order listed, each record below
 // its own directory of -records, and the total of the packages measured,
-// with the one the script could not measure named and left out of it; and
+// with the one the recipe could not measure named and left out of it; and
 // stderr says what became of each package. A package gobco could not
 // measure is the summary's to report, not a failure of the run.
 func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 	t.Parallel()
-	script := treeScript()
+	recipe := treeRecipe()
 	records := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	args := []string{"-records", records, "-commit", "c0ffee", "-gate", "beyond:linux/amd64", "-parallel", "2", "-dir", "root"}
-	if got := runTree(args, &stdout, &stderr, treeLister(treeListing(), nil), script.run); got != 0 {
+	if got := runTree(t.Context(), args, &stdout, &stderr, treeLister(treeListing(), nil), recipe.run); got != 0 {
 		t.Fatalf("runTree() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
-	slices.SortFunc(script.calls, func(a, b scriptCall) int { return strings.Compare(a.pkg, b.pkg) })
+	slices.SortFunc(recipe.calls, func(a, b recipeCall) int { return strings.Compare(a.pkg, b.pkg) })
 	env := []string{"GOBCO_GATE=beyond:linux/amd64", "GOBCO_MODE=condition"}
-	wantCalls := []scriptCall{{dir: "root", pkg: "./cmd/a", env: env}, {dir: "root", pkg: "./internal/b", env: env}, {dir: "root", pkg: "./internal/c", env: env}}
-	if !reflect.DeepEqual(script.calls, wantCalls) {
-		t.Errorf("script calls = %+v, want %+v", script.calls, wantCalls)
+	wantCalls := []recipeCall{{dir: "root", pkg: "./cmd/a", env: env}, {dir: "root", pkg: "./internal/b", env: env}, {dir: "root", pkg: "./internal/c", env: env}}
+	if !reflect.DeepEqual(recipe.calls, wantCalls) {
+		t.Errorf("recipe calls = %+v, want %+v", recipe.calls, wantCalls)
 	}
 	local := "`local` (" + platform + ")"
 	want := summaryIntro("beyond:linux/amd64", "c0ffee") +
@@ -146,7 +150,7 @@ func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 		"| `./internal/b` | `local` | `b.go` | 7 | `y` | never evaluated | yes |\n" +
 		"\n### Not measured\n" +
 		"\n#### `./internal/c` on `local`\n\n" +
-		"`scripts/coverage-conditions.sh` exited 1, which means it could not measure, and said:\n\n" +
+		"`cmd/internal/conditions` exited 1, which means it could not measure, and said:\n\n" +
 		"```text\ngobco: gobco exited 1 on ./internal/c\n```\n"
 	if stdout.String() != want {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout.String(), want)
@@ -167,14 +171,14 @@ func TestRunTree_EveryPackage_IsMeasuredAndSummarized(t *testing.T) {
 	}
 }
 
-// TestRunTree_BranchMode_CountsBranchesThroughTheScript verifies the tree in
-// gobco's branch mode: the mode reaches every run of the script beside the
+// TestRunTree_BranchMode_CountsBranchesThroughTheRecipe verifies the tree in
+// gobco's branch mode: the mode reaches every run of the recipe beside the
 // gate, and the summary is of branch coverage, read from the figure gobco
 // writes in that mode, so a package whose report carries only a condition
 // figure is a record the summary could not use and fails the run.
-func TestRunTree_BranchMode_CountsBranchesThroughTheScript(t *testing.T) {
+func TestRunTree_BranchMode_CountsBranchesThroughTheRecipe(t *testing.T) {
 	t.Parallel()
-	script := &fakeScript{
+	recipe := &fakeRecipe{
 		outputs: map[string]string{
 			"./cmd/a": "Branch coverage: 4/4\n",
 			"./internal/b": "Branch coverage: 5/6\n" + `b.go:3:4: condition "x && y" was once true but never false` + "\n" +
@@ -185,18 +189,18 @@ func TestRunTree_BranchMode_CountsBranchesThroughTheScript(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	args := []string{"-records", t.TempDir(), "-commit", "c0ffee", "-mode", "branch"}
-	if got := runTree(args, &stdout, &stderr, treeLister(treeListing(), nil), script.run); got != 1 {
+	if got := runTree(t.Context(), args, &stdout, &stderr, treeLister(treeListing(), nil), recipe.run); got != 1 {
 		t.Fatalf("runTree() = %d, want 1; stderr:\n%s", got, stderr.String())
 	}
-	for _, call := range script.calls {
+	for _, call := range recipe.calls {
 		if want := []string{"GOBCO_GATE=all", "GOBCO_MODE=branch"}; !reflect.DeepEqual(call.env, want) {
-			t.Errorf("the script ran over %s with %q, want %q", call.pkg, call.env, want)
+			t.Errorf("the recipe ran over %s with %q, want %q", call.pkg, call.env, want)
 		}
 	}
 	local := "`local` (" + platform + ")"
-	const problem = "the record of ./internal/c on local cannot be read: the script's status says it measured, and its output carries no Branch coverage figure"
+	const problem = "the record of ./internal/c on local cannot be read: the recipe's status says it measured, and its output carries no Branch coverage figure"
 	want := "## Branch coverage, measured\n\n" +
-		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `scripts/coverage-conditions.sh`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
+		"`GOBCO_GATE=all` at `c0ffee`. Every figure is the one gobco printed on the runner named, through `cmd/internal/conditions`, the recipe behind `make coverage-conditions`; none is inferred from another platform. gobco counts each decision twice, once per outcome: the whole condition of an `if` or a `for`, and each case of a `switch`, so a total is twice the number of decisions. No figure fails this workflow: it is a measurement, not a gate.\n\n" +
 		"| Package | System | Covered | Not both ways | Held by the gate | Raw output |\n" +
 		"| --- | --- | ---: | ---: | ---: | --- |\n" +
 		"| `./cmd/a` | " + local + " | 4 of 4 | 0 | 0 | `cmd-a` |\n" +
@@ -229,7 +233,7 @@ func TestRunTree_StaleRecord_IsAProblemOfTheSummary(t *testing.T) {
 	writeRun(t, filepath.Join(records, "cmd-gone"), recordFor("./cmd/gone", localSystem, "linux/amd64", 0), "Condition coverage: 1/2\n")
 	writeRun(t, filepath.Join(records, "cmd-a"), recordFor("./cmd/a", localSystem, "linux/amd64", 1), "an earlier run\n")
 	var stdout, stderr bytes.Buffer
-	if got := runTree([]string{"-records", records, "-commit", "c"}, &stdout, &stderr, treeLister(treeListing(), nil), treeScript().run); got != 1 {
+	if got := runTree(t.Context(), []string{"-records", records, "-commit", "c"}, &stdout, &stderr, treeLister(treeListing(), nil), treeRecipe().run); got != 1 {
 		t.Fatalf("runTree() = %d, want 1", got)
 	}
 	const problem = "a record names ./cmd/gone on local, which the plan did not ask for"
@@ -250,13 +254,62 @@ func TestRunTree_UnwritableRecords_FailWithEveryPackagesReason(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := treeScript()
+	recipe := treeRecipe()
 	var stdout, stderr bytes.Buffer
-	if got := runTree([]string{"-records", file, "-commit", "c"}, &stdout, &stderr, treeLister(treeListing(), nil), script.run); got != 1 {
+	if got := runTree(t.Context(), []string{"-records", file, "-commit", "c"}, &stdout, &stderr, treeLister(treeListing(), nil), recipe.run); got != 1 {
 		t.Fatalf("runTree() = %d, want 1", got)
 	}
-	if stdout.Len() != 0 || len(script.calls) != 3 || strings.Count(stderr.String(), "mkdir "+file) != 3 {
-		t.Errorf("stdout = %q, %d script call(s), stderr =\n%s\nwant no summary, three calls and three mkdir failures", stdout.String(), len(script.calls), stderr.String())
+	if stdout.Len() != 0 || len(recipe.calls) != 3 || strings.Count(stderr.String(), "mkdir "+file) != 3 {
+		t.Errorf("stdout = %q, %d recipe call(s), stderr =\n%s\nwant no summary, three calls and three mkdir failures", stdout.String(), len(recipe.calls), stderr.String())
+	}
+}
+
+// TestRunTree_AnInterrupt_EndsTheRunWithNoSummary verifies that a signal while
+// a package is measured ends the run with the status a shell gives it: no
+// other package is measured, nothing is said of the one it ended in, and no
+// summary is written of a tree half measured.
+func TestRunTree_AnInterrupt_EndsTheRunWithNoSummary(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancelCause(t.Context())
+	recipe := treeRecipe()
+	recipe.onRun = func() { cancel(runs.InterruptedError{Signal: syscall.SIGTERM}) }
+	var stdout, stderr bytes.Buffer
+	if got := runTree(ctx, []string{"-records", t.TempDir(), "-commit", "c"}, &stdout, &stderr, treeLister(treeListing(), nil), recipe.run); got != 143 {
+		t.Errorf("runTree() = %d, want 143", got)
+	}
+	want := "measure_conditions: measuring the 3 packages below cmd/ and internal/, 1 at a time, with GOBCO_GATE=all and GOBCO_MODE=condition\n"
+	if stdout.Len() != 0 || len(recipe.calls) != 1 || stderr.String() != want {
+		t.Errorf("stdout = %q, %d recipe call(s), stderr = %q; want no summary, one call and %q", stdout.String(), len(recipe.calls), stderr.String(), want)
+	}
+}
+
+// TestRunTree_AnInterruptDuringTheListing_EndsTheRunWithTheSignalsStatus
+// verifies that a signal while the packages are listed ends the run with the
+// status a shell gives it, whether the listing failed for it or not: nothing is
+// said of the listing and no package is measured.
+func TestRunTree_AnInterruptDuringTheListing_EndsTheRunWithTheSignalsStatus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{{name: "the listing failed", err: errors.New("planted")}, {name: "the listing ended"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancelCause(t.Context())
+			answer := treeLister(treeListing(), tc.err)
+			list := func(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
+				cancel(runs.InterruptedError{Signal: syscall.SIGTERM})
+				return answer(ctx, dir, env, args...)
+			}
+			recipe := treeRecipe()
+			var stdout, stderr bytes.Buffer
+			if got := runTree(ctx, []string{"-records", t.TempDir(), "-commit", "c"}, &stdout, &stderr, list, recipe.run); got != 143 {
+				t.Errorf("runTree() = %d, want 143", got)
+			}
+			if stdout.Len() != 0 || stderr.Len() != 0 || len(recipe.calls) != 0 {
+				t.Errorf("stdout = %q, stderr = %q, %d recipe call(s); want none of them", stdout.String(), stderr.String(), len(recipe.calls))
+			}
+		})
 	}
 }
 
@@ -264,22 +317,22 @@ func TestRunTree_UnwritableRecords_FailWithEveryPackagesReason(t *testing.T) {
 // figure issue 1667 asked for, over the planted module and its packages below
 // cmd/ and internal/, listed and counted with the toolchain's own go command:
 // the packages with nothing to measure are measured with nothing to measure
-// and the script is run over the rest alone, so every package of the tree is
+// and the recipe is run over the rest alone, so every package of the tree is
 // in the total, which the conditionless ones add nothing to.
 func TestRunTree_PlantedModule_MeasuresEveryPackage(t *testing.T) {
 	t.Parallel()
-	script := &fakeScript{
+	recipe := &fakeRecipe{
 		outputs: map[string]string{"./internal/branchless": "Condition coverage: 2/2\n", "./internal/some": "Condition coverage: 1/2\n"},
 		status:  map[string]int{"./internal/branchless": 0, "./internal/some": 0},
 	}
 	var stdout, stderr bytes.Buffer
 	args := []string{"-records", t.TempDir(), "-commit", "c0ffee", "-dir", plantedModule}
-	if got := runTree(args, &stdout, &stderr, goList, script.run); got != 0 {
+	if got := runTree(t.Context(), args, &stdout, &stderr, goList, recipe.run); got != 0 {
 		t.Fatalf("runTree() = %d, want 0; stderr:\n%s", got, stderr.String())
 	}
-	slices.SortFunc(script.calls, func(a, b scriptCall) int { return strings.Compare(a.pkg, b.pkg) })
-	if len(script.calls) != 2 || script.calls[0].pkg != "./internal/branchless" || script.calls[1].pkg != "./internal/some" {
-		t.Errorf("script calls = %+v, want ./internal/branchless and ./internal/some alone", script.calls)
+	slices.SortFunc(recipe.calls, func(a, b recipeCall) int { return strings.Compare(a.pkg, b.pkg) })
+	if len(recipe.calls) != 2 || recipe.calls[0].pkg != "./internal/branchless" || recipe.calls[1].pkg != "./internal/some" {
+		t.Errorf("recipe calls = %+v, want ./internal/branchless and ./internal/some alone", recipe.calls)
 	}
 	local := "`local` (" + platform + ")"
 	want := summaryIntro("all", "c0ffee") +
@@ -293,10 +346,10 @@ func TestRunTree_PlantedModule_MeasuresEveryPackage(t *testing.T) {
 	}
 	progress := slices.Sorted(slices.Values(strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")[1:]))
 	wantProgress := []string{
-		"measure_conditions: ./cmd/none: measured, nothing to measure (no condition, the script not run)",
+		"measure_conditions: ./cmd/none: measured, nothing to measure (no condition, the recipe not run)",
 		"measure_conditions: ./internal/branchless: measured (exit 0)",
 		"measure_conditions: ./internal/some: measured (exit 0)",
-		"measure_conditions: ./internal/testonly: measured, nothing to measure (no condition, the script not run)",
+		"measure_conditions: ./internal/testonly: measured, nothing to measure (no condition, the recipe not run)",
 	}
 	if !reflect.DeepEqual(progress, wantProgress) {
 		t.Errorf("progress lines = %q, want %q in any order", progress, wantProgress)

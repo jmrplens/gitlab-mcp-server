@@ -71,8 +71,8 @@ func parseEveryShape(t *testing.T, mode, figure string) {
 }
 
 // TestParseMeasurement_StatusAndOutput_MustAgree verifies that a measurement
-// is refused when its output is not what the script writes for its status
-// and mode: no figure, a figure of zero (which the script refuses), a figure
+// is refused when its output is not what the recipe writes for its status
+// and mode: no figure, a figure of zero (which the recipe refuses), a figure
 // in the other mode's words, a figure whose count of either side does not
 // fit an int, a held line gobco's report does not name, a gate status with
 // nothing held, and a passing status with something held. The last figure of
@@ -90,19 +90,19 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 	}{
 		{
 			name: "no figure", output: never + "\n", status: statusMeasured,
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 		{
 			name: "a branch figure read as conditions", output: "Branch coverage: 2/2\n", status: statusMeasured,
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 		{
 			name: "a condition figure read as branches", output: "Condition coverage: 2/2\n", status: statusMeasured, mode: "branch",
-			wantErr: "the script's status says it measured, and its output carries no Branch coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Branch coverage figure",
 		},
 		{
 			name: "a branch figure of zero", output: "Branch coverage: 0/0\n", status: statusMeasured, mode: "branch",
-			wantErr: "the script's status says it measured, and its output carries no Branch coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Branch coverage figure",
 		},
 		{
 			name: "a branch total past an int", output: "Branch coverage: 2/99999999999999999999\n", status: statusMeasured, mode: "branch",
@@ -114,7 +114,7 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 		},
 		{
 			name: "a figure of zero", output: "Condition coverage: 0/0\n", status: statusMeasured,
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 		{
 			name: "a covered count past an int", output: "Condition coverage: 99999999999999999999/2\n", status: statusMeasured,
@@ -126,15 +126,15 @@ func TestParseMeasurement_StatusAndOutput_MustAgree(t *testing.T) {
 		},
 		{
 			name: "a held line gobco did not name", output: "Condition coverage: 1/2\n  " + never + "\n", status: statusGateHeld,
-			wantErr: "the script held 1 condition(s) and gobco's report names 0 of them",
+			wantErr: "the recipe held 1 condition(s) and gobco's report names 0 of them",
 		},
 		{
 			name: "a gate status with nothing held", output: "Condition coverage: 1/2\n" + never + "\n", status: statusGateHeld,
-			wantErr: "the script exited 3 and its gate held 0 condition(s)",
+			wantErr: "the recipe exited 3 and its gate held 0 condition(s)",
 		},
 		{
 			name: "a passing status with something held", output: "Condition coverage: 1/2\n" + never + "\n  " + never + "\n", status: statusMeasured,
-			wantErr: "the script exited 0 and its gate held 1 condition(s)",
+			wantErr: "the recipe exited 0 and its gate held 1 condition(s)",
 		},
 		{name: "a passing run, the last figure read", output: "Condition coverage: 1/9\nCondition coverage: 2/2\nBranch coverage: 1/9\n", status: statusMeasured},
 	}
@@ -185,21 +185,22 @@ func TestParseMeasurement_NothingToMeasure_IsZeroOfZero(t *testing.T) {
 	}{
 		{name: "in condition mode", output: line("condition"), status: statusMeasured, mode: "condition"},
 		{name: "in branch mode", output: line("branch") + "\r\n", status: statusMeasured, mode: "branch"},
+		{name: "followed by the other mode's line", output: line("condition") + line("branch"), status: statusMeasured, mode: "condition"},
 		{
 			name: "the other mode's line", output: line("branch"), status: statusMeasured, mode: "condition",
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 		{name: "beside a figure", output: line("condition") + "Condition coverage: 1/2\n", status: statusMeasured, mode: "condition", wantErr: both},
 		{name: "beside a condition", output: line("condition") + never + "\n", status: statusMeasured, mode: "condition", wantErr: both},
 		{name: "beside a held line", output: line("condition") + "  " + never + "\n", status: statusGateHeld, mode: "condition", wantErr: both},
-		{name: "under the gate's status", output: line("condition"), status: statusGateHeld, mode: "condition", wantErr: "the script exited 3 and its gate held 0 condition(s)"},
+		{name: "under the gate's status", output: line("condition"), status: statusGateHeld, mode: "condition", wantErr: "the recipe exited 3 and its gate held 0 condition(s)"},
 		{
 			name: "cut short before its 0 of 0", output: strings.TrimSuffix(line("condition"), ": 0 of 0\n") + "\n", status: statusMeasured, mode: "condition",
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 		{
 			name: "with words after its 0 of 0", output: strings.TrimSuffix(line("condition"), "\n") + " and more\n", status: statusMeasured, mode: "condition",
-			wantErr: "the script's status says it measured, and its output carries no Condition coverage figure",
+			wantErr: "the recipe's status says it measured, and its output carries no Condition coverage figure",
 		},
 	}
 	for _, tc := range cases {

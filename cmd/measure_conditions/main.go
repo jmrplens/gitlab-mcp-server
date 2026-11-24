@@ -4,9 +4,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/recipe"
 )
 
 // toolName is how every message this command prints names its source.
@@ -25,25 +28,28 @@ const usage = `usage: measure_conditions <plan|measure|summarize|tree> [flags]
 var osExit = os.Exit
 
 func main() {
-	osExit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := recipe.Signals(context.Background())
+	status := runMain(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	osExit(status)
 }
 
 // runMain dispatches a subcommand and returns the process exit code: 2 for a
 // usage error, otherwise whatever the subcommand returns.
-func runMain(args []string, stdout, stderr io.Writer) int {
+func runMain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
 	switch args[0] {
 	case "plan":
-		return runPlan(args[1:], stdout, stderr, goList)
+		return runPlan(ctx, args[1:], stdout, stderr, goList)
 	case "measure":
-		return runMeasure(args[1:], stdout, stderr, goList, runScript)
+		return runMeasure(ctx, args[1:], stdout, stderr, goList, runRecipe)
 	case "summarize":
 		return runSummarize(args[1:], stdout, stderr)
 	case "tree":
-		return runTree(args[1:], stdout, stderr, goList, runScript)
+		return runTree(ctx, args[1:], stdout, stderr, goList, runRecipe)
 	default:
 		fmt.Fprintf(stderr, "%s: unknown subcommand %q\n%s", toolName, args[0], usage)
 		return 2

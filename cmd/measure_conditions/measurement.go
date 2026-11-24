@@ -9,23 +9,25 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/conditions"
 )
 
-// The exit statuses of scripts/coverage-conditions.sh that mean a measurement
+// The exit statuses of cmd/internal/conditions that mean a measurement
 // was taken: the gate held nothing, or the gate held at least one condition.
-// Every other status means the script could not measure.
+// Every other status means the recipe could not measure.
 const (
-	statusMeasured = 0
-	statusGateHeld = 3
+	statusMeasured = conditions.Measured
+	statusGateHeld = conditions.GateHeld
 )
 
 // figurePattern is the line gobco ends its report on, read exactly as the
-// script reads it: opened with the words of the mode it counted in, and a
-// total of zero is no measurement, which the script refuses before it could
+// recipe reads it: opened with the words of the mode it counted in, and a
+// total of zero is no measurement, which the recipe refuses before it could
 // be recorded as one.
 var figurePattern = regexp.MustCompile(`^(Condition coverage|Branch coverage): (\d+)/([1-9]\d*)$`)
 
-// coverageMode is one GOBCO_MODE scripts/coverage-conditions.sh reads: the
+// coverageMode is one GOBCO_MODE cmd/internal/conditions reads: the
 // words gobco opens its figure with in that mode, and the sentence a summary
 // says what the figures count in.
 type coverageMode struct {
@@ -33,7 +35,7 @@ type coverageMode struct {
 	counts string
 }
 
-// coverageModes are the GOBCO_MODE values the script reads. condition is
+// coverageModes are the GOBCO_MODE values the recipe reads. condition is
 // gobco's default, which counts every atomic condition, each operand of &&
 // and || and each comparison wherever it is written. branch is gobco's
 // -branch, which counts the whole controlling condition of each if and each
@@ -60,7 +62,7 @@ var coverageModes = map[string]coverageMode{
 // it ends, since what gobco says after it holds no quote.
 var conditionPattern = regexp.MustCompile(`^(.+\.go):(\d+):\d+: condition (".*") was (never evaluated|.* but never (?:true|false))$`)
 
-// heldIndent is how the script prints a condition its gate held, under the
+// heldIndent is how the recipe prints a condition its gate held, under the
 // line that says how many there were.
 const heldIndent = "  "
 
@@ -86,13 +88,13 @@ type measurement struct {
 // parseMeasurement reads the output of a run whose status says it measured,
 // in the mode the runs were asked for, which is a key of coverageModes.
 //
-// The figure must be there in the words of the mode, since the script
+// The figure must be there in the words of the mode, since the recipe
 // refuses to pass a run without one; a figure in the other mode's words is
 // not the measurement asked for, and is passed over like any other line. A
-// condition the script held is printed twice, once in gobco's report and
+// condition the recipe held is printed twice, once in gobco's report and
 // once indented under the gate's verdict, and is marked held. A held line
 // gobco's report does not name, or a status that disagrees with whether
-// anything was held, means the output is not what the script writes, and is
+// anything was held, means the output is not what the recipe writes, and is
 // refused rather than tabulated.
 //
 // The line measurePackage writes for a package with nothing to measure in
@@ -109,7 +111,7 @@ func parseMeasurement(output string, status int, mode string) (measurement, erro
 		return measurement{}, errors.New("the output says there was nothing to measure, and carries a figure or a condition as well")
 	}
 	if figure == "" && !nothing {
-		return measurement{}, fmt.Errorf("the script's status says it measured, and its output carries no %s figure", label)
+		return measurement{}, fmt.Errorf("the recipe's status says it measured, and its output carries no %s figure", label)
 	}
 	if figure != "" {
 		var err error
@@ -124,10 +126,10 @@ func parseMeasurement(output string, status int, mode string) (measurement, erro
 		}
 	}
 	if found.held != len(heldLines) {
-		return measurement{}, fmt.Errorf("the script held %d condition(s) and gobco's report names %d of them", len(heldLines), found.held)
+		return measurement{}, fmt.Errorf("the recipe held %d condition(s) and gobco's report names %d of them", len(heldLines), found.held)
 	}
 	if (status == statusGateHeld) != (found.held > 0) {
-		return measurement{}, fmt.Errorf("the script exited %d and its gate held %d condition(s)", status, found.held)
+		return measurement{}, fmt.Errorf("the recipe exited %d and its gate held %d condition(s)", status, found.held)
 	}
 	return found, nil
 }

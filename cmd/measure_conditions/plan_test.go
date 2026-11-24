@@ -91,12 +91,12 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 			wantStderr: "measure_conditions: 1 run(s) planned, ./cmd/server on macos-latest, with GOBCO_GATE=all and GOBCO_MODE=branch\n",
 		},
 		{
-			name: "a mode the script would refuse", args: []string{"-systems", "macos-latest", "-gate", "all", "-mode", "branches"}, list: broken, wantCode: 2,
-			wantStderr: "measure_conditions: -mode \"branches\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+			name: "a mode the recipe would refuse", args: []string{"-systems", "macos-latest", "-gate", "all", "-mode", "branches"}, list: broken, wantCode: 2,
+			wantStderr: "measure_conditions: -mode \"branches\" is neither condition nor branch, which is what cmd/internal/conditions reads\n",
 		},
 		{
 			name: "no mode", args: []string{"-systems", "macos-latest", "-gate", "all", "-mode", ""}, list: broken, wantCode: 2,
-			wantStderr: "measure_conditions: -mode \"\" is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n",
+			wantStderr: "measure_conditions: -mode \"\" is neither condition nor branch, which is what cmd/internal/conditions reads\n",
 		},
 		{
 			name: "no package named and none found", args: []string{"-systems", "macos-latest", "-gate", "all"}, list: nothing, wantCode: 1,
@@ -116,15 +116,15 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 		},
 		{
 			name: "no gate", args: []string{"-systems", "macos-latest"}, list: broken, wantCode: 2,
-			wantStderr: "measure_conditions: -gate \"\" is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n",
+			wantStderr: "measure_conditions: -gate \"\" is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n",
 		},
 		{
-			name: "a gate the script would refuse", args: []string{"-systems", "macos-latest", "-gate", "beyond:linux"}, list: broken, wantCode: 2,
-			wantStderr: "measure_conditions: -gate \"beyond:linux\" is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n",
+			name: "a gate the recipe would refuse", args: []string{"-systems", "macos-latest", "-gate", "beyond:linux"}, list: broken, wantCode: 2,
+			wantStderr: "measure_conditions: -gate \"beyond:linux\" is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n",
 		},
 		{
 			name: "a gate with more after it", args: []string{"-systems", "macos-latest", "-gate", "all,"}, list: broken, wantCode: 2,
-			wantStderr: "measure_conditions: -gate \"all,\" is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n",
+			wantStderr: "measure_conditions: -gate \"all,\" is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n",
 		},
 		{
 			name: "a runner outside the three", args: []string{"-systems", "self-hosted", "-gate", "all"}, list: broken, wantCode: 2,
@@ -170,7 +170,7 @@ func TestRunPlan_Dispatches_PrintTheMatrixOrRefuse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var stdout, stderr bytes.Buffer
-			if got := runPlan(tc.args, &stdout, &stderr, tc.list); got != tc.wantCode {
+			if got := runPlan(t.Context(), tc.args, &stdout, &stderr, tc.list); got != tc.wantCode {
 				t.Fatalf("runPlan(%q) = %d, want %d; stderr:\n%s", tc.args, got, tc.wantCode, stderr.String())
 			}
 			if stdout.String() != tc.wantStdout {
@@ -197,7 +197,7 @@ func TestRunPlan_DirFlag_IsWhereTheDiscoveryLooks(t *testing.T) {
 		return nil, errors.New("stop")
 	}
 	var stdout, stderr bytes.Buffer
-	if got := runPlan([]string{"-dir", "elsewhere", "-systems", "macos-latest", "-gate", "all"}, &stdout, &stderr, list); got != 1 {
+	if got := runPlan(t.Context(), []string{"-dir", "elsewhere", "-systems", "macos-latest", "-gate", "all"}, &stdout, &stderr, list); got != 1 {
 		t.Fatalf("runPlan() = %d, want 1", got)
 	}
 	if !reflect.DeepEqual(dirs, []string{"elsewhere"}) {
@@ -238,7 +238,7 @@ func TestRunPlan_TreeDirFlag_IsWhereTheTreeIsListed(t *testing.T) {
 		return nil, errors.New("stop")
 	}
 	var stdout, stderr bytes.Buffer
-	if got := runPlan([]string{"-tree", "-dir", "elsewhere", "-systems", "macos-latest", "-gate", "all"}, &stdout, &stderr, list); got != 1 {
+	if got := runPlan(t.Context(), []string{"-tree", "-dir", "elsewhere", "-systems", "macos-latest", "-gate", "all"}, &stdout, &stderr, list); got != 1 {
 		t.Fatalf("runPlan() = %d, want 1", got)
 	}
 	want := []listCall{{dir: "elsewhere", args: []string{"list", "-f", listFormat, "./cmd/...", "./internal/..."}}}

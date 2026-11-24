@@ -30,7 +30,7 @@ var releaseTargets = []string{
 
 // listFormat is the row asked of `go list` per package: its import path, its
 // module's path, and the four lists of files the go command builds for it,
-// which are the lists scripts/coverage-conditions.sh compares a directory
+// which are the lists cmd/internal/conditions compares a directory
 // against. The four lists are compared as one string, so how they are joined
 // does not matter as long as it is the same under every target.
 const listFormat = `{{.ImportPath}}	{{with .Module}}{{.Path}}{{end}}	{{join .GoFiles " "}}	{{join .CgoFiles " "}}	{{join .TestGoFiles " "}}	{{join .XTestGoFiles " "}}`
@@ -68,7 +68,7 @@ type listedPackage struct {
 //
 // CGO_ENABLED is set because the go command turns cgo off for a platform
 // other than the host's, which would make a cgo file read as constrained to
-// the host; the script sets it for its reference listing for the same reason.
+// the host; the recipe sets it for its reference listing for the same reason.
 func constrainedPackages(ctx context.Context, dir string, list lister) ([]string, error) {
 	first := map[string]listedPackage{}
 	varies := map[string]bool{}
@@ -148,11 +148,11 @@ func parseListing(out []byte) ([]listedPackage, error) {
 	return rows, nil
 }
 
-// relativePackage names a package the way the script and the workflow take
+// relativePackage names a package the way the recipe and the workflow take
 // it, ./ and its directory below the module root. A package that is not below
 // its module's path, the module root itself included, is refused: no package
 // of this module sits at its root, and one that did would need a name the
-// script reads differently.
+// recipe reads differently.
 func relativePackage(pkg listedPackage) (string, error) {
 	rel, below := strings.CutPrefix(pkg.path, pkg.module+"/")
 	if !below {

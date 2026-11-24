@@ -204,7 +204,6 @@ type scriptDeclaration struct {
 // pending script names any longer has landed, and its line is reported until
 // it goes.
 var pendingPorts = map[int]string{
-	4:  "one coverage command over cmd/internal/golist that stages the module copy and still drives gremlins and gobco",
 	6:  "a Go orchestrator for the Docker e2e runs under test/e2e/, the gitlab-rails snippets embedded",
 	8:  "the SonarCloud scan beside the coverage command",
 	15: "Go tests that drive what stays through os/exec and httptest, or node:test inside site/ for the site's own steps",
@@ -241,12 +240,6 @@ var declaredScripts = map[string]scriptDeclaration{
 		category: scriptDistributionEntryPoint,
 		reason:   "the npm package's bin, which npx runs with Node to choose the platform package's binary",
 	},
-	"scripts/check-spec-conditions.sh":              {category: scriptPortPending, item: 4},
-	"scripts/check_spec_conditions_sh_test.py":      {category: scriptPortPending, item: 4},
-	"scripts/coverage-conditions.sh":                {category: scriptPortPending, item: 4},
-	"scripts/coverage-mutants.sh":                   {category: scriptPortPending, item: 4},
-	"scripts/coverage_conditions_sh_test.py":        {category: scriptPortPending, item: 4},
-	"scripts/coverage_mutants_sh_test.py":           {category: scriptPortPending, item: 4},
 	"scripts/e2e_docker_images_test.py":             {category: scriptPortPending, item: 6},
 	"scripts/e2e_fixture_addresses_test.py":         {category: scriptPortPending, item: 6},
 	"scripts/e2e_gitlab_exceptions_test.py":         {category: scriptPortPending, item: 6},

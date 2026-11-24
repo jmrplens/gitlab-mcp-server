@@ -1,0 +1,264 @@
+{
+ "note": "every run of scripts/check-spec-conditions.sh at 02a41e35d over one changed action_specs.go per package, with the condition recipe answered as output and status say",
+ "runs": [
+  {
+   "name": "gobco panicked",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "gobco: ./internal/tools/alpha holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (x_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them.\npanic: x_unix.go:5:6: f redeclared in this block\ngobco: gobco exited 2 on the staged copy of ./internal/tools/alpha, so any figure above is not a measurement: its go test failed there\n",
+     "status": 2
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: panic: x_unix.go:5:6: f redeclared in this block\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "a staged run failed",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "gobco: ./internal/tools/alpha holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (x_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them.\n--- FAIL: TestHeaders (0.00s)\n\nCondition coverage: 3/4\ngobco: gobco exited 1 on the staged copy of ./internal/tools/alpha, so any figure above is not a measurement: its go test failed there\ngobco: the copy blanked\n",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: gobco: gobco exited 1 on the staged copy of ./internal/tools/alpha, so any figure above is not a measurement: its go test failed there\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "a run where it is failed",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "--- FAIL: TestX (0.00s)\n\nCondition coverage: 3/4\ngobco: gobco exited 1 on ./internal/tools/alpha, so any figure above is not a measurement: its go test failed\n",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: gobco: gobco exited 1 on ./internal/tools/alpha, so any figure above is not a measurement: its go test failed\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "no condition measured",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "gobco: ./internal/tools/alpha holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (x_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them.\n\nCondition coverage: 0/0\ngobco: the report above measured no condition of ./internal/tools/alpha (Condition coverage: 0/0); refusing to pass it on as a measurement\n",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: gobco: the report above measured no condition of ./internal/tools/alpha (Condition coverage: 0/0); refusing to pass it on as a measurement\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "refused before gobco ran",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "gobco: ./internal/tools/alpha keeps no test file; refusing to measure\ngobco: a package behind a build tag\n",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: gobco: ./internal/tools/alpha keeps no test file; refusing to measure\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "no verdict at all",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "something went wrong\nand kept going\n",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: something went wrong\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "nothing said",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "",
+     "status": 1
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: \ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "undeclared",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "gobco: ./internal/tools/alpha holds 1 .go file(s) the go command does not build on linux/amd64 under build tags (none) (x_windows.go), which gobco would parse with the rest (issue 1017); measuring it in a staged copy of the module without them.\n\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha/action_specs.go:4:9: condition \"c == 1\" was once true but never false\ncheck-spec-conditions: 1 finding(s)\n"
+  },
+  {
+   "name": "undeclared, never true",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was once false but never true\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha/action_specs.go:4:9: condition \"c == 1\" was once false but never true\ncheck-spec-conditions: 1 finding(s)\n"
+  },
+  {
+   "name": "undeclared, never evaluated",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was never evaluated\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha/action_specs.go:4:9: condition \"c == 1\" was never evaluated\ncheck-spec-conditions: 1 finding(s)\n"
+  },
+  {
+   "name": "a condition of another file",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\nother.go:4:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "declared on its line",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1 // gobco: always true here\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "declared on the line above",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\t// gobco: always true here\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:5:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "a declaration that answers nothing",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1 // gobco: always true here\n}\n",
+     "output": "\nCondition coverage: 3/4\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha: 1 declaration(s) and 0 answered condition(s); the rest are stale\ncheck-spec-conditions: 1 finding(s)\n"
+  },
+  {
+   "name": "declared and stale beside undeclared",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1 // gobco: always true here\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:1:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha/action_specs.go:1:9: condition \"c == 1\" was once true but never false\n  internal/tools/alpha: 1 declaration(s) and 0 answered condition(s); the rest are stale\ncheck-spec-conditions: 2 finding(s)\n"
+  },
+  {
+   "name": "two packages",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    },
+    "beta": {
+     "specs": "package beta\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\naction_specs.go:4:9: condition \"c == 1\" was once true but never false\n",
+     "status": 0
+    }
+   },
+   "status": 1,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\nCondition coverage: 3/4\ncheck-spec-conditions: measuring internal/tools/beta\nCondition coverage: 3/4\n",
+   "stderr": "  internal/tools/alpha/action_specs.go:4:9: condition \"c == 1\" was once true but never false\n  internal/tools/beta/action_specs.go:4:9: condition \"c == 1\" was once true but never false\ncheck-spec-conditions: 2 finding(s)\n"
+  },
+  {
+   "name": "one measured and one not",
+   "packages": {
+    "alpha": {
+     "specs": "package alpha\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "panic: no\n",
+     "status": 1
+    },
+    "beta": {
+     "specs": "package beta\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
+     "output": "\nCondition coverage: 3/4\n",
+     "status": 0
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: measuring internal/tools/alpha\n  not measured: gobco could not instrument this package: panic: no\ncheck-spec-conditions: measuring internal/tools/beta\nCondition coverage: 3/4\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "removed",
+   "packages": {
+    "alpha": {
+     "specs": null,
+     "output": "",
+     "status": 0
+    }
+   },
+   "status": 0,
+   "stdout": "check-spec-conditions: internal/tools/alpha/action_specs.go was removed, nothing to measure\ncheck-spec-conditions: every measured condition is evaluated both ways\n",
+   "stderr": ""
+  },
+  {
+   "name": "nothing changed",
+   "packages": {},
+   "status": 0,
+   "stdout": "check-spec-conditions: no action_specs.go changed against 06ab2a192dc2ccfbee280f94863881c817358206\n",
+   "stderr": ""
+  },
+  {
+   "name": "no such ref",
+   "packages": {},
+   "base": "no-such-ref",
+   "status": 2,
+   "stdout": "",
+   "stderr": "check-spec-conditions: no such ref: no-such-ref\n"
+  }
+ ]
+}

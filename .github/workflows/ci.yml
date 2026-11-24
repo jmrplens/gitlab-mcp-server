@@ -1220,20 +1220,6 @@ jobs:
       # scripts/mcpb_manifest_test.py pins mcpb/manifest.json. What the bundle
       # build packs and refuses is held by cmd/release_packages' own tests,
       # which run with every Go package.
-      # scripts/coverage_mutants_sh_test.py drives the mutation recipe,
-      # scripts/coverage-mutants.sh, against a stand-in go command, and holds
-      # the deadline it hands gremlins to the run gremlins actually times, and
-      # gremlins and all it starts to the address-space ceiling (RLIMIT_AS)
-      # MUTANT_MEMORY_MAX sets.
-      # scripts/coverage_conditions_sh_test.py drives the condition recipe,
-      # scripts/coverage-conditions.sh, against a stand-in go and gobco, and
-      # holds it to staging one build context for gobco to read, to measuring
-      # with the network unreachable once its --install has put gobco on PATH,
-      # and the workflows to installing gobco before they measure.
-      # scripts/check_spec_conditions_sh_test.py runs the condition gate over
-      # action specs, scripts/check-spec-conditions.sh, in a throwaway git
-      # repository against a stand-in recipe, and holds the reason it gives a
-      # package it could not measure.
       # scripts/smoke_test_image_sh_test.py runs the image smoke test against
       # a stand-in docker, and holds it to refusing an image without this
       # repository's LICENSE or without third-party notices for its platform.
@@ -1590,9 +1576,9 @@ jobs:
       # one-way is one nothing measures on this platform, and fails it. A
       # green leg therefore measures both packages in full on its system; the
       # figure for any other package is conditions.yml's, dispatched by hand,
-      # which runs this same script and fails on no figure.
+      # which runs this same recipe and fails on no figure.
       #
-      # Through bash and the script itself rather than make, which
+      # Through go run of the command itself rather than make, which
       # windows-latest does not promise. The timeout is gobco's go test's, whose
       # default of ten minutes is the one the unit suite above had to raise for
       # cmd/server on Windows. A Go runtime crash of issue 467 fails this step
@@ -1600,18 +1586,20 @@ jobs:
       # the log, and is answered the same way: rerun the failed job.
       #
       # gobco is installed once, by the step just before it, so the step runs
-      # it from PATH. The script would otherwise run it through `go run`, which
+      # it from PATH. The recipe would otherwise run it through `go run`, which
       # asks the module proxy on every run, and a macOS runner that lost name
       # resolution failed this step twice in two days without measuring
-      # anything (issue 1515). The install goes through the script, which holds
-      # the one pin of gobco's release, tries go install three times with a
-      # pause, and fails when PATH does not then find that release. Its
-      # timeout bounds three attempts that each wait on a resolver.
+      # anything (issue 1515). `go run` of the command, whose packages are this
+      # module's own, asks the proxy for nothing the job has not downloaded.
+      # The install goes through the command, which holds the one pin of
+      # gobco's release, tries go install three times with a pause, and fails
+      # when PATH does not then find that release. Its timeout bounds three
+      # attempts that each wait on a resolver.
       - name: Install gobco
         if: matrix.os != 'ubuntu-latest'
         shell: bash
         timeout-minutes: 5
-        run: bash scripts/coverage-conditions.sh --install
+        run: go run ./cmd/coverage_recipes install-gobco
       - name: Condition coverage of cmd/server and internal/toolutil
         if: matrix.os != 'ubuntu-latest'
         shell: bash
@@ -1621,7 +1609,7 @@ jobs:
         run: |
           status=0
           for pkg in ./cmd/server ./internal/toolutil; do
-            bash scripts/coverage-conditions.sh "$pkg" || status=1
+            go run ./cmd/coverage_recipes conditions "$pkg" || status=1
           done
           exit "$status"
       # The two transport modules need neither GitLab nor a credential, and

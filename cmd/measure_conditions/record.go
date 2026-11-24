@@ -18,8 +18,8 @@ import (
 
 // recordFile and outputFile are what each run of the workflow leaves in its
 // artifact: the record of what ran where and how it ended, written by the
-// measuring step, and everything scripts/coverage-conditions.sh printed, both
-// streams, which is gobco's raw output with the script's own lines around it.
+// measuring step, and everything cmd/internal/conditions printed, both
+// streams, which is gobco's raw output with the recipe's own lines around it.
 const (
 	recordFile = "run.env"
 	outputFile = "gobco.txt"
@@ -27,7 +27,7 @@ const (
 
 // recordKeys are the lines a record holds, each `key=value` and each once:
 // the package measured, the runner label, the GOOS/GOARCH the go command
-// reported there, and the script's exit status.
+// reported there, and the recipe's exit status.
 var recordKeys = []string{"package", "system", "platform", "status"}
 
 // record is one run's record together with its raw output.

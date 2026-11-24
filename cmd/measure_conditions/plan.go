@@ -23,7 +23,7 @@ import (
 // prints.
 var runners = []string{"windows-latest", "macos-latest", "ubuntu-latest"}
 
-// gatePattern is every GOBCO_GATE value scripts/coverage-conditions.sh reads,
+// gatePattern is every GOBCO_GATE value cmd/internal/conditions reads,
 // spelled as it checks them, so a value it would refuse after a runner has
 // started is refused before any has.
 var gatePattern = regexp.MustCompile(`^(all|beyond:[a-z0-9]+/[a-z0-9]+)$`)
@@ -33,14 +33,14 @@ var gatePattern = regexp.MustCompile(`^(all|beyond:[a-z0-9]+/[a-z0-9]+)$`)
 // mode could be chosen.
 const defaultMode = "condition"
 
-// refuseMode says on stderr that a -mode is not a GOBCO_MODE the script
-// reads, and reports whether it did, so a value the script would refuse
+// refuseMode says on stderr that a -mode is not a GOBCO_MODE the recipe
+// reads, and reports whether it did, so a value the recipe would refuse
 // after a runner has started is refused before any has, as the gate is.
 func refuseMode(stderr io.Writer, mode string) bool {
 	if _, known := coverageModes[mode]; known {
 		return false
 	}
-	fmt.Fprintf(stderr, "%s: -mode %q is neither condition nor branch, which is what scripts/coverage-conditions.sh reads\n", toolName, mode)
+	fmt.Fprintf(stderr, "%s: -mode %q is neither condition nor branch, which is what cmd/internal/conditions reads\n", toolName, mode)
 	return true
 }
 
@@ -88,13 +88,13 @@ type matrix struct {
 // `matrix=<json>` line for $GITHUB_OUTPUT, and what it planned on stderr. It
 // returns 2 for an input it cannot read and 1 when the packages could not be
 // found or none was.
-func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
+func runPlan(ctx context.Context, args []string, stdout, stderr io.Writer, list lister) int {
 	flags := flag.NewFlagSet("plan", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	packagesFlag := flags.String("packages", "", "packages to measure, ./cmd/server style, separated by spaces or commas; empty means every package carrying a GOOS- or GOARCH-constrained file")
 	systemsFlag := flags.String("systems", "", "runners to measure on, separated by spaces or commas: "+strings.Join(runners, ", "))
-	gate := flags.String("gate", "", "the GOBCO_GATE the script runs with: all or beyond:GOOS/GOARCH")
-	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the script runs with: condition or branch")
+	gate := flags.String("gate", "", "the GOBCO_GATE the recipe runs with: all or beyond:GOOS/GOARCH")
+	mode := flags.String("mode", defaultMode, "the GOBCO_MODE the recipe runs with: condition or branch")
 	dir := flags.String("dir", ".", "module root the packages are looked for in")
 	tree := flags.Bool("tree", false, "measure every package below cmd/ and internal/, in shards, instead of the packages -packages names")
 	if err := flags.Parse(args); err != nil {
@@ -105,7 +105,7 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 		return 2
 	}
 	if !gatePattern.MatchString(*gate) {
-		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what scripts/coverage-conditions.sh reads\n", toolName, *gate)
+		fmt.Fprintf(stderr, "%s: -gate %q is neither all nor beyond:GOOS/GOARCH, which is what cmd/internal/conditions reads\n", toolName, *gate)
 		return 2
 	}
 	if refuseMode(stderr, *mode) {
@@ -122,11 +122,15 @@ func runPlan(args []string, stdout, stderr io.Writer, list lister) int {
 		fmt.Fprintf(stderr, "%s: -packages: %v\n", toolName, err)
 		return 2
 	}
+	if *tree && len(packages) > 0 {
+		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(packages, " "))
+		return 2
+	}
 	if *tree {
-		return planTree(stdout, stderr, list, *dir, packages, systems, measuredWith)
+		return planTree(ctx, stdout, stderr, list, *dir, systems, measuredWith)
 	}
 	if len(packages) == 0 {
-		packages, err = constrainedPackages(context.Background(), *dir, list)
+		packages, err = constrainedPackages(ctx, *dir, list)
 		if err != nil {
 			fmt.Fprintf(stderr, "%s: no package named, and the packages carrying a GOOS- or GOARCH-constrained file could not be found: %v\n", toolName, err)
 			return 1
@@ -177,7 +181,7 @@ func parseSystems(value string) ([]string, error) {
 // parsePackages returns the packages a dispatch named, each written ./ and
 // its directory and each once, in the order first named. A pattern, a path
 // leaving the module and a character outside segmentPattern are refused,
-// since the script measures one package and every name ends up in a shell
+// since the recipe measures one package and every name ends up in a shell
 // variable, an artifact name and a summary.
 func parsePackages(value string) ([]string, error) {
 	var packages []string
@@ -220,14 +224,10 @@ func buildMatrix(packages, systems []string) (matrix, error) {
 
 // planTree prints the plan of a -tree dispatch: every package below cmd/ and
 // internal/, in shards, and says on stderr what it planned and the gate and
-// mode the runs measure with. A package list beside -tree is refused, since
-// the dispatch would be asking for two things at once.
-func planTree(stdout, stderr io.Writer, list lister, dir string, named, systems []string, measuredWith string) int {
-	if len(named) > 0 {
-		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(named, " "))
-		return 2
-	}
-	packages, err := treePackages(context.Background(), dir, list)
+// mode the runs measure with. A package list beside -tree is refused before it
+// is called, since the dispatch would be asking for two things at once.
+func planTree(ctx context.Context, stdout, stderr io.Writer, list lister, dir string, systems []string, measuredWith string) int {
+	packages, err := treePackages(ctx, dir, list)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: -tree: the packages below cmd/ and internal/ could not be listed: %v\n", toolName, err)
 		return 1
