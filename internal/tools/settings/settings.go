@@ -85,13 +85,13 @@ type UpdateOutput struct {
 // Update modifies application settings (admin-only).
 //
 // It accepts a map of setting keys and values and sends them through
-// client-go's UpdateSettingsOptions. At client-go v3.50.0 that struct models
-// 448 of the 677 top-level params GitLab 19.5.0's PUT route declares (447 at
-// v3.30.0 and v3.40.3, and v3.41.0 added search_rate_limit_allowlist_raw), and
-// encoding/json drops a member the target does not carry without a word, so a
-// patch naming one of the other 229 used to be sent with that key missing, answered 200, and reported to the model as
-// a reconfiguration that never happened. The keys it does not model are
-// therefore named and the whole patch refused before anything is sent: a
+// client-go's UpdateSettingsOptions. At client-go v3.56.1 that struct models
+// 450 of the 762 top-level params GitLab 19.6.1's PUT route declares (v3.51.0
+// added the two o11y_provisioner ones), and encoding/json drops a member the
+// target does not carry without a word, so a patch naming one of the other 312
+// used to be sent with that key missing, answered 200, and reported to the
+// model as a reconfiguration that never happened. The keys it does not model
+// are therefore named and the whole patch refused before anything is sent: a
 // half-applied patch reported as applied is the one outcome worth refusing
 // for, which is the condition this repository states for preferring a refusal
 // to a decode that fails open.
@@ -213,9 +213,9 @@ func unsendableSettingKeys(patch map[string]any) (unmodeled, undeclared []string
 
 // undeclaredSettingKeys are the settings client-go's update options model and
 // GitLab's PUT /application/settings does not declare, as the pinned live
-// record of GitLab 19.5.0 and client-go v3.50.0 have them. GitLab's handler reads the declared params alone, so a patch
-// naming one of these beside a setting it takes is applied without it and
-// answered 200.
+// record of GitLab 19.6.1 and client-go v3.56.1 have them. GitLab's handler
+// reads the declared params alone, so a patch naming one of these beside a
+// setting it takes is applied without it and answered 200.
 //
 // The list is written out because the server does not carry the record, and
 // TestUndeclaredSettingKeys_AreTheModeledKeysTheUpdateRouteDoesNotDeclare

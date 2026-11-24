@@ -2274,14 +2274,16 @@ func requestPathRefusal() error {
 }
 
 // TestClassifyError_RequestPathRefused_SaysThePathArgumentWasRefused pins the
-// classification of a request the GitLab transport declined to send because
-// its path had a "." or ".." segment apart from the network and TLS branches
-// below it: the caller is told a path argument was refused and nothing was
-// sent, never that GitLab is unreachable or that TLS verification failed.
+// classification of a request that was not sent because its path had a "." or
+// ".." segment apart from the network and TLS branches below it: the caller is
+// told a path argument was refused and nothing was sent, never that GitLab is
+// unreachable or that TLS verification failed. The refusal is the GitLab
+// transport's or, for a value a route places unescaped, client-go's own.
 func TestClassifyError_RequestPathRefused_SaysThePathArgumentWasRefused(t *testing.T) {
 	tests := map[string]error{
 		"as the transport reports it":  requestPathRefusal(),
 		"wrapped without a round trip": fmt.Errorf("sending: %w", gitlabclient.ErrRequestPathRefused),
+		"as client-go reports it":      fmt.Errorf("%w: %q", gl.ErrInvalidPathSegment, "certificate/../b"),
 	}
 
 	for name, err := range tests {
@@ -2336,30 +2338,48 @@ func TestWrapErr_RequestPathRefused_ReplacesTheHandlersHint(t *testing.T) {
 // client-go route that places an argument into the path without escaping it
 // through a client of the GitLab package against a recording mock: an
 // argument with a dot segment reaches the caller classified as a refused path
-// argument, and no request reaches the mock. It holds the classification to
-// the error the client actually returns, not to a hand-built one.
+// argument, and no request reaches the mock, whichever check refused it. A
+// segment between slashes is client-go's to refuse, before there is a request,
+// and one between backslashes the transport's, which splits on both. It holds
+// the classification to the error each actually returns, not to a hand-built
+// one.
 func TestWrapErrWithMessage_PathRefusedByTheClient_IsARefusedArgument(t *testing.T) {
-	var requests atomic.Int64
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		requests.Add(1)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	value := "v"
-	_, err := client.GL().SystemHooks.SetHookURLVariable(5, "a/../b",
-		&gl.SetHookURLVariableOptions{Value: &value}, gl.WithContext(context.Background()))
-	if err == nil {
-		t.Fatal("SetHookURLVariable with a dot-segment key = nil error, want a refusal")
-	}
+	for _, tt := range []struct {
+		name  string
+		key   string
+		cause error
+	}{
+		{name: "between slashes, refused by client-go", key: "a/../b", cause: gl.ErrInvalidPathSegment},
+		{name: "between backslashes, refused by the transport", key: `a\..\b`, cause: gitlabclient.ErrRequestPathRefused},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			value := "v"
+			_, err := client.GL().SystemHooks.SetHookURLVariable(5, tt.key,
+				&gl.SetHookURLVariableOptions{Value: &value}, gl.WithContext(context.Background()))
+			if !errors.Is(err, tt.cause) {
+				t.Fatalf("SetHookURLVariable(%q) = %v, want it to wrap %v", tt.key, err, tt.cause)
+			}
 
-	text := WrapErrWithMessage("op", err).Error()
-	if want := "op: " + RequestPathRefusedMessage + ". Suggestion: " + RequestPathRefusedHint + ": "; !strings.HasPrefix(text, want) {
-		t.Errorf("the composed message = %q, want it to start with %q", text, want)
-	}
-	if strings.Contains(text, "network error") {
-		t.Errorf("the composed message describes a network error:\n%s", text)
-	}
-	if n := requests.Load(); n != 0 {
-		t.Errorf("the mock received %d request(s); a refused request must never leave the process", n)
+			wrapped := WrapErrWithMessage("op", err)
+			text := wrapped.Error()
+			if want := "op: " + RequestPathRefusedMessage + ". Suggestion: " + RequestPathRefusedHint + ": "; !strings.HasPrefix(text, want) {
+				t.Errorf("the composed message = %q, want it to start with %q", text, want)
+			}
+			if strings.Contains(text, "network error") {
+				t.Errorf("the composed message describes a network error:\n%s", text)
+			}
+			if !errors.Is(wrapped, tt.cause) {
+				t.Error("the wrapping lost the cause, so nothing downstream can recognize it any more")
+			}
+			if n := requests.Load(); n != 0 {
+				t.Errorf("the mock received %d request(s); a refused request must never leave the process", n)
+			}
+		})
 	}
 }
 
@@ -3113,9 +3133,9 @@ func TestClassifyError_UnauthorizedWithoutACredentialVerdict_NamesBothCauses(t *
 // Over REST the signal is the RFC 6750 code invalid_token, which only the API
 // guard writes. Over GraphQL there is no code, and none is needed: the
 // endpoint answers 401 only from its authentication checks. client-go returns
-// that answer as *gl.GraphQLResponseError, which does not unwrap to the
-// response, and until the classifier looked through it every GraphQL refusal
-// was reported as an unexpected error.
+// that answer as *gl.GraphQLResponseError, which did not unwrap to the
+// response before v3.53.1, and until the classifier looked through it every
+// GraphQL refusal was reported as an unexpected error.
 //
 // A token without the api or read_api scope is one of those checks: the
 // GraphQL endpoint looks the user up with those scopes and answers a token
@@ -3323,9 +3343,10 @@ const graphQLForbiddenBody = `{"errors":[{"message":"API not accessible for user
 // status check reads a GraphQL refusal the way the classifier does.
 //
 // client-go wraps a GraphQL refusal in *gl.GraphQLResponseError, which keeps
-// the response in a field and does not unwrap to it. The classifier looked
-// through it and IsHTTPStatus did not, so one 403 was classified as access
-// denied while the check a handler branches on said it was not a 403 at all.
+// the response in a field and did not unwrap to it before v3.53.1. The
+// classifier looked through it and IsHTTPStatus did not, so one 403 was
+// classified as access denied while the check a handler branches on said it
+// was not a 403 at all.
 func TestIsHTTPStatus_GraphQLRefusal_ReadsTheAnsweredStatus(t *testing.T) {
 	err := graphQLAnswer(t, "", http.StatusForbidden, graphQLForbiddenBody)
 	tests := []struct {
@@ -3871,10 +3892,10 @@ func TestSanitizeError_GraphQLRefusalWrapped_CollapsesOnlyWhenAMessageWouldSurvi
 // Each row is held to carrying that sentence exactly once, in its message.
 //
 // The GraphQL rows are the ones the card used to lose. client-go wraps a
-// GraphQL refusal in *gl.GraphQLResponseError, which does not unwrap to the
-// response, so the card read no status and no request ID for it and wrote no
-// HTTP Status row, while its message, read through that type, was already the
-// verdict.
+// GraphQL refusal in *gl.GraphQLResponseError, which did not unwrap to the
+// response before v3.53.1, so the card read no status and no request ID for it
+// and wrote no HTTP Status row, while its message, read through that type, was
+// already the verdict.
 func TestNewDetailedError_Unauthorized_CardCarriesTheAnsweredStatus(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -4043,14 +4064,16 @@ func TestWrapErrWithMessage_NotFoundSentinel_AppendsNoStatusText(t *testing.T) {
 
 // TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain holds the reason the
 // status readers here are not built on gl.StatusCode, which client-go v3.13.0
-// added. On the two paths where client-go builds the refusal and the chain
-// unwraps plainly, a REST answer carrying its response and the 404 sentinel
-// carrying none, it reads what [answeredStatus] reads. On the other two it
-// reads zero: a GraphQL refusal, which *gl.GraphQLResponseError keeps in a
-// field it has no Unwrap method for, and a refusal built with a response and
-// no status, the shape mergerequests.CreateTodo builds for a 304. Adopting it
-// would stop IsHTTPStatus and every status hint from seeing either, so this
-// test is also what notices when upstream changes the wrapper.
+// added. On the three paths where client-go builds the refusal and the chain
+// unwraps plainly, a REST answer carrying its response, the 404 sentinel
+// carrying none and, from v3.53.1, a GraphQL refusal GitLab answered with
+// another status than 200, it reads what [answeredStatus] reads. On the other
+// two it does not: it reads zero for a refusal built with a response and no
+// status, the shape mergerequests.CreateTodo builds for a 304, and a 404 for a
+// mutation refused with HTTP 200 that also matches the 404 sentinel
+// ([refusalMatchingNotFound]), which carries no response at all (want 0).
+// Adopting it would misread both in IsHTTPStatus and every status hint, so
+// this test is also what notices when upstream changes either.
 func TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -4082,7 +4105,7 @@ func TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain(t *testing.T) {
 				t.Helper()
 				return graphQLAnswer(t, "", http.StatusForbidden, graphQLForbiddenBody)
 			},
-			want: http.StatusForbidden, wantSDK: 0,
+			want: http.StatusForbidden, wantSDK: http.StatusForbidden,
 		},
 		{
 			name: "a refusal built with a response and no status",
@@ -4091,21 +4114,33 @@ func TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain(t *testing.T) {
 			},
 			want: http.StatusNotModified, wantSDK: 0,
 		},
+		{
+			name: "a mutation refused with HTTP 200 that matches the 404 sentinel",
+			err: func(t *testing.T) error {
+				t.Helper()
+				_, err := refusalMatchingNotFound(t, refusedCategoryUpdateBody)
+				return err
+			},
+			want: 0, wantSDK: http.StatusNotFound,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.err(t)
+			if got := gl.StatusCode(err); got != tt.wantSDK {
+				t.Errorf("gl.StatusCode() = %d, want %d", got, tt.wantSDK)
+			}
 			glErr, ok := gitLabResponseOf(err)
+			if ok != (tt.want != 0) {
+				t.Fatalf("gitLabResponseOf(%v) found a response = %v, want %v", err, ok, tt.want != 0)
+			}
 			if !ok {
-				t.Fatalf("gitLabResponseOf(%v) found no response", err)
+				return
 			}
 			if got := answeredStatus(glErr); got != tt.want {
 				t.Errorf("answeredStatus() = %d, want %d", got, tt.want)
 			}
 			if !IsHTTPStatus(err, tt.want) {
 				t.Errorf("IsHTTPStatus(%d) = false, want true", tt.want)
-			}
-			if got := gl.StatusCode(err); got != tt.wantSDK {
-				t.Errorf("gl.StatusCode() = %d, want %d", got, tt.wantSDK)
 			}
 		})
 	}

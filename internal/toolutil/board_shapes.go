@@ -52,6 +52,33 @@ func NewBoardListAssigneeOutput(a *gl.BoardListAssignee) *BoardListAssigneeOutpu
 	return &BoardListAssigneeOutput{ID: a.ID, Name: a.Name, Username: a.Username}
 }
 
+// WorkItemStatusOutput is a work item status as
+// ee/lib/api/entities/work_items/status.rb renders it. Every key is exposed
+// with expose_nil, so a null description, which a default status always has,
+// is an empty string here.
+type WorkItemStatusOutput struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	IconName    string `json:"icon_name"`
+	Color       string `json:"color"`
+	Position    int64  `json:"position"`
+	Description string `json:"description,omitempty"`
+	Category    string `json:"category"`
+}
+
+// NewBoardListStatusOutput converts a gl.BoardListStatus, the status GitLab
+// sends on a status list and on no other, returning nil when the SDK value is
+// nil.
+func NewBoardListStatusOutput(s *gl.BoardListStatus) *WorkItemStatusOutput {
+	if s == nil {
+		return nil
+	}
+	return &WorkItemStatusOutput{
+		ID: s.ID, Name: s.Name, IconName: s.IconName, Color: s.Color,
+		Position: s.Position, Description: s.Description, Category: s.Category,
+	}
+}
+
 // BoardLabelOutput is the documented board-list label object. Every
 // documented board-list response shows the list's `label` object with only
 // name, color, and description; gl.Label's remaining fields are not part of

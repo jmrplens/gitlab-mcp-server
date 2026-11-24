@@ -7,8 +7,9 @@
 // whose work-in-progress limit is set, which only a licensed instance has:
 // every answer carrying a column carries the metric that column is counted
 // by, limit_metric (issue 1256), and the text of the board listing names each
-// limited column with its ceilings and its metric (issue 1284). The board and column
-// lifecycle is Free and lives in the common package.
+// limited column with its ceilings and its metric (issue 1284). It covers the
+// status column a licensed instance takes from 19.6 as well. The board and
+// column lifecycle is Free and lives in the common package.
 
 package ee
 
@@ -94,6 +95,33 @@ func TestProjectBoards_LimitedColumns_EveryAnswerCarriesTheMetric(t *testing.T) 
 		if moved.Position != frontPosition || moved.MaxIssueCount != countCeiling || moved.MaxIssueWeight != 0 {
 			e.T.Errorf("board_list_update answered column %d at %d with an issue ceiling of %d and a weight ceiling of %d, want it at %d with %d and none",
 				counted, moved.Position, moved.MaxIssueCount, moved.MaxIssueWeight, frontPosition, countCeiling)
+		}
+	})
+}
+
+// TestProjectBoards_CreateList_ScopesAColumnToAStatus creates a project board
+// on every surface and adds a status column, which the REST API takes from
+// GitLab 19.6, and holds the answer to the status it was asked for and to no
+// other scope. The project belongs to a group, since GitLab refuses a status
+// list in a personal namespace as one the license lacks. Status lists are
+// Premium, which is why the scenario lives here.
+func TestProjectBoards_CreateList_ScopesAColumnToAStatus(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.GitLabAtLeast(19, 6)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("boardstatus"))
+		project := fixture.NewProject(e, fixture.WithNamePrefix("boardstatus"), fixture.InGroup(group))
+		params := map[string]any{"project_id": project.IDParam()}
+
+		created := harness.Do[boards.BoardOutput](s, actionProjectBoardCreate, withParams(params, map[string]any{"name": e.Name("board")}))
+		if created.ID == 0 {
+			e.T.Fatalf("board_create answered %+v, want a board with an ID", created)
+		}
+
+		column := harness.Do[boards.BoardListOutput](s, actionProjectBoardListCreate, withParams(params, map[string]any{"board_id": created.ID, "status_id": inProgressStatus}))
+		if column.ID == 0 || column.Status == nil || column.Status.ID != inProgressStatus || column.Status.Category != "in_progress" || column.Label != nil || column.Assignee != nil || column.Milestone != nil || column.Iteration != nil {
+			e.T.Errorf("board_list_create for status %d answered %+v, want a column scoped to that status alone", inProgressStatus, column)
 		}
 	})
 }

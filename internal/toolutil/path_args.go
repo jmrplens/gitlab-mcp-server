@@ -47,15 +47,16 @@ func RejectTraversalArg(operation, field, value string) error {
 //
 // A handler calls it for an argument that a client-go route places into the
 // request path as given (the NoEscape path variable) where the route takes a
-// single segment, such as a URL variable key or a template name. client-go
-// builds the request from the route in its escaped form and in its decoded
-// form, and net/url sends the escaped form only while it is a valid encoding;
-// a byte that a path cannot carry as it is (a space, a non-ASCII byte, a
-// quote, a brace) makes it encode the decoded form again instead, in which the
-// "%2F" of another argument, such as a project's full path, has become a "/".
-// Escaping the value first keeps the escaped form valid, so every argument
-// reaches the path as client-go escaped it. Escaping "%" too means GitLab
-// reads the value the caller passed rather than decoding it a second time.
+// single segment, such as a URL variable key or a template name. Such a route
+// keeps the "/" and the percent-encoding of the value it is given, so a "/"
+// left as it is would split the value across two segments, a "%2F" in it would
+// be read by GitLab as that "/", and a "%" that opens no escape would be
+// refused by client-go as a malformed one. Escaping the value first means
+// GitLab reads the value the caller passed, as one name. The bytes a path
+// cannot carry as they are (a space, a non-ASCII byte, a quote, a brace) are
+// escaped with it; client-go escapes those on its own from v3.56.1, and before
+// it one left as it was made net/url encode the whole path again and turn the
+// "%2F" of another argument, such as a project's full path, into a "/".
 //
 // It escapes and does not check: a value with a "." or ".." segment is
 // refused before it by [RejectTraversalArg], which reads the value as the

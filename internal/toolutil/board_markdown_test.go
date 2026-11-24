@@ -10,11 +10,12 @@ import (
 
 // TestBoardColumnScope_EachScopeKind_NamesWhatTheColumnCollects pins the
 // scope cell the project and the group boards both write for a column: the
-// label, the assignee's handle, the milestone and the iteration, each escaped
-// as a table cell, the first of them present winning over the rest. A scope
-// object GitLab sent without the name or title it is shown by is passed over,
-// so the next one present names the column, and a column with none, the
-// status column a REST answer can carry, renders as an empty cell.
+// label, the assignee's handle, the milestone, the iteration and the status,
+// each escaped as a table cell, the first of them present winning over the
+// rest. A scope object GitLab sent without the name or title it is shown by is
+// passed over, so the next one present names the column, and a column with
+// none, the status column an instance before 19.6 answers with, renders as an
+// empty cell.
 func TestBoardColumnScope_EachScopeKind_NamesWhatTheColumnCollects(t *testing.T) {
 	label := &BoardLabelOutput{Name: "To|Do"}
 	unnamedLabel := &BoardLabelOutput{Color: "#fff"}
@@ -22,12 +23,15 @@ func TestBoardColumnScope_EachScopeKind_NamesWhatTheColumnCollects(t *testing.T)
 	unnamedAssignee := &BoardListAssigneeOutput{ID: 4, Name: "No Handle"}
 	iteration := &IterationOutput{ID: 5, Title: "Sprint|4"}
 	untitledIteration := &IterationOutput{ID: 6}
+	status := &WorkItemStatusOutput{ID: 2, Name: "In|progress"}
+	unnamedStatus := &WorkItemStatusOutput{ID: 3}
 	tests := []struct {
 		name      string
 		label     *BoardLabelOutput
 		assignee  *BoardListAssigneeOutput
 		milestone string
 		iteration *IterationOutput
+		status    *WorkItemStatusOutput
 		want      string
 	}{
 		{name: "label", label: label, want: "To&#124;Do"},
@@ -38,13 +42,16 @@ func TestBoardColumnScope_EachScopeKind_NamesWhatTheColumnCollects(t *testing.T)
 		{name: "assignee with no username passes to the milestone", assignee: unnamedAssignee, milestone: "v1|x", want: "Milestone: v1&#124;x"},
 		{name: "milestone wins over iteration", milestone: "v1", iteration: iteration, want: "Milestone: v1"},
 		{name: "iteration", iteration: iteration, want: "Iteration: Sprint&#124;4"},
-		{name: "iteration with no title", iteration: untitledIteration, want: ""},
-		{name: "objects with nothing to show", label: unnamedLabel, assignee: unnamedAssignee, iteration: untitledIteration, want: ""},
-		{name: "status column", want: ""},
+		{name: "iteration wins over status", iteration: iteration, status: status, want: "Iteration: Sprint&#124;4"},
+		{name: "iteration with no title passes to the status", iteration: untitledIteration, status: status, want: "Status: In&#124;progress"},
+		{name: "status", status: status, want: "Status: In&#124;progress"},
+		{name: "status with no name", status: unnamedStatus, want: ""},
+		{name: "objects with nothing to show", label: unnamedLabel, assignee: unnamedAssignee, iteration: untitledIteration, status: unnamedStatus, want: ""},
+		{name: "status column before 19.6", want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BoardColumnScope(tt.label, tt.assignee, tt.milestone, tt.iteration); got != tt.want {
+			if got := BoardColumnScope(tt.label, tt.assignee, tt.milestone, tt.iteration, tt.status); got != tt.want {
 				t.Errorf("BoardColumnScope() = %q, want %q", got, tt.want)
 			}
 		})

@@ -218,6 +218,11 @@ func roundTripThroughGuard(t *testing.T, rawURL string) (int, error) {
 // while the same route with a clean argument reaches it unchanged. It holds
 // the rule to the chain every handler's request passes, not to one handler's
 // own check.
+//
+// client-go refuses such an argument itself when the segment lies between
+// slashes (gl.ErrInvalidPathSegment, from v3.56.1), before there is a request;
+// one set off by a backslash, and one of a route that escapes its arguments,
+// are this chain's alone to refuse.
 func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
@@ -251,14 +256,15 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 		return append([]string(nil), seen...)
 	}
 
-	// Each refusal reaches the caller through client-go and net/http, which
-	// wrap it, so the sentinel has to survive both for a caller to classify
-	// the refusal; the segment's description has to match the form the value
-	// took on the wire, whether client-go escaped it or not.
+	// Each refusal reaches the caller through client-go, and the transport's
+	// through net/http as well, which wrap it, so the sentinel has to survive
+	// for a caller to classify the refusal; what it says has to match the form
+	// the value took on the wire, whether client-go escaped it or not.
 	refusals := []struct {
-		name string
-		send func(*Client) error
-		want string
+		name  string
+		send  func(*Client) error
+		cause error
+		want  string
 	}{
 		{
 			name: "artifact path with a dot segment, placed unescaped",
@@ -267,7 +273,8 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 					"a/../b", gl.WithContext(context.Background()))
 				return err
 			},
-			want: `has the segment ".."`,
+			cause: gl.ErrInvalidPathSegment,
+			want:  `"a/../b"`,
 		},
 		{
 			name: "hook URL variable key with a dot segment, placed unescaped",
@@ -277,7 +284,18 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 					&gl.SetHookURLVariableOptions{Value: &value}, gl.WithContext(context.Background()))
 				return err
 			},
-			want: `has the segment ".."`,
+			cause: gl.ErrInvalidPathSegment,
+			want:  `"a/../b"`,
+		},
+		{
+			name: "artifact path with a dot segment between backslashes, placed unescaped",
+			send: func(client *Client) error {
+				_, _, err := client.GL().Jobs.DownloadSingleArtifactsFile("group/sub/proj", 7,
+					`a\..\b`, gl.WithContext(context.Background()))
+				return err
+			},
+			cause: ErrRequestPathRefused,
+			want:  `has the segment ".." once its percent-encoding is undone`,
 		},
 		{
 			name: "escaped label name that is a dot segment as a whole",
@@ -285,7 +303,8 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 				_, _, err := client.GL().Labels.GetLabel(1, "..", gl.WithContext(context.Background()))
 				return err
 			},
-			want: `has the segment ".."`,
+			cause: ErrRequestPathRefused,
+			want:  `has the segment ".."`,
 		},
 		{
 			name: "escaped label name with a dot segment between its slashes",
@@ -293,7 +312,8 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 				_, _, err := client.GL().Labels.GetLabel(1, "x/./y", gl.WithContext(context.Background()))
 				return err
 			},
-			want: `has the segment "." once its percent-encoding is undone`,
+			cause: ErrRequestPathRefused,
+			want:  `has the segment "." once its percent-encoding is undone`,
 		},
 	}
 	for _, tc := range refusals {
@@ -303,8 +323,8 @@ func TestAPITransport_UnescapedDotSegmentArgument_IsRefusedBeforeSending(t *test
 			if err == nil {
 				t.Fatal("the call = nil error, want a refusal")
 			}
-			if !errors.Is(err, ErrRequestPathRefused) {
-				t.Errorf("the call's error %v does not wrap ErrRequestPathRefused", err)
+			if !errors.Is(err, tc.cause) {
+				t.Errorf("the call's error %v does not wrap %v", err, tc.cause)
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("the call's error %q does not say it %s", err, tc.want)

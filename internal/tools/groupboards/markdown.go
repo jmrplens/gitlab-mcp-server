@@ -43,7 +43,7 @@ func boardListScope(l BoardListOutput) string {
 	if l.Milestone != nil {
 		milestone = l.Milestone.Title
 	}
-	return toolutil.BoardColumnScope(l.Label, l.Assignee, milestone, l.Iteration)
+	return toolutil.BoardColumnScope(l.Label, l.Assignee, milestone, l.Iteration, l.Status)
 }
 
 // boardLabelNames lists a board's scope label names, skipping the nil entries
@@ -164,6 +164,9 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	}
 	if out.Milestone != nil {
 		c.Link("Milestone", out.Milestone.Title, out.Milestone.WebURL)
+	}
+	if out.Status != nil {
+		c.Field("Status", out.Status.Name)
 	}
 	c.Int("Position", out.Position)
 	c.Count("Max Issue Count", out.MaxIssueCount)

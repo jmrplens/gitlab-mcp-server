@@ -105,7 +105,9 @@ var dotSegmentEscapes = strings.NewReplacer(
 // routes escape each argument, so a "/" inside a value reaches the path as
 // "%2F" and the value stays one segment; a few client-go routes place an
 // argument into the path without escaping it (the NoEscape path variable), so
-// there the value can span several segments. An escaped value is a dot
+// there the value can span several segments, and client-go itself refuses a
+// dot segment between two of its slashes (gl.ErrInvalidPathSegment, from
+// v3.56.1), though not one between backslashes. An escaped value is a dot
 // segment too when it is "." or ".." as a whole, since [dotUnescapeTransport]
 // sends its dots as dots. A dot segment is refused because it changes the
 // route: once the path is resolved, "." drops out and ".." removes the segment

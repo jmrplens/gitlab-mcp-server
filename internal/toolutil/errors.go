@@ -51,8 +51,9 @@ const UnattributedRequestMessage = "this request could not be attributed to a cr
 // names a flag instead.
 const DestinationRefusedMessage = "this server refused to connect to that address, so the request never left the process"
 
-// RequestPathRefusedMessage is what a caller is told when this server declined
-// to send a request because its path had a "." or ".." segment.
+// RequestPathRefusedMessage is what a caller is told when a request was not
+// sent because its path had a "." or ".." segment, whichever of the two checks
+// in this process refused it ([refusedRequestPath]).
 //
 // It says a path argument was refused and that the request never left the
 // process, for the reason [DestinationRefusedMessage] says the latter: nothing
@@ -82,7 +83,7 @@ const graphQLRefusalDescription = "GitLab refused the GraphQL request; its error
 // RequestPathRefusedHint is the next step offered with a request path
 // refusal: the path is built from the action's arguments, so what changes the
 // outcome is the argument the segment came from, and the cause names the path
-// and the segment to look for in it.
+// or the value to look for the segment in.
 const RequestPathRefusedHint = `pass each path argument with no "." or ".." segment, written plainly or percent-encoded`
 
 // UnattributedRequestError is [UnattributedRequestMessage] as a JSON-RPC
@@ -181,20 +182,35 @@ func wrapDestinationRefused(operation string, err error) error {
 	return hintedError(operation, err, gitlabclient.DestinationRefusedHintFor(err))
 }
 
-// wrapRequestPathRefused returns the message for a request this server
-// declined to send because its path had a "." or ".." segment, or nil when
-// that is not the cause.
+// wrapRequestPathRefused returns the message for a request that was not sent
+// because its path had a "." or ".." segment, or nil when that is not the
+// cause.
 //
 // It is here for the reason [wrapDestinationRefused] is: the transport refuses
 // such a path on any call, so there is no subset of handlers the refusal
-// belongs to. The cause is kept, since it names the path and the segment, and
-// the hint is [RequestPathRefusedHint] in place of the handler's, which
-// advises about GitLab state when GitLab was never asked.
+// belongs to. The cause is kept, since it names the path and the segment, or
+// the value the segment is in, and the hint is [RequestPathRefusedHint] in
+// place of the handler's, which advises about GitLab state when GitLab was
+// never asked.
 func wrapRequestPathRefused(operation string, err error) error {
-	if !errors.Is(err, gitlabclient.ErrRequestPathRefused) {
+	if !refusedRequestPath(err) {
 		return nil
 	}
 	return hintedError(operation, err, RequestPathRefusedHint)
+}
+
+// refusedRequestPath reports whether err is a request path refused in this
+// process for a "." or ".." segment.
+//
+// Two checks refuse one. The transport reads every path it is about to send
+// ([gitlabclient.ErrRequestPathRefused]). client-go refuses such a segment
+// earlier, from v3.56.1, in a value one of its routes places into the path
+// without escaping it (gl.ErrInvalidPathSegment), before there is a request
+// for the transport to read; it splits on "/" alone, so a segment set off by a
+// backslash is still the transport's to refuse. What the caller has to do is
+// the same for both, so both are one refusal here.
+func refusedRequestPath(err error) bool {
+	return errors.Is(err, gitlabclient.ErrRequestPathRefused) || errors.Is(err, gl.ErrInvalidPathSegment)
 }
 
 // wrapUnattributed returns the whole message for a request that never reached
@@ -263,13 +279,12 @@ func ClassifyError(err error) string {
 		return DestinationRefusedMessage
 	}
 
-	// This server declined to send a request whose path had a "." or ".."
-	// segment. Checked here for the same reason as the line above, and for one
-	// more: the TLS branch below matches the text of the error, which carries
-	// the request URL, so a path with the word "certificate" in it would read
-	// as a failed handshake and the caller would be told to turn verification
-	// off.
-	if errors.Is(err, gitlabclient.ErrRequestPathRefused) {
+	// A request whose path had a "." or ".." segment was not sent. Checked here
+	// for the same reason as the line above, and for one more: the TLS branch
+	// below matches the text of the error, which carries the request URL or the
+	// refused value, so a path with the word "certificate" in it would read as
+	// a failed handshake and the caller would be told to turn verification off.
+	if refusedRequestPath(err) {
 		return RequestPathRefusedMessage
 	}
 
@@ -324,16 +339,15 @@ func ClassifyError(err error) string {
 
 // gitLabResponseOf returns the GitLab response err carries, if it carries one.
 //
-// errors.As alone is not enough, because client-go hands back a GraphQL call
-// GitLab refused as *gl.GraphQLResponseError, which keeps the response in its
-// Err field and has no Unwrap method. client-go builds that type when the body
+// client-go hands back a GraphQL call GitLab refused as
+// *gl.GraphQLResponseError, which keeps the response in its Err field and
+// unwraps to it from v3.53.1. client-go builds that type when the body
 // decodes into its GenericGraphQLErrors, which the literal null does and a
 // JSON object does when its errors member, if present, is an array of objects
 // whose message, if present, is a string. GitLab answers every GraphQL refusal
-// with such an object, so every one of them was classified as an unexpected
-// error rather than by the status GitLab answered with. Any other body, an
-// empty one included, reaches this function as a *gl.ErrorResponse wrapped by
-// fmt.Errorf, which errors.As already finds.
+// with such an object. Any other body, an empty one included, reaches this
+// function as a *gl.ErrorResponse wrapped by fmt.Errorf. errors.As finds the
+// response in either, and is still not enough where one error carries two.
 //
 // A 404 carries no response over either surface: client-go answers every 404
 // with its ErrNotFound sentinel without reading the body, so over GraphQL the
@@ -386,15 +400,17 @@ func matchesNotFoundSentinel(err error) bool {
 //
 // client-go v3.13.0 added gl.StatusCode, the StatusCode field of the first
 // *gl.ErrorResponse in an error's chain, and neither this nor
-// [gitLabResponseOf] is built on it, because it answers the same only where
-// the chain is plain. It agrees on a REST refusal client-go built, which
-// records the status in both places, and on the 404 sentinel. It reads zero
-// for a GraphQL refusal, since *gl.GraphQLResponseError keeps the response in
-// a field it has no Unwrap method for, and for a refusal built with a response
-// and no status, which mergerequests.CreateTodo builds for a 304. Using it
-// would hide both from every status reader in this file;
-// TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain notices the day that
-// changes upstream.
+// [gitLabResponseOf] is built on it, because the two do not answer the same
+// everywhere. They agree on a REST refusal client-go built, which records the
+// status in both places, on the 404 sentinel, and, from v3.53.1, on a GraphQL
+// refusal GitLab answered with another status than 200, which
+// *gl.GraphQLResponseError unwraps to. gl.StatusCode reads zero for a refusal
+// built with a response and no status, which mergerequests.CreateTodo builds
+// for a 304, and a 404 for the mutation refusals answered with HTTP 200 that
+// [gitLabResponseOf] describes, through the sentinel they match for
+// compatibility. Using it would misread both in every status reader of this
+// file; TestAnsweredStatus_GLStatusCodeAgreesOnlyOnAPlainChain notices the day
+// that changes upstream.
 func answeredStatus(glErr *gl.ErrorResponse) int {
 	if glErr.Response != nil {
 		return glErr.Response.StatusCode

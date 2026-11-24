@@ -18,8 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1273,11 +1271,12 @@ func TestCreateBoardList_AllTypes(t *testing.T) {
 			AssigneeID:  3,
 			MilestoneID: 5,
 			IterationID: 10,
+			StatusID:    2,
 		})
 		return err
 	})
 
-	want := map[string]any{"assignee_id": float64(3), "milestone_id": float64(5), "iteration_id": float64(10)}
+	want := map[string]any{"assignee_id": float64(3), "milestone_id": float64(5), "iteration_id": float64(10), "status_id": float64(2)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("create list body = %#v, want %#v", got, want)
 	}
@@ -1304,29 +1303,34 @@ func TestCreateBoardList_ServerError(t *testing.T) {
 // the instance's license or the project's plan lacks is one of them
 // (EE::Boards::Lists::CreateService#license_validation_error, "Assignee lists
 // not available with your current license"), so the license hint is keyed on
-// that message and not on a 403, which the route only answers for a role.
+// that message and not on a 403, which the route only answers for a role. The
+// same message refuses an iteration or a status list in a personal namespace
+// whatever the license includes (a licensed 19.6.1 answered it for a status
+// list), so both hints name that cause beside the license.
 // GitLab writes that message in the caller's preferred language, though
 // (API::Helpers#current_user sets the locale, and locale/es, de and ja among
-// others translate it), so a 400 refusing an assignee, milestone or iteration
-// list in other words gets the scope hint with the license named beside it:
-// the handler cannot tell a translated license refusal from "Assignee not
+// others translate it), so a 400 refusing an assignee, milestone, iteration or
+// status list in other words gets the scope hint with the license named beside
+// it: the handler cannot tell a translated license refusal from "Assignee not
 // found", and the scope hint alone would send a caller after IDs. A 400
 // refusing a label list, or one that asked for no list type, gets the scope
 // hint alone and names no license, since no license gates a label list: a
 // Community Edition route requires label_id, an Enterprise one takes exactly
-// one of the four, the ID has to name something the project can use ("Label
-// not found"), and a board holds one list per label, assignee, milestone or
-// iteration ("Label has already been taken").
+// one of the five (four before 19.6, which takes no status_id), the ID has to
+// name something the project can use ("Label not found"), and a board holds
+// one list per label, assignee, milestone, iteration or status ("Label has
+// already been taken", "A list for this status already exists on the board").
 func TestCreateBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) {
 	const (
-		licenseHint   = "assignee, milestone and iteration lists need GitLab Premium or Ultimate"
-		scopeHint     = "exactly one of label_id, assignee_id, milestone_id or iteration_id"
-		licenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences"
+		licenseHint   = "assignee, milestone, iteration and status lists need GitLab Premium or Ultimate in the license or plan this project is on, and iteration and status lists also need the project to belong to a group, since GitLab refuses them in a personal namespace whatever the license includes"
+		scopeHint     = "exactly one of label_id, assignee_id, milestone_id, iteration_id or status_id"
+		licenseClause = "Assignee, milestone, iteration and status lists are refused with a 400 as well on an instance whose license or plan does not include them, and iteration and status lists in a personal namespace whatever it includes, in the language set in the caller's GitLab preferences"
 	)
 	licenseWords := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e`)
 	assignee := CreateBoardListInput{ProjectID: "10", BoardID: 1, AssigneeID: 3}
 	milestone := CreateBoardListInput{ProjectID: "10", BoardID: 1, MilestoneID: 4}
 	iteration := CreateBoardListInput{ProjectID: "10", BoardID: 1, IterationID: 5}
+	status := CreateBoardListInput{ProjectID: "10", BoardID: 1, StatusID: 2}
 	label := CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20}
 	tests := []struct {
 		name  string
@@ -1342,6 +1346,10 @@ func TestCreateBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) {
 		{"assignee list unlicensed in Spanish", assignee, `{"message":{"error":"Las listas de personas asignadas no están disponibles con su licencia actual"}}`, "clause"},
 		{"milestone list unlicensed in German", milestone, `{"message":{"error":"Meilensteinlisten sind mit deiner momentanen Lizenz nicht verfügbar"}}`, "clause"},
 		{"iteration list unlicensed in Japanese", iteration, `{"message":{"error":"現在のライセンスではイテレーション一覧は利用できません"}}`, "clause"},
+		{"status list unlicensed", status, `{"message":{"error":"Status lists not available with your current license"}}`, "license"},
+		{"status list on GitLab before 19.6", status, `{"error":"label_id, milestone_id, iteration_id, assignee_id are missing, exactly one parameter must be provided"}`, "clause"},
+		{"status not found", status, `{"message":{"error":"Status not found"}}`, "clause"},
+		{"status already listed", status, `{"message":{"error":["A list for this status already exists on the board"]}}`, "clause"},
 		{"assignee not found", assignee, `{"message":{"error":"Assignee not found"}}`, "clause"},
 		{"community edition requires label_id", assignee, `{"error":"label_id is missing"}`, "clause"},
 		{"more than one of the four", CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20, MilestoneID: 4}, `{"error":"label_id, milestone_id, iteration_id, assignee_id are mutually exclusive"}`, "clause"},
@@ -1504,6 +1512,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		Assignee:  &BoardListAssigneeOutput{ID: 3, Username: "alice"},
 		Milestone: &MilestoneOutput{ID: 5, Title: "v1.0", WebURL: "https://gitlab.example.com/group/p/-/milestones/1"},
 		Iteration: &IterationOutput{ID: 9, Title: "Sprint 3", WebURL: "https://gitlab.example.com/groups/g/-/iterations/9"},
+		Status:    &toolutil.WorkItemStatusOutput{ID: 2, Name: "In progress"},
 	}
 
 	md := FormatBoardListMarkdown(out)
@@ -1514,6 +1523,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		"- **Assignee**: @alice\n" +
 		"- **Milestone**: [v1.0](https://gitlab.example.com/group/p/-/milestones/1)\n" +
 		"- **Iteration**: [Sprint 3](https://gitlab.example.com/groups/g/-/iterations/9)\n" +
+		"- **Status**: In progress\n" +
 		"- **Position**: 0\n" +
 		"- **Max Issue Count**: 10\n" +
 		"- **Max Issue Weight**: 50\n" +
@@ -1975,7 +1985,7 @@ func TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey(t *testing.T) {
 }
 
 // TestCreateBoardList_OneScopeAtATime_SendsOnlyThatKey drives each list type
-// alone and pins the whole POST body. The four ids are interchangeable numbers,
+// alone and pins the whole POST body. The five ids are interchangeable numbers,
 // so a swapped pair or an inverted guard would create a column scoped to
 // something the caller never named while every existing assertion held.
 func TestCreateBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
@@ -1988,6 +1998,7 @@ func TestCreateBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
 		{"assignee_id", CreateBoardListInput{AssigneeID: 3}, map[string]any{"assignee_id": float64(3)}},
 		{"milestone_id", CreateBoardListInput{MilestoneID: 5}, map[string]any{"milestone_id": float64(5)}},
 		{"iteration_id", CreateBoardListInput{IterationID: 9}, map[string]any{"iteration_id": float64(9)}},
+		{"status_id", CreateBoardListInput{StatusID: 2}, map[string]any{"status_id": float64(2)}},
 		{"no scope set", CreateBoardListInput{}, map[string]any{}},
 	}
 	for _, tc := range cases {
@@ -2126,10 +2137,10 @@ func TestBoardReads_ProjectPathIsEscapedIntoTheRequest(t *testing.T) {
 
 // TestFormatListBoardListsMarkdown_ScopeFallbacks pins the Scope column for
 // every column shape the label branch leaves: an assignee list, an iteration
-// list, and the three that name nothing (an assignee GitLab sent no handle
-// for, a milestone with no title and an iteration with no title), which render
-// as an empty cell rather than as some other list's scope. The iteration
-// branch was reached by no test at all.
+// list, a status list, and the three that name nothing (an assignee GitLab
+// sent no handle for, a milestone with no title and an iteration with no
+// title), which render as an empty cell rather than as some other list's
+// scope. The iteration branch was reached by no test at all.
 func TestFormatListBoardListsMarkdown_ScopeFallbacks(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -2138,21 +2149,23 @@ func TestFormatListBoardListsMarkdown_ScopeFallbacks(t *testing.T) {
 			{ID: 3, Milestone: &MilestoneOutput{ID: 5}},
 			{ID: 4, Iteration: &IterationOutput{ID: 9, Title: "Sprint 3"}},
 			{ID: 5, Iteration: &IterationOutput{ID: 10}},
+			{ID: 6, Status: &toolutil.WorkItemStatusOutput{ID: 2, Name: "In progress"}},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 5},
+		Pagination: toolutil.PaginationOutput{TotalItems: 6},
 	}
 
 	md := FormatListBoardListsMarkdown(out)
 
-	want := "## Board Lists (5)\n\n" +
+	want := "## Board Lists (6)\n\n" +
 		"| ID | Scope | Position | Max Issues | Max Weight | Limit Metric |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| 1 | @alice | 0 | - | - | - |\n" +
 		"| 2 |  | 0 | - | - | - |\n" +
 		"| 3 |  | 0 | - | - | - |\n" +
 		"| 4 | Iteration: Sprint 3 | 0 | - | - | - |\n" +
-		"| 5 |  | 0 | - | - | - |\n\n" +
-		"5 items total\n\n" +
+		"| 5 |  | 0 | - | - | - |\n" +
+		"| 6 | Status: In progress | 0 | - | - | - |\n\n" +
+		"6 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'project.board_list_get' to read one column\n" +
 		"- Use action 'project.board_list_create' to add a new column\n"
@@ -2499,8 +2512,8 @@ func TestProjectBoardReads_Refused_AccessHintFollowsThePermissionRefusal(t *test
 	}
 }
 
-// statusListJSON is a status list as 19.6 renders it, the status
-// ee/lib/ee/api/entities/list.rb adds beside the keys client-go models.
+// statusListJSON is a status list as 19.6 renders it, with the status
+// ee/lib/ee/api/entities/list.rb adds to such a list.
 const statusListJSON = `{"id":100,"position":0,"label":null,"status":{"id":2,"name":"In progress",` +
 	`"icon_name":"status-running","color":"#1f75cb","position":0,"description":null,"category":"in_progress"}}`
 
@@ -2512,9 +2525,8 @@ func wantInProgressStatus() *toolutil.WorkItemStatusOutput {
 }
 
 // TestBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer verifies the
-// status of a status list, which client-go's BoardList does not model, is
-// read off the captured answer by every handler that answers with a list:
-// the four list handlers and a board's own lists.
+// status of a status list is published by every handler that answers with a
+// list: the four list handlers and a board's own lists.
 func TestBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardLists, func(w http.ResponseWriter, r *http.Request) {
@@ -2574,8 +2586,9 @@ func TestBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T) {
 }
 
 // TestBoardLists_AStatusTheTypeCannotHold_IsReported verifies each list
-// handler reports a status that arrives in a shape the extra cannot hold
-// rather than publishing the list without it.
+// handler reports a status that arrives in a shape its type cannot hold rather
+// than publishing the list without it. The SDK models the status and decodes
+// the body first, so it is the one that reports it.
 func TestBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := `{"id":100,"status":"in_progress"}`
@@ -2584,7 +2597,7 @@ func TestBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			_, err := ListBoardLists(t.Context(), client, ListBoardListsInput{ProjectID: "10", BoardID: 1})
 			return err
@@ -2594,13 +2607,4 @@ func TestBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
 			return err
 		}},
 	})
-}
-
-// TestBoardListExtraAt_ABoardWithFewerCapturedLists_ReadsAsNoStatus pins the
-// one place the board's lists and the captured ones could disagree in count.
-func TestBoardListExtraAt_ABoardWithFewerCapturedLists_ReadsAsNoStatus(t *testing.T) {
-	out := convertBoard(&gl.IssueBoard{Lists: []*gl.BoardList{{ID: 1}}}, toolutil.BoardExtra{})
-	if len(out.Lists) != 1 || out.Lists[0].Status != nil {
-		t.Errorf("lists = %+v, want one list without a status", out.Lists)
-	}
 }

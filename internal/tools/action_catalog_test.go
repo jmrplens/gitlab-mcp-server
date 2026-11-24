@@ -1045,13 +1045,13 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 // GitLab documents as Premium and Ultimate only to the tier the input schema
 // serves them from (issue 1233). doc/api/boards.md and doc/api/group_boards.md
 // mark the assignee, milestone, labels and weight a board update scopes the
-// board to, and the assignee, milestone and iteration a list create makes a
-// column of, "Premium and Ultimate only". A Free instance updates the board and
-// leaves out the scope it was asked for, and refuses a list create that names
-// no label, so a Free schema offering them invites a call whose answer is
-// either a silent omission or a refusal. The fields beside them that every tier
-// takes stay on the Free schema, which is what tells a tag on the right fields
-// from a tag on the whole input.
+// board to, and the assignee, milestone, iteration and status a list create
+// makes a column of, "Premium and Ultimate only". A Free instance updates the
+// board and leaves out the scope it was asked for, and refuses a list create
+// that names no label, so a Free schema offering them invites a call whose
+// answer is either a silent omission or a refusal. The fields beside them that
+// every tier takes stay on the Free schema, which is what tells a tag on the
+// right fields from a tag on the whole input.
 func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
 	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
@@ -1084,10 +1084,12 @@ func TestCentralTierFilter_BoardScopeInputsArePremium(t *testing.T) {
 		{name: "board_list_create_assignee_id", id: projectListCreate, field: "assignee_id", premiumOnly: true},
 		{name: "board_list_create_milestone_id", id: projectListCreate, field: "milestone_id", premiumOnly: true},
 		{name: "board_list_create_iteration_id", id: projectListCreate, field: "iteration_id", premiumOnly: true},
+		{name: "board_list_create_status_id", id: projectListCreate, field: "status_id", premiumOnly: true},
 		{name: "board_list_create_label_id", id: projectListCreate, field: "label_id"},
 		{name: "group_board_create_list_assignee_id", id: groupListCreate, field: "assignee_id", premiumOnly: true},
 		{name: "group_board_create_list_milestone_id", id: groupListCreate, field: "milestone_id", premiumOnly: true},
 		{name: "group_board_create_list_iteration_id", id: groupListCreate, field: "iteration_id", premiumOnly: true},
+		{name: "group_board_create_list_status_id", id: groupListCreate, field: "status_id", premiumOnly: true},
 		{name: "group_board_create_list_label_id", id: groupListCreate, field: "label_id"},
 	}
 	for _, tc := range cases {
