@@ -299,7 +299,16 @@ var upstreamWaits = []Entry{
 		Category:   CategoryUpstream,
 		Sites:      []string{"orbit.callMCP"},
 		Predicates: []Predicate{NoMethodFor{Route: "POST /orbit/mcp"}},
-		Reason:     "client-go has no method for POST /orbit/mcp, the Orbit MCP endpoint orbit.tools, orbit.dsl and the llm schema read since GitLab.com removed the routes Orbit.GetTools, Orbit.GetDsl and Orbit.GetSchema send, so the actions send the JSON-RPC request themselves",
+		Reason:     "client-go has no method for POST /orbit/mcp, the Orbit MCP endpoint orbit.tools, orbit.dsl and the llm schema read since GitLab.com removed the routes Orbit.GetTools, Orbit.GetDsl and Orbit.GetSchema send, and the only place GitLab serves what orbit.command_list and orbit.response_format read, so the actions send the JSON-RPC request themselves",
+	},
+	{
+		Category: CategoryUpstream,
+		Sites:    []string{"orbit.restResponse"},
+		Predicates: []Predicate{
+			NoMethodFor{Route: "GET /orbit/skills"},
+			NoMethodFor{Route: "GET /orbit/skills/:"},
+		},
+		Reason: "client-go has no method for the Orbit skill routes, GET /orbit/skills, /orbit/skills/:name and /orbit/skills/:name/*path, so orbit.skill_list, orbit.skill_get and orbit.skill_file send the GET through restResponse",
 	},
 	{
 		Category:   CategoryUpstream,

@@ -44,7 +44,7 @@ var classicRoutes = []join.ClassicDeclaration{
 	},
 	{
 		Route: "POST /orbit/mcp", Category: categoryReadAPIEveryMethod, Scope: finegrained.ClassicReadAPI,
-		Reason: "ee/lib/api/orbit/mcp.rb:34 at b03c97a8 (master on 2026-10-29) grants read_api beside mcp_orbit and mcp to the Orbit MCP endpoint, a POST that carries one JSON-RPC request; orbit.tools, orbit.dsl and the llm format of orbit.schema send tools/list and tools/call through it since GitLab.com removed their REST routes on 2026-10-27 and -28. The endpoint is not in 19.4.1-ee and GitLab.com, the one instance that serves it, was not measured with a read_api token; listing the actions leaves GitLab's own 403 to answer if it refuses",
+		Reason: "ee/lib/api/orbit/mcp.rb:34 at b03c97a8 (master on 2026-10-29) grants read_api beside mcp_orbit and mcp to the Orbit MCP endpoint, a POST that carries one JSON-RPC request; orbit.tools, orbit.dsl, orbit.command_list, orbit.response_format and the llm format of orbit.schema send tools/list and tools/call through it, what the REST routes GitLab.com removed on 2026-10-27 and -28 answered. The endpoint is not in 19.4.1-ee and GitLab.com, the one instance that serves it, was not measured with a read_api token; listing the actions leaves GitLab's own 403 to answer if it refuses",
 	},
 	{
 		Route: "POST /markdown", Category: categoryReadAPIEveryMethod, Scope: finegrained.ClassicReadAPI,

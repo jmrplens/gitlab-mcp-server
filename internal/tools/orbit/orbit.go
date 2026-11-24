@@ -17,9 +17,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// ResponseFormatInput is the response_format selector of orbit.dsl, the one
-// Orbit action besides orbit.query and orbit.schema whose source still renders
-// an llm text: the list_commands tool of GitLab's Orbit MCP endpoint. The query
+// ResponseFormatInput is the response_format selector of the actions that read
+// the commands of GitLab's Orbit MCP endpoint with a raw and an llm answer:
+// orbit.dsl and orbit.command_list through the list_commands tool, and
+// orbit.response_format through the get_response_format command. The query
 // takes a third value and declares its own field ([QueryInput.ResponseFormat]).
 type ResponseFormatInput struct {
 	// ResponseFormat selects the answer's shape. GitLab declares two values

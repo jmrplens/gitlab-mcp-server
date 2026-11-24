@@ -766,8 +766,6 @@ var routeFamilies = []routeFamily{
 		"the SSE listener of Orbit's MCP endpoint; orbit.tools, orbit.dsl and orbit.schema send its JSON-RPC POST through orbit.callMCP and read the one answer it gives"),
 	tracked(issueOrbitRoutes, 1, on(http.MethodPost), "/orbit/query/*",
 		"runs a named query template; orbit.query runs a query the caller writes"),
-	tracked(issueOrbitRoutes, 3, on(http.MethodGet), "/orbit/skills/**",
-		"lists the deployed Orbit skills and reads one and one of its files"),
 	tracked(issueOrbitRoutes, 1, on(http.MethodGet), "/orbit/grep",
 		"searches the graph for entities by name, from 19.6; no action searches it yet"),
 	tracked(issueOrbitRoutes, 1, on(http.MethodPost), "/orbit/context",

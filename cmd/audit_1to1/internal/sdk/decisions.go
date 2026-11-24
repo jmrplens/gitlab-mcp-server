@@ -208,6 +208,10 @@ var graphqlDecisions = map[string]decision{
 	"orbit.graphStatusByPath":      {Decision: decisionKeep, Reason: orbitRoutesRemoved},
 	"orbit.graphStatusByGroupID":   {Decision: decisionKeep, Reason: orbitRoutesRemoved},
 	"orbit.graphStatusByProjectID": {Decision: decisionKeep, Reason: orbitRoutesRemoved},
+	// KEEP: the query templates GitLab.com serves through GraphQL alone since
+	// gitlab-org/gitlab!265633 removed GET /orbit/query/templates on
+	// 2026-10-27, a route client-go never had a method for either.
+	"orbit.QueryTemplates": {Decision: decisionKeep, Reason: "GitLab.com serves the Orbit query templates as Query.orbit.queryTemplates since gitlab-org/gitlab!265633 removed GET /orbit/query/templates (2026-10-27); client-go's Orbit service had no method for that route and has none for the field"},
 }
 
 // orbitRoutesRemoved is the shared reason behind the Orbit GraphQL operations.
