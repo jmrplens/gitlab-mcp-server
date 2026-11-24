@@ -52,6 +52,25 @@ func TestValue_AMeasure_IsReadWhereItIs(t *testing.T) {
 	}
 }
 
+// TestReportGate_AnAnswerAsLongAsIsRead_IsRead verifies that the bound on an
+// answer is the longest one read, and not the first refused.
+func TestReportGate_AnAnswerAsLongAsIsRead_IsRead(t *testing.T) {
+	t.Parallel()
+	run := usual(t)
+	padded := string(run.Gate) + strings.Repeat(" ", maxAnswer-len(run.Gate))
+	b := newBench(t, run)
+	b.answerWith(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/measures/component" {
+			_, _ = w.Write(run.Measures)
+			return
+		}
+		_, _ = w.Write([]byte(padded))
+	})
+	if status := b.session.main(t.Context(), []string{"-no-scan"}); status != run.Status || b.stderr.Len() != 0 {
+		t.Errorf("status = %d, stderr = %q; want %d and nothing", status, b.stderr.String(), run.Status)
+	}
+}
+
 // TestReportGate_AnAnswerItCannotRead_IsAnError verifies that a request
 // answered with any status from 300 on, a redirect among them, which is not
 // followed, an answer that is no JSON, is more than one value, is longer than
