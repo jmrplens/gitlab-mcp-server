@@ -589,7 +589,7 @@ func TestMeasure_AnInterruptBeforeGobco_StartsNothingMore(t *testing.T) {
 			if status != 130 || stderr != "" {
 				t.Errorf("status = %d, stderr = %q; want 130 and nothing said", status, stderr)
 			}
-			if last := strings.Join(started[max(len(started)-1, 0):], ""); last != after {
+			if strings.Join(started[max(len(started)-1, 0):], "") != after {
 				t.Errorf("started %q, want nothing after %q", started, after)
 			}
 			if len(b.calls) != 0 || len(b.left(t)) != 0 {
