@@ -41,7 +41,8 @@
 //     than a full scan.
 //   - SONAR_POLL_TIMEOUT and SONAR_POLL_INTERVAL are whole numbers of seconds,
 //     where the interval was whatever sleep took, 0.5 or 1m among them.
-//   - COVERAGE_MIN is a number, where one awk could not read passed the check.
+//   - COVERAGE_MIN is a finite number, where one awk could not read passed the
+//     check.
 //   - The three are read before anything runs, with -no-scan too, which the
 //     script ran without looking at them.
 //   - What fails without a status to pass on, which is git, a request to

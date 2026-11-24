@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,8 +105,9 @@ func (s *session) readEnvironment(read *settings) error {
 	}
 	read.host = variable("SONAR_HOST_URL", "https://sonarcloud.io")
 	read.coverageMin = variable("COVERAGE_MIN", "90")
-	if _, err := strconv.ParseFloat(read.coverageMin, 64); err != nil {
-		return fmt.Errorf("COVERAGE_MIN=%s is not a number", read.coverageMin)
+	// ParseFloat reads NaN and the infinities, and no total is below NaN.
+	if minimum, err := strconv.ParseFloat(read.coverageMin, 64); err != nil || math.IsNaN(minimum) || math.IsInf(minimum, 0) {
+		return fmt.Errorf("COVERAGE_MIN=%s is not a finite number", read.coverageMin)
 	}
 	for _, wait := range []struct {
 		name, fallback string

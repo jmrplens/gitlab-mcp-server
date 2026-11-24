@@ -3260,14 +3260,14 @@ go run ./cmd/sonar_scan            # make sonar
 go run ./cmd/sonar_scan -no-scan   # make sonar-status: the last step alone
 ```
 
-| Setting               | Read from                | Default                 | Description                                         |
-| --------------------- | ------------------------ | ----------------------- | --------------------------------------------------- |
-| `SONARQUBE_TOKEN`     | `.env`, then environment | required                | The token every request is made as                  |
-| `SONAR_BRANCH`        | `.env`, then environment | The current branch      | The branch analyzed and reported                    |
-| `SONAR_HOST_URL`      | environment              | `https://sonarcloud.io` | The SonarQube host                                  |
-| `SONAR_POLL_TIMEOUT`  | environment              | `240`                   | Whole seconds the Compute Engine task is waited for |
-| `SONAR_POLL_INTERVAL` | environment              | `5`                     | Whole seconds between two looks at it               |
-| `COVERAGE_MIN`        | environment              | `90`                    | The minimum total coverage, a number, as CI has it  |
+| Setting               | Read from                | Default                 | Description                                               |
+| --------------------- | ------------------------ | ----------------------- | --------------------------------------------------------- |
+| `SONARQUBE_TOKEN`     | `.env`, then environment | required                | The token every request is made as                        |
+| `SONAR_BRANCH`        | `.env`, then environment | The current branch      | The branch analyzed and reported                          |
+| `SONAR_HOST_URL`      | environment              | `https://sonarcloud.io` | The SonarQube host                                        |
+| `SONAR_POLL_TIMEOUT`  | environment              | `240`                   | Whole seconds the Compute Engine task is waited for       |
+| `SONAR_POLL_INTERVAL` | environment              | `5`                     | Whole seconds between two looks at it                     |
+| `COVERAGE_MIN`        | environment              | `90`                    | The minimum total coverage, a finite number, as CI has it |
 
 A value of the last three that is not such a number is refused before anything runs. The `.env` at the repository's root has to be there. It is parsed rather than sourced, so a line that is not an assignment is refused, with a message that shows nothing of the file, and what it sets reaches `sonar-scanner` and not the tests, which CI runs without it. The command exits 0 when the gate is OK, 1 when it is not or a step could not be done, 2 for a command line it cannot read, and with the status of the tests or of `sonar-scanner` when one of them fails; run through `go run`, every failure reads as 1.
 
