@@ -184,9 +184,9 @@ func makeRecipe(t *testing.T, target string) string {
 func TestMakefile_EachTarget_RunsItsRecipe(t *testing.T) {
 	t.Parallel()
 	for target, want := range map[string]string{
-		"coverage-conditions":   "\t@go run ./cmd/coverage_recipes conditions $(PKG) $(TAGS)\n",
-		"coverage-mutants":      "\t@go run ./cmd/coverage_recipes mutants $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)\n",
-		"check-spec-conditions": "\tgo run ./cmd/coverage_recipes spec-conditions $(BASE)\n",
+		"coverage-conditions":   "\t@$(call RUN_BUILT,coverage_recipes) conditions $(PKG) $(TAGS)\n",
+		"coverage-mutants":      "\t@$(call RUN_BUILT,coverage_recipes) mutants $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR) $(MUTANT_DEADLINE_MAX)\n",
+		"check-spec-conditions": "\t$(call RUN_BUILT,coverage_recipes) spec-conditions $(BASE)\n",
 	} {
 		t.Run(target, func(t *testing.T) {
 			t.Parallel()

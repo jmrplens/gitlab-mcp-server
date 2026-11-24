@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,6 +24,12 @@ import (
 // helperEnv names what this test binary does instead of running its tests,
 // when it stands in for a program a recipe runs.
 const helperEnv = "RECIPE_TEST_HELPER"
+
+// The files a stand-in recipe writes where it runs.
+const (
+	startedFile = "started"
+	endedFile   = "ended"
+)
 
 // TestMain runs the tests, or the program helperEnv asks for.
 func TestMain(m *testing.M) {
@@ -41,6 +49,8 @@ func TestMain(m *testing.M) {
 		fmt.Println(soft, hard, err)
 	case "pwd":
 		fmt.Println(os.Getenv("PWD"))
+	case "recipe":
+		os.Exit(standInRecipe())
 	case "signal":
 		// Killed by its own signal, so it has no exit status.
 		self, err := os.FindProcess(os.Getpid())
@@ -49,6 +59,30 @@ func TestMain(m *testing.M) {
 		}
 		time.Sleep(time.Minute)
 	}
+}
+
+// standInRecipe is the program a make target runs in
+// TestMakefile_ASIGTERMToMake_ReachesTheProgramOfTheTarget: it writes which
+// process it is and what it was given to the file startedFile of the directory
+// it runs in, waits for a signal, and returns the signal's status once it has
+// written that to endedFile. One no signal reaches ends by itself.
+func standInRecipe() int {
+	ctx, stop := Signals(context.Background())
+	defer stop()
+	//#nosec G703 -- the path is a constant, and the arguments are only what the file holds
+	if os.WriteFile(startedFile, fmt.Appendln(nil, os.Getpid(), os.Args[1:]), 0o600) != nil {
+		return 1
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Minute):
+		return 1
+	}
+	status, _ := Status(ctx)
+	if os.WriteFile(endedFile, fmt.Append(nil, status), 0o600) != nil {
+		return 1
+	}
+	return status
 }
 
 // mustGetwd is the helper's working directory, with its links resolved.
@@ -365,4 +399,125 @@ func TestSignals_ASignal_EndsTheContextAndStopLetsItGo(t *testing.T) {
 			}
 		})
 	}
+}
+
+// goStandIn is a go command that builds and runs one program, this test
+// binary, and runs it as `go run` does: as a child it waits for, which a
+// signal that ends the go command does not reach.
+const goStandIn = `#!/bin/sh
+case $1 in
+build)
+  out=
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then out=$2; fi
+    shift
+  done
+  mkdir -p "$(dirname "$out")" && ln -s "$RECIPE_TEST_SELF" "$out"
+  ;;
+run)
+  shift 2
+  "$RECIPE_TEST_SELF" "$@" &
+  wait "$!"
+  ;;
+esac
+`
+
+// makeInDirectory is a make of this repository's Makefile in a directory of
+// its own, where it builds into, with goStandIn as the go command and the
+// stand-in recipe as everything it builds, and the files the stand-in writes.
+// It skips the test where that make cannot run: macOS ships make 3.81, older
+// than the 4.2 the Makefile needs, and Windows has no signal to send one.
+func makeInDirectory(t *testing.T, args ...string) (run *exec.Cmd, started, ended string) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skipf("the Makefile's recipes are held on Linux; this is %s", runtime.GOOS)
+	}
+	makeBin, err := exec.LookPath("make")
+	if err != nil {
+		t.Skipf("make is not installed here: %v", err)
+	}
+	makefile, err := filepath.Abs(filepath.Join("..", "..", "..", "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, stubs := t.TempDir(), t.TempDir()
+	//#nosec G306 -- the stand-in is a script make has to execute
+	if err = os.WriteFile(filepath.Join(stubs, "go"), []byte(goStandIn), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	started, ended = filepath.Join(dir, startedFile), filepath.Join(dir, endedFile)
+	run = exec.CommandContext(t.Context(), makeBin, append([]string{"-f", makefile}, args...)...) //#nosec G204 -- make from PATH, over this repository's own Makefile
+	run.Dir = dir
+	run.Env = append(slices.DeleteFunc(os.Environ(), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.Contains([]string{"MAKEFLAGS", "MFLAGS", "MAKELEVEL"}, name)
+	}), helperEnv+"=recipe", "RECIPE_TEST_SELF="+self, "PATH="+stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return run, started, ended
+}
+
+// TestMakefile_ASIGTERMToMake_ReachesTheProgramOfTheTarget sends make a SIGTERM
+// while the program of a target runs, and verifies that the program was given
+// what the target says, received the signal and ended before make did. make
+// hands the signal to the process it started and to nothing below it, and `go
+// run`, which the targets once ran their programs through, ends on it without
+// passing it on: the program went on by itself, a staged copy still in the
+// module, and started gremlins after the run it belonged to had been ended.
+func TestMakefile_ASIGTERMToMake_ReachesTheProgramOfTheTarget(t *testing.T) {
+	cases := []struct {
+		target string
+		args   []string
+		want   string
+	}{
+		{target: "coverage-conditions", args: []string{"PKG=./a", "TAGS=e2e"}, want: "[conditions ./a e2e]"},
+		{target: "coverage-mutants", args: []string{"PKG=./a", "MUTANT_BUDGET=1", "MUTANT_BUDGET_FLOOR=2", "MUTANT_DEADLINE_MAX=3"}, want: "[mutants ./a 1 2 3]"},
+		{target: "check-spec-conditions", args: []string{"BASE=main"}, want: "[spec-conditions main]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.target, func(t *testing.T) {
+			run, started, ended := makeInDirectory(t, append([]string{tc.target}, tc.args...)...)
+			if err := run.Start(); err != nil {
+				t.Fatal(err)
+			}
+			pid, got := awaitStandIn(t, started)
+			if got != tc.want {
+				t.Errorf("make %s gave its program %s, want %s", tc.target, got, tc.want)
+			}
+			if err := run.Process.Signal(syscall.SIGTERM); err != nil {
+				t.Fatal(err)
+			}
+			if err := run.Wait(); err == nil {
+				t.Errorf("make %s ended as a run that was not interrupted", tc.target)
+			}
+			if status, err := os.ReadFile(ended); err != nil || string(status) != "143" {
+				t.Errorf("the program of make %s did not end on the signal: it wrote %q, %v", tc.target, status, err)
+				// It is a child of no process of this test by now, and it
+				// would outlive the test by a minute.
+				if left, findErr := os.FindProcess(pid); findErr == nil {
+					_ = left.Kill()
+				}
+			}
+		})
+	}
+}
+
+// awaitStandIn waits for the stand-in recipe to say it runs, and returns which
+// process it is and the arguments it was given.
+func awaitStandIn(t *testing.T, started string) (pid int, args string) {
+	t.Helper()
+	for range 3000 {
+		if said, err := os.ReadFile(started); err == nil && bytes.HasSuffix(said, []byte("\n")) {
+			number, rest, _ := strings.Cut(strings.TrimSuffix(string(said), "\n"), " ")
+			if pid, err = strconv.Atoi(number); err != nil {
+				t.Fatalf("the stand-in said %q", said)
+			}
+			return pid, rest
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("make did not run the program of its target")
+	return 0, ""
 }
