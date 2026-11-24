@@ -1,10 +1,10 @@
 ---
 title: Orbit
-description: Six read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com with a Premium or Ultimate tier.
+description: Fifteen read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com with a Premium or Ultimate tier.
 datePublished: "2026-05-06"
 faq:
   - q: "What is Orbit in GitLab MCP Server?"
-    a: "Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools: `status`, `schema`, `tools`, `dsl`, `query` and `graph_status`. They let an AI assistant check the service's health, inspect the graph schema, list the tools Orbit's MCP endpoint serves, read the query language, run read-only queries against the Knowledge Graph and check the indexing state. Since Orbit's general availability on 29 October 2026, GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial. Orbit performs no writes. It is registered only when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate: its six actions are the `orbit.*` catalog entries on the default dynamic surface, the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit exposes GitLab.com's experimental Knowledge Graph API through fifteen read-only MCP tools: `status`, `schema`, `tools`, `dsl`, `query`, `graph_status`, `query_templates`, `response_format`, `command_list`, `skill_list`, `skill_get`, `skill_file`, `named_query`, `context` and `grep`. They let an AI assistant check the service's health, inspect the graph schema, list the tools and commands Orbit's MCP endpoint serves, read the query language and the shape of a query's answer, run read-only queries and GitLab's named queries against the Knowledge Graph, check the indexing state, search a group or project, resolve one reference to its summary and read the skills GitLab.com deploys. Since Orbit's general availability on 29 October 2026, GitLab.com serves a group's index and queries only for a top-level group with the `orbit_promo` add-on or a running Orbit trial. Orbit performs no writes. It is registered only when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate: its fifteen actions are the `orbit.*` catalog entries on the default dynamic surface, the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or fifteen `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "What query language does Orbit use?"
     a: "GQL, a read-only language based on openCypher 9, which GitLab.com compiles every query in since 2026-10-15. The `query` action takes one statement as text: `MATCH` a pattern, optionally filtered by `WHERE`, then `RETURN` properties, whole nodes or aggregates, optionally followed by `ORDER BY`, `SKIP` and `LIMIT`. Every node carries a label, and at least one is bounded by its id or a literal property. A relationship type follows a colon, `-[:IN_PROJECT]->`, the undirected `--` reaches every neighbor of one node, and `MATCH path = ANY SHORTEST (a)-[:IN_PROJECT*1..3]->(b) RETURN path` finds a path over the relationship types it names. GitLab infers the query type from the statement and answers one it cannot compile with a message naming the fault, which the server passes on."
   - q: "What happens to a query written as a JSON object?"
@@ -12,16 +12,16 @@ faq:
   - q: "Is Orbit available on self-managed GitLab?"
     a: "No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection."
   - q: "What license and configuration does Orbit require?"
-    a: "Orbit requires a Premium or Ultimate tier on a GitLab.com connection. Enable it with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate` in stdio mode, or `--tier=premium` / `--tier=ultimate` in HTTP mode; when neither is set the tier is detected from the plans of the namespaces the token administers, then from the groups the token is a member of, falling back to `free` (GitLab.com answers the instance plan with `null`, so the license is not asked there), so a member of a group on a paid plan sees the Orbit actions without pinning the tier. A fine-grained token is the exception: GitLab answers the group step to no fine-grained token, so one that administers no paid namespace resolves to `free` and needs the tier pinned. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored; HTTP mode reads `GITLAB_MCP_TIER` from its environment when `--tier` is not passed. When these conditions are met, Orbit's six actions are reachable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` and `orbit.graph_status` on the default dynamic surface, as the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or as six `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
+    a: "Orbit requires a Premium or Ultimate tier on a GitLab.com connection. Enable it with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate` in stdio mode, or `--tier=premium` / `--tier=ultimate` in HTTP mode; when neither is set the tier is detected from the plans of the namespaces the token administers, then from the groups the token is a member of, falling back to `free` (GitLab.com answers the instance plan with `null`, so the license is not asked there), so a member of a group on a paid plan sees the Orbit actions without pinning the tier. A fine-grained token is the exception: GitLab answers the group step to no fine-grained token, so one that administers no paid namespace resolves to `free` and needs the tier pinned. The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored; HTTP mode reads `GITLAB_MCP_TIER` from its environment when `--tier` is not passed. When these conditions are met, Orbit's fifteen actions are reachable as the `orbit.*` catalog entries (`orbit.status`, `orbit.query`, `orbit.grep` and the others) on the default dynamic surface, as the `gitlab_orbit` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`, or as fifteen `gitlab_orbit_*` tools with `GITLAB_MCP_TOOL_SURFACE=individual`."
   - q: "Is Orbit read-only?"
-    a: "Yes. All six Orbit tools are read-only. `status`, `schema`, `tools`, `dsl`, and `graph_status` only inspect health, ontology, manifest, query language, and indexing state, and `query` runs read-only GQL statements against the index. No Orbit action mutates GitLab data, so Orbit is safe to expose even in cautious deployments."
+    a: "Yes. All fifteen Orbit tools are read-only. The catalog reads only inspect health, ontology, manifests, commands, the query language, response format, skills and indexing state; `query` and `named_query` run read-only GQL statements against the index; `grep` searches and `context` resolves a reference, sent as a GET or a POST that GitLab reads as a read. `context` with `expand` runs one billable graph query, as `query` does. No Orbit action mutates GitLab data, so Orbit is safe to expose even in cautious deployments."
   - q: "How do I learn the exact parameters for an Orbit action?"
     a: 'On the default dynamic surface, `gitlab_find_action` with a query such as "orbit query" returns the exact `params` schema inline; the same schema is readable as the `gitlab://tools/orbit.query` resource (`gitlab://tools/gitlab_orbit.query` with `GITLAB_MCP_TOOL_SURFACE=meta`). These resources stay available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal` and in any `GITLAB_MCP_META_PARAM_SCHEMA` mode. Before constructing a query, run the `dsl` action for the query language GitLab.com compiles it in and the `schema` action for the entities and relationship types it can name.'
 ---
 
 import FAQ from "../../../components/FAQ.astro";
 
-Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools**: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate (`GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`, `--tier=premium` or `--tier=ultimate` in HTTP mode, or the tier detected from the namespace plans, then the groups the token is a member of). The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
+Orbit exposes GitLab.com's experimental Knowledge Graph API through **fifteen read-only MCP tools**: `status`, `schema`, `tools`, `dsl`, `query` and `graph_status`, the catalog reads `query_templates`, `response_format`, `command_list`, `skill_list`, `skill_get` and `skill_file`, and `named_query`, `context` and `grep`. It is available **only** when the server connects to `https://gitlab.com` and the resolved tier is Premium or Ultimate (`GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`, `--tier=premium` or `--tier=ultimate` in HTTP mode, or the tier detected from the namespace plans, then the groups the token is a member of). The `GITLAB_ENTERPRISE` environment variable was removed in 3.0.0 and is ignored. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
 
 :::note[Technical reference]
 For every action with its parameters, see the [Orbit knowledge graph](/gitlab-mcp-server/reference/tools/orbit/) page of the tool reference.
@@ -29,15 +29,15 @@ For every action with its parameters, see the [Orbit knowledge graph](/gitlab-mc
 
 ## When is Orbit available?
 
-Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. It requires the `https://gitlab.com` host **and** a resolved tier of Premium or Ultimate. On the default dynamic surface its six actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with six actions; with `GITLAB_MCP_TOOL_SURFACE=individual` it is six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
+Orbit registers only on GitLab.com connections with a Premium or Ultimate tier. It requires the `https://gitlab.com` host **and** a resolved tier of Premium or Ultimate. On the default dynamic surface its fifteen actions are the `orbit.*` catalog entries reached through `gitlab_find_action` and `gitlab_execute_action`; with `GITLAB_MCP_TOOL_SURFACE=meta` it is the single `gitlab_orbit` tool with fifteen actions; with `GITLAB_MCP_TOOL_SURFACE=individual` it is fifteen `gitlab_orbit_*` tools. Every Orbit tool is read-only.
 
 | Requirement               | Value                                         |
 | ------------------------- | --------------------------------------------- |
 | GitLab host               | `https://gitlab.com`                          |
 | Tier                      | Premium or Ultimate                           |
 | Dynamic surface (default) | `orbit.*` actions via `gitlab_execute_action` |
-| Meta-tool mode            | `gitlab_orbit` with six actions               |
-| Individual mode           | Six `gitlab_orbit_*` tools                    |
+| Meta-tool mode            | `gitlab_orbit` with fifteen actions           |
+| Individual mode           | Fifteen `gitlab_orbit_*` tools                |
 | Write behavior            | Read-only                                     |
 
 Self-managed GitLab instances do not register Orbit tools, even on a Premium or Ultimate tier.
@@ -48,25 +48,41 @@ GitLab.com itself decides what it answers. Since Orbit's general availability on
 
 GitLab.com removed five of the six REST routes Orbit used on 27 and 28 October 2026. Each action now reads the source GitLab offers in their place, a documented API where there is one, and the Orbit MCP endpoint only for what nothing else serves:
 
-| Action         | Source on GitLab.com                                                                                            |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `status`       | GraphQL `Query.orbit.serviceStatus`                                                                             |
-| `schema`       | GraphQL `Query.orbit.schema`; `llm` from `get_graph_schema` of `POST /api/v4/orbit/mcp`                         |
-| `tools`        | `tools/list` of the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`                                                |
-| `dsl`          | `list_commands` of the Orbit MCP endpoint                                                                       |
-| `query`        | `POST /api/v4/orbit/query`                                                                                      |
-| `graph_status` | GraphQL `Group.orbit` and `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`, `access`, `trial`) |
+| Action                                  | Source on GitLab.com                                                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `status`                                | GraphQL `Query.orbit.serviceStatus`                                                                             |
+| `schema`                                | GraphQL `Query.orbit.schema`; `llm` from `get_graph_schema` of `POST /api/v4/orbit/mcp`                         |
+| `tools`                                 | `tools/list` of the Orbit MCP endpoint, `POST /api/v4/orbit/mcp`                                                |
+| `dsl`                                   | `list_commands` of the Orbit MCP endpoint                                                                       |
+| `query`                                 | `POST /api/v4/orbit/query`                                                                                      |
+| `graph_status`                          | GraphQL `Group.orbit` and `Project.orbit` (`indexing`, `itemCounts`, `enabled`, `enabledAt`, `access`, `trial`) |
+| `query_templates`                       | GraphQL `Query.orbit.queryTemplates`                                                                            |
+| `response_format`                       | `get_response_format` of the Orbit MCP endpoint, through `invoke_command`                                       |
+| `command_list`                          | `list_commands` of the Orbit MCP endpoint                                                                       |
+| `skill_list`, `skill_get`, `skill_file` | `GET /api/v4/orbit/skills`, `/orbit/skills/:name` and `/orbit/skills/:name/*path`                               |
+| `named_query`                           | `POST /api/v4/orbit/query/:name`                                                                                |
+| `context`                               | `POST /api/v4/orbit/context`                                                                                    |
+| `grep`                                  | `GET /api/v4/orbit/grep`                                                                                        |
 
 ## Actions
 
-| Action         | Canonical ID         | Individual tool             | Purpose                                                        |
-| -------------- | -------------------- | --------------------------- | -------------------------------------------------------------- |
-| `status`       | `orbit.status`       | `gitlab_orbit_status`       | Check Orbit service health and component status                |
-| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspect the graph schema and the properties of the nodes named |
-| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | List the tools GitLab's Orbit MCP endpoint serves              |
-| `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Read the query language GitLab.com compiles queries in, GQL    |
-| `query`        | `orbit.query`        | `gitlab_orbit_query`        | Execute a read-only Knowledge Graph query written in GQL       |
-| `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for a namespace, project, or full path |
+| Action            | Canonical ID            | Individual tool                | Purpose                                                                   |
+| ----------------- | ----------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `status`          | `orbit.status`          | `gitlab_orbit_status`          | Check Orbit service health and component status                           |
+| `schema`          | `orbit.schema`          | `gitlab_orbit_schema`          | Inspect the graph schema and the properties of the nodes named            |
+| `tools`           | `orbit.tools`           | `gitlab_orbit_tools`           | List the tools GitLab's Orbit MCP endpoint serves                         |
+| `dsl`             | `orbit.dsl`             | `gitlab_orbit_dsl`             | Read the query language GitLab.com compiles queries in, GQL               |
+| `query`           | `orbit.query`           | `gitlab_orbit_query`           | Execute a read-only Knowledge Graph query written in GQL                  |
+| `graph_status`    | `orbit.graph_status`    | `gitlab_orbit_graph_status`    | Inspect indexing status for a namespace, project, or full path            |
+| `query_templates` | `orbit.query_templates` | `gitlab_orbit_query_templates` | List the query templates GitLab renders for the token's user              |
+| `response_format` | `orbit.response_format` | `gitlab_orbit_response_format` | Read the JSON Schema of a query's raw answer                              |
+| `command_list`    | `orbit.command_list`    | `gitlab_orbit_command_list`    | List the commands of the Orbit MCP endpoint and the action that runs each |
+| `skill_list`      | `orbit.skill_list`      | `gitlab_orbit_skill_list`      | List the skills GitLab.com has deployed                                   |
+| `skill_get`       | `orbit.skill_get`       | `gitlab_orbit_skill_get`       | Inspect one skill and the files it holds                                  |
+| `skill_file`      | `orbit.skill_file`      | `gitlab_orbit_skill_file`      | Read one file of a skill                                                  |
+| `named_query`     | `orbit.named_query`     | `gitlab_orbit_named_query`     | Run one of GitLab's named queries by name                                 |
+| `context`         | `orbit.context`         | `gitlab_orbit_context`         | Resolve one reference to its summary and, with `expand`, its neighborhood |
+| `grep`            | `orbit.grep`            | `gitlab_orbit_grep`            | Search what one group or project holds                                    |
 
 The action name is what the `gitlab_orbit` meta-tool takes in `action`; the canonical ID is what `gitlab_execute_action` takes on the default dynamic surface.
 
@@ -322,6 +338,50 @@ GitLab.com serves the index under `LICENSED` or `TRIAL_ACTIVE` access. A top-lev
 
 **Example:** See above.
 
+### `query_templates`: List the query templates
+
+Returns the query templates GitLab renders for the token's user: the `name`, `description` and GQL text (`query`) of each. A template that asks about the user binds the user's own id in its text, so the answer is that user's alone and is never cached for another. The templates take no parameters; `named_query` runs one by its name.
+
+### `response_format`: Read the shape of a query's answer
+
+Returns the JSON Schema of the raw answer `query` and `named_query` return, with its `version` (`raw`, the default), or the same schema as compact text (`llm`). It invokes `get_response_format` on the Orbit MCP endpoint, which answers what the removed `GET /api/v4/orbit/schema/format` did.
+
+### `command_list`: List the Orbit commands
+
+Returns the commands GitLab's Orbit MCP endpoint runs, each with its description, its input schema and the action of this server that runs it: `query_graph` is `query`, `get_graph_schema` is `schema` and `get_response_format` is `response_format`. `command_names` narrows the list; a name GitLab does not serve is an error that says so. No action invokes a command by name.
+
+### `skill_list`, `skill_get` and `skill_file`: Read the deployed skills
+
+`skill_list` returns the skills GitLab.com has deployed, with the version, compatibility and description of each. `skill_get` takes a skill's `name` and returns its version and the files it holds, each with its path, SHA-256 digest and size, without their content. `skill_file` takes the `name` and a file's `path` relative to the skill root and returns the file as GitLab serves it, with its media type. GitLab answers the skills only to a user with an Orbit-enabled namespace and `404 Skills are not available` otherwise, which the action answers with what Orbit needs; a skill or a file GitLab does not hold is answered by name, with the action that lists the skills or their files.
+
+### `named_query`: Run a named query
+
+Runs one of GitLab's named queries by `name` with its `parameters` and returns the answer `query` returns. The five templates `query_templates` lists take no parameters. The other twelve take the ones GitLab named for each on 29 October 2026, which nothing GitLab serves lists and the description of the action's `parameters` carries on every surface: `context_for_issue`, `context_for_job`, `context_for_review`, `expand_merge_request` and `expand_work_item` take `node_ids` and `limit`, both required; `expand_neighbors` takes `entity`, `node_ids` and `limit`; `definition_callees` and `definition_references` take `node_id`, a string; `file_definitions` and `file_definition_callers` take `project_id` and `file_path`; `list_nodes` takes `entity`; `search_nodes` takes `entity`, `field` and `text`. An id in `node_ids` is a number or a decimal string, and a string is sent to GitLab as the integer it spells. The ids of definitions and files have up to 63 bits, so give them as strings (`"662267755689139244"`): a number of 2^53 (9007199254740992) or beyond loses its last digits before the server reads it, so the server refuses one anywhere in `parameters`, naming the parameter, instead of running the query on another id. GitLab refuses an unknown name or parameter with a message naming the valid ones, which the error carries. It refuses `query` and `named_query` with `422` when the token's user has chosen no default group for Orbit billing; the error carries GitLab's message, where the group is chosen and the groups to choose from.
+
+### `context`: Resolve one reference
+
+Takes exactly one token in `tokens` (`Type[id]`, a GID, an instance URL, `path!iid`, `path#iid`, `path&iid` or `path@ref`) and returns what GitLab resolved it to: a work item, merge request, job, pipeline, branch or commit, with a summary read from GitLab's database (title, state, description, discussions, changed files, jobs, failed jobs with an excerpt of their log and their failed tests, linked items). With `expand` it also returns the graph neighborhood of a work item, merge request or job, the named query GitLab ran for it and its answer, which costs one billable graph query. An expansion GitLab did not answer carries the reason beside the summary (`expansion_unsupported_type`, `outside_graph_scope`, `billing_namespace_required`, `quota_exhausted`, `timeout` or `execution_error`), so it is never read as an object with no neighbors. A token GitLab cannot resolve comes back with `found: false` and the reason, `invalid_token`, `unsupported_type` or `not_found`, rather than as an error. `not_found` does not say that the object does not exist: GitLab answers it for an object the token's user cannot read too.
+
+With a fine-grained token, the route's own permission, `read_orbit` at user, opens none of those objects. GitLab also checks inside the route what the token may read on the object's own project or group, which the table of the [permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#orbit) cannot show, since GitLab declares it on no route:
+
+- `read_work_item` for a work item, and `read_issue_discussion` for its discussions, or `read_epic_discussion` when it is an epic.
+- `read_merge_request` for a merge request, `read_merge_request_discussion` for its discussions and `download_code` for its changed files.
+- `read_job` for a job, and for the log of every failed job; `read_pipeline_test_report` for failed tests.
+- `read_pipeline` for a pipeline, and for the pipeline of a merge request, branch or commit; `read_pipeline_job` for a pipeline's jobs and failed jobs, and for the failed jobs of a merge request or branch.
+- `read_branch` for a branch and `read_commit` for a commit, with `read_commit_diff` for its changed files and `read_commit_merge_request` for its merge requests.
+
+An object the token may not read is answered `not_found`, like one that does not exist, and a part of a summary it may not read (`discussions`, a pipeline's status, the failed jobs, a linked item) is left out of it. The neighborhood `expand` asks for is filtered by the access of the token's user, not by the token's.
+
+A person's classic token is checked the same way where the object's top-level group [enforces fine-grained tokens](/gitlab-mcp-server/operations/fine-grained-tokens/#when-an-organization-enforces-fine-grained-tokens): it holds none of these permissions, so every object there is answered `not_found`, and `grep` lists the `branches` scope of a project there as unavailable.
+
+### `grep`: Search a group or project
+
+Searches what one group or project holds, named by exactly one of `namespace_id`, `project_id` and `full_path`: work items, merge requests, code, commits, notes, milestones, users, projects, groups and, when asked in `scopes`, branches. `search` is 2 to 256 bytes once trimmed, `limit` 1 to 50 (GitLab's default 20) and `per_scope` 1 to 10 (default 5, or `limit` when that is lower) and never above `limit`; the server refuses a call past any of them before it sends it. Every hit but a file carries its token, which `context` takes for a work item, merge request, commit or branch, and a note also carries the token of what it is on; most carry the id `query` filters on, a commit's being its SHA, and a file carries its matching passages. A scope GitLab did not search is listed with the reason. A group or project GitLab does not find, one the token's user cannot read and one whose top-level group has Orbit off are all answered as not found, by the parameter that named it; so is one that exists when Orbit is off for the token's user, which is why the answer also lists what Orbit needs. GitLab marks the route experimental and runs the searches `/search` runs, so it needs the `read_orbit` and `use_global_search` permissions. `namespace_id` is a group's id: a user namespace, and a project in one, are answered as not found. The `branches` scope is a project's alone and needs the token's user to be able to read its code, and a fine-grained token `read_branch` on the project too; otherwise GitLab lists it as unavailable, `not_available_for_target`.
+
+### What changed in 3.9.0
+
+Nine actions joined the six: `query_templates`, `response_format`, `command_list`, `skill_list`, `skill_get`, `skill_file`, `named_query`, `context` and `grep`. The three search aliases of the Orbit group (the word search after the `orbit`, `kg` or `knowledge_graph` prefix) now resolve to `grep`, which is the search; they named `query` before, which runs a graph query and searches nothing. A caller that ran a GQL statement through one of them calls `orbit.query` by its own ID. The Orbit live record holds no answer to the new actions yet: GitLab.com stopped serving Orbit to the fixture namespace on 29 October 2026, so they are built from the answers captured that morning.
+
 ### What changed in 3.4.0
 
 The six action IDs, tool names and parameters are the ones of earlier releases. What GitLab no longer sends anywhere left the outputs with the routes:
@@ -336,13 +396,22 @@ The six action IDs, tool names and parameters are the ones of earlier releases. 
 
 On every surface, action parameter schemas are available through MCP resources, so you can learn the exact `params` shape of each Orbit action without expanding every schema in `tools/list`; on the dynamic surface `gitlab_find_action` returns the same schema inline. These resources remain available with `GITLAB_MCP_CAPABILITY_SURFACE=full` or `minimal`, regardless of `GITLAB_MCP_META_PARAM_SCHEMA` mode. The table lists the default-surface IDs; with `GITLAB_MCP_TOOL_SURFACE=meta` the entry is `gitlab://tools/gitlab_orbit.<action>`.
 
-| Resource                            | Purpose                                |
-| ----------------------------------- | -------------------------------------- |
-| `gitlab://tools/orbit.status`       | Parameters for service health checks   |
-| `gitlab://tools/orbit.schema`       | Parameters for ontology inspection     |
-| `gitlab://tools/orbit.tools`        | Parameters for tool manifest discovery |
-| `gitlab://tools/orbit.dsl`          | Parameters for the query language      |
-| `gitlab://tools/orbit.query`        | Parameters for Knowledge Graph queries |
-| `gitlab://tools/orbit.graph_status` | Parameters for indexing status checks  |
+| Resource                               | Purpose                                      |
+| -------------------------------------- | -------------------------------------------- |
+| `gitlab://tools/orbit.status`          | Parameters for service health checks         |
+| `gitlab://tools/orbit.schema`          | Parameters for ontology inspection           |
+| `gitlab://tools/orbit.tools`           | Parameters for tool manifest discovery       |
+| `gitlab://tools/orbit.dsl`             | Parameters for the query language            |
+| `gitlab://tools/orbit.query`           | Parameters for Knowledge Graph queries       |
+| `gitlab://tools/orbit.graph_status`    | Parameters for indexing status checks        |
+| `gitlab://tools/orbit.query_templates` | Parameters for the query templates (none)    |
+| `gitlab://tools/orbit.response_format` | Parameters for the shape of a query's answer |
+| `gitlab://tools/orbit.command_list`    | Parameters for the commands Orbit runs       |
+| `gitlab://tools/orbit.skill_list`      | Parameters for listing the skills (none)     |
+| `gitlab://tools/orbit.skill_get`       | Parameters for reading one skill             |
+| `gitlab://tools/orbit.skill_file`      | Parameters for reading one file of a skill   |
+| `gitlab://tools/orbit.named_query`     | Parameters for named queries                 |
+| `gitlab://tools/orbit.context`         | Parameters for resolving a reference         |
+| `gitlab://tools/orbit.grep`            | Parameters for searching a group or project  |
 
 <FAQ />

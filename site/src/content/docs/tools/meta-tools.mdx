@@ -46,7 +46,7 @@ Consolidating answers three costs that a long tool list carries, which is why th
 | Meta                | {stats.meta.base}  | {stats.meta.premium}  | {stats.meta.self_managed_enterprise} | {stats.meta.gitlab_com}  | Medium         |
 | Individual          | {stats.tools.free} | {stats.tools.premium} | {stats.tools.ultimate_self_managed}  | {stats.tools.gitlab_com} | Highest        |
 
-All three modes reach every action the tier allows; only the packaging differs. On GitLab.com, Premium gains Orbit as well: the `gitlab_orbit` meta-tool on this surface, or its six tools on the individual one. A token's scopes can lower these counts: without `admin_mode`, the groups that need it are left out ([Scope-based tool filtering](/gitlab-mcp-server/operations/security/#scope-based-tool-filtering)).
+All three modes reach every action the tier allows; only the packaging differs. On GitLab.com, Premium gains Orbit as well: the `gitlab_orbit` meta-tool on this surface, or its fifteen tools on the individual one. A token's scopes can lower these counts: without `admin_mode`, the groups that need it are left out ([Scope-based tool filtering](/gitlab-mcp-server/operations/security/#scope-based-tool-filtering)).
 
 Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
@@ -369,7 +369,7 @@ The detail resource says where the confirmation goes: the `call` that `gitlab://
 }
 ```
 
-`gitlab_orbit` is registered only for `https://gitlab.com` connections on the Premium or Ultimate tier and exposes six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
+`gitlab_orbit` is registered only for `https://gitlab.com` connections on the Premium or Ultimate tier and exposes fifteen read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, `graph_status`, `query_templates`, `response_format`, `command_list`, `skill_list`, `skill_get`, `skill_file`, `named_query`, `context` and `grep`.
 
 ## Key meta-tools reference
 
@@ -499,7 +499,7 @@ The eleven Ultimate meta-tools, none of which the scope filter withholds for wan
 | `gitlab_security_scan_profile` |       3 | Attaching and detaching security scan profiles, and a project's statuses (GraphQL) |
 | `gitlab_vulnerability`         |       8 | Vulnerabilities, their state and a pipeline's security summary (GraphQL)           |
 
-On GitLab.com, `gitlab_orbit` joins them on Premium and Ultimate, with six read-only actions ([Orbit](/gitlab-mcp-server/tools/orbit/)).
+On GitLab.com, `gitlab_orbit` joins them on Premium and Ultimate, with fifteen read-only actions ([Orbit](/gitlab-mcp-server/tools/orbit/)).
 
 Premium and Ultimate also add actions to seven of the base dispatchers:
 

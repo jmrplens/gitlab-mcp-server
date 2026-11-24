@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Meta-Tools Reference
 
-> Version 3.8.0 | up to 1102 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.8.0 | up to 1111 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -13086,25 +13086,55 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Orbit**
 
-Use {"action":"dsl","params":{...}}. The only top-level keys are action and params.
-Action params schema: gitlab://tools/gitlab_orbit.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so orbit.dsl is {"action":"dsl"} on this one.
+Use {"action":"command_list","params":{...}}. The only top-level keys are action and params.
+Action params schema: gitlab://tools/gitlab_orbit.<action>. A domain.action ID below is the action after the dot on the gitlab_<domain> tool, or that tool itself where it takes no action, so orbit.command_list is {"action":"command_list"} on this one.
 Action guidance:
+- command_list: List the commands GitLab's Orbit (Knowledge Graph) MCP endpoint runs, with the description and input schema of each and the action of this server that runs it: query_graph is orbit.query, get_graph_schema is orbit.schema and get_response_format is orbit.response_format.
+- context: Resolve one reference to a work item, merge request, job, pipeline, branch or commit through GitLab Orbit (Knowledge Graph) and read its summary, discussions, changed files and failed jobs' logs, and with expand the graph neighborhood of one of the first three, one billable query. A reference it cannot resolve is found false with the reason, not_found also for an object the user or token may not read: a fine-grained token needs, beside read_orbit, permission to read on the object's own project or group. Summary parts it may not read are left out, and a failed expansion carries its reason.
 - dsl: Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, as Orbit's query command describes it: its grammar and the JSON Schema of its input, or the same as compact text.
 - graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain, and for a top-level group its Orbit access and trial, which decide whether GitLab.com serves the index at all.
+- grep: Search what one group or project holds through GitLab Orbit (Knowledge Graph): work items, merge requests, code, commits, notes, milestones, users, projects, groups and branches, by namespace_id, project_id or full_path. Every hit but a file carries its token, which orbit.context reads for a work item, merge request, commit or branch, a note also the token of what it is on, and most carry the id orbit.query filters on.
+- named_query: Run one of GitLab Orbit's (Knowledge Graph) named queries by name: a template orbit.query_templates lists, which takes no parameters, or one of the queries that take node ids, an entity, a file path or search text, which the description of parameters lists with what each takes. The answer is the envelope orbit.query returns.
 - query: Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists. A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, and a refused query is corrected from the message GitLab answers with.
+- query_templates: List the GitLab Orbit (Knowledge Graph) query templates GitLab.com renders for the token's user: the name, description and GQL text of each. The text binds the user's own id where a template asks about the user, so it is that user's alone. The named queries that take parameters are not listed.
+- response_format: Read the JSON Schema of the raw answer a GitLab Orbit (Knowledge Graph) query returns, with its version, or the same schema as compact text.
 - schema: Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge kinds, with the properties of the node kinds named in expand, or the schema as compact text.
+- skill_file: Read one file of a deployed GitLab Orbit (Knowledge Graph) skill, by skill name and the file's path relative to the skill root, as GitLab.com serves it.
+- skill_get: Inspect one deployed GitLab Orbit (Knowledge Graph) skill by name: its version, compatibility and the files it holds, with the path, digest and size of each. File content is read one file at a time.
+- skill_list: List the GitLab Orbit (Knowledge Graph) skills GitLab.com has deployed: the name, version, compatibility and description of each.
 - status: Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.
-- tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
+- tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each: list_commands and invoke_command, whose commands orbit.command_list describes with the action of this server that runs each.
 Parameter guidance:
 - graph_status.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
 - graph_status.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
+- grep.namespace_id: scope_group. Source: Numeric ID of the group to search, which group.get returns. Avoid: A user namespace is answered not found, and so is a project in one.
+- grep.project_id: scope_project. Source: Numeric project ID. This action does not take a URL-encoded path, so read the ID with project.get first.
+- named_query.name: named_query. Source: A template name from orbit.query_templates, or one of the named queries that take parameters, which the description of parameters lists. Avoid: A template's name runs the template's text with nothing to fill in. To run a query of your own, use orbit.query.
+- named_query.parameters: named_query_parameters. Source: An object of the named query's parameters. Templates take none. The others: context_for_issue, context_for_job, context_for_review, expand_merge_request and expand_work_item take node_ids (a list of ids) and limit, both required; expand_neighbors takes entity, node_ids and limit; definition_callees and definition_references take node_id, a string; file_definitions and file_definition_callers take project_id and file_path; list_nodes takes entity; search_nodes takes entity, field and text. Avoid: The ids in node_ids are numbers or decimal strings, [14831871432, "662267755689139244"], a string being sent as the integer it spells. An id of 2^53 (9007199254740992) or beyond, which a definition's or a file's is, has to be a string: as a number it is read with its last digits changed, so it is refused before the request., node_id of definition_callees and definition_references is a string, "662267755689139244", and GitLab refuses a number., A parameter the named query does not take is refused with the list of the ones it takes, and a template takes none, so send no parameters for one.
 - query.query: graph_query. Source: GQL text, one MATCH ... RETURN statement, naming the entities, properties and relationship types orbit.schema lists. orbit.dsl describes the language as GitLab.com publishes it. Avoid: Every query bounds at least one node by its id or a literal property, inline as {id: 278964} or {full_path: 'gitlab-org/gitlab'}, or in a WHERE comparison. LIMIT bounds nothing, so MATCH (p:Project) RETURN p LIMIT 5 is refused., A relationship type follows a colon, -[:IN_PROJECT]->, and several types are joined by |, -[:IN_PROJECT|CONTAINS*1..3]->. Written without the colon, -[IN_PROJECT]-> declares a variable and is refused., WHERE combines predicates on one node's properties with AND and NOT. OR, XOR, RETURN DISTINCT, count(*), OPTIONAL MATCH, WITH and UNION are refused, and a list is negated as NOT p.visibility_level IN [...], never with NOT IN. count(DISTINCT x) counts distinct values., Between labeled nodes the arrow is -> or <-. The undirected -- is for the neighbors of one node, whose far end has a variable and nothing else: MATCH (p:Project {id: 278964})--(n) RETURN n., A shortest path is MATCH path = ANY SHORTEST (a)-[:TYPE*1..3]->(b) RETURN path with both ends bounded and its relationship types named, one type or several joined by |, since a wildcard -[*1..3]-> is refused there. An aggregate is aliased to be sorted by, with one sort key: RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC., A page is SKIP and LIMIT: SKIP 0 to 10000, LIMIT 1 to 1000, as in ORDER BY p.id SKIP 20 LIMIT 20. PAGE and AFTER are refused., A query written as a JSON object is the JSON DSL GitLab.com removed, and is answered compile_error at line 1, column 1. Send a GQL statement.
+- skill_file.path: skill_file_path. Source: A file's path relative to the skill root, as orbit.skill_get lists it for the skill named.
 
 GitLab orbit actions.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Action Output Schemas:**
+
+<details><summary>command_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"commands":{"items":{"additionalProperties":false,"properties":{"description":{"type":"string"},"name":{"type":"string"},"parameters":true,"performed_by":{"type":"string"}},"required":["name"],"type":"object"},"type":["null","array"]},"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"response_format":{"type":"string"}},"type":"object"}
+```
+
+</details>
+
+<details><summary>context</summary>
+
+```json
+{"additionalProperties":false,"properties":{"entities":{"items":{"additionalProperties":false,"properties":{"error":{"additionalProperties":false,"properties":{"code":{"type":"string"}},"required":["code"],"type":["null","object"]},"expansion":{"additionalProperties":false,"properties":{"error":{"additionalProperties":false,"properties":{"candidates":{"items":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"}},"required":["id","name"],"type":"object"},"type":["null","array"]},"code":{"type":"string"},"deep_link":{"type":"string"},"message":{"type":"string"}},"required":["code"],"type":["null","object"]},"query":{"additionalProperties":false,"properties":{"name":{"type":"string"},"parameters":true},"required":["name"],"type":["null","object"]},"result":true},"type":["null","object"]},"found":{"type":"boolean"},"id":{"type":"string"},"resolved_token":{"type":"string"},"summary":{"additionalProperties":false,"properties":{"allow_failure":{"type":["null","boolean"]},"assignees":true,"author":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"username":{"type":"string"}},"required":["id"],"type":["null","object"]},"author_name":{"type":"string"},"authored_date":{"type":"string"},"changed_files":{"items":{"additionalProperties":false,"properties":{"diff":{"type":"string"},"lines":{"items":{"type":"string"},"type":["null","array"]},"old_path":{"type":"string"},"path":{"type":"string"},"status":{"type":"string"}},"required":["path"],"type":"object"},"type":["null","array"]},"default_branch":{"type":["null","boolean"]},"description":{"type":"string"},"discussions":true,"failed_jobs":{"items":{"additionalProperties":false,"properties":{"allow_failure":{"type":"boolean"},"failed_tests":{"items":{"additionalProperties":false,"properties":{"classname":{"type":"string"},"file":{"type":"string"},"name":{"type":"string"},"output":{"type":"string"}},"type":"object"},"type":["null","array"]},"failure_reason":{"type":["null","string"]},"log":{"type":"string"},"name":{"type":"string"},"stage":{"type":"string"},"truncated":{"items":{"type":"string"},"type":["null","array"]},"web_url":{"type":"string"}},"required":["name","failure_reason","allow_failure"],"type":"object"},"type":["null","array"]},"failed_tests":{"items":{"additionalProperties":false,"properties":{"classname":{"type":"string"},"file":{"type":"string"},"name":{"type":"string"},"output":{"type":"string"}},"type":"object"},"type":["null","array"]},"failure_reason":{"type":["null","string"]},"head_pipeline_status":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"jobs":{"items":{"additionalProperties":false,"properties":{"allow_failure":{"type":"boolean"},"name":{"type":"string"},"stage":{"type":"string"},"status":{"type":"string"},"web_url":{"type":"string"}},"required":["name","allow_failure"],"type":"object"},"type":["null","array"]},"labels":{"items":{"type":"string"},"type":["null","array"]},"linked_issues":true,"linked_merge_requests":true,"log":{"type":"string"},"merge_commit_sha":{"type":["null","string"]},"merge_request":true,"merge_requests":true,"milestone":true,"name":{"type":"string"},"namespace_path":{"type":"string"},"pipeline_id":{"type":"integer"},"pipeline_status":{"type":"string"},"project_path":{"type":"string"},"ref":{"type":"string"},"reviewers":true,"sha":{"type":"string"},"source":{"type":"string"},"source_branch":{"type":"string"},"stage":{"type":"string"},"state":{"type":"string"},"status":{"type":"string"},"target_branch":{"type":"string"},"title":{"type":"string"},"truncated":{"items":{"type":"string"},"type":["null","array"]},"web_url":{"type":"string"},"work_item_type":{"type":"string"}},"type":["null","object"]},"token":{"type":"string"},"type":{"type":"string"}},"required":["token","found"],"type":"object"},"type":["null","array"]},"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"response_format":{"type":"string"},"version":{"type":"string"}},"type":"object"}
+```
+
+</details>
 
 <details><summary>dsl</summary>
 
@@ -13122,6 +13152,22 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 </details>
 
+<details><summary>grep</summary>
+
+```json
+{"additionalProperties":false,"properties":{"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"request":{"additionalProperties":false,"properties":{"limit":{"type":"integer"},"per_scope":{"type":"integer"},"search":{"type":"string"}},"required":["search","limit","per_scope"],"type":["null","object"]},"response_format":{"type":"string"},"result_count":{"type":"integer"},"results":{"items":{"additionalProperties":false,"properties":{"id":true,"matches":{"items":{"additionalProperties":false,"properties":{"end_line":{"type":"integer"},"start_line":{"type":"integer"},"text":{"type":"string"}},"required":["start_line","end_line","text"],"type":"object"},"type":["null","array"]},"reference":{"additionalProperties":false,"properties":{"branch":{"type":"string"},"commit_sha":{"type":["null","string"]},"id":{"type":"integer"},"iid":{"type":"integer"},"name":{"type":"string"},"namespace_path":{"type":"string"},"noteable":{"type":"string"},"noteable_reference":{"type":"string"},"path":{"type":"string"},"project_id":{"type":"integer"},"project_path":{"type":"string"},"sha":{"type":"string"}},"type":"object"},"scope":{"type":"string"},"state":{"type":"string"},"text":{"type":"string"},"token":{"type":["null","string"]},"type":{"type":"string"}},"required":["scope","type","id","token","reference"],"type":"object"},"type":["null","array"]},"scopes":{"items":{"additionalProperties":false,"properties":{"backend":{"type":"string"},"name":{"type":"string"},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"}},"required":["has_more"],"type":["null","object"]},"reason":{"additionalProperties":false,"properties":{"code":{"type":"string"}},"required":["code"],"type":["null","object"]},"result_count":{"type":"integer"},"status":{"type":"string"}},"required":["name","status"],"type":"object"},"type":["null","array"]},"target":{"additionalProperties":false,"properties":{"full_path":{"type":"string"},"id":{"type":"integer"},"token":{"type":"string"},"type":{"type":"string"}},"required":["type","id"],"type":["null","object"]},"truncated":{"type":"boolean"},"version":{"type":"string"}},"type":"object"}
+```
+
+</details>
+
+<details><summary>named_query</summary>
+
+```json
+{"additionalProperties":false,"properties":{"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"query_type":{"type":"string"},"raw_query_strings":{"items":{"type":"string"},"type":["null","array"]},"result":true,"row_count":{"type":"integer"}},"type":"object"}
+```
+
+</details>
+
 <details><summary>query</summary>
 
 ```json
@@ -13130,10 +13176,50 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 </details>
 
+<details><summary>query_templates</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"templates":{"items":{"additionalProperties":false,"properties":{"description":{"type":"string"},"name":{"type":"string"},"query":{"type":"string"}},"required":["name","query"],"type":"object"},"type":["null","array"]}},"required":["templates"],"type":"object"}
+```
+
+</details>
+
+<details><summary>response_format</summary>
+
+```json
+{"additionalProperties":false,"properties":{"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"response_format":{"type":"string"},"schema":true,"version":{"type":"string"}},"type":"object"}
+```
+
+</details>
+
 <details><summary>schema</summary>
 
 ```json
 {"additionalProperties":false,"properties":{"domains":{"items":{"additionalProperties":false,"properties":{"name":{"type":"string"},"node_names":{"items":{"type":"string"},"type":["null","array"]}},"type":"object"},"type":["null","array"]},"edges":{"items":{"additionalProperties":false,"properties":{"description":{"type":"string"},"name":{"type":"string"},"variants":{"items":{"additionalProperties":false,"properties":{"source_type":{"type":"string"},"target_type":{"type":"string"}},"type":"object"},"type":["null","array"]}},"type":"object"},"type":["null","array"]},"formatted_text":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"nodes":{"items":{"additionalProperties":false,"properties":{"description":{"type":"string"},"display":{"additionalProperties":false,"properties":{"color":{"type":"string"},"size":{"type":"integer"}},"type":["null","object"]},"domain":{"type":"string"},"label_field":{"type":"string"},"name":{"type":"string"},"primary_key":{"type":"string"},"properties":{"items":{"additionalProperties":false,"properties":{"data_type":{"type":"string"},"enum_values":{"items":{"type":"string"},"type":["null","array"]},"name":{"type":"string"},"nullable":{"type":"boolean"}},"required":["name","nullable"],"type":"object"},"type":["null","array"]}},"required":["name"],"type":"object"},"type":["null","array"]}},"type":"object"}
+```
+
+</details>
+
+<details><summary>skill_file</summary>
+
+```json
+{"additionalProperties":false,"properties":{"content":{"type":"string"},"content_type":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"path":{"type":"string"}},"required":["name","path","content"],"type":"object"}
+```
+
+</details>
+
+<details><summary>skill_get</summary>
+
+```json
+{"additionalProperties":false,"properties":{"compatibility":{"type":"string"},"files":{"items":{"additionalProperties":false,"properties":{"path":{"type":"string"},"sha256":{"type":"string"},"size":{"type":"integer"}},"required":["path","size"],"type":"object"},"type":["null","array"]},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"server_version":{"type":"string"},"version":{"type":"string"}},"required":["name","files"],"type":"object"}
+```
+
+</details>
+
+<details><summary>skill_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"server_version":{"type":"string"},"skills":{"items":{"additionalProperties":false,"properties":{"compatibility":{"type":"string"},"description":{"type":"string"},"name":{"type":"string"},"version":{"type":"string"}},"required":["name"],"type":"object"},"type":["null","array"]}},"required":["skills"],"type":"object"}
 ```
 
 </details>

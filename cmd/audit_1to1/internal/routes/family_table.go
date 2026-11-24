@@ -763,7 +763,7 @@ var routeFamilies = []routeFamily{
 	// them inherit SUPERSEDED_UPSTREAM; the actions read GraphQL and the POST
 	// of the MCP endpoint instead.
 	tracked(issueOrbitRoutes, 1, on(http.MethodGet), "/orbit/mcp",
-		"the SSE listener of Orbit's MCP endpoint; orbit.tools, orbit.dsl and orbit.schema send its JSON-RPC POST through orbit.callMCP and read the one answer it gives"),
+		"the SSE listener of Orbit's MCP endpoint; orbit.tools, orbit.dsl, orbit.schema, orbit.command_list and orbit.response_format send its JSON-RPC POST through orbit.callMCP and read the one answer it gives"),
 	// The GitLab Duo domain (issueDuoRoutes).
 	tracked(issueDuoRoutes, 27, on(), "/ai/duo_workflows/**",
 		"the GitLab Duo Agent Platform's flows: creates, reads, updates, restarts, resumes and executes a workflow, writes and reads its checkpoints and events, uploads its session files and reads them and their raw content, reads its catalog items and its trace, the tools and agent privileges it may use and the connection details of its service and WebSocket, reads the Duo Code Review custom instructions, ingests audit events and revokes the workflow's token. Fifteen skip the fine-grained check for ai_workflows_oauth_auth or ai_workflows_token_auth, which a user's token with the api scope calls"),

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 José M. Requena Plens
 // SPDX-License-Identifier: MIT
 
-// Package orbit holds the live tests of the six read-only gitlab_orbit_*
+// Package orbit holds the live tests of the fifteen read-only gitlab_orbit_*
 // tools against GitLab.com's experimental Knowledge Graph API, on the
 // fixtures cmd/orbit_fixtures provisions under
 // test/fixtures/orbit.

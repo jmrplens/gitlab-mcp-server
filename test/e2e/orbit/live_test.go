@@ -4,13 +4,18 @@
 //go:build orbitlive
 
 // Package orbit contains live integration tests against the GitLab Orbit
-// Knowledge Graph on GitLab.com. The tests reach the real sources each handler
-// in internal/tools/orbit reads (no httptest mocks): GitLab's GraphQL API for
-// the status, the schema and a namespace's indexing status, the Orbit MCP
-// endpoint at https://gitlab.com/api/v4/orbit/mcp for the tool list, the query
-// language and the schema's compact text, and POST /api/v4/orbit/query, the one
-// Orbit REST route of the six these handlers used that GitLab.com still serves
-// after removing the others on 2026-10-27 and -28.
+// Knowledge Graph on GitLab.com. The tests reach the real sources each of the
+// fifteen handlers in internal/tools/orbit reads (no httptest mocks): GitLab's
+// GraphQL API for the status, the schema, a namespace's indexing status and the
+// query templates; the Orbit MCP endpoint at
+// https://gitlab.com/api/v4/orbit/mcp for the tool list, the query language,
+// the schema's compact text, the response format and the command list; and the
+// Orbit REST routes for the rest. Those are POST /api/v4/orbit/query, the one
+// route of the six the first six handlers used that GitLab.com still serves
+// after removing the others on 2026-10-27 and -28, and the ones the nine reads
+// added after them send: POST /orbit/query/:name, POST /orbit/context, GET
+// /orbit/grep and GET /orbit/skills with the routes of one skill and one of its
+// files below it.
 //
 // # Access
 //
@@ -29,7 +34,11 @@
 // that needs only the account (the status, the schema, the tool list and the
 // query language) under [skipUnlessServed], which skips on a null the handler
 // reports only when GitLab, asked for the same field again outside the
-// handler, answers it null too. The top-level group's Orbit access and
+// handler, answers it null too. The nine reads
+// [TestOrbitLiveGitLabCom_CatalogSearchAndContext] runs all sit under
+// [requireOrbitServed], the ones that name no namespace included: GitLab.com
+// answers the skills, the named queries, the context and the search only to a
+// user with an Orbit-enabled namespace. The top-level group's Orbit access and
 // trial answer either way, since they are what says which, so
 // [testOrbitLiveAccess] always runs.
 //
@@ -101,6 +110,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"slices"
@@ -145,7 +155,41 @@ const (
 	// fixtureBranch is the source branch of the squash-merged merge
 	// request the setup script creates in kg-fixtures.
 	fixtureBranch = "feature/restock-helper"
+	// seedIssueTitle is the title of the kg-fixtures issue that says
+	// "seed", the first of fixtureIssues in cmd/orbit_fixtures, which finds
+	// it by title and creates it when it is missing, under whatever number
+	// GitLab gives it.
+	seedIssueTitle = "Add reserve_stock seed helper"
 )
+
+// commandActionsWanted is the action of this server each command GitLab's
+// Orbit MCP endpoint served on 2026-10-29 is run by, as orbit.command_list
+// publishes it.
+var commandActionsWanted = map[string]string{
+	queryCommand:          "orbit.query",
+	"get_graph_schema":    "orbit.schema",
+	"get_response_format": "orbit.response_format",
+}
+
+// fixtureIssueToken returns the reference of the kg-fixtures issue titled
+// [seedIssueTitle], read by its title, since the setup creates a missing one
+// without choosing its number.
+func fixtureIssueToken(ctx context.Context, client *gitlabclient.Client, namespace string) (string, error) {
+	project := projectPath(namespace, kgFixturesProjectPath)
+	issues, _, err := client.GL().Issues.ListProjectIssues(project, &gl.ListProjectIssuesOptions{
+		Search: new(seedIssueTitle),
+		In:     new("title"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("list the issues of %s titled %q: %w", project, seedIssueTitle, err)
+	}
+	for _, issue := range issues {
+		if issue.Title == seedIssueTitle {
+			return fmt.Sprintf("%s#%d", project, issue.IID), nil
+		}
+	}
+	return "", fmt.Errorf("%s holds no issue titled %q: run make orbit-setup-fixtures", project, seedIssueTitle)
+}
 
 // newLiveClient creates a GitLab.com client using the GITLAB_COM_TOKEN
 // environment variable, skipping the test when the token is unset.
@@ -172,7 +216,7 @@ func newLiveClient(t *testing.T) *gitlabclient.Client {
 // The 60s budget is wide enough to absorb a slow /api/v4/orbit/query
 // response (a shortest path can scan a non-trivial slice of the graph
 // even bounded at three hops); the Orbit knowledge graph service is the
-// slowest of the six endpoints. Tighter budgets (e.g. 30s) produced flaky
+// slowest of the sources read. Tighter budgets (e.g. 30s) produced flaky
 // CI on a re-run right after setup, when the indexer had only just
 // finished catching up.
 func summarize(t *testing.T, name string, fn func(context.Context) (any, error)) {
@@ -1577,6 +1621,60 @@ func TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement(t *testing.T) 
 	}
 }
 
+// TestResponseFormatProblem_AnIncompleteAnswer_IsNamed holds the live
+// response format subtest to a version and a schema object with properties,
+// so an empty answer GitLab.com sends cannot pass it. It needs no network.
+func TestResponseFormatProblem_AnIncompleteAnswer_IsNamed(t *testing.T) {
+	schema := map[string]any{"type": "object", "properties": map[string]any{"result": map[string]any{}}}
+	tests := []struct {
+		name string
+		out  orbit.QueryResponseFormatOutput
+		want string
+	}{
+		{name: "version and schema", out: orbit.QueryResponseFormatOutput{Version: "6.0.0", Schema: schema}},
+		{name: "empty", out: orbit.QueryResponseFormatOutput{}, want: "no version"},
+		{name: "no schema", out: orbit.QueryResponseFormatOutput{Version: "6.0.0"}, want: "not a JSON Schema object"},
+		{name: "a schema with no property", out: orbit.QueryResponseFormatOutput{Version: "6.0.0", Schema: map[string]any{"type": "object"}}, want: "no properties"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := responseFormatProblem(tt.out)
+			if (tt.want == "") != (got == "") || !strings.Contains(got, tt.want) {
+				t.Errorf("responseFormatProblem() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCommandActionsProblem_ACommandLeftOutOrMisnamed_IsNamed holds the live
+// command list subtest to the three commands and the action each is run by,
+// so a list without one of them cannot pass it. It needs no network.
+func TestCommandActionsProblem_ACommandLeftOutOrMisnamed_IsNamed(t *testing.T) {
+	all := []orbit.Command{
+		{Name: "query_graph", PerformedBy: "orbit.query"},
+		{Name: "get_graph_schema", PerformedBy: "orbit.schema"},
+		{Name: "get_response_format", PerformedBy: "orbit.response_format"},
+		{Name: "a_new_command"},
+	}
+	tests := []struct {
+		name     string
+		commands []orbit.Command
+		want     string
+	}{
+		{name: "all three, and one more", commands: all},
+		{name: "no command", want: "get_graph_schema is not listed; get_response_format is not listed; query_graph is not listed"},
+		{name: "the query command alone", commands: all[:1], want: "get_graph_schema is not listed; get_response_format is not listed"},
+		{name: "the schema read by another action", commands: []orbit.Command{all[0], {Name: "get_graph_schema", PerformedBy: "orbit.query"}, all[2]}, want: `get_graph_schema is run by "orbit.query", want orbit.schema`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := commandActionsProblem(orbit.CommandListOutput{Commands: tt.commands}); got != tt.want {
+				t.Errorf("commandActionsProblem() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID holds the
 // SKIP and LIMIT subtest to what it asks: the second fixture project by id,
 // with has_more set exactly when the namespace holds a project after it. An
@@ -1676,6 +1774,151 @@ func testOrbitLiveFixtures(t *testing.T) {
 	// the undirected pattern takes with the outgoing ones.
 	summarize(t, "Neighbors_kg_fixtures", provisionedRun(client,
 		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})--(n) RETURN n"))
+}
+
+// responseFormatProblem says what is missing from the raw response format
+// GitLab.com answered, or "" when it carries a version and a schema object
+// with properties, so an empty answer cannot pass as one.
+func responseFormatProblem(out orbit.QueryResponseFormatOutput) string {
+	if out.Version == "" {
+		return "the response format came back with no version"
+	}
+	schema, ok := out.Schema.(map[string]any)
+	if !ok {
+		return fmt.Sprintf("the response format came back with the schema %v, not a JSON Schema object", out.Schema)
+	}
+	if properties, _ := schema["properties"].(map[string]any); len(properties) == 0 {
+		return "the response format's schema has no properties"
+	}
+	return ""
+}
+
+// commandActionsProblem says which command of [commandActionsWanted] the
+// command list leaves out or names another action for, or "" when each is
+// listed with its action, so a list without them cannot pass.
+func commandActionsProblem(out orbit.CommandListOutput) string {
+	performedBy := make(map[string]string, len(out.Commands))
+	for _, command := range out.Commands {
+		performedBy[command.Name] = command.PerformedBy
+	}
+	var problems []string
+	for _, name := range slices.Sorted(maps.Keys(commandActionsWanted)) {
+		action, listed := performedBy[name]
+		switch {
+		case !listed:
+			problems = append(problems, name+" is not listed")
+		case action != commandActionsWanted[name]:
+			problems = append(problems, fmt.Sprintf("%s is run by %q, want %s", name, action, commandActionsWanted[name]))
+		}
+	}
+	return strings.Join(problems, "; ")
+}
+
+// firstSkill reads the first skill GitLab.com lists, with its files. Which
+// skills GitLab.com deploys is its own business, so none is named here: one
+// listed is one that can be read and holds a file.
+func firstSkill(ctx context.Context, client *gitlabclient.Client) (orbit.SkillGetOutput, error) {
+	list, err := orbit.SkillList(ctx, client, orbit.SkillListInput{})
+	if err != nil {
+		return orbit.SkillGetOutput{}, err
+	}
+	if len(list.Skills) == 0 {
+		return orbit.SkillGetOutput{}, errors.New("GitLab.com lists no Orbit skill")
+	}
+	skill, err := orbit.SkillGet(ctx, client, orbit.SkillGetInput{Name: list.Skills[0].Name})
+	if err != nil {
+		return orbit.SkillGetOutput{}, err
+	}
+	if len(skill.Files) == 0 {
+		return orbit.SkillGetOutput{}, fmt.Errorf("skill %s holds no file", skill.Name)
+	}
+	return skill, nil
+}
+
+// TestOrbitLiveGitLabCom_CatalogSearchAndContext runs the nine reads issues
+// 1209, 1586 and 1587 added against GitLab.com: the query templates, the
+// response format, the command list, the skills, one of them and one of its
+// files, a named query, a search of the fixture namespace and the context of
+// the issue the setup provisions.
+// They were built from the answers captured on 2026-10-29, the morning
+// GitLab.com stopped serving Orbit to the fixture namespace, so the whole test
+// skips with GitLab's answer while that lasts ([requireOrbitServed]), and its
+// first run with access says whether GitLab still answers them that way.
+func TestOrbitLiveGitLabCom_CatalogSearchAndContext(t *testing.T) {
+	client := newLiveClient(t)
+	namespace := orbitFixturesNamespace()
+	requireOrbitServed(t, client, namespace)
+
+	summarize(t, "QueryTemplates", func(ctx context.Context) (any, error) {
+		return orbit.QueryTemplates(ctx, client, orbit.QueryTemplatesInput{})
+	})
+	summarize(t, "ResponseFormat", func(ctx context.Context) (any, error) {
+		out, err := orbit.QueryResponseFormat(ctx, client, orbit.QueryResponseFormatInput{})
+		if err != nil {
+			return nil, err
+		}
+		if problem := responseFormatProblem(out); problem != "" {
+			return nil, errors.New(problem)
+		}
+		return out, nil
+	})
+	summarize(t, "CommandList_names_the_action_of_each_command", func(ctx context.Context) (any, error) {
+		out, err := orbit.CommandList(ctx, client, orbit.CommandListInput{})
+		if err != nil {
+			return nil, err
+		}
+		if problem := commandActionsProblem(out); problem != "" {
+			return nil, errors.New(problem)
+		}
+		return out, nil
+	})
+	summarize(t, "SkillList", func(ctx context.Context) (any, error) {
+		return orbit.SkillList(ctx, client, orbit.SkillListInput{})
+	})
+	summarize(t, "SkillGet_the_first_skill_listed", func(ctx context.Context) (any, error) {
+		return firstSkill(ctx, client)
+	})
+	summarize(t, "SkillFile_the_first_file_of_that_skill", func(ctx context.Context) (any, error) {
+		skill, err := firstSkill(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+		file, err := orbit.SkillFile(ctx, client, orbit.SkillFileInput{Name: skill.Name, Path: skill.Files[0].Path})
+		if err != nil {
+			return nil, err
+		}
+		if len(file.Content) != skill.Files[0].Size {
+			return nil, fmt.Errorf("%s of %s is %d bytes, and orbit.skill_get lists it with %d", file.Path, file.Name, len(file.Content), skill.Files[0].Size)
+		}
+		return file, nil
+	})
+	summarize(t, "NamedQuery_recent_merges", func(ctx context.Context) (any, error) {
+		return orbit.NamedQuery(ctx, client, orbit.NamedQueryInput{Name: "recent_merges"})
+	})
+	summarize(t, "Grep_fixture_namespace", func(ctx context.Context) (any, error) {
+		out, err := orbit.Grep(ctx, client, orbit.GrepInput{Search: "seed", FullPath: namespace})
+		if err != nil {
+			return nil, err
+		}
+		if out.ResultCount == 0 {
+			return nil, fmt.Errorf("searching %s for seed found nothing, and the setup provisions an issue and a merge request that say it", namespace)
+		}
+		return out, nil
+	})
+	summarize(t, "Context_fixture_issue", func(ctx context.Context) (any, error) {
+		token, err := fixtureIssueToken(ctx, client, namespace)
+		if err != nil {
+			return nil, err
+		}
+		out, err := orbit.EntityContext(ctx, client, orbit.EntityContextInput{Tokens: []string{token}})
+		if err != nil {
+			return nil, err
+		}
+		if len(out.Entities) != 1 || !out.Entities[0].Found {
+			return nil, fmt.Errorf("the context of %s is %+v, want the issue the setup provisions", token, out.Entities)
+		}
+		return out, nil
+	})
 }
 
 // TestOrbitLiveGitLabCom_FeatureCoverage exercises the GQL surface against

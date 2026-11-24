@@ -1,6 +1,6 @@
 # gitlab-mcp-server. Medium Reference
 
-> Version 3.8.0 | up to 1102 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 3.8.0 | up to 1111 tools | 34 base meta-tools; 51 self-managed enterprise meta-tools; 52 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
@@ -395,7 +395,7 @@ Actions (4): add, get, list_branch, list_project
 
 GitLab orbit actions.
 
-Actions (6): dsl, graph_status, query, schema, status, tools
+Actions (15): command_list, context, dsl, graph_status, grep, named_query, query, query_templates, response_format, schema, skill_file, skill_get, skill_list, status, tools
 
 ### gitlab_project_alias
 
@@ -447,7 +447,7 @@ Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, re
 
 ## Individual Tools
 
-Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation.
+Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1111 tools, one per operation.
 
 - gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership at access_level, or Developer when it is left out.
 - gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership at access_level, or Developer when it is left out.
@@ -1177,12 +1177,21 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1102 tools, one per operation
 - gitlab_notification_group_update: Update the authenticated user's notification settings for a group.
 - gitlab_notification_project_get: Get the authenticated user's notification settings for a project.
 - gitlab_notification_project_update: Update the authenticated user's notification settings for a project.
+- gitlab_orbit_command_list: List the commands GitLab's Orbit (Knowledge Graph) MCP endpoint runs, with the description and input schema of each and the action of this server that runs it: ...
+- gitlab_orbit_context: Resolve one reference to a work item, merge request, job, pipeline, branch or commit through GitLab Orbit (Knowledge Graph) and read its summary, discussions, c...
 - gitlab_orbit_dsl: Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, as Orbit's query command describes it: its grammar and the JSON Sche...
 - gitlab_orbit_graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing sta...
+- gitlab_orbit_grep: Search what one group or project holds through GitLab Orbit (Knowledge Graph): work items, merge requests, code, commits, notes, milestones, users, projects, gr...
+- gitlab_orbit_named_query: Run one of GitLab Orbit's (Knowledge Graph) named queries by name: a template orbit.query_templates lists, which takes no parameters, or one of the queries that...
 - gitlab_orbit_query: Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists.
+- gitlab_orbit_query_templates: List the GitLab Orbit (Knowledge Graph) query templates GitLab.com renders for the token's user: the name, description and GQL text of each.
+- gitlab_orbit_response_format: Read the JSON Schema of the raw answer a GitLab Orbit (Knowledge Graph) query returns, with its version, or the same schema as compact text.
 - gitlab_orbit_schema: Inspect the GitLab Orbit (Knowledge Graph) schema: domains, node kinds and edge kinds, with the properties of the node kinds named in expand, or the schema as c...
+- gitlab_orbit_skill_file: Read one file of a deployed GitLab Orbit (Knowledge Graph) skill, by skill name and the file's path relative to the skill root, as GitLab.com serves it.
+- gitlab_orbit_skill_get: Inspect one deployed GitLab Orbit (Knowledge Graph) skill by name: its version, compatibility and the files it holds, with the path, digest and size of each.
+- gitlab_orbit_skill_list: List the GitLab Orbit (Knowledge Graph) skills GitLab.com has deployed: the name, version, compatibility and description of each.
 - gitlab_orbit_status: Inspect the health of the GitLab Orbit (Knowledge Graph) service on GitLab.com: its state, version and the state of each component.
-- gitlab_orbit_tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.
+- gitlab_orbit_tools: List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each: list_commands and invoke_command, whose commands orbit.command...
 - gitlab_package_delete: Delete a package permanently.
 - gitlab_package_download: Download a single file from the Generic Package Registry to a local path.
 - gitlab_package_file_delete: Delete a single file from a package permanently.

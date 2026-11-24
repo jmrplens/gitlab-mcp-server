@@ -290,9 +290,9 @@ each action's handler, input and output schema, destructive classification,
 read-only status, icons and formatter, so meta execution, dynamic execution,
 the `gitlab://tools` manifest, the generated `llms*.txt` files and the audits
 cannot disagree about an action. Orbit is projected the same way: one
-`gitlab_orbit` meta-tool with six actions, six `gitlab_orbit_*` individual
-tools, or the six `orbit.*` IDs on the dynamic surface, served on GitLab.com
-at Premium and Ultimate only.
+`gitlab_orbit` meta-tool with fifteen actions, fifteen `gitlab_orbit_*`
+individual tools, or the fifteen `orbit.*` IDs on the dynamic surface, served
+on GitLab.com at Premium and Ultimate only.
 
 ## How a dynamic call is dispatched
 

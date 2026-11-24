@@ -46,7 +46,7 @@ Consolidar responde a tres costes que arrastra una lista larga de herramientas, 
 | Meta                 | {stats.meta.base}  | {stats.meta.premium}  | {stats.meta.self_managed_enterprise} | {stats.meta.gitlab_com}  | Medio           |
 | Individual           | {stats.tools.free} | {stats.tools.premium} | {stats.tools.ultimate_self_managed}  | {stats.tools.gitlab_com} | El más alto     |
 
-Los tres modos alcanzan todas las acciones que permite el tier; solo cambia el empaquetado. En GitLab.com, Premium también recibe Orbit: la meta-herramienta `gitlab_orbit` en esta superficie, o sus seis herramientas en la individual. Los scopes de un token pueden bajar estas cifras: sin `admin_mode`, quedan fuera los grupos que lo necesitan ([Filtrado de herramientas por scopes](/gitlab-mcp-server/es/operations/security/#filtrado-de-herramientas-por-scopes)).
+Los tres modos alcanzan todas las acciones que permite el tier; solo cambia el empaquetado. En GitLab.com, Premium también recibe Orbit: la meta-herramienta `gitlab_orbit` en esta superficie, o sus quince herramientas en la individual. Los scopes de un token pueden bajar estas cifras: sin `admin_mode`, quedan fuera los grupos que lo necesitan ([Filtrado de herramientas por scopes](/gitlab-mcp-server/es/operations/security/#filtrado-de-herramientas-por-scopes)).
 
 Las meta-herramientas reducen el recuento de herramientas en **más del 95%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
@@ -369,7 +369,7 @@ El recurso de detalle indica dónde va la confirmación: el `call` que devuelve 
 }
 ```
 
-`gitlab_orbit` solo se registra para conexiones con `https://gitlab.com` en el nivel Premium o Ultimate y expone seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
+`gitlab_orbit` solo se registra para conexiones con `https://gitlab.com` en el nivel Premium o Ultimate y expone quince acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query`, `graph_status`, `query_templates`, `response_format`, `command_list`, `skill_list`, `skill_get`, `skill_file`, `named_query`, `context` y `grep`.
 
 ## Referencia de meta-herramientas clave
 
@@ -499,7 +499,7 @@ Las once meta-herramientas de Ultimate, ninguna de las cuales retira el filtro d
 | `gitlab_security_scan_profile` |        3 | Vincular y desvincular perfiles de escaneo de seguridad, y los estados de un proyecto (GraphQL) |
 | `gitlab_vulnerability`         |        8 | Vulnerabilidades, su estado y el resumen de seguridad de un pipeline (GraphQL)                  |
 
-En GitLab.com, `gitlab_orbit` se suma a ellas en Premium y Ultimate, con seis acciones de solo lectura ([Orbit](/gitlab-mcp-server/es/tools/orbit/)).
+En GitLab.com, `gitlab_orbit` se suma a ellas en Premium y Ultimate, con quince acciones de solo lectura ([Orbit](/gitlab-mcp-server/es/tools/orbit/)).
 
 Premium y Ultimate también añaden acciones a siete de los despachadores base:
 
