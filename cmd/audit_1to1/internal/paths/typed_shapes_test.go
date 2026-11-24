@@ -1262,8 +1262,8 @@ func TestShapeCheck_ANestedOptionDeclaration_IsHeldToItsEvidence(t *testing.T) {
 }
 
 // TestTypedShapeCheck_Repository_HoldsTheHeadPipelineToThePipelineEntity is the
-// witness of the nested comparison on this tree, against client-go v3.50.0 and
-// the record of GitLab 19.5.0.
+// witness of the nested comparison on this tree, against client-go v3.56.1 and
+// the record of GitLab 19.6.1.
 //
 // A merge request's head_pipeline is rendered with API::Entities::Ci::Pipeline,
 // which sends no name and sends archived, and toolutil.PipelineOutput publishes

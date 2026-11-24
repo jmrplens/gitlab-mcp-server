@@ -74,9 +74,9 @@ func TestTierReadUnresolved_TellsAnUnansweredReadFromAnAnswer(t *testing.T) {
 	}
 }
 
-// TestGitLabStatus_OpensWhatClientGoWraps checks that the status is read from
-// a GraphQL error client-go wraps without an Unwrap, and that no status is
-// made up for an error that carries none.
+// TestGitLabStatus_OpensWhatClientGoWraps checks that the status is read
+// through the GraphQL error client-go wraps one in, and that no status is made
+// up for an error that carries none.
 func TestGitLabStatus_OpensWhatClientGoWraps(t *testing.T) {
 	cases := []struct {
 		name     string

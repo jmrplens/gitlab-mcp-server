@@ -10,8 +10,8 @@
 // what only a licensed instance sends on a group board, the assignee and
 // weight it is scoped to and the metric each limited column is counted by
 // (issue 1283), the text of the board listing, which names each limited
-// column with its ceilings and its metric (issue 1284), and the assignee and
-// milestone columns a column create makes. The label
+// column with its ceilings and its metric (issue 1284), and the assignee,
+// milestone and status columns a column create makes. The label
 // column actions, and the reads and the rename of a board the fixture library
 // built, are Free and live in the common package.
 
@@ -122,6 +122,35 @@ func TestGroupBoards_CreateList_ScopesAColumnToAnAssigneeOrAMilestone(t *testing
 		byMilestone := harness.Do[groupboards.BoardListOutput](s, actionGroupBoardCreateList, withParams(board, map[string]any{"milestone_id": milestone.ID}))
 		if byMilestone.ID == 0 || byMilestone.Milestone == nil || byMilestone.Milestone.ID != milestone.ID || byMilestone.Label != nil || byMilestone.Assignee != nil {
 			e.T.Errorf("group_board_create_list for milestone %d answered %+v, want a column scoped to that milestone alone", milestone.ID, byMilestone)
+		}
+	})
+}
+
+// inProgressStatus is the system-defined status GitLab numbers 2, the one the
+// two status column scenarios ask for: a fresh namespace has no custom status,
+// so a status ID names a system-defined one there.
+const inProgressStatus = int64(2)
+
+// TestGroupBoards_CreateList_ScopesAColumnToAStatus creates a group board on
+// every surface and adds a status column, which the REST API takes from GitLab
+// 19.6, and holds the answer to the status it was asked for and to no other
+// scope. Status lists are Premium, which is why the scenario lives here.
+func TestGroupBoards_CreateList_ScopesAColumnToAStatus(t *testing.T) {
+	e := harness.New(t, harness.Needs(harness.GitLabAtLeast(19, 6)))
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("boardstatus"))
+		params := map[string]any{"group_id": group.IDParam()}
+
+		created := harness.Do[groupboards.GroupBoardOutput](s, actionGroupBoardCreate, withParams(params, map[string]any{"name": e.Name("board")}))
+		if created.ID == 0 {
+			e.T.Fatalf("group_board_create answered %+v, want a board with an ID", created)
+		}
+
+		column := harness.Do[groupboards.BoardListOutput](s, actionGroupBoardCreateList, withParams(params, map[string]any{"board_id": created.ID, "status_id": inProgressStatus}))
+		if column.ID == 0 || column.Status == nil || column.Status.ID != inProgressStatus || column.Status.Category != "in_progress" || column.Label != nil || column.Assignee != nil || column.Milestone != nil || column.Iteration != nil {
+			e.T.Errorf("group_board_create_list for status %d answered %+v, want a column scoped to that status alone", inProgressStatus, column)
 		}
 	})
 }

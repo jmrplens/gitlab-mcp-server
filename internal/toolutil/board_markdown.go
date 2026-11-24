@@ -16,8 +16,8 @@ import (
 const BoardListMetricLabel = "Limit Metric"
 
 // BoardColumnScope names what a board column collects, which is the one thing
-// a reader of a column wants: its label, or the assignee, milestone or
-// iteration a Premium column is scoped to, rendered as a table cell. The
+// a reader of a column wants: its label, or the assignee, milestone, iteration
+// or status a Premium column is scoped to, rendered as a table cell. The
 // project and the group boards both name a column's scope through it, each
 // from its own list output, so a scope reads the same on either. The milestone
 // is passed by its title, the one field of it the cell shows, because each of
@@ -25,16 +25,17 @@ const BoardListMetricLabel = "Limit Metric"
 // column is scoped to none. A scope object GitLab sent without the name or
 // title it is shown by is passed over as if it were absent.
 //
-// A column GitLab sends with none of the four is a status column: GitLab
-// answers a board's lists without its backlog and closed columns, a column of
-// any of those four scopes is deleted with its scope, and the REST List entity
-// exposes no status. It renders as nothing rather than as an invented scope.
+// A column GitLab sends with none of the five is a status column of an
+// instance before 19.6, whose REST List entity exposes no status: GitLab
+// answers a board's lists without its backlog and closed columns, and a column
+// of any other scope is deleted with its scope. It renders as nothing rather
+// than as an invented scope.
 //
 // It is a chain of ifs rather than a tagless switch so that each condition is
 // a statement coverage can see: Go's coverage counts a block for each case
 // body and none for the case expressions, which left every mutant of those
 // expressions reported as not covered whatever the tests drove.
-func BoardColumnScope(label *BoardLabelOutput, assignee *BoardListAssigneeOutput, milestone string, iteration *IterationOutput) string {
+func BoardColumnScope(label *BoardLabelOutput, assignee *BoardListAssigneeOutput, milestone string, iteration *IterationOutput, status *WorkItemStatusOutput) string {
 	if label != nil && label.Name != "" {
 		return EscapeMdTableCell(label.Name)
 	}
@@ -46,6 +47,9 @@ func BoardColumnScope(label *BoardLabelOutput, assignee *BoardListAssigneeOutput
 	}
 	if iteration != nil && iteration.Title != "" {
 		return "Iteration: " + EscapeMdTableCell(iteration.Title)
+	}
+	if status != nil && status.Name != "" {
+		return "Status: " + EscapeMdTableCell(status.Name)
 	}
 	return ""
 }

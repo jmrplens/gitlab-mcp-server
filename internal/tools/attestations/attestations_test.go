@@ -329,21 +329,22 @@ func TestList_Success(t *testing.T) {
 	if out.Attestations[1].ExpireAt == "" {
 		t.Error("expected expire_at to be set for second attestation")
 	}
-	// signing_method, which client-go's Attestation does not model, is read
-	// off the captured answer, attestation by attestation.
+	// signing_method is each attestation's own, and empty on one GitLab sent
+	// without it, which is every one before 19.6.
 	if got := []string{out.Attestations[0].SigningMethod, out.Attestations[1].SigningMethod}; got[0] != "sigstore" || got[1] != "" {
 		t.Errorf("signing methods = %q, want [sigstore \"\"]", got)
 	}
 }
 
 // TestList_ASigningMethodTheTypeCannotHold_IsReported verifies the list
-// reports a signing_method in a shape the extra cannot hold rather than
-// publishing the attestations without it.
+// reports a signing_method in a shape its type cannot hold rather than
+// publishing the attestations without it. The SDK models it and decodes the
+// body first, so it is the one that reports it.
 func TestList_ASigningMethodTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"signing_method":7}]`)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			_, err := List(t.Context(), client, ListInput{ProjectID: "10", SubjectDigest: testDigest})
 			return err

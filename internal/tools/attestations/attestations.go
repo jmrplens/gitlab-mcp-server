@@ -100,9 +100,7 @@ type Output struct {
 	UpdatedAt     string `json:"updated_at,omitempty"`
 	ExpireAt      string `json:"expire_at,omitempty"`
 	// SigningMethod is how the attestation was signed, sigstore or local_ca,
-	// which lib/api/entities/supply_chain/attestation.rb sends from 19.6 and
-	// client-go's Attestation does not model, read from the captured
-	// response (ADR-0021).
+	// which lib/api/entities/supply_chain/attestation.rb sends from 19.6.
 	SigningMethod string `json:"signing_method,omitempty"`
 }
 
@@ -135,6 +133,7 @@ func toOutput(a *gl.Attestation) Output {
 		PredicateType: a.PredicateType,
 		SubjectDigest: a.SubjectDigest,
 		DownloadURL:   a.DownloadURL,
+		SigningMethod: a.SigningMethod,
 	}
 	if a.CreatedAt != nil {
 		o.CreatedAt = a.CreatedAt.Format(time.RFC3339)
@@ -174,8 +173,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if err != nil {
 		return ListOutput{}, err
 	}
-	listCtx, captured := gitlabclient.WithResponseCapture(ctx)
-	atts, resp, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), digest, gl.WithContext(listCtx), toolutil.PaginationRequestOption(in.PaginationInput))
+	atts, resp, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), digest, gl.WithContext(ctx), toolutil.PaginationRequestOption(in.PaginationInput))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			if _, _, projectErr := client.GL().Projects.GetProject(in.ProjectID.String(), nil, gl.WithContext(ctx)); projectErr == nil {
@@ -184,15 +182,9 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(op, err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
 	}
-	extras, err := toolutil.CapturedAttestations(captured, len(atts))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr(op, err)
-	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts)), Pagination: toolutil.PaginationFromResponse(resp)}
-	for i, a := range atts {
-		o := toOutput(a)
-		o.SigningMethod = extras[i].SigningMethod
-		out.Attestations = append(out.Attestations, o)
+	for _, a := range atts {
+		out.Attestations = append(out.Attestations, toOutput(a))
 	}
 	return out, nil
 }

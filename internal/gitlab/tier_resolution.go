@@ -222,13 +222,10 @@ func statusLeavesStepUnread(status int) bool {
 }
 
 // gitLabStatus is the HTTP status GitLab answered err with, and false when no
-// status came back. GraphQL.Do wraps the *gl.ErrorResponse of a JSON body in a
-// *gl.GraphQLResponseError, which has no Unwrap, so that one is opened by
-// hand.
+// status came back. A GraphQL answer carries it as a REST one does: GraphQL.Do
+// wraps the *gl.ErrorResponse of a JSON body in a *gl.GraphQLResponseError,
+// which unwraps to it.
 func gitLabStatus(err error) (int, bool) {
-	if refusal, ok := errors.AsType[*gl.GraphQLResponseError](err); ok {
-		err = refusal.Err
-	}
 	if answer, ok := errors.AsType[*gl.ErrorResponse](err); ok {
 		return answer.StatusCode, true
 	}

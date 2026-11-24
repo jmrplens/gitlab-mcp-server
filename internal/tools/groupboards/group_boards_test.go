@@ -498,9 +498,8 @@ func TestGetGroupBoardList_Success(t *testing.T) {
 }
 
 // TestGroupBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer verifies the
-// status of a status list, which client-go's BoardList does not model, is
-// read off the captured answer by the four list handlers and a board's own
-// lists.
+// status of a status list is published by the four list handlers and a board's
+// own lists.
 func TestGroupBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T) {
 	const statusList = `{"id":10,"position":0,"label":null,"status":{"id":2,"name":"In progress",` +
 		`"icon_name":"status-running","color":"#1f75cb","position":0,"description":"Being worked on","category":"in_progress"}}`
@@ -567,8 +566,9 @@ func TestGroupBoardLists_AStatusList_CarriesItsStatusOnEveryAnswer(t *testing.T)
 }
 
 // TestGroupBoardLists_AStatusTheTypeCannotHold_IsReported verifies each
-// list handler reports a status that arrives in a shape the extra cannot
-// hold rather than publishing the list without it.
+// list handler reports a status that arrives in a shape its type cannot hold
+// rather than publishing the list without it. The SDK models the status and
+// decodes the body first, so it is the one that reports it.
 func TestGroupBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := `{"id":10,"status":"in_progress"}`
@@ -577,7 +577,7 @@ func TestGroupBoardLists_AStatusTheTypeCannotHold_IsReported(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			_, err := ListGroupBoardLists(t.Context(), client, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
 			return err
@@ -655,12 +655,13 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 }
 
 // TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey drives each of
-// the four list types the route takes alone, through the parameters a tool
+// the five list types the route takes alone, through the parameters a tool
 // call carries, and pins the whole POST body. CreateGroupIssueBoardListOptions
-// models the assignee, milestone and iteration from client-go v3.39.0, each
-// omitempty, so a column asked for one of them carries that key alone. The
-// four ids are interchangeable numbers, so a swapped pair would create a
-// column scoped to something the caller never named.
+// models the assignee, milestone and iteration from client-go v3.39.0 and the
+// status from v3.55.0, each omitempty, so a column asked for one of them
+// carries that key alone. The five ids are interchangeable numbers, so a
+// swapped pair would create a column scoped to something the caller never
+// named.
 func TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -671,6 +672,7 @@ func TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
 		{"assignee_id", map[string]any{"assignee_id": 3}, map[string]any{"assignee_id": float64(3)}},
 		{"milestone_id", map[string]any{"milestone_id": 5}, map[string]any{"milestone_id": float64(5)}},
 		{"iteration_id", map[string]any{"iteration_id": 9}, map[string]any{"iteration_id": float64(9)}},
+		{"status_id", map[string]any{"status_id": 2}, map[string]any{"status_id": float64(2)}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -701,7 +703,7 @@ func TestCreateGroupBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
 
 // TestCreateGroupBoardList_NotExactlyOneListType_IsRefusedBeforeAnyRequest
 // verifies a column create naming no list type, or more than one, is refused
-// with the four names before anything is sent. An Enterprise route takes
+// with the five names before anything is sent. An Enterprise route takes
 // exactly one of them and a Community Edition one requires label_id, so
 // GitLab would refuse either call with a 400.
 func TestCreateGroupBoardList_NotExactlyOneListType_IsRefusedBeforeAnyRequest(t *testing.T) {
@@ -712,14 +714,15 @@ func TestCreateGroupBoardList_NotExactlyOneListType_IsRefusedBeforeAnyRequest(t 
 		{"none", CreateGroupBoardListInput{GroupID: "42", BoardID: 1}},
 		{"label and milestone", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, MilestoneID: 5}},
 		{"assignee and iteration", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, AssigneeID: 3, IterationID: 9}},
-		{"all four", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, AssigneeID: 3, MilestoneID: 5, IterationID: 9}},
+		{"label and status", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, StatusID: 2}},
+		{"all five", CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 8, AssigneeID: 3, MilestoneID: 5, IterationID: 9, StatusID: 2}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 			_, err := CreateGroupBoardList(t.Context(), client, tc.input)
-			if err == nil || !strings.Contains(err.Error(), "name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id or iteration_id") {
-				t.Errorf("CreateGroupBoardList() error = %v, want the refusal naming the four list types", err)
+			if err == nil || !strings.Contains(err.Error(), "name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id, iteration_id or status_id") {
+				t.Errorf("CreateGroupBoardList() error = %v, want the refusal naming the five list types", err)
 			}
 		})
 	}
@@ -967,6 +970,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		MaxIssueCount:  10,
 		MaxIssueWeight: 50,
 		LimitMetric:    "all_metrics",
+		Status:         &toolutil.WorkItemStatusOutput{ID: 2, Name: "In progress"},
 	}
 
 	md := FormatBoardListMarkdown(out)
@@ -977,6 +981,7 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 		"- **Assignee**: @dev1\n" +
 		"- **Iteration**: [Iteration 1](https://gitlab.example.com/groups/grp/-/iterations/9)\n" +
 		"- **Milestone**: [sprint-1](https://gitlab.example.com/groups/grp/-/milestones/7)\n" +
+		"- **Status**: In progress\n" +
 		"- **Position**: 0\n" +
 		"- **Max Issue Count**: 10\n" +
 		"- **Max Issue Weight**: 50\n" +
@@ -1340,24 +1345,26 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 // (EE::Boards::Lists::CreateService#license_validation_error, "Assignee lists
 // not available with your current license"), so the license hint is keyed on
 // that message. GitLab writes it in the caller's preferred language, so a 400
-// refusing an assignee, milestone or iteration list in other words gets the
-// scope hint with the license named beside it, as does a Community Edition
-// route's refusal of anything but label_id. A 400 refusing a label list gets
-// the scope hint alone and names no license, since no license gates a label
-// list: the ID has to name a label the group can use ("Label not found"), and
-// a board holds one list per label, assignee, milestone or iteration ("Label
-// has already been taken").
+// refusing an assignee, milestone, iteration or status list in other words
+// gets the scope hint with the license named beside it, as does a Community
+// Edition route's refusal of anything but label_id. A 400 refusing a label
+// list gets the scope hint alone and names no license, since no license gates
+// a label list: the ID has to name a label the group can use ("Label not
+// found"), and a board holds one list per label, assignee, milestone,
+// iteration or status ("Label has already been taken", "A list for this status
+// already exists on the board").
 func TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) {
 	const (
-		licenseHint   = "assignee, milestone and iteration lists need GitLab Premium or Ultimate"
+		licenseHint   = "assignee, milestone, iteration and status lists need GitLab Premium or Ultimate"
 		scopeHint     = "a Community Edition instance takes label_id alone"
 		labelHint     = "a label of this group or of one of its parent groups"
-		licenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences"
+		licenseClause = "On an instance whose license or plan does not include them, assignee, milestone, iteration and status lists are refused with a 400 as well, in the language set in the caller's GitLab preferences"
 	)
 	licenseWords := regexp.MustCompile(`(?i)premium|ultimate|licen[cs]e`)
 	assignee := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, AssigneeID: 3}
 	milestone := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, MilestoneID: 4}
 	iteration := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, IterationID: 5}
+	status := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, StatusID: 2}
 	label := CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 20}
 	tests := []struct {
 		name  string
@@ -1373,6 +1380,10 @@ func TestCreateGroupBoardList_BadRequest_HintFollowsGitLabsAnswer(t *testing.T) 
 		{"assignee list unlicensed in Spanish", assignee, `{"message":{"error":"Las listas de personas asignadas no están disponibles con su licencia actual"}}`, "clause"},
 		{"milestone list unlicensed in German", milestone, `{"message":{"error":"Meilensteinlisten sind mit deiner momentanen Lizenz nicht verfügbar"}}`, "clause"},
 		{"iteration list unlicensed in Japanese", iteration, `{"message":{"error":"現在のライセンスではイテレーション一覧は利用できません"}}`, "clause"},
+		{"status list unlicensed", status, `{"message":{"error":"Status lists not available with your current license"}}`, "license"},
+		{"status list on GitLab before 19.6", status, `{"error":"label_id, milestone_id, iteration_id, assignee_id are missing, exactly one parameter must be provided"}`, "clause"},
+		{"status not found", status, `{"message":{"error":"Status not found"}}`, "clause"},
+		{"status already listed", status, `{"message":{"error":["A list for this status already exists on the board"]}}`, "clause"},
 		{"assignee not found", assignee, `{"message":{"error":"Assignee not found"}}`, "clause"},
 		{"community edition requires label_id", assignee, `{"error":"label_id is missing"}`, "clause"},
 		{"label not found", label, `{"message":{"error":"Label not found"}}`, "scope"},
@@ -1638,6 +1649,7 @@ func TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind(t *testing.T) {
 		{"assignee", BoardListOutput{ID: 1, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "ada"}}, "@ada"},
 		{"milestone", BoardListOutput{ID: 1, Milestone: &MilestoneOutput{ID: 4, Title: "v1.0"}}, "Milestone: v1.0"},
 		{"iteration", BoardListOutput{ID: 1, Iteration: &IterationOutput{ID: 5, Title: "Sprint 4"}}, "Iteration: Sprint 4"},
+		{"status", BoardListOutput{ID: 1, Status: &toolutil.WorkItemStatusOutput{ID: 2, Name: "In progress"}}, "Status: In progress"},
 		{"label with no name", BoardListOutput{ID: 1, Label: &LabelOutput{}}, ""},
 		{"assignee with no username", BoardListOutput{ID: 1, Assignee: &BoardListAssigneeOutput{ID: 3}}, ""},
 		{"milestone with no title", BoardListOutput{ID: 1, Milestone: &MilestoneOutput{ID: 4}}, ""},

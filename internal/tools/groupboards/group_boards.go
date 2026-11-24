@@ -38,8 +38,8 @@ type GroupBoardOutput struct {
 }
 
 // BoardListOutput represents a single list within a group board. Nested objects
-// (assignee, label, iteration, milestone) mirror the full client-go gl.BoardList
-// sub-objects per the 1:1 audit policy.
+// (assignee, label, iteration, milestone, status) mirror the full client-go
+// gl.BoardList sub-objects per the 1:1 audit policy.
 //
 // LimitMetric, MaxIssueCount and MaxIssueWeight are the list's
 // work-in-progress limits, which ee/lib/ee/api/entities/list.rb exposes only
@@ -57,8 +57,7 @@ type BoardListOutput struct {
 	Milestone      *MilestoneOutput         `json:"milestone,omitempty" tier:"premium"`
 	Position       int64                    `json:"position"`
 	// Status is the work item status a status list is for, which
-	// ee/lib/ee/api/entities/list.rb sends from 19.6 on such a list only,
-	// read from the captured response (ADR-0021).
+	// ee/lib/ee/api/entities/list.rb sends from 19.6 on such a list only.
 	Status *toolutil.WorkItemStatusOutput `json:"status,omitempty" tier:"premium"`
 }
 
@@ -95,17 +94,16 @@ func convertGroupBoard(b *gl.GroupIssueBoard, extra toolutil.GroupBoardExtra) Gr
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
 	}
-	for i, l := range b.Lists {
-		out.Lists = append(out.Lists, convertBoardList(l, toolutil.BoardListExtraAt(extra.Lists, i)))
+	for _, l := range b.Lists {
+		out.Lists = append(out.Lists, convertBoardList(l))
 	}
 	return out
 }
 
-// convertBoardList maps a GitLab board list into group board MCP output, with
-// the status read off the captured answer beside the SDK's decode.
-func convertBoardList(l *gl.BoardList, extra toolutil.BoardListExtra) BoardListOutput {
+// convertBoardList maps a GitLab board list into group board MCP output.
+func convertBoardList(l *gl.BoardList) BoardListOutput {
 	return BoardListOutput{
-		Status:         extra.Status,
+		Status:         toolutil.NewBoardListStatusOutput(l.Status),
 		ID:             l.ID,
 		Assignee:       boardListAssigneeOutput(l.Assignee),
 		Iteration:      iterationOutput(l.Iteration),
@@ -391,19 +389,14 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_list", err, http.StatusNotFound,
 			"board_id not found on this group. Use group.group_board_list to discover board IDs")
 	}
-	extras, err := toolutil.CapturedBoardLists(captured, len(lists))
-	if err != nil {
-		return ListBoardListsOutput{}, toolutil.WrapErr("group_board_list_list", err)
-	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for i, l := range lists {
-		out.Lists = append(out.Lists, convertBoardList(l, extras[i]))
+	for _, l := range lists {
+		out.Lists = append(out.Lists, convertBoardList(l))
 	}
 	return out, nil
 }
@@ -426,30 +419,17 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	if input.ListID == 0 {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_get", toolutil.ErrFieldRequired("list_id"))
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
 			"list_id not found on this board. Use group.group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
-	return boardListOutput("group_board_list_get", list, captured)
-}
-
-// boardListOutput finishes a handler that answers with one board list: it
-// reads the status off the captured answer and pairs it with what the SDK
-// decoded.
-func boardListOutput(op string, list *gl.BoardList, captured *gitlabclient.ResponseCapture) (BoardListOutput, error) {
-	extra, err := toolutil.CapturedBoardList(captured)
-	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErr(op, err)
-	}
-	return convertBoardList(list, extra), nil
+	return convertBoardList(list), nil
 }
 
 // CreateGroupBoardListInput represents input for creating a group board list:
 // a column scoped to exactly one label, or on Premium and Ultimate to one
-// assignee, milestone or iteration. client-go's
-// CreateGroupIssueBoardListOptions models the last three from v3.39.0.
+// assignee, milestone, iteration or, from GitLab 19.6, status.
 type CreateGroupBoardListInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID     int64                `json:"board_id" jsonschema:"Board ID,required"`
@@ -457,19 +437,20 @@ type CreateGroupBoardListInput struct {
 	AssigneeID  int64                `json:"assignee_id,omitempty" tier:"premium" jsonschema:"User ID to create an assignee list"`
 	MilestoneID int64                `json:"milestone_id,omitempty" tier:"premium" jsonschema:"Milestone ID to create a milestone list"`
 	IterationID int64                `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Iteration ID to create an iteration list"`
+	StatusID    int64                `json:"status_id,omitempty" tier:"premium" jsonschema:"Work item status ID to create a status list (GitLab 19.6 and later): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate"`
 }
 
 // errGroupListType refuses a column create that names no list type or more
 // than one, which an Enterprise route answers with a 400 and a Community
 // Edition one with a 400 for a missing label_id.
-var errGroupListType = errors.New("name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id or iteration_id")
+var errGroupListType = errors.New("name exactly one list type: label_id, or on Premium and Ultimate assignee_id, milestone_id, iteration_id or status_id")
 
 // CreateGroupBoardList creates a new group board list, sending the one list
 // type the caller named and refusing an input that names none or more than
 // one before any request. GitLab decides whether it takes the type, and
 // answers otherwise with a 400 [createGroupBoardListError] explains: a
 // Community Edition route requires label_id, and an Enterprise one takes the
-// other three only where they are licensed.
+// other four only where they are licensed, the status from 19.6 alone.
 func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, input CreateGroupBoardListInput) (BoardListOutput, error) {
 	if input.GroupID == "" {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", toolutil.ErrFieldRequired("group_id"))
@@ -478,7 +459,7 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_create", toolutil.ErrFieldRequired("board_id"))
 	}
 	named := 0
-	for _, id := range []int64{input.LabelID, input.AssigneeID, input.MilestoneID, input.IterationID} {
+	for _, id := range []int64{input.LabelID, input.AssigneeID, input.MilestoneID, input.IterationID, input.StatusID} {
 		if id != 0 {
 			named++
 		}
@@ -499,31 +480,39 @@ func CreateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.IterationID != 0 {
 		opts.IterationID = new(input.IterationID)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	if input.StatusID != 0 {
+		opts.StatusID = new(input.StatusID)
+	}
 	list, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoardList(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
-		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0
+		licensedType := input.AssigneeID != 0 || input.MilestoneID != 0 || input.IterationID != 0 || input.StatusID != 0
 		return BoardListOutput{}, createGroupBoardListError(err, licensedType)
 	}
-	return boardListOutput("group_board_list_create", list, captured)
+	return convertBoardList(list), nil
 }
 
 const (
 	// groupListTypeLicenseHint follows the 400 an Enterprise instance answers
 	// a list type its license or the group's plan lacks with
 	// (EE::Boards::Lists::CreateService#license_validation_error).
-	groupListTypeLicenseHint = "assignee, milestone and iteration lists need GitLab Premium or Ultimate, which the license or plan this group is on does not include, so only a label list (label_id) can be created on its boards"
+	groupListTypeLicenseHint = "assignee, milestone, iteration and status lists need GitLab Premium or Ultimate, which the license or plan this group is on does not include, so only a label list (label_id) can be created on its boards"
 
 	// groupListScopeHint follows every other 400 of a list creation: Grape's
-	// own parameter rule (a Community Edition route requires label_id), a
-	// target the group cannot use ("Label not found") and a second list for
-	// one the board already has ("Label has already been taken").
-	groupListScopeHint = "a Community Edition instance takes label_id alone. label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), milestone_id and iteration_id one this group can use (group.group_milestone_list lists the milestones), and assignee_id an existing user, and a board holds one list per label, assignee, milestone or iteration, so GitLab answers that it has already been taken when this board has that list already (group.group_board_list_lists shows them)"
+	// own parameter rules (a Community Edition route requires label_id, an
+	// Enterprise one takes exactly one of the five, status_id among them from
+	// 19.6), a target the group cannot use ("Label not found", "Status not
+	// found") and a second list for one the board already has ("Label has
+	// already been taken", "A list for this status already exists on the
+	// board"). A status is read in the top-level group
+	// (WorkItems::Statuses::Finder at v19.6.1-ee): one of its custom statuses
+	// when it has any, and a system-defined one otherwise.
+	groupListScopeHint = "a Community Edition instance takes label_id alone, and GitLab before 19.6 does not take status_id. label_id must name a label of this group or of one of its parent groups (group.group_label_list with include_ancestor_groups lists them, and a project label is answered as not found), milestone_id and iteration_id one this group can use (group.group_milestone_list lists the milestones), assignee_id an existing user, and status_id a custom status of the top-level group where it has them and a system-defined one otherwise. A board holds one list per label, assignee, milestone, iteration or status, so GitLab refuses a list the board has already (group.group_board_list_lists shows them)"
 
 	// groupListTypeLicenseClause follows groupListScopeHint on a 400 refusing
-	// an assignee, milestone or iteration list in words other than the English
-	// license refusal, which GitLab writes in the caller's preferred language.
-	groupListTypeLicenseClause = "On an instance whose license or plan does not include them, assignee, milestone and iteration lists are refused with a 400 as well, in the language set in the caller's GitLab preferences, and only a label list (label_id) can be created there"
+	// an assignee, milestone, iteration or status list in words other than the
+	// English license refusal, which GitLab writes in the caller's preferred
+	// language.
+	groupListTypeLicenseClause = "On an instance whose license or plan does not include them, assignee, milestone, iteration and status lists are refused with a 400 as well, in the language set in the caller's GitLab preferences, and only a label list (label_id) can be created there"
 )
 
 // groupListTypeLicenseRefusal is the fixed part of the message GitLab refuses a
@@ -539,9 +528,9 @@ const groupListTypeLicenseRefusal = "lists not available with your current licen
 // own parameter rules with it. A list type the license or the group's plan
 // lacks is one of those 400s, so the license is named on a 400 and never on a
 // 403. GitLab translates the license refusal, so a 400 refusing an assignee,
-// milestone or iteration list (licensedType) in any other words names the
-// license beside the scope, and a 400 refusing a label list, which no license
-// gates, names none. A caller without admin_issue_board_list on the group is
+// milestone, iteration or status list (licensedType) in any other words names
+// the license beside the scope, and a 400 refusing a label list, which no
+// license gates, names none. A caller without admin_issue_board_list on the group is
 // refused by authorize! with a 403: every role from Planner up holds it, and
 // an archived group, or one under an archived parent, withholds it from all of
 // them. That refusal is keyed on [toolutil.IsPermissionRefusal] rather than on
@@ -587,7 +576,6 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	list, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(
 		string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx),
 	)
@@ -595,7 +583,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 		return BoardListOutput{}, groupBoardRefusal("group_board_list_update", err, groupBoardListsHint,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	return boardListOutput("group_board_list_update", list, captured)
+	return convertBoardList(list), nil
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.

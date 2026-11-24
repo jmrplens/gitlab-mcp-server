@@ -4,6 +4,7 @@
 package toolutil
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -41,6 +42,27 @@ func TestNewBoardListAssigneeOutput(t *testing.T) {
 	got := NewBoardListAssigneeOutput(&gl.BoardListAssignee{ID: 9, Name: "Jane", Username: "jane"})
 	if got == nil || got.ID != 9 || got.Name != "Jane" || got.Username != "jane" {
 		t.Errorf("NewBoardListAssigneeOutput = %+v, want {9 Jane jane}", got)
+	}
+}
+
+// TestNewBoardListStatusOutput pins the status list conversion: nil-on-nil,
+// which every list but a status list is, plus a full mirror of the 7 keys
+// GitLab renders.
+func TestNewBoardListStatusOutput(t *testing.T) {
+	if got := NewBoardListStatusOutput(nil); got != nil {
+		t.Fatalf("NewBoardListStatusOutput(nil) = %+v, want nil", got)
+	}
+
+	got := NewBoardListStatusOutput(&gl.BoardListStatus{
+		ID: 2, Name: "In progress", IconName: "status-running", Color: "#1f75cb",
+		Position: 3, Description: "Being worked on", Category: "in_progress",
+	})
+	want := &WorkItemStatusOutput{
+		ID: 2, Name: "In progress", IconName: "status-running", Color: "#1f75cb",
+		Position: 3, Description: "Being worked on", Category: "in_progress",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("NewBoardListStatusOutput = %+v, want %+v", got, want)
 	}
 }
 

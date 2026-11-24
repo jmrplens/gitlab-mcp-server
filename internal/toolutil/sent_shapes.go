@@ -594,45 +594,10 @@ type BasicGroupDetailsOutput struct {
 // condition and leaves null on a board that belongs to a project, and the
 // weight the board is scoped to as GitLab sent it: null for a board with no
 // weight scope, which client-go's IssueBoard decodes as int64 and so reads as a
-// board scoped to weight 0. Lists is what each of the board's lists carries
-// that client-go's BoardList does not, in the order GitLab sent them.
+// board scoped to weight 0.
 type BoardExtra struct {
 	Group  *BasicGroupDetailsOutput `json:"group"`
 	Weight *int64                   `json:"weight"`
-	Lists  []BoardListExtra         `json:"lists"`
-}
-
-// WorkItemStatusOutput is a work item status as
-// ee/lib/api/entities/work_items/status.rb renders it. Every key is exposed
-// with expose_nil, so a null description, which a default status always has,
-// is an empty string here.
-type WorkItemStatusOutput struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	IconName    string `json:"icon_name"`
-	Color       string `json:"color"`
-	Position    int64  `json:"position"`
-	Description string `json:"description,omitempty"`
-	Category    string `json:"category"`
-}
-
-// BoardListExtra is what ee/lib/ee/api/entities/list.rb sends on a board list
-// that client-go's BoardList does not model: from 19.6 the work item status a
-// status list is for, sent only on such a list (boards.md).
-type BoardListExtra struct {
-	Status *WorkItemStatusOutput `json:"status"`
-}
-
-// CapturedBoardList reads it off the captured answer to a request for one
-// board list.
-func CapturedBoardList(capture *gitlabclient.ResponseCapture) (BoardListExtra, error) {
-	return capturedOne[BoardListExtra](capture)
-}
-
-// CapturedBoardLists reads the same off a list answer, one extra per board
-// list in order, the count held to what the SDK decoded.
-func CapturedBoardLists(capture *gitlabclient.ResponseCapture, decoded int) ([]BoardListExtra, error) {
-	return capturedList[BoardListExtra](capture, decoded, "board lists")
 }
 
 // MetadataExtra is what lib/api/entities/metadata.rb sends that client-go's
@@ -647,29 +612,6 @@ type MetadataExtra struct {
 // CapturedMetadata reads it off the captured answer to GET /metadata.
 func CapturedMetadata(capture *gitlabclient.ResponseCapture) (MetadataExtra, error) {
 	return capturedOne[MetadataExtra](capture)
-}
-
-// AttestationExtra is what lib/api/entities/supply_chain/attestation.rb sends
-// that client-go's Attestation does not model: from 19.6 how the attestation
-// was signed, sigstore or local_ca (attestations.md).
-type AttestationExtra struct {
-	SigningMethod string `json:"signing_method"`
-}
-
-// CapturedAttestations reads it off a list answer, one extra per attestation
-// in order, the count held to what the SDK decoded.
-func CapturedAttestations(capture *gitlabclient.ResponseCapture, decoded int) ([]AttestationExtra, error) {
-	return capturedList[AttestationExtra](capture, decoded, "attestations")
-}
-
-// BoardListExtraAt is the extra of a board's list i, or none when the
-// captured board carried fewer lists than the SDK decoded, which a board
-// answer cannot do and so reads as a list without the keys.
-func BoardListExtraAt(lists []BoardListExtra, i int) BoardListExtra {
-	if i < len(lists) {
-		return lists[i]
-	}
-	return BoardListExtra{}
 }
 
 // CapturedBoard reads it off the captured answer to a request for one board.
@@ -691,8 +633,7 @@ func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]Board
 // It is a shape of its own rather than [BoardExtra] because GroupIssueBoard
 // models the board's group, which IssueBoard lacks.
 type GroupBoardExtra struct {
-	Weight *int64           `json:"weight"`
-	Lists  []BoardListExtra `json:"lists"`
+	Weight *int64 `json:"weight"`
 }
 
 // CapturedGroupBoard reads it off the captured answer to a request for one

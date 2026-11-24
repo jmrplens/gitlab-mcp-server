@@ -252,15 +252,6 @@ func tailReaderCases() []capturedReaderCase {
 	}
 	return []capturedReaderCase{
 		{
-			name: "board list",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedBoardList(c) },
-			body: `{"id":1,"status":{"id":2,"name":"Done","category":"done"}}`,
-			want: func(v any) bool {
-				e, _ := v.(BoardListExtra)
-				return e.Status != nil && e.Status.Name == "Done" && e.Status.Category == "done"
-			},
-		},
-		{
 			name: "pipeline trigger",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedPipelineTrigger(c) },
 			body: `{"id":1,"expires_at":"2026-05-05T00:00:00.000Z"}`,
@@ -607,33 +598,6 @@ func TestCapturedReaders_ReadEachTailEntity(t *testing.T) {
 	}
 }
 
-// TestCapturedAttestations_ReadsTheSigningMethodOfEach verifies the
-// attestation reader pairs each attestation with its signing method, and
-// reports a capture nothing ran under.
-func TestCapturedAttestations_ReadsTheSigningMethodOfEach(t *testing.T) {
-	extras, err := CapturedAttestations(gitlabclient.CapturedBody([]byte(`[{"id":1,"signing_method":"local_ca"},{"id":2}]`)), 2)
-	if err != nil || len(extras) != 2 || extras[0].SigningMethod != "local_ca" || extras[1].SigningMethod != "" {
-		t.Errorf("CapturedAttestations() = %+v, %v; want local_ca then nothing", extras, err)
-	}
-	_, untouched := gitlabclient.WithResponseCapture(t.Context())
-	if _, err = CapturedAttestations(untouched, 0); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
-		t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
-	}
-}
-
-// TestBoardListExtraAt_PairsByPositionAndReadsAMissingListAsNone verifies the
-// extra a board's list i is given: its own when the captured board carried it,
-// and none past the end, which reads as a list without the keys.
-func TestBoardListExtraAt_PairsByPositionAndReadsAMissingListAsNone(t *testing.T) {
-	lists := []BoardListExtra{{}, {Status: &WorkItemStatusOutput{ID: 7}}}
-	if got := BoardListExtraAt(lists, 1); got.Status == nil || got.Status.ID != 7 {
-		t.Errorf("BoardListExtraAt(1) = %+v, want the second list's status", got)
-	}
-	if got := BoardListExtraAt(lists, 2); got.Status != nil {
-		t.Errorf("BoardListExtraAt(2) = %+v, want none", got)
-	}
-}
-
 // TestCapturedTailListReaders_HoldTheCountToTheSDKs verifies every list reader
 // added for those entities refuses a count other than the SDK's, naming both
 // numbers and the entity, so a capture that fell out of step with the decode
@@ -705,14 +669,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"group boards", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedGroupBoards(c, n)
-			return len(x), e
-		}},
-		{"board lists", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedBoardLists(c, n)
-			return len(x), e
-		}},
-		{"attestations", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedAttestations(c, n)
 			return len(x), e
 		}},
 		{"bridges", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
