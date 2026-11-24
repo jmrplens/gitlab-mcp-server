@@ -298,7 +298,11 @@ func (c *recordedCall) look(dir, tmp string) error {
 		if _, statErr := os.Stat(filepath.Join(root, "go.mod")); statErr == nil {
 			break
 		}
-		root = filepath.Dir(root)
+		above := filepath.Dir(root)
+		if above == root {
+			return fmt.Errorf("%s is below no go.mod", dir)
+		}
+		root = above
 	}
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() {
@@ -505,9 +509,10 @@ func interruptible(t *testing.T) (ctx context.Context, interrupt func(os.Signal)
 // TestMeasure_AnInterruptWhileGobcoRuns_EndsTheRunAndRemovesTheCopy verifies
 // that a signal that arrives while gobco runs lets it finish, and then ends
 // the run with the status a shell gives the signal, whatever gobco's report
-// says, with the copy gone and nothing said about a failure: the report of a
-// run that was ended is not passed on. It is held with gobco run through go
-// run and from PATH, and for a gobco the signal reached too, which failed.
+// says, with the copy gone and nothing said about a failure or by the gate: the
+// report of a run that was ended is not judged. It is held with gobco run
+// through go run and from PATH, and for a gobco the signal reached too, which
+// failed.
 func TestMeasure_AnInterruptWhileGobcoRuns_EndsTheRunAndRemovesTheCopy(t *testing.T) {
 	rec := readRecord(t)
 	cases := []struct {
@@ -544,8 +549,8 @@ func TestMeasure_AnInterruptWhileGobcoRuns_EndsTheRunAndRemovesTheCopy(t *testin
 			if staged != 1 {
 				t.Errorf("gobco ran beside %d staged copies, want one", staged)
 			}
-			if strings.Contains(stdout, "GOBCO_GATE") && tc.status != 0 || stderr != "gobco's own standard error\n" {
-				t.Errorf("stdout = %q, stderr = %q; want no word of a failure", stdout, stderr)
+			if strings.Contains(stdout, "GOBCO_GATE") || stderr != "gobco's own standard error\n" {
+				t.Errorf("stdout = %q, stderr = %q; want no verdict and no word of a failure", stdout, stderr)
 			}
 			if left := b.left(t); len(left) != 0 {
 				t.Errorf("left in the temporary directory: %q", left)
@@ -584,7 +589,7 @@ func TestMeasure_AnInterruptBeforeGobco_StartsNothingMore(t *testing.T) {
 			if status != 130 || stderr != "" {
 				t.Errorf("status = %d, stderr = %q; want 130 and nothing said", status, stderr)
 			}
-			if last := len(started) - 1; after != "" && started[last] != after {
+			if last := strings.Join(started[max(len(started)-1, 0):], ""); last != after {
 				t.Errorf("started %q, want nothing after %q", started, after)
 			}
 			if len(b.calls) != 0 || len(b.left(t)) != 0 {
@@ -697,8 +702,10 @@ func TestMeasure_OneWriterForBothStreams_TakesEverything(t *testing.T) {
 	if status := Measure(t.Context(), b.tools(), Request{Dir: b.root, Package: "./internal/plain", Environ: b.environ, Stdout: &both, Stderr: &both}); status != Measured {
 		t.Errorf("status = %d, want measured; said %q", status, both.String())
 	}
-	if said := both.String(); strings.Count(said, "e") < 100 || strings.Count(said, "o") < 100 {
-		t.Errorf("the writer took %d bytes: %q", len(said), said)
+	// Counted apart from the report, which holds both letters.
+	streams, ended := strings.CutSuffix(both.String(), "\nCondition coverage: 1/2\n")
+	if !ended || strings.Count(streams, "e") != 100 || strings.Count(streams, "o") != 100 {
+		t.Errorf("the writer took %d bytes: %q", both.Len(), both.String())
 	}
 }
 

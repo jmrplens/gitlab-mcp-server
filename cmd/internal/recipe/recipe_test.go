@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/golist"
 )
 
 // helperEnv names what this test binary does instead of running its tests,
@@ -319,6 +321,44 @@ func TestGetenv_AnEnvironment_AnswersTheLastEntryOfAKey(t *testing.T) {
 	}
 }
 
+// TestLine_AnAnswer_LosesTheEndOfItsLineAlone verifies that a path a program
+// names keeps a blank at its end, which a directory may hold.
+func TestLine_AnAnswer_LosesTheEndOfItsLineAlone(t *testing.T) {
+	t.Parallel()
+	for out, want := range map[string]string{"": "", "\n": "", "/repo \n": "/repo ", " /repo\r\n": " /repo", "/repo": "/repo", "a\nb\n": "a\nb"} {
+		t.Run(strconv.Quote(out), func(t *testing.T) {
+			t.Parallel()
+			if got := Line(out); got != want {
+				t.Errorf("Line(%q) = %q, want %q", out, got, want)
+			}
+		})
+	}
+}
+
+// noBreakSpace is a space no shell splits a word at.
+const noBreakSpace = string(rune(0xa0))
+
+// TestWords_AVariable_IsSplitAtTheBlanksAShellSplitsAt verifies that a run of
+// spaces, tabs and line ends separates two words, and that a no-break space
+// belongs to the word it is in.
+func TestWords_AVariable_IsSplitAtTheBlanksAShellSplitsAt(t *testing.T) {
+	t.Parallel()
+	for value, want := range map[string][]string{
+		"":                                 {},
+		" \t\n":                            {},
+		" -run=A  -v\t-x\n-y":              {"-run=A", "-v", "-x", "-y"},
+		"-run=^A$|" + noBreakSpace + " -v": {"-run=^A$|" + noBreakSpace, "-v"},
+		"--output=a" + noBreakSpace + "b":  {"--output=a" + noBreakSpace + "b"},
+	} {
+		t.Run(strconv.Quote(value), func(t *testing.T) {
+			t.Parallel()
+			if got := Words(value); !slices.Equal(got, want) {
+				t.Errorf("Words(%q) = %q, want %q", value, got, want)
+			}
+		})
+	}
+}
+
 // TestStatus_EachCause_IsTheStatusAShellGivesIt verifies the statuses of the
 // two signals, and that a context that is not done, or is done for another
 // reason, is no interrupt.
@@ -501,6 +541,28 @@ func TestMakefile_ASIGTERMToMake_ReachesTheProgramOfTheTarget(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMakefile_ATrimmedBuild_LeavesItsProgramTheToolchainsRoot runs a target
+// with -trimpath in GOFLAGS and no GOROOT, over a module whose command prints
+// the root go/build answers, and verifies that the command still knows the one
+// it was built with, which is where it finds go.
+func TestMakefile_ATrimmedBuild_LeavesItsProgramTheToolchainsRoot(t *testing.T) {
+	run, _, _ := makeInDirectory(t, "-s", "coverage-conditions", "PKG=./a")
+	goBin := golist.Executable()
+	// The Makefile asks for the toolchain the go directive names, so it names
+	// this one.
+	toolchain, _, _ := strings.Cut(strings.TrimPrefix(runtime.Version(), "go"), " ")
+	plant(t, run.Dir, "go.mod", "module example.com/m\n\ngo "+toolchain+"\n", 0o600)
+	plant(t, run.Dir, "cmd/coverage_recipes/main.go", "package main\n\nimport (\n\t\"fmt\"\n\t\"go/build\"\n)\n\nfunc main() { fmt.Println(build.Default.GOROOT) }\n", 0o600)
+	run.Env = append(slices.DeleteFunc(run.Env, func(entry string) bool { return strings.HasPrefix(entry, "GOROOT=") }),
+		"GOFLAGS=-trimpath", "GOWORK=off", "PATH="+filepath.Dir(goBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var said bytes.Buffer
+	run.Stderr = &said
+	out, err := run.Output()
+	if want := filepath.Dir(filepath.Dir(goBin)) + "\n"; err != nil || string(out) != want {
+		t.Errorf("the program of make coverage-conditions printed %q (%v, %s), want %q", out, err, said.String(), want)
 	}
 }
 

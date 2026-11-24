@@ -55,7 +55,7 @@ func TestStage_AModuleThatCannotBeCopied_IsRefusedAndLeavesNothing(t *testing.T)
 
 // TestStage_ACopyThatCannotBeRewritten_IsRemoved verifies that the copy is
 // removed when the module cannot be copied, and when the package's copy cannot
-// be brought to what gobco reads because a file of it is not there.
+// be brought to what gobco reads because a file it has to rewrite is not there.
 func TestStage_ACopyThatCannotBeRewritten_IsRemoved(t *testing.T) {
 	rec := readRecord(t)
 	for _, tc := range []struct {
@@ -63,7 +63,6 @@ func TestStage_ACopyThatCannotBeRewritten_IsRemoved(t *testing.T) {
 		staged staging
 		module string
 	}{
-		{name: "left out and gone", staged: staging{leftOut: []string{"gone.go"}}},
 		{name: "constrained and gone", staged: staging{constrained: []string{"gone.go"}}},
 		{name: "support and gone", staged: staging{support: []string{"gone_test.go"}}},
 		{name: "the module gone", staged: staging{unimported: true}, module: "gone"},
@@ -77,6 +76,38 @@ func TestStage_ACopyThatCannotBeRewritten_IsRemoved(t *testing.T) {
 			_, cleanup, err := m.stage()
 			if !errors.Is(err, fs.ErrNotExist) {
 				t.Errorf("stage() = %v, want that something is not there", err)
+			}
+			cleanup()
+			if left := b.left(t); len(left) != 0 {
+				t.Errorf("left in the temporary directory: %q", left)
+			}
+		})
+	}
+}
+
+// TestStage_AFileToLeaveOutThatWent_IsLeftOut verifies that a file the copy is
+// to be without, and that went after the package was listed, keeps nothing from
+// being staged, and that one that cannot be removed does.
+func TestStage_AFileToLeaveOutThatWent_IsLeftOut(t *testing.T) {
+	rec := readRecord(t)
+	for _, tc := range []struct {
+		name    string
+		rel     string
+		refused bool
+	}{
+		{name: "gone", rel: "elsewhere.go"},
+		{name: "a directory that is not empty", rel: "gone.go/in.txt", refused: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newBench(t, rec.Files)
+			writeFile(t, b.root, "internal/plain/"+tc.rel, "")
+			module := filepath.ToSlash(b.root)
+			m := &measurement{staged: staging{leftOut: []string{"gone.go"}}, pkg: golist.PackageFiles{Dir: module + "/internal/plain", ModuleDir: module, Name: "plain"}}
+			var said strings.Builder
+			m.Stdout = &said
+			_, cleanup, err := m.stage()
+			if (err != nil) != tc.refused {
+				t.Errorf("stage() = %v, want it refused: %t", err, tc.refused)
 			}
 			cleanup()
 			if left := b.left(t); len(left) != 0 {

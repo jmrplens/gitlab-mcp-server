@@ -149,7 +149,8 @@ func (m *measurement) measure(ctx context.Context) int {
 		return NotMeasured
 	}
 	report, passed := m.runGobco(ctx, target)
-	if !passed {
+	// The report of a run a signal is ending is not judged, whatever it says.
+	if !passed || ctx.Err() != nil {
 		return NotMeasured
 	}
 	return m.judge(ctx, report)

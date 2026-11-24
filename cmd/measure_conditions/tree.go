@@ -56,6 +56,9 @@ func runTree(ctx context.Context, args []string, stdout, stderr io.Writer, list 
 		return 2
 	}
 	packages, err := treePackages(ctx, *dir, list)
+	if ended, interrupted := recipe.Status(ctx); interrupted {
+		return ended
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: the packages below cmd/ and internal/ could not be listed: %v\n", toolName, err)
 		return 1

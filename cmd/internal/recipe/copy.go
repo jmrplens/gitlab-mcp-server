@@ -18,12 +18,16 @@ import (
 // true for is left out, a directory with everything below it; dst may be such
 // a directory. What is neither a file, a directory nor a link is left out too:
 // a socket or a pipe is nothing a package's tests read.
+//
+// A copy that cannot be finished is removed, and a dst that is already there is
+// an error and left as it is, so a caller removes only a copy this made.
 func CopyTree(src, dst string, skip func(rel string) bool) error {
 	// A src that cannot be resolved is the walk's to report.
 	if linked, err := filepath.EvalSymlinks(src); err == nil {
 		src = linked
 	}
-	return filepath.WalkDir(src, func(name string, entry fs.DirEntry, err error) error {
+	created := false
+	err := filepath.WalkDir(src, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -36,8 +40,15 @@ func CopyTree(src, dst string, skip func(rel string) bool) error {
 			}
 			return nil
 		}
-		return copyEntry(name, filepath.Join(dst, rel), entry)
+		// The root is the first entry of the walk, and dst its copy.
+		err = copyEntry(name, filepath.Join(dst, rel), entry)
+		created = created || err == nil
+		return err
 	})
+	if err != nil && created {
+		_ = os.RemoveAll(dst)
+	}
+	return err
 }
 
 // copyEntry copies one entry of a tree. A directory stays writable by its

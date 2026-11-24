@@ -121,7 +121,8 @@ func TestCopyTree_WhatOnlyAUnixTreeHolds_IsCopiedOrLeftOut(t *testing.T) {
 			info, statErr := os.Lstat(filepath.Join(dst, rel))
 			if statErr != nil {
 				t.Error(statErr)
-			} else if info.Mode() != mode && info.Mode().Type() != fs.ModeSymlink {
+			} else if info.Mode().Type() != mode.Type() || (mode.Type() != fs.ModeSymlink && info.Mode() != mode) {
+				// A link's own permissions are the platform's to choose.
 				t.Errorf("%s's mode = %v, want %v", rel, info.Mode(), mode)
 			}
 		})
@@ -159,16 +160,35 @@ func TestCopyTree_ATreeReachedThroughALink_IsCopiedItself(t *testing.T) {
 
 // TestCopyTree_WhatCannotBeCopied_IsAnError verifies that a tree that is not
 // there, a copy that is already there, and a file that cannot be written are
-// each the copy's error rather than a copy with something missing.
+// each the copy's error rather than a copy with something missing: a copy that
+// was begun is removed, and what was already there is left as it was.
 func TestCopyTree_WhatCannotBeCopied_IsAnError(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()
 	plant(t, src, "a.txt", "a", 0o600)
+	plant(t, src, "sub/b.txt", "b", 0o600)
 	if err := CopyTree(filepath.Join(src, "absent"), filepath.Join(t.TempDir(), "x"), keepAll); err == nil {
 		t.Error("CopyTree(absent) = nil, want an error")
 	}
-	if err := CopyTree(src, t.TempDir(), keepAll); !errors.Is(err, fs.ErrExist) {
+	there := t.TempDir()
+	plant(t, there, "kept.txt", "k", 0o600)
+	if err := CopyTree(src, there, keepAll); !errors.Is(err, fs.ErrExist) {
 		t.Errorf("CopyTree(onto a directory) = %v, want that it exists", err)
+	}
+	holdCopied(t, there, map[string]string{"kept.txt": "k"}, "a.txt")
+	// A file the copy would write is there by the time it comes to it.
+	dst := filepath.Join(t.TempDir(), "copy")
+	err := CopyTree(src, dst, func(rel string) bool {
+		if rel == "sub/b.txt" {
+			plant(t, dst, "sub/b.txt", "planted", 0o600)
+		}
+		return false
+	})
+	if !errors.Is(err, fs.ErrExist) {
+		t.Errorf("CopyTree(over a file) = %v, want that it exists", err)
+	}
+	if _, statErr := os.Lstat(dst); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("a copy that could not be finished was left behind (%v)", statErr)
 	}
 }
 

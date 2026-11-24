@@ -283,6 +283,36 @@ func TestRunTree_AnInterrupt_EndsTheRunWithNoSummary(t *testing.T) {
 	}
 }
 
+// TestRunTree_AnInterruptDuringTheListing_EndsTheRunWithTheSignalsStatus
+// verifies that a signal while the packages are listed ends the run with the
+// status a shell gives it, whether the listing failed for it or not: nothing is
+// said of the listing and no package is measured.
+func TestRunTree_AnInterruptDuringTheListing_EndsTheRunWithTheSignalsStatus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{{name: "the listing failed", err: errors.New("planted")}, {name: "the listing ended"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancelCause(t.Context())
+			answer := treeLister(treeListing(), tc.err)
+			list := func(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
+				cancel(runs.InterruptedError{Signal: syscall.SIGTERM})
+				return answer(ctx, dir, env, args...)
+			}
+			recipe := treeRecipe()
+			var stdout, stderr bytes.Buffer
+			if got := runTree(ctx, []string{"-records", t.TempDir(), "-commit", "c"}, &stdout, &stderr, list, recipe.run); got != 143 {
+				t.Errorf("runTree() = %d, want 143", got)
+			}
+			if stdout.Len() != 0 || stderr.Len() != 0 || len(recipe.calls) != 0 {
+				t.Errorf("stdout = %q, stderr = %q, %d recipe call(s); want none of them", stdout.String(), stderr.String(), len(recipe.calls))
+			}
+		})
+	}
+}
+
 // TestRunTree_PlantedModule_MeasuresEveryPackage verifies the whole-tree
 // figure issue 1667 asked for, over the planted module and its packages below
 // cmd/ and internal/, listed and counted with the toolchain's own go command:

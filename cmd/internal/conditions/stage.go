@@ -119,7 +119,10 @@ func (m *measurement) announceStaging() {
 func (m *measurement) rewrite(target string) error {
 	var failed []error
 	for _, name := range m.staged.leftOut {
-		failed = append(failed, os.Remove(filepath.Join(target, name)))
+		// One that went since it was listed is left out already.
+		if err := os.Remove(filepath.Join(target, name)); !errors.Is(err, fs.ErrNotExist) {
+			failed = append(failed, err)
+		}
 	}
 	for _, name := range m.staged.constrained {
 		failed = append(failed, rewriteFile(filepath.Join(target, name), filepath.Join(target, name), blankConstraints))

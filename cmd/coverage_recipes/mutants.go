@@ -179,13 +179,13 @@ func (m *mutation) load(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("go env failed: %w; refusing to measure", err)
 	}
-	m.goroot = strings.TrimSpace(goroot)
+	m.goroot = recipe.Line(goroot)
 	m.environ = append(m.environ, "GOROOT="+m.goroot)
 	root, err := m.goOutput(ctx, m.dir, "list", "-m", "-f", golist.ModuleFormat)
 	if err != nil {
 		return fmt.Errorf("go list -m failed: %w; refusing to measure", err)
 	}
-	m.root = strings.ReplaceAll(strings.TrimSpace(root), `\`, "/")
+	m.root = strings.ReplaceAll(recipe.Line(root), `\`, "/")
 	out, err := m.goOutput(ctx, m.dir, slices.Concat([]string{"list", "-e"}, m.flags.tagArgs(), []string{"-f", golist.FilesFormat, m.name})...)
 	if err != nil {
 		return fmt.Errorf("go list could not list %s: %w; refusing to measure", m.name, err)
@@ -423,9 +423,11 @@ func (m *mutation) trimpathHint(pattern string) string {
 // gremlins and not for the baseline, which runs the package's own code and
 // nothing a mutant changed. A soft limit the run inherited at or under the
 // ceiling is left alone, because setting the ceiling would raise it as far as
-// the hard limit allows and so loosen what the caller set. Outside Linux the
-// limit may be accepted and never enforced, which would make the line a claim
-// nobody checked, so it is not set there at all.
+// the hard limit allows and so loosen what the caller set. Where the limit can
+// be read and not set, as in a sandbox that denies it, gremlins runs under the
+// one it inherits. Outside Linux the limit may be accepted and never enforced,
+// which would make the line a claim nobody checked, so it is not set there at
+// all.
 func (m *mutation) memoryCeiling() (ceiling uint64, said string) {
 	if m.knobs.memoryMax == 0 {
 		return 0, ""
@@ -434,11 +436,14 @@ func (m *mutation) memoryCeiling() (ceiling uint64, said string) {
 	if m.goos != "linux" {
 		return 0, fmt.Sprintf("MUTANT_MEMORY_MAX=%d is applied with RLIMIT_AS, which this recipe relies on Linux to enforce, so on %s %s", m.knobs.memoryMax, m.goos, unbounded)
 	}
+	wanted := m.knobs.memoryMax << 30
 	held, _, err := m.limits()
+	if err == nil && held > wanted {
+		err = m.tryLimit(wanted)
+	}
 	if err != nil {
 		return 0, fmt.Sprintf("MUTANT_MEMORY_MAX=%d cannot be set here (%v), so %s", m.knobs.memoryMax, err, unbounded)
 	}
-	wanted := m.knobs.memoryMax << 30
 	if held <= wanted {
 		return 0, fmt.Sprintf("every process gremlins starts is already held to %d MiB of address space, the limit this run inherited, which is no more than MUTANT_MEMORY_MAX=%d GiB and so is kept", held>>20, m.knobs.memoryMax)
 	}

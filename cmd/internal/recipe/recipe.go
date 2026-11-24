@@ -115,6 +115,19 @@ func Output(ctx context.Context, run Runner, call Call) (string, error) {
 	return out.String(), nil
 }
 
+// Line returns what a program wrote without the end of its last line, so a path
+// it named keeps every other character of its own, a blank at its end included.
+func Line(out string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r")
+}
+
+// Words splits a variable that holds several words at the blanks a shell splits
+// one at, a space, a tab and a line's end, so any other space belongs to the
+// word it is in.
+func Words(value string) []string {
+	return strings.FieldsFunc(value, func(r rune) bool { return strings.ContainsRune(" \t\n", r) })
+}
+
 // Getenv returns the value environ, a list of KEY=value entries as
 // [os.Environ] returns, gives key, and whether it is set. The last entry of a
 // repeated key wins, as it does for the process the list is handed to.

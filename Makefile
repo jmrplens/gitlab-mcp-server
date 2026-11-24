@@ -299,8 +299,9 @@ endif
 # to the process it started and to nothing below that one, and `go run` ends on
 # a signal without handing it to the program it runs, which then goes on by
 # itself. Nothing is stamped into it, as nothing is by `go run`, so a checkout
-# git will not answer for builds too.
-RUN_BUILT=go build -buildvcs=false -o dist/tools/$1$(BINARY_EXT) ./cmd/$1 && exec dist/tools/$1$(BINARY_EXT)
+# git will not answer for builds too. It keeps its paths whatever GOFLAGS says,
+# since the commands find go by the toolchain root their binary records.
+RUN_BUILT=go build -buildvcs=false -trimpath=false -o dist/tools/$1$(BINARY_EXT) ./cmd/$1 && exec dist/tools/$1$(BINARY_EXT)
 
 # Analysis output directory
 ANALYSIS_DIR=dist/analysis

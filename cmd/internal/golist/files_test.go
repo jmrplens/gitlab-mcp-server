@@ -4,10 +4,12 @@
 package golist
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -20,13 +22,13 @@ func fileRow(fields ...string) string {
 
 // TestParseFileRows_EveryField_IsReadWhereTheFormatPutsIt verifies the rows a
 // listing writes: each field in its place, a list split into its names, the
-// directories written with slashes whatever the platform that listed them, a
-// carriage return a Windows console added dropped, and the error unquoted, its
-// lines kept.
+// directories unquoted, whatever they hold, and written with slashes whatever
+// the platform that listed them, a carriage return a Windows console added
+// dropped, and the error unquoted, its lines kept.
 func TestParseFileRows_EveryField_IsReadWhereTheFormatPutsIt(t *testing.T) {
 	t.Parallel()
-	output := fileRow(`C:\src\m\pkg`, `C:\src\m`, "pkg", "example.com/m/pkg", "a.go b.go", "c.go", "a_test.go", "x_test.go", "fmt io", "testing", "example.com/m/pkg", "") +
-		strings.TrimSuffix(fileRow("/src/m/gone", "", "", "example.com/m/gone", "", "", "", "", "", "", "", `"no such package:\n\tgone"`), "\n") + "\r\n\n"
+	output := fileRow(`"C:\\src\\m\\pkg"`, `"C:\\src\\m"`, "pkg", "example.com/m/pkg", "a.go b.go", "c.go", "a_test.go", "x_test.go", "fmt io", "testing", "example.com/m/pkg", "") +
+		strings.TrimSuffix(fileRow(`"/a\tb /m/gone"`, "", "", "example.com/m/gone", "", "", "", "", "", "", "", `"no such package:\n\tgone"`), "\n") + "\r\n\n"
 	got, err := ParseFileRows([]byte(output))
 	if err != nil {
 		t.Fatalf("ParseFileRows() error = %v", err)
@@ -38,7 +40,7 @@ func TestParseFileRows_EveryField_IsReadWhereTheFormatPutsIt(t *testing.T) {
 			Imports: []string{"fmt", "io"}, TestImports: []string{"testing"}, XTestImports: []string{"example.com/m/pkg"},
 		},
 		{
-			Dir: "/src/m/gone", ImportPath: "example.com/m/gone", GoFiles: []string{}, CgoFiles: []string{}, TestGoFiles: []string{}, XTestGoFiles: []string{},
+			Dir: "/a\tb /m/gone", ImportPath: "example.com/m/gone", GoFiles: []string{}, CgoFiles: []string{}, TestGoFiles: []string{}, XTestGoFiles: []string{},
 			Imports: []string{}, TestImports: []string{}, XTestImports: []string{}, Error: "no such package:\n\tgone",
 		},
 	}
@@ -49,16 +51,19 @@ func TestParseFileRows_EveryField_IsReadWhereTheFormatPutsIt(t *testing.T) {
 
 // TestParseFileRows_NoRowsOrMalformedOnes_AreEmptyOrRefused verifies that no
 // output is a listing of no packages a caller can range over, and that a row
-// of any other number of fields, or an error that is not quoted, is refused.
+// of any other number of fields, or a directory or an error that is not quoted,
+// is refused.
 func TestParseFileRows_NoRowsOrMalformedOnes_AreEmptyOrRefused(t *testing.T) {
 	t.Parallel()
 	if got, err := ParseFileRows(nil); err != nil || got == nil || len(got) != 0 {
 		t.Errorf("ParseFileRows(nil) = %v, %v; want an empty listing", got, err)
 	}
 	for name, row := range map[string]string{
-		"a field short":     fileRow("d", "m", "n", "p", "", "", "", "", "", "", ""),
-		"a field over":      fileRow("d", "m", "n", "p", "", "", "", "", "", "", "", "", ""),
-		"an unquoted error": fileRow("d", "m", "n", "p", "", "", "", "", "", "", "", "broken"),
+		"a field short":                fileRow(`"d"`, `"m"`, "n", "p", "", "", "", "", "", "", ""),
+		"a field over":                 fileRow(`"d"`, `"m"`, "n", "p", "", "", "", "", "", "", "", "", ""),
+		"an unquoted directory":        fileRow("d", `"m"`, "n", "p", "", "", "", "", "", "", "", ""),
+		"an unquoted module directory": fileRow(`"d"`, "m", "n", "p", "", "", "", "", "", "", "", ""),
+		"an unquoted error":            fileRow(`"d"`, `"m"`, "n", "p", "", "", "", "", "", "", "", "broken"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -105,6 +110,40 @@ func TestFilesFormat_ToolchainListing_IsWhatParseFileRowsReads(t *testing.T) {
 	}
 	if absent.Error == "" {
 		t.Errorf("row of an absent package = %+v, want an error", absent)
+	}
+}
+
+// TestFilesFormat_ACheckoutPathWithATab_IsReadBack verifies, where a file name
+// may hold one, that a module below a directory whose name holds a tab is
+// listed and read back as any other.
+func TestFilesFormat_ACheckoutPathWithATab_IsReadBack(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("a file name holds no tab there")
+	}
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(parent, "a\tb ")
+	err = errors.Join(
+		os.Mkdir(root, 0o750),
+		os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n\ngo 1.27\n"), 0o600),
+		os.WriteFile(filepath.Join(root, "m.go"), []byte("package m\n"), 0o600),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// #nosec G204 -- Executable returns the fixed Go tool path from the active toolchain.
+	list := exec.CommandContext(t.Context(), Executable(), "list", "-e", "-f", FilesFormat, ".")
+	list.Dir, list.Env = root, append(os.Environ(), "PWD="+root, "GOWORK=off", "GOFLAGS=")
+	output, err := list.Output()
+	if err != nil {
+		t.Fatalf("go list: %v", err)
+	}
+	rows, err := ParseFileRows(output)
+	if err != nil || len(rows) != 1 || rows[0].Dir != root || rows[0].ModuleDir != root {
+		t.Errorf("ParseFileRows(%q) = %+v, %v; want one row of %q", output, rows, err, root)
 	}
 }
 

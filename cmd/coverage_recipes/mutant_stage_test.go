@@ -6,10 +6,13 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -48,13 +51,22 @@ func windowsListing(b *mutantsBench) {
 		}
 		for line := range strings.Lines(out) {
 			dir, rest, _ := strings.Cut(line, "\t")
-			if below, ok := strings.CutPrefix(filepath.ToSlash(dir), filepath.ToSlash(b.root)); ok {
-				dir = b.root + strings.ReplaceAll(below, "/", `\`)
+			// A listing of whole rows quotes the directory it opens with.
+			named, unquoteErr := strconv.Unquote(dir)
+			quoted := unquoteErr == nil
+			if !quoted {
+				named = dir
+			}
+			if below, ok := strings.CutPrefix(filepath.ToSlash(named), filepath.ToSlash(b.root)); ok {
+				named = b.root + strings.ReplaceAll(below, "/", `\`)
+			}
+			if quoted {
+				named = strconv.Quote(named)
 			}
 			if rest != "" {
-				dir += "\t" + rest
+				named += "\t" + rest
 			}
-			if _, err = call.Stdout.Write([]byte(dir)); err != nil {
+			if _, err = call.Stdout.Write([]byte(named)); err != nil {
 				return 0, err
 			}
 		}
@@ -136,7 +148,7 @@ func TestStage_AModuleReachedThroughALink_LeavesOutThePackagesBelow(t *testing.T
 			if tc.imports != "" {
 				writeFile(t, b.root, "cmd/tool/imp.go", tc.imports)
 			}
-			before := fileTree(b.root)
+			before := snapshot(t, b.root)
 			link := filepath.Join(b.scratch, "link")
 			if err := os.Symlink(b.root, link); err != nil {
 				t.Fatal(err)
@@ -152,7 +164,7 @@ func TestStage_AModuleReachedThroughALink_LeavesOutThePackagesBelow(t *testing.T
 			if !slices.Equal(last.Tree, tc.want) {
 				t.Errorf("the copy held %q, want %q", last.Tree, tc.want)
 			}
-			if after := fileTree(b.root); !slices.Equal(after, before) {
+			if after := snapshot(t, b.root); !maps.Equal(after, before) {
 				t.Errorf("the module holds\n%q\nafter the run, want\n%q", after, before)
 			}
 		})
@@ -189,7 +201,7 @@ func TestMutants_AnInterrupt_EndsTheRunAndRemovesTheCopy(t *testing.T) {
 				writeFile(t, b.root, "cmd/tool/imp.go", "package main\n\nimport _ \"example.com/m/cmd/tool/internal/derive\"\n")
 				writeFile(t, b.root, "cmd/tool/internal/derive/derive.go", "package derive\n")
 			}
-			before := fileTree(b.root)
+			before := snapshot(t, b.root)
 			ctx, interrupt := interruptible(t)
 			b.onCall = func(verb string) {
 				if verb != tc.during {
@@ -209,7 +221,7 @@ func TestMutants_AnInterrupt_EndsTheRunAndRemovesTheCopy(t *testing.T) {
 			if b.stderr.Len() != 0 {
 				t.Errorf("stderr = %q, want no word of a failure", b.stderr.String())
 			}
-			if after := fileTree(b.root); !slices.Equal(after, before) {
+			if after := snapshot(t, b.root); !maps.Equal(after, before) {
 				t.Errorf("the module holds\n%q\nafter the run, want\n%q", after, before)
 			}
 		})
@@ -218,7 +230,8 @@ func TestMutants_AnInterrupt_EndsTheRunAndRemovesTheCopy(t *testing.T) {
 
 // TestStage_ACopyThatCannotBeMade_IsRefused verifies that a package whose
 // subtree go list cannot name, and one that cannot be copied, are refused with
-// the reason and no copy left.
+// the reason and no copy left, and that what another run put in the copy's
+// place after it was looked at is left there.
 func TestStage_ACopyThatCannotBeMade_IsRefused(t *testing.T) {
 	files := mutantsFixture(t)
 	planted := errors.New("planted")
@@ -245,6 +258,46 @@ func TestStage_ACopyThatCannotBeMade_IsRefused(t *testing.T) {
 			t.Errorf("the copy was left behind (%v)", statErr)
 		}
 	})
+	t.Run("a copy another run made meanwhile", func(t *testing.T) {
+		b := newMutantsBench(t, files)
+		m := &mutation{session: b.session, name: "./cmd/tool", environ: b.session.environ, root: filepath.ToSlash(b.root)}
+		m.pkg = golist.PackageFiles{Dir: m.root + "/cmd/tool", Name: "main", ImportPath: "example.com/m/cmd/tool"}
+		m.Run = func(context.Context, recipe.Call) (int, error) {
+			writeFile(t, b.root, "cmd/tool.mutants-main/theirs.go", "package main\n")
+			return 0, nil
+		}
+		cleanup, err := m.stage(t.Context())
+		if !errors.Is(err, fs.ErrExist) {
+			t.Errorf("stage() = %v, want that the copy's place is taken", err)
+		}
+		cleanup()
+		if got, want := fileTree(t, filepath.Join(b.root, "cmd", "tool.mutants-main")), []string{"theirs.go"}; !slices.Equal(got, want) {
+			t.Errorf("the other run's copy holds %q, want %q", got, want)
+		}
+	})
+}
+
+// TestMutants_AModuleRootThatEndsInABlank_IsReadWhole verifies that a checkout
+// whose name ends in a space is measured in that directory: the name go list
+// prints loses the end of its line alone.
+func TestMutants_AModuleRootThatEndsInABlank_IsReadWhole(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a file name does not end in a space there")
+	}
+	b := newMutantsBench(t, mutantsFixture(t))
+	root := b.root + " "
+	if err := os.Rename(b.root, root); err != nil {
+		t.Fatal(err)
+	}
+	b.root, b.session.dir = root, root
+	if status := b.session.run(t.Context(), []string{"mutants", "./cmd/tool"}); status != 0 {
+		t.Fatalf("status = %d, stderr %q", status, b.stderr.String())
+	}
+	for _, call := range b.calls {
+		if call.Dir != root {
+			t.Errorf("%q ran in %q, want %q", call.Args, call.Dir, root)
+		}
+	}
 }
 
 // TestImportsOwnInternal_EachImport_IsReadWhole verifies which imports are of

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestReadPlatform_ThreeLines_AreEnough(t *testing.T) {
 // row writes a listing of one package at dir, below module, with the files
 // given, as go list -f golist.FilesFormat prints it.
 func row(dir, module, files, tests, xtests string) string {
-	return strings.Join([]string{dir, module, "plain", "example.com/m/internal/plain", files, "", tests, xtests, "", "", "", ""}, "\t") + "\n"
+	return strings.Join([]string{strconv.Quote(dir), strconv.Quote(module), "plain", "example.com/m/internal/plain", files, "", tests, xtests, "", "", "", ""}, "\t") + "\n"
 }
 
 // TestReadReference_ALaterListingThatFails_IsRefused verifies that a beyond:

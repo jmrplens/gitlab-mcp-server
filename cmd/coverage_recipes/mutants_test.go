@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -85,24 +86,56 @@ func writeFile(t *testing.T, root, rel, content string) {
 	}
 }
 
-// fileTree is every file below dir, by its path relative to it.
-func fileTree(dir string) []string {
+// fileTree is every file below dir, by its path relative to it. A directory it
+// cannot read fails the test rather than reading as one with nothing in it.
+func fileTree(t *testing.T, dir string) []string {
+	t.Helper()
 	files := []string{}
-	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
+	for rel, content := range snapshot(t, dir) {
+		if content != directoryEntry {
+			files = append(files, rel)
 		}
-		rel, relErr := filepath.Rel(dir, path)
-		files = append(files, filepath.ToSlash(rel))
-		return relErr
-	})
+	}
 	sort.Strings(files)
 	return files
+}
+
+// directoryEntry is what [snapshot] holds for a directory, which no fixture
+// file holds.
+const directoryEntry = "\x00directory"
+
+// snapshot is everything below dir, by its path relative to it: the content of
+// each file, and the directories, one with nothing in it included.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	held := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || path == dir {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		content := []byte(directoryEntry)
+		if !entry.IsDir() {
+			if content, err = os.ReadFile(path); err != nil { //#nosec G304 G122 -- a file of the fixture, which nothing else writes
+				return err
+			}
+		}
+		held[filepath.ToSlash(rel)] = string(content)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("%s could not be read: %v", dir, err)
+	}
+	return held
 }
 
 // mutantsBench is a fixture module with the stand-in go test and gremlins
 // over it: where it is, how they answer, and what was run.
 type mutantsBench struct {
+	t        *testing.T
 	scratch  string
 	root     string
 	tmp      string
@@ -131,7 +164,7 @@ func newMutantsBench(t *testing.T, files map[string]string) *mutantsBench {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := &mutantsBench{scratch: scratch, root: filepath.Join(scratch, "module"), tmp: filepath.Join(scratch, "tmp"), base: 250 * time.Millisecond}
+	b := &mutantsBench{t: t, scratch: scratch, root: filepath.Join(scratch, "module"), tmp: filepath.Join(scratch, "tmp"), base: 250 * time.Millisecond}
 	for rel, content := range files {
 		writeFile(t, b.root, rel, content)
 	}
@@ -156,8 +189,9 @@ func newMutantsBench(t *testing.T, files map[string]string) *mutantsBench {
 		"GOTOOLCHAIN=local", "GOCACHE="+filepath.Join(cache, "go-build"), "GOMODCACHE="+filepath.Join(scratch, "modcache"))
 	b.session = &session{
 		Go: golist.Executable(), Run: b.answer, now: b.now, goos: "linux",
-		limits: func() (soft, hard uint64, err error) { return math.MaxUint64, math.MaxUint64, nil },
-		dir:    b.root, environ: environ, stdout: &b.stdout, stderr: &b.stderr,
+		limits:   func() (soft, hard uint64, err error) { return math.MaxUint64, math.MaxUint64, nil },
+		tryLimit: func(uint64) error { return nil },
+		dir:      b.root, environ: environ, stdout: &b.stdout, stderr: &b.stderr,
 	}
 	return b
 }
@@ -169,8 +203,14 @@ func (b *mutantsBench) now() time.Time {
 }
 
 // answer runs a call: go list and go env as the real go command, and the rest
-// recorded and answered as the bench's run says.
+// recorded and answered as the bench's run says. Everything the recipe runs, it
+// runs through the go command, and gremlins under its own settings as the
+// caller set them.
 func (b *mutantsBench) answer(ctx context.Context, call recipe.Call) (int, error) {
+	b.t.Helper()
+	if call.Program != golist.Executable() {
+		b.t.Errorf("ran %s %q, want the toolchain's own go command", call.Program, call.Args)
+	}
 	verb := call.Args[0]
 	if verb == "list" || verb == "env" {
 		return recipe.Exec(ctx, call)
@@ -188,7 +228,12 @@ func (b *mutantsBench) answer(ctx context.Context, call recipe.Call) (int, error
 	case "test":
 		status = b.answerTest(call, &entry)
 	case "run":
-		entry.Tree = fileTree(filepath.Join(call.Dir, call.Args[len(call.Args)-1]))
+		for name, want := range b.run.Env {
+			if got, _ := recipe.Getenv(call.Env, name); strings.HasPrefix(name, "GREMLINS_") && got != want {
+				b.t.Errorf("gremlins was given %s=%q, want %q", name, got, want)
+			}
+		}
+		entry.Tree = fileTree(b.t, filepath.Join(call.Dir, call.Args[len(call.Args)-1]))
 		fmt.Fprintln(call.Stdout, "gremlins ran")
 		status = b.run.GremlinsStatus
 	}
@@ -207,7 +252,7 @@ func (b *mutantsBench) answerTest(call recipe.Call, entry *mutantsCall) int {
 		entry.Args[at+1] = "$PROFILE"
 	}
 	pattern := call.Args[len(call.Args)-1]
-	entry.Tree = fileTree(filepath.Join(call.Dir, strings.TrimSuffix(strings.TrimRight(pattern, "."), "/")))
+	entry.Tree = fileTree(b.t, filepath.Join(call.Dir, strings.TrimSuffix(strings.TrimRight(pattern, "."), "/")))
 	tests := 1
 	for _, earlier := range b.calls {
 		if earlier.Args[0] == "test" {
@@ -305,8 +350,8 @@ func (b *mutantsBench) loadErrorText(t *testing.T, pkg string) string {
 // scripts/coverage-mutants.sh, over the same module and with the same
 // stand-ins, and holds the recipe to it: the status, both streams, every
 // program with its arguments, directory, flags and toolchain root, the files
-// it found where it ran, the ceiling gremlins ran under, and nothing left in
-// the module or the temporary directory.
+// it found where it ran, the ceiling gremlins ran under, the module with the
+// files and the content it had, and nothing left in the temporary directory.
 func TestRecordedRuns_Mutants_DoesWhatTheScriptDid(t *testing.T) {
 	var rec mutantsRecord
 	readRecord(t, "mutants_runs.json", &rec)
@@ -317,7 +362,7 @@ func TestRecordedRuns_Mutants_DoesWhatTheScriptDid(t *testing.T) {
 		t.Run(run.Name, func(t *testing.T) {
 			b := newMutantsBench(t, rec.Files)
 			b.prepare(t, run)
-			before := fileTree(b.root)
+			before := snapshot(t, b.root)
 			status := b.session.run(t.Context(), append([]string{"mutants"}, run.Args...))
 			wantStderr := run.Stderr
 			if run.LoadError != nil {
@@ -333,10 +378,10 @@ func TestRecordedRuns_Mutants_DoesWhatTheScriptDid(t *testing.T) {
 				t.Errorf("stderr =\n%s\nwant\n%s", got, wantStderr)
 			}
 			b.compareCalls(t, run.Calls)
-			if after := fileTree(b.root); !slices.Equal(after, before) {
+			if after := snapshot(t, b.root); !maps.Equal(after, before) {
 				t.Errorf("the module holds\n%q\nafter the run, want\n%q", after, before)
 			}
-			if left := fileTree(b.tmp); len(left) != 0 {
+			if left := snapshot(t, b.tmp); len(left) != 0 {
 				t.Errorf("left in the temporary directory: %q", left)
 			}
 		})
@@ -360,8 +405,8 @@ func refuseCall(b *mutantsBench, out string, status int, err error, words ...str
 
 // TestMutants_AProgramThatDoesNotAnswer_IsRefused verifies every way a program
 // of the run can fail to answer before gremlins, and gremlins failing to
-// start: each is a run that measured nothing, with the reason, and gremlins is
-// never started on it.
+// start: each is a run that measured nothing, with the reason, gremlins is
+// never started on it, and the baseline's profile is not left behind.
 func TestMutants_AProgramThatDoesNotAnswer_IsRefused(t *testing.T) {
 	files := mutantsFixture(t)
 	planted := errors.New("planted")
@@ -400,6 +445,9 @@ func TestMutants_AProgramThatDoesNotAnswer_IsRefused(t *testing.T) {
 				if call.Args[0] == "run" {
 					t.Error("gremlins was started")
 				}
+			}
+			if left := snapshot(t, b.tmp); len(left) != 0 {
+				t.Errorf("left in the temporary directory: %q", left)
 			}
 		})
 	}
@@ -450,25 +498,29 @@ func TestMutants_NoTemporaryDirectory_IsRefused(t *testing.T) {
 // TestMemoryCeiling_EachLimitInherited_IsKeptOrLowered verifies the ceiling
 // gremlins is started under for each limit the run inherited: a looser one is
 // lowered to the ceiling, one at it or under it is kept, and none is set where
-// the limits cannot be read or the platform is not Linux, which the run says.
+// the limits cannot be read or set or the platform is not Linux, which the run
+// says. Only a looser one is tried.
 func TestMemoryCeiling_EachLimitInherited_IsKeptOrLowered(t *testing.T) {
 	t.Parallel()
 	const gib = 1 << 30
+	refused := errors.New("refused")
 	cases := []struct {
-		name string
-		goos string
-		held uint64
-		err  error
-		want uint64
-		says string
+		name  string
+		goos  string
+		held  uint64
+		err   error
+		tried error
+		want  uint64
+		says  string
 	}{
-		{"none", "linux", math.MaxUint64, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
-		{"a looser one", "linux", 16 * gib, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
-		{"one byte looser", "linux", 8*gib + 1, nil, 8 * gib, "is held to 8 GiB"},
-		{"the ceiling", "linux", 8 * gib, nil, 0, "is already held to 8192 MiB of address space, the limit this run inherited"},
-		{"a tighter one", "linux", 4 * gib, nil, 0, "is already held to 4096 MiB of address space, the limit this run inherited, which is no more than MUTANT_MEMORY_MAX=8 GiB and so is kept"},
-		{"unreadable", "linux", 0, errors.New("planted"), 0, "MUTANT_MEMORY_MAX=8 cannot be set here (planted), so a mutant that allocates without end runs until the host stops it"},
-		{"not Linux", "darwin", math.MaxUint64, nil, 0, "relies on Linux to enforce, so on darwin a mutant that allocates without end runs until the host stops it"},
+		{"none", "linux", math.MaxUint64, nil, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
+		{"a looser one", "linux", 16 * gib, nil, nil, 8 * gib, "is held to 8 GiB of address space (MUTANT_MEMORY_MAX)"},
+		{"one byte looser", "linux", 8*gib + 1, nil, nil, 8 * gib, "is held to 8 GiB"},
+		{"the ceiling", "linux", 8 * gib, nil, refused, 0, "is already held to 8192 MiB of address space, the limit this run inherited"},
+		{"a tighter one", "linux", 4 * gib, nil, refused, 0, "is already held to 4096 MiB of address space, the limit this run inherited, which is no more than MUTANT_MEMORY_MAX=8 GiB and so is kept"},
+		{"unreadable", "linux", 16 * gib, errors.New("planted"), refused, 0, "MUTANT_MEMORY_MAX=8 cannot be set here (planted), so a mutant that allocates without end runs until the host stops it"},
+		{"not settable", "linux", 16 * gib, nil, refused, 0, "MUTANT_MEMORY_MAX=8 cannot be set here (refused), so a mutant that allocates without end runs until the host stops it"},
+		{"not Linux", "darwin", math.MaxUint64, nil, refused, 0, "relies on Linux to enforce, so on darwin a mutant that allocates without end runs until the host stops it"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -476,6 +528,12 @@ func TestMemoryCeiling_EachLimitInherited_IsKeptOrLowered(t *testing.T) {
 			m := &mutation{session: &session{}, knobs: knobs{memoryMax: 8}}
 			m.goos = tc.goos
 			m.limits = func() (soft, hard uint64, err error) { return tc.held, math.MaxUint64, tc.err }
+			m.tryLimit = func(maxBytes uint64) error {
+				if maxBytes != 8*gib {
+					t.Errorf("tried a limit of %d bytes, want the ceiling", maxBytes)
+				}
+				return tc.tried
+			}
 			ceiling, said := m.memoryCeiling()
 			if ceiling != tc.want || !strings.Contains(said, tc.says) {
 				t.Errorf("memoryCeiling() = %d, %q; want %d and %q", ceiling, said, tc.want, tc.says)

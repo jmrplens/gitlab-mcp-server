@@ -24,6 +24,13 @@ func AddressSpace() (soft, hard uint64, err error) {
 	return limit.Cur, limit.Max, err
 }
 
+// TryAddressSpace sets the soft limit a call's AddressSpace of maxBytes would,
+// puts it back, and returns why either was refused: a sandbox may let a process
+// read its limits and not set them.
+func TryAddressSpace(maxBytes uint64) error {
+	return underLimit(maxBytes, func() error { return nil }, func() {})
+}
+
 // startLimited starts cmd under a soft limit of maxBytes on its address
 // space, which everything it starts inherits. The limit is this process's own
 // for the moment the program is started, since that is what a child inherits,
@@ -34,6 +41,16 @@ func AddressSpace() (soft, hard uint64, err error) {
 // script this was lowered both: a program that raises its own soft limit is
 // held no longer.
 func startLimited(cmd *exec.Cmd, maxBytes uint64) error {
+	return underLimit(maxBytes, cmd.Start, func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+}
+
+// underLimit calls do while the soft limit on this process's address space is
+// maxBytes. Where it cannot be put back after a do that went well, it calls
+// undo, and that is the error.
+func underLimit(maxBytes uint64, do func() error, undo func()) error {
 	var held syscall.Rlimit
 	if err := getrlimit(syscall.RLIMIT_AS, &held); err != nil {
 		return err
@@ -41,11 +58,10 @@ func startLimited(cmd *exec.Cmd, maxBytes uint64) error {
 	if err := setrlimit(syscall.RLIMIT_AS, &syscall.Rlimit{Cur: maxBytes, Max: held.Max}); err != nil {
 		return err
 	}
-	startErr := cmd.Start()
-	if err := setrlimit(syscall.RLIMIT_AS, &held); err != nil && startErr == nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+	doErr := do()
+	if err := setrlimit(syscall.RLIMIT_AS, &held); err != nil && doErr == nil {
+		undo()
 		return err
 	}
-	return startErr
+	return doErr
 }

@@ -65,7 +65,8 @@ func importsOwnInternal(pkg golist.PackageFiles) bool {
 // hard enough to skip its own cleanup, which a person should see rather than
 // have quietly overwritten. Both places are looked at, since a leftover of
 // either is a second copy of the package in the module whichever place this
-// run would use.
+// run would use. One that appears after that look is the copy's error, and is
+// left as it is too.
 func (m *mutation) stage(ctx context.Context) (cleanup func(), err error) {
 	cleanup = func() {}
 	if !needsStaging(m.pkg) {
@@ -89,7 +90,6 @@ func (m *mutation) stage(ctx context.Context) (cleanup func(), err error) {
 	}
 	m.sayf("%s is package %s in a directory that does not end in \"%s\", which gremlins cannot resolve (issue 872); measuring a staged copy at %s%s", m.name, m.pkg.Name, m.pkg.Name, m.fromRoot(at.dir), where)
 	m.staged = at
-	cleanup = func() { _ = os.RemoveAll(at.dir) }
 	err = recipe.CopyTree(m.pkg.Dir, at.dir, func(rel string) bool {
 		// The copy itself, when it sits below the package it copies.
 		return rel == name || slices.Contains(nested, rel)
@@ -97,7 +97,7 @@ func (m *mutation) stage(ctx context.Context) (cleanup func(), err error) {
 	if err != nil {
 		return cleanup, fmt.Errorf("the staged copy of %s could not be made: %w; refusing to measure", m.name, err)
 	}
-	return cleanup, nil
+	return func() { _ = os.RemoveAll(at.dir) }, nil
 }
 
 // nestedPackages are the packages below this one, as go names them, by their
@@ -116,7 +116,7 @@ func (m *mutation) nestedPackages(ctx context.Context) ([]string, error) {
 	}
 	var nested []string
 	for line := range strings.Lines(strings.ReplaceAll(out, `\`, "/")) {
-		if rel, below := strings.CutPrefix(strings.TrimSpace(line), m.pkg.Dir+"/"); below {
+		if rel, below := strings.CutPrefix(recipe.Line(line), m.pkg.Dir+"/"); below {
 			nested = append(nested, rel)
 		}
 	}

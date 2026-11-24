@@ -497,7 +497,8 @@ runaway at 660 MiB resident, and the heaviest suites measured
 times it between them, and a host that runs several sweeps at once still needs
 a bound on all of them together, such as a container's memory limit. `0` sets
 no ceiling, and a tighter limit the run inherited is kept rather than raised to
-the ceiling. A value that is not a whole number of GiB written without a
+the ceiling. Where the host refuses to set one, the run says so and goes on
+without it. A value that is not a whole number of GiB written without a
 leading zero is refused before anything runs, as the coefficient is below, and
 for a like reason: a shell reads a leading zero as octal, so `010` would read as
 8 there and as 10 elsewhere. So is one over 1048576 GiB (1 PiB), which bounds

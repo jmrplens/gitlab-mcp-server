@@ -13,8 +13,9 @@ import (
 // asks for, and the order [ParseFileRows] reads back. It is asked with -e, so
 // a package go cannot load is a row whose last field says why rather than the
 // end of the listing. That field is quoted, since an error can span lines,
-// and is empty for a package that loads.
-const FilesFormat = `{{.Dir}}	{{with .Module}}{{.Dir}}{{end}}	{{.Name}}	{{.ImportPath}}	{{join .GoFiles " "}}	{{join .CgoFiles " "}}	{{join .TestGoFiles " "}}	{{join .XTestGoFiles " "}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}	{{with .Error}}{{printf "%q" .Error}}{{end}}`
+// and is empty for a package that loads. The two directories are quoted too,
+// since a path may hold a tab.
+const FilesFormat = `{{printf "%q" .Dir}}	{{with .Module}}{{printf "%q" .Dir}}{{end}}	{{.Name}}	{{.ImportPath}}	{{join .GoFiles " "}}	{{join .CgoFiles " "}}	{{join .TestGoFiles " "}}	{{join .XTestGoFiles " "}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}	{{with .Error}}{{printf "%q" .Error}}{{end}}`
 
 // fileRowFields is how many fields a row of [FilesFormat] holds.
 const fileRowFields = 12
@@ -68,6 +69,16 @@ func ParseFileRows(output []byte) ([]PackageFiles, error) {
 		if len(fields) != fileRowFields {
 			return nil, fmt.Errorf("unexpected go list row: %q", line)
 		}
+		for _, quoted := range []*string{&fields[0], &fields[1], &fields[11]} {
+			if *quoted == "" {
+				continue
+			}
+			text, err := strconv.Unquote(*quoted)
+			if err != nil {
+				return nil, fmt.Errorf("unexpected go list row: %q", line)
+			}
+			*quoted = text
+		}
 		row := PackageFiles{
 			Dir:          slashed(fields[0]),
 			ModuleDir:    slashed(fields[1]),
@@ -80,13 +91,7 @@ func ParseFileRows(output []byte) ([]PackageFiles, error) {
 			Imports:      strings.Fields(fields[8]),
 			TestImports:  strings.Fields(fields[9]),
 			XTestImports: strings.Fields(fields[10]),
-		}
-		if fields[11] != "" {
-			said, err := strconv.Unquote(fields[11])
-			if err != nil {
-				return nil, fmt.Errorf("unexpected go list row: %q", line)
-			}
-			row.Error = said
+			Error:        fields[11],
 		}
 		packages = append(packages, row)
 	}

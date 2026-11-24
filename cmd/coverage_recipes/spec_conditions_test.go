@@ -6,10 +6,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -205,6 +207,40 @@ func TestSpecConditions_TheRecipe_IsRunWithNoGateOfItsOwn(t *testing.T) {
 				t.Errorf("%s = %q (set %t), want %q", name, got, set, want)
 			}
 		})
+	}
+}
+
+// TestSpecConditions_ARootThatEndsInABlank_IsReadWhole verifies that a checkout
+// whose name ends in a space is the directory the changes are read in and the
+// package measured from.
+func TestSpecConditions_ARootThatEndsInABlank_IsReadWhole(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("a file name does not end in a space there")
+	}
+	b := newSpecBench(t)
+	base := b.change(t, oneSided())
+	root, err := filepath.EvalSymlinks(b.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(root, "checkout ")
+	if err = os.Mkdir(moved, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	err = errors.Join(
+		os.Rename(filepath.Join(root, ".git"), filepath.Join(moved, ".git")),
+		os.Rename(filepath.Join(root, "internal"), filepath.Join(moved, "internal")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.session.dir = moved
+	if status := b.session.run(t.Context(), []string{"spec-conditions", base}); status != 1 || len(b.requests) != 1 {
+		t.Fatalf("status = %d after measuring %d package(s), want 1 for the finding; stderr %q", status, len(b.requests), b.stderr.String())
+	}
+	if got := b.requests[0].Dir; got != moved {
+		t.Errorf("measured in %q, want %q", got, moved)
 	}
 }
 

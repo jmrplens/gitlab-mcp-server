@@ -126,7 +126,7 @@ func (g *specGate) report(finding string) {
 // gitOutput runs git in dir and returns what it wrote to its standard output.
 func (g *specGate) gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	out, err := recipe.Output(ctx, g.Run, recipe.Call{Program: g.git, Args: args, Dir: dir, Env: g.environ, Stderr: g.stderr})
-	return strings.TrimSpace(out), err
+	return recipe.Line(out), err
 }
 
 // check measures what changed against base and returns the gate's status: 2

@@ -76,7 +76,7 @@ type gremlinsFlags struct {
 // fixed coefficient whose deadline could not be told.
 func readGremlinsFlags(environ []string) (gremlinsFlags, error) {
 	given, _ := recipe.Getenv(environ, "GREMLINS_FLAGS")
-	read := gremlinsFlags{words: strings.Fields(given)}
+	read := gremlinsFlags{words: recipe.Words(given)}
 	read.tags, _ = recipe.Getenv(environ, "GREMLINS_UNLEASH_TAGS")
 	read.coverpkg, _ = recipe.Getenv(environ, "GREMLINS_UNLEASH_COVERPKG")
 	exclusion, _ := recipe.Getenv(environ, "GREMLINS_UNLEASH_EXCLUDE_FILES")

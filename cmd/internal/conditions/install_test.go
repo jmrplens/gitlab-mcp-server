@@ -5,6 +5,7 @@ package conditions
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"slices"
@@ -76,13 +77,16 @@ func TestInstall_AnInterrupt_EndsItWithTheSignalsStatus(t *testing.T) {
 	b := newBench(t, rec.Files)
 	b.installFailures = 3
 	ctx, interrupt := interruptible(t)
-	b.plant = func(recipe.Call) (bool, int, error) {
+	tools := b.tools()
+	paused := 0
+	tools.Pause = func(ctx context.Context, _ time.Duration) {
+		paused++
 		interrupt(os.Interrupt)
-		return false, 0, nil
+		<-ctx.Done()
 	}
 	var out, errs bytes.Buffer
-	if status := Install(ctx, b.tools(), b.environ, &out, &errs); status != 130 || b.installs != 1 {
-		t.Errorf("status = %d after %d attempt(s), want 130 after one", status, b.installs)
+	if status := Install(ctx, tools, b.environ, &out, &errs); status != 130 || b.installs != 1 || paused != 1 {
+		t.Errorf("status = %d after %d attempt(s) and %d pause(s), want 130 after one of each", status, b.installs, paused)
 	}
 }
 

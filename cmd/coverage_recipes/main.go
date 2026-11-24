@@ -35,15 +35,16 @@ var osExit = os.Exit
 
 // tools is what the recipes reach outside this process: the condition
 // recipe's own tools, which the others share, the clock the mutation recipe
-// times its baseline with, the platform and the address-space limits it reads
-// before it sets a ceiling, and the condition recipe as the gate over action
-// specs runs it.
+// times its baseline with, the platform, the address-space limits it reads and
+// whether it may set one before it sets a ceiling, and the condition recipe as
+// the gate over action specs runs it.
 type tools struct {
 	conditions.Tools
-	now     func() time.Time
-	goos    string
-	limits  func() (soft, hard uint64, err error)
-	measure func(ctx context.Context, tools conditions.Tools, req conditions.Request) int
+	now      func() time.Time
+	goos     string
+	limits   func() (soft, hard uint64, err error)
+	tryLimit func(maxBytes uint64) error
+	measure  func(ctx context.Context, tools conditions.Tools, req conditions.Request) int
 }
 
 // session is one run of a subcommand: where it runs, the environment it reads
@@ -111,7 +112,8 @@ func (s *session) installGobco(ctx context.Context, args []string) int {
 // environment and streams, and the real tools.
 func defaultSession() *session {
 	return &session{
-		Tools: conditions.DefaultTools(), now: time.Now, goos: runtime.GOOS, limits: recipe.AddressSpace, measure: conditions.Measure,
+		Tools: conditions.DefaultTools(), now: time.Now, goos: runtime.GOOS,
+		limits: recipe.AddressSpace, tryLimit: recipe.TryAddressSpace, measure: conditions.Measure,
 		dir: ".", environ: os.Environ(), stdout: os.Stdout, stderr: os.Stderr,
 	}
 }

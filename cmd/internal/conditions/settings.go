@@ -60,7 +60,7 @@ func readSettings(environ []string, tags string) (settings, error) {
 		read.args = append(read.args, "-test=-tags="+tags)
 	}
 	flags, _ := recipe.Getenv(environ, "GOBCO_TEST_FLAGS")
-	for flag := range strings.FieldsSeq(flags) {
+	for _, flag := range recipe.Words(flags) {
 		read.args = append(read.args, "-test="+flag)
 	}
 	read.gate, _ = recipe.Getenv(environ, "GOBCO_GATE")

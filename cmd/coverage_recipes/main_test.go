@@ -157,7 +157,7 @@ func TestDefaultSession_IsThisProcess(t *testing.T) {
 	if s.dir != "." || s.goos != runtime.GOOS || s.Go != golist.Executable() || len(s.environ) == 0 || s.stdout != os.Stdout || s.stderr != os.Stderr {
 		t.Errorf("defaultSession() = %+v", s)
 	}
-	if s.now == nil || s.limits == nil || s.measure == nil || s.Run == nil || s.LookPath == nil || s.Pause == nil {
+	if s.now == nil || s.limits == nil || s.tryLimit == nil || s.measure == nil || s.Run == nil || s.LookPath == nil || s.Pause == nil {
 		t.Errorf("defaultSession() leaves a tool unset: %+v", s)
 	}
 	if _, _, err := s.limits(); err != nil && runtime.GOOS == "linux" && !errors.Is(err, errors.ErrUnsupported) {
