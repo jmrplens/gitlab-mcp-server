@@ -27,11 +27,17 @@ import (
 // skill, of a template and of the response format schema, that schema's title,
 // the compatibility of a skill, the content of a skill's file, and the
 // statement of a template.
+//
+// Most callers are the handlers of a stand-in GitLab, which run off the test
+// goroutine, so a fixture it cannot read is reported with t.Errorf rather
+// than an abort, and the body returned in its place is one no handler of the
+// package accepts, which fails the test where it is read as well.
 func readFixture(t *testing.T, name string) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
-		t.Fatalf("read testdata/%s: %v", name, err)
+		t.Errorf("read testdata/%s: %v", name, err)
+		return "missing test fixture " + name
 	}
 	return strings.TrimSuffix(string(body), "\n")
 }
