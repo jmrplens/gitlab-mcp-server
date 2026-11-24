@@ -22,9 +22,10 @@ import (
 )
 
 // TestActionSpecs_OrderAndCount verifies that [ActionSpecs] returns
-// exactly six specs in the canonical order: status, schema, tools,
-// dsl, query, graph_status. Meta-tool and individual-tool projection
-// rely on this order to map aliases and routes deterministically.
+// exactly the specs wantNames lists, in that canonical order: the first six
+// (status, schema, tools, dsl, query, graph_status) and then the reads added
+// after them. Meta-tool and individual-tool projection rely on this order to
+// map aliases and routes deterministically.
 //
 // The first alias on every spec is the individual tool name
 // (gitlab_orbit_<name>); the spec may carry additional natural-language
@@ -36,10 +37,13 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	if len(specs) != 6 {
-		t.Fatalf("ActionSpecs() len = %d, want 6", len(specs))
+	wantNames := []string{
+		"status", "schema", "tools", "dsl", "query", "graph_status",
+		"query_templates", "response_format", "command_list", "skill_list", "skill_get", "skill_file",
 	}
-	wantNames := []string{"status", "schema", "tools", "dsl", "query", "graph_status"}
+	if len(specs) != len(wantNames) {
+		t.Fatalf("ActionSpecs() len = %d, want %d", len(specs), len(wantNames))
+	}
 	for i, want := range wantNames {
 		t.Run(want, func(t *testing.T) {
 			if specs[i].Name != want {
@@ -86,8 +90,8 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	if len(specs) != 6 {
-		t.Fatalf("ActionSpecs() len = %d, want 6", len(specs))
+	if len(specs) != 12 {
+		t.Fatalf("ActionSpecs() len = %d, want 12", len(specs))
 	}
 	for i, spec := range specs {
 		hasKGAlias := false
@@ -130,16 +134,17 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 // query, and its parameter guidance, whose example is a GQL statement
 // GitLab.com answered. Every confusion names a rule of GQL a model gets wrong,
 // and one says what a query sent as a JSON object is answered. Nothing served
-// teaches the JSON DSL any longer. The other five actions take no query and
-// carry no guidance.
+// teaches the JSON DSL any longer. The other actions take no query and carry
+// no guidance, but for the ones named beside it, whose own tests hold theirs.
 func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "tok", false)
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
+	guided := map[string]bool{"query": true, "skill_file": true}
 	for i, spec := range specs {
-		if i != 4 && spec.ParameterGuidance != nil {
+		if !guided[spec.Name] && spec.ParameterGuidance != nil {
 			t.Errorf("ActionSpecs()[%d] (%s).ParameterGuidance = %v, want none", i, spec.Name, spec.ParameterGuidance)
 		}
 	}
@@ -522,6 +527,20 @@ func propertySchema(t *testing.T, schema map[string]any, name string) map[string
 	return property
 }
 
+// servedGuidance returns the guidance the catalog serves for a parameter of
+// an Orbit action, the default it fills in for a parameter with none included.
+func servedGuidance(t *testing.T, action, parameter string) toolutil.ParameterGuidance {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	for _, spec := range ActionSpecs(client) {
+		if spec.Name == action {
+			return toolutil.FillScopeParameterGuidanceSingle(spec).ParameterGuidance[parameter]
+		}
+	}
+	t.Fatalf("ActionSpecs() holds no %s", action)
+	return toolutil.ParameterGuidance{}
+}
+
 // metaActionParams returns the params schema a meta tool schema defines for
 // action under $defs, failing the test when it defines none.
 func metaActionParams(t *testing.T, schema map[string]any, action string) map[string]any {
@@ -554,7 +573,11 @@ func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 		}
 		names = append(names, spec.IndividualTool.Name)
 	}
-	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
+	for _, want := range []string{
+		"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status",
+		"gitlab_orbit_query_templates", "gitlab_orbit_response_format", "gitlab_orbit_command_list",
+		"gitlab_orbit_skill_list", "gitlab_orbit_skill_get", "gitlab_orbit_skill_file",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !containsTool(names, want) {
 				t.Fatalf("ActionSpecs() missing %s in %v", want, names)
@@ -652,6 +675,12 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
 		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
+		{name: "gitlab_orbit_query_templates", args: map[string]any{}},
+		{name: "gitlab_orbit_response_format", args: map[string]any{}},
+		{name: "gitlab_orbit_command_list", args: map[string]any{}},
+		{name: "gitlab_orbit_skill_list", args: map[string]any{}},
+		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}},
+		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}},
 	}
 
 	for _, tt := range tests {
@@ -690,6 +719,9 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
 		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
+		{name: "gitlab_orbit_skill_list", args: map[string]any{}},
+		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "no-such-skill"}},
+		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "missing.md"}},
 	}
 
 	for _, tt := range tests {
@@ -723,7 +755,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 // TestOrbit_ActionSpecs_ForbiddenStaysAnError verifies that the not-found
 // wrapper every Orbit route carries converts a 404 and nothing else: a 403
 // reaches the caller as the error it is, rather than as the not-found card.
-// On the query route and the MCP endpoint, which GitLab.com answers 403 for an
+// On the REST routes and the MCP endpoint, which GitLab.com answers 403 for an
 // account Orbit is not served to since its general availability, it keeps the
 // hint naming what Orbit needs; on the GraphQL endpoint, which answers an Orbit
 // field it does not serve with null instead, a 403 is about the token or the
@@ -744,6 +776,12 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_dsl", args: map[string]any{}, wantHint: true},
 		{name: "gitlab_orbit_query", args: map[string]any{"query": projectByIDGQL}, wantHint: true},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
+		{name: "gitlab_orbit_query_templates", args: map[string]any{}},
+		{name: "gitlab_orbit_response_format", args: map[string]any{}, wantHint: true},
+		{name: "gitlab_orbit_command_list", args: map[string]any{}, wantHint: true},
+		{name: "gitlab_orbit_skill_list", args: map[string]any{}, wantHint: true},
+		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}, wantHint: true},
+		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}, wantHint: true},
 	}
 
 	for _, tt := range tests {

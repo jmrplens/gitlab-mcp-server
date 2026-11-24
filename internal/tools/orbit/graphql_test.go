@@ -95,13 +95,14 @@ func TestStatus_EachResponseFormat_AnswersTheSameStructuredStatus(t *testing.T) 
 }
 
 // TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable verifies the answers
-// GitLab gives a user Orbit is not available to: serviceStatus or schema null,
-// or the whole orbit field null, and a subgroup or a project whose index GitLab
-// answers null with no access beside it, as it answered jmrp-oss/orbit-fixtures
-// and kg-fixtures under it at 16:58 UTC on 2026-10-29. Each is an error
-// wrapping [ErrOrbitUnavailable] with the hint naming what Orbit needs, never
-// an empty answer that would read as a service with nothing in it; the index's
-// hint adds that the top-level group reports its access.
+// GitLab gives a user Orbit is not available to: serviceStatus, schema or
+// queryTemplates null, or the whole orbit field null, and a subgroup or a
+// project whose index GitLab answers null with no access beside it, as it
+// answered jmrp-oss/orbit-fixtures and kg-fixtures under it at 16:58 UTC on
+// 2026-10-29. Each is an error wrapping [ErrOrbitUnavailable] with the hint
+// naming what Orbit needs, never an empty answer that would read as a service
+// with nothing in it; the index's hint adds that the top-level group reports
+// its access.
 func TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -113,6 +114,7 @@ func TestGraphQLHandlers_NullAnswers_ReportOrbitUnavailable(t *testing.T) {
 		{name: "status, orbit null", answer: `{"orbit":null}`, call: callStatus, hint: orbitUnavailableHint},
 		{name: "schema, schema null", answer: `{"orbit":{"schema":null}}`, call: callSchema, hint: orbitUnavailableHint},
 		{name: "schema, orbit null", answer: `{"orbit":null}`, call: callSchema, hint: orbitUnavailableHint},
+		{name: "query templates, queryTemplates null", answer: `{"orbit":{"queryTemplates":null}}`, call: callQueryTemplates, hint: orbitUnavailableHint},
 		{name: "graph status, orbit null", answer: `{"group":{"orbit":null},"project":null}`, call: callGraphStatus, hint: graphStatusUnavailableHint},
 		{name: "graph status, subgroup index null", answer: `{"group":{"orbit":` + subgroupNoIndexAnswer + `},"project":null}`, call: callGraphStatus, hint: graphStatusUnavailableHint},
 		{name: "graph status, project index null", answer: `{"projects":{"nodes":[{"orbit":` + projectNoIndexAnswer + `}]}}`, call: callGraphStatusByProjectID, hint: graphStatusUnavailableHint},
@@ -179,6 +181,7 @@ func TestGraphQLHandlers_HTTPFailure_CarriesTheOrbitHint(t *testing.T) {
 		{name: "graph status", call: callGraphStatus},
 		{name: "graph status by group id", call: callGraphStatusByGroupID},
 		{name: "graph status by project id", call: callGraphStatusByProjectID},
+		{name: "query templates", call: callQueryTemplates},
 	}
 	statuses := []struct {
 		status   int
@@ -827,6 +830,12 @@ func callStatus(ctx context.Context, client *testClient) error {
 // callSchema calls [Schema] for the structured schema.
 func callSchema(ctx context.Context, client *testClient) error {
 	_, err := Schema(ctx, client, SchemaInput{})
+	return err
+}
+
+// callQueryTemplates calls [QueryTemplates], which takes nothing.
+func callQueryTemplates(ctx context.Context, client *testClient) error {
+	_, err := QueryTemplates(ctx, client, QueryTemplatesInput{})
 	return err
 }
 

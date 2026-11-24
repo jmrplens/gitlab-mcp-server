@@ -1,0 +1,18 @@
+{
+  "name": "orbit",
+  "version": "0.35.4+gql",
+  "compatibility": "Any shell.",
+  "server_version": "0.163.0",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "f3d87659f853749f62448f76704d80925fde13d58e65adbac734575631a9be41",
+      "content": "---\nname: orbit\ndescription: Reads Orbit."
+    },
+    {
+      "path": "references/gql.md",
+      "sha256": "fa0c9266668b202bd03db4cf6aa2c6ae10ffb66ce42b03e283b51b57a239b46c",
+      "content": "# How to write a statement"
+    }
+  ]
+}

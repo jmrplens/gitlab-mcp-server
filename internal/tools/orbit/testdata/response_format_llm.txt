@@ -1,0 +1,6 @@
+ResponseFormat v6.0.0 (JSON Schema):
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.com/gitlab-org/orbit/knowledge-graph/schemas/query_response/v6",
+  "title": "A title",
+  "description": "A description.",

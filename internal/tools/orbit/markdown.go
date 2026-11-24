@@ -20,9 +20,12 @@ const hintGraphStatus = "inspect indexing status for a namespace or project"
 
 // orbitNotFoundOutput is returned by MCP Orbit tools when the requested resource or feature is not found (HTTP 404).
 // Used to provide actionable hints for missing Orbit endpoints or disabled features.
+// Hints are the next steps of a route whose 404 is about what the caller named, such
+// as one skill; without them the result names what Orbit needs to be served at all.
 type orbitNotFoundOutput struct {
 	Resource   string
 	Identifier string
+	Hints      []string
 }
 
 // init registers all Markdown formatters for Orbit MCP tool outputs.
@@ -38,12 +41,178 @@ func init() {
 	toolutil.RegisterMarkdown[DSLOutput](FormatDSLMarkdown)
 	toolutil.RegisterMarkdown[QueryOutput](FormatQueryMarkdown)
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
+	toolutil.RegisterMarkdown[QueryTemplatesOutput](FormatQueryTemplatesMarkdown)
+	toolutil.RegisterMarkdown[QueryResponseFormatOutput](FormatQueryResponseFormatMarkdown)
+	toolutil.RegisterMarkdown[CommandListOutput](FormatCommandListMarkdown)
+	toolutil.RegisterMarkdown[SkillListOutput](FormatSkillListMarkdown)
+	toolutil.RegisterMarkdown[SkillGetOutput](FormatSkillGetMarkdown)
+	toolutil.RegisterMarkdown[SkillFileOutput](FormatSkillFileMarkdown)
+}
+
+// FormatQueryTemplatesMarkdown renders the query templates as the card of one
+// object: how many there are, then each template as a section with its
+// description and its GQL text in a fence sized to it, since the text is
+// GitLab's and may hold anything. The text is the user's own, rendered with
+// the user's id where a template asks about the user.
+func FormatQueryTemplatesMarkdown(out QueryTemplatesOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Query Templates")
+	queryHint := toolutil.HintAction(orbitActionQuery, "run a template's text as it is, or adapted, as a query")
+	if len(out.Templates) == 0 {
+		c.Note("GitLab rendered no query template for this user.")
+		c.End(queryHint)
+		return b.String()
+	}
+	c.Int("Templates", int64(len(out.Templates)))
+	for _, template := range out.Templates {
+		section := c.Section(template.Name)
+		section.Text("Description", template.Description)
+		section.Fence("", "cypher", template.Query)
+	}
+	c.End(queryHint, toolutil.HintAction(orbitActionDSL, "read the grammar the templates are written in"))
+	return b.String()
+}
+
+// FormatQueryResponseFormatMarkdown renders the JSON Schema of a query's raw
+// answer as the card of one object: its version and the schema in a fence
+// sized to it, or the compact text GitLab answers the llm format with as the
+// whole body.
+func FormatQueryResponseFormatMarkdown(out QueryResponseFormatOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Response Format")
+	queryHint := toolutil.HintAction(orbitActionQuery, "run a query whose raw answer this schema describes")
+	if out.FormattedText != "" {
+		c.Fence("", "text", out.FormattedText)
+		c.End(queryHint)
+		return b.String()
+	}
+	if out.Schema == nil && out.Version == "" {
+		c.Note("GitLab described no response format.")
+		c.End(queryHint)
+		return b.String()
+	}
+	c.Field("Version", out.Version)
+	if out.Schema != nil {
+		c.Fence("JSON Schema", "json", prettyAny(out.Schema))
+	}
+	c.End(queryHint)
+	return b.String()
+}
+
+// FormatCommandListMarkdown renders the command catalog of GitLab's Orbit MCP
+// endpoint as a table of the commands and the action of this server that runs
+// each, or the compact text GitLab answers the llm format with as the whole
+// body. The input schemas stay in the structured output.
+func FormatCommandListMarkdown(out CommandListOutput) string {
+	var b strings.Builder
+	if out.FormattedText != "" {
+		c := toolutil.NewCard(&b, "Orbit Commands")
+		c.Fence("", "text", out.FormattedText)
+		c.End(toolutil.HintAction(orbitActionQuery, "run a graph query, the query_graph command"))
+		return b.String()
+	}
+	if len(out.Commands) == 0 {
+		return toolutil.EmptyMessage("Orbit commands")
+	}
+	toolutil.WriteListHeading(&b, "Orbit Commands", len(out.Commands), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Command", "Run by", "Description"))
+	for _, command := range out.Commands {
+		runBy := "none"
+		if command.PerformedBy != "" {
+			runBy = toolutil.MdCodeSpanCell(command.PerformedBy)
+		}
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(command.Name),
+			runBy,
+			toolutil.EscapeMdTableCell(command.Description),
+		))
+	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(orbitActionQuery, "run a graph query, the query_graph command"),
+		toolutil.HintAction(orbitActionSchema, "read the graph schema, the get_graph_schema command"))
+	return b.String()
+}
+
+// FormatSkillListMarkdown renders the deployed skills as a table.
+func FormatSkillListMarkdown(out SkillListOutput) string {
+	if len(out.Skills) == 0 {
+		return toolutil.EmptyMessage("Orbit skills")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Orbit Skills", len(out.Skills), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Skill", "Version", "Description"))
+	for _, skill := range out.Skills {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(skill.Name),
+			toolutil.EscapeMdTableCell(skill.Version),
+			toolutil.EscapeMdTableCell(skill.Description),
+		))
+	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(orbitActionSkillGet, "list the files of one skill by its name"))
+	return b.String()
+}
+
+// FormatSkillGetMarkdown renders one skill as the card of one object: its
+// version and compatibility, then its files as a nested collection with the
+// path, size and digest of each.
+func FormatSkillGetMarkdown(out SkillGetOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Skill")
+	c.Code("Name", out.Name)
+	c.Field("Version", out.Version)
+	c.Text("Compatibility", out.Compatibility)
+	c.Field("Server version", out.ServerVersion)
+	if len(out.Files) > 0 {
+		table := c.Table("Files", "Path", "Bytes", "SHA-256")
+		for _, file := range out.Files {
+			table.Row(
+				toolutil.MdCodeSpanCell(file.Path),
+				strconv.Itoa(file.Size),
+				toolutil.EscapeMdTableCell(file.SHA256),
+			)
+		}
+	}
+	c.End(toolutil.HintAction(orbitActionSkillFile, "read one of these files by the skill name and its path"))
+	return b.String()
+}
+
+// FormatSkillFileMarkdown renders one skill file as the card of one object:
+// where it is and its media type, then the file in a fence sized to it, since
+// a skill file is Markdown or code GitLab wrote and may hold fences of its
+// own.
+func FormatSkillFileMarkdown(out SkillFileOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Skill File")
+	c.Code("Skill", out.Name)
+	c.Code("Path", out.Path)
+	c.Field("Content type", out.ContentType)
+	c.Fence("", skillFileLanguage(out.Path), out.Content)
+	c.End(toolutil.HintAction(orbitActionSkillGet, "list the other files of this skill"))
+	return b.String()
+}
+
+// skillFileLanguage is the fence language of a skill file, read from its
+// extension: Markdown and Python are what the skills of 2026-10 held, and
+// anything else is fenced as text.
+func skillFileLanguage(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".md"):
+		return "markdown"
+	case strings.HasSuffix(path, ".py"):
+		return "python"
+	default:
+		return "text"
+	}
 }
 
 // formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable
 // hints when an Orbit resource is not found. Used by all Orbit MCP
 // tool handlers to provide LLM-friendly output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
+	if len(out.Hints) > 0 {
+		return toolutil.NotFoundResult(out.Resource, out.Identifier, out.Hints...)
+	}
 	return toolutil.NotFoundResult(
 		out.Resource, out.Identifier,
 		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",

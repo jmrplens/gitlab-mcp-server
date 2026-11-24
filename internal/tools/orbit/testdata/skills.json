@@ -1,0 +1,23 @@
+{
+  "skills": [
+    {
+      "name": "orbit",
+      "version": "0.35.4+gql",
+      "compatibility": "Any shell.",
+      "description": "First skill of this answer."
+    },
+    {
+      "name": "orbit-gql-migration",
+      "version": "0.1.0",
+      "compatibility": "Any shell.",
+      "description": "Second skill of this answer."
+    },
+    {
+      "name": "orbit-start",
+      "version": "0.2.2",
+      "compatibility": "Any shell.",
+      "description": "Third skill of this answer."
+    }
+  ],
+  "server_version": "0.163.0"
+}

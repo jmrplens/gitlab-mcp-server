@@ -172,12 +172,13 @@ var declaredUndocumentedEndpoints = []endpointDeclaration{
 	{
 		Shape:    "/orbit/...",
 		Category: categoryUndocumentedAPI,
-		Reason: "the Knowledge Graph API is beta and GitLab.com only. doc/api/orbit.md exists since 2026-09-16 " +
-			"(gitlab-org/gitlab@79abefeb) and points at the generated reference at api.gitlab.com instead of listing " +
-			"the routes: its plaintext blocks name only /orbit/skills and its subpaths, which this server does not call, " +
-			"and that reference (doc/api/openapi/openapi_v3.yaml) gives query, schema, status and tools no response " +
-			"schema while agent/commands and graph_status are hidden routes. What the six routes answer is held instead to " +
-			"docs/development/orbit-responses.json, which cmd/gen_orbit_record records from GitLab.com.",
+		Reason: "the Knowledge Graph API is beta and GitLab.com only. doc/api/orbit.md at the release the documentation " +
+			"record reads lists the query, named query, grep, context and skill routes, and not POST /orbit/mcp, GitLab's " +
+			"own MCP endpoint, which orbit.tools, orbit.dsl, orbit.command_list, orbit.response_format and the llm format " +
+			"of orbit.schema send their JSON-RPC requests to. What the first six Orbit actions are answered is held instead " +
+			"to docs/development/orbit-responses.json, which cmd/gen_orbit_record records from GitLab.com; the answers of " +
+			"the actions added after them are not recorded yet, so what holds those that no entity of the live record " +
+			"judges is the answers GitLab.com gave on 2026-10-29, trimmed to the package's testdata.",
 	},
 	{
 		Shape:    "//sidekiq/...",

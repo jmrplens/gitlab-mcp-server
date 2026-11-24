@@ -22,13 +22,20 @@ const (
 	orbitActionDSL         = "orbit.dsl"
 	orbitActionQuery       = "orbit.query"
 	orbitActionGraphStatus = "orbit.graph_status"
+
+	orbitActionQueryTemplates = "orbit.query_templates"
+	orbitActionResponseFormat = "orbit.response_format"
+	orbitActionCommandList    = "orbit.command_list"
+	orbitActionSkillList      = "orbit.skill_list"
+	orbitActionSkillGet       = "orbit.skill_get"
+	orbitActionSkillFile      = "orbit.skill_file"
 )
 
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
 //
-// Each ActionSpec describes one Orbit action (status, schema, tools, dsl, query, graph_status), answered by
-// GitLab's GraphQL API, its Orbit MCP endpoint or the Orbit query route, and is used to project both
-// individual tools and meta-tool routes in the MCP server runtime.
+// Each ActionSpec describes one Orbit read, in the order the actions were added, answered by GitLab's
+// GraphQL API, its Orbit MCP endpoint or an Orbit REST route, and is used to project both individual
+// tools and meta-tool routes in the MCP server runtime.
 //
 // These specs are the single source of truth for tool registration, schema, and documentation.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
@@ -42,8 +49,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{orbitActionSchema, orbitActionDSL},
 			[]string{"kg.schema", "knowledge_graph.schema", "kg.ontology", "knowledge_graph.ontology"}, orbitInput{}),
 		orbitReadSpec("tools", orbitReadRoute(client, Tools, "GitLab Orbit Tools", "tool list"), "gitlab_orbit_tools",
-			"List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each.",
-			[]string{orbitActionTools},
+			"List the tools GitLab's Orbit (Knowledge Graph) MCP endpoint serves and the input schema of each: list_commands and invoke_command, "+
+				"whose commands orbit.command_list describes with the action of this server that runs each.",
+			[]string{orbitActionTools, orbitActionCommandList},
 			[]string{"kg.tools", "knowledge_graph.tools", "kg.manifest", "knowledge_graph.manifest"}, orbitInput{}),
 		orbitReadSpec("dsl", orbitReadRoute(client, DSL, "GitLab Orbit Query Language", queryCommand+" command"), "gitlab_orbit_dsl",
 			"Read the GitLab Orbit (Knowledge Graph) query language GitLab.com compiles queries in, GQL, "+
@@ -54,13 +62,39 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Execute a read-only GitLab Orbit (Knowledge Graph) query in GQL, the language orbit.dsl describes, naming what orbit.schema lists. "+
 				"A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, "+
 				"and a refused query is corrected from the message GitLab answers with.",
-			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
+			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus, orbitActionQueryTemplates},
 			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}, queryInput()),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
 			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain, "+
 				"and for a top-level group its Orbit access and trial, which decide whether GitLab.com serves the index at all.",
 			[]string{orbitActionQuery},
 			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}, orbitInput{}),
+		orbitReadSpec("query_templates", orbitReadRoute(client, QueryTemplates, "GitLab Orbit Query Templates", "query templates"), "gitlab_orbit_query_templates",
+			"List the GitLab Orbit (Knowledge Graph) query templates GitLab.com renders for the token's user: the name, description and GQL text of each. "+
+				"The text binds the user's own id where a template asks about the user, so it is that user's alone. The named queries that take parameters are not listed.",
+			[]string{orbitActionQuery, orbitActionDSL},
+			[]string{"kg.templates", "knowledge_graph.templates", "orbit.templates", "kg.query_templates"}, orbitInput{}),
+		orbitReadSpec("response_format", orbitReadRoute(client, QueryResponseFormat, "GitLab Orbit Response Format", "response format"), "gitlab_orbit_response_format",
+			"Read the JSON Schema of the raw answer a GitLab Orbit (Knowledge Graph) query returns, with its version, or the same schema as compact text.",
+			[]string{orbitActionQuery, orbitActionDSL},
+			[]string{"kg.response_format", "knowledge_graph.response_format", "kg.result_schema", "orbit.result_schema"}, orbitInput{}),
+		orbitReadSpec("command_list", orbitReadRoute(client, CommandList, "GitLab Orbit Commands", "command list"), "gitlab_orbit_command_list",
+			"List the commands GitLab's Orbit (Knowledge Graph) MCP endpoint runs, with the description and input schema of each and the action of this server that runs it: "+
+				"query_graph is orbit.query, get_graph_schema is orbit.schema and get_response_format is orbit.response_format.",
+			[]string{orbitActionTools, orbitActionDSL},
+			[]string{"kg.commands", "knowledge_graph.commands", "orbit.commands", "kg.command_list"}, orbitInput{}),
+		orbitReadSpec("skill_list", orbitReadRoute(client, SkillList, "GitLab Orbit Skills", "deployed skills"), "gitlab_orbit_skill_list",
+			"List the GitLab Orbit (Knowledge Graph) skills GitLab.com has deployed: the name, version, compatibility and description of each.",
+			[]string{orbitActionSkillGet},
+			[]string{"kg.skills", "knowledge_graph.skills", "orbit.skills", "kg.skill_list"}, orbitInput{}),
+		orbitReadSpec("skill_get", orbitSkillRoute(client, SkillGet, skillNotFound), "gitlab_orbit_skill_get",
+			"Inspect one deployed GitLab Orbit (Knowledge Graph) skill by name: its version, compatibility and the files it holds, with the path, digest and size of each. File content is read one file at a time.",
+			[]string{orbitActionSkillList, orbitActionSkillFile},
+			[]string{"kg.skill", "knowledge_graph.skill", "orbit.skill", "kg.skill_get"}, orbitInput{}),
+		orbitReadSpec("skill_file", orbitSkillRoute(client, SkillFile, skillFileNotFound), "gitlab_orbit_skill_file",
+			"Read one file of a deployed GitLab Orbit (Knowledge Graph) skill, by skill name and the file's path relative to the skill root, as GitLab.com serves it.",
+			[]string{orbitActionSkillGet},
+			[]string{"kg.skill_file", "knowledge_graph.skill_file", "orbit.skill_content", "kg.skill_content"}, skillFileInput()),
 	}
 }
 
@@ -129,6 +163,14 @@ func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Conte
 	return toolutil.RouteAction(client, fn).WrapNotFound(func(map[string]any) any {
 		return orbitNotFoundOutput{Resource: resource, Identifier: identifier}
 	})
+}
+
+// orbitSkillRoute is [orbitReadRoute] for a read of one skill or one of its
+// files, whose 404 says one of two things: GitLab serves the user no skills,
+// answered by the availability result ([answerSkillsUnavailable]), or it holds
+// no such skill or file, answered by what notFound builds from the arguments.
+func orbitSkillRoute[T, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), notFound func(map[string]any) any) toolutil.ActionRoute {
+	return toolutil.RouteAction(client, fn).WrapHandler(answerSkillsUnavailable).WrapNotFound(notFound)
 }
 
 // orbitReadSpec constructs an ActionSpec for a read-only Orbit endpoint.

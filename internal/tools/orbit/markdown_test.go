@@ -609,3 +609,102 @@ func TestPrettyAny_ValueThatDoesNotEncode_FallsBackToItsText(t *testing.T) {
 		t.Fatal("prettyAny() returned empty fallback")
 	}
 }
+
+// missingFrom returns the parts a rendered card does not hold, in the order
+// they were named.
+func missingFrom(md string, parts ...string) []string {
+	var missing []string
+	for _, part := range parts {
+		if !strings.Contains(md, part) {
+			missing = append(missing, part)
+		}
+	}
+	return missing
+}
+
+// TestFormatQueryTemplatesMarkdown_EachTemplate_IsASectionWithItsText holds
+// the templates card to a section per template, its description and its GQL
+// text in a fence widened past any backtick run the text holds, and to a
+// sentence when GitLab rendered none.
+func TestFormatQueryTemplatesMarkdown_EachTemplate_IsASectionWithItsText(t *testing.T) {
+	md := FormatQueryTemplatesMarkdown(QueryTemplatesOutput{Templates: []QueryTemplate{
+		{Name: "my_neighbors", Description: "One project and its path", Query: "MATCH (p:Project {id: 1})\nRETURN p.id, p.full_path"},
+		{Name: "odd", Query: "MATCH (n) RETURN '```'"},
+	}})
+	if lacks := missingFrom(md, "## Orbit Query Templates", "- **Templates**: 2", "### my_neighbors", "- **Description**: One project and its path",
+		"```cypher\nMATCH (p:Project {id: 1})\nRETURN p.id, p.full_path\n```", "````cypher\nMATCH (n) RETURN '```'\n````", "orbit.query", "orbit.dsl"); len(lacks) > 0 {
+		t.Errorf("card lacks %q:\n%s", lacks, md)
+	}
+	if empty := FormatQueryTemplatesMarkdown(QueryTemplatesOutput{}); !strings.Contains(empty, "GitLab rendered no query template") {
+		t.Errorf("empty card = %q, want it to say no template was rendered", empty)
+	}
+}
+
+// TestFormatQueryResponseFormatMarkdown_EachShape renders the three shapes of
+// the response format card: the version and the schema in a JSON fence, the
+// llm text as the whole body, and a sentence when GitLab described nothing.
+func TestFormatQueryResponseFormatMarkdown_EachShape(t *testing.T) {
+	structured := FormatQueryResponseFormatMarkdown(QueryResponseFormatOutput{Version: "6.0.0", Schema: map[string]any{"type": "object"}})
+	if lacks := missingFrom(structured, "## Orbit Response Format", "- **Version**: 6.0.0", "### JSON Schema", "```json\n{\n  \"type\": \"object\"\n}\n```", "orbit.query"); len(lacks) > 0 {
+		t.Errorf("structured card lacks %q:\n%s", lacks, structured)
+	}
+	if llm := FormatQueryResponseFormatMarkdown(QueryResponseFormatOutput{FormattedText: "ResponseFormat v6.0.0"}); !strings.Contains(llm, "```text\nResponseFormat v6.0.0\n```") {
+		t.Errorf("llm card = %q, want the text in one fence", llm)
+	}
+	if empty := FormatQueryResponseFormatMarkdown(QueryResponseFormatOutput{}); !strings.Contains(empty, "GitLab described no response format") {
+		t.Errorf("empty card = %q, want it to say nothing was described", empty)
+	}
+	if version := FormatQueryResponseFormatMarkdown(QueryResponseFormatOutput{Version: "6.0.0"}); !strings.Contains(version, "- **Version**: 6.0.0") || strings.Contains(version, "described no response format") {
+		t.Errorf("card of a version alone = %q, want the version", version)
+	}
+	if schema := FormatQueryResponseFormatMarkdown(QueryResponseFormatOutput{Schema: map[string]any{}}); !strings.Contains(schema, "### JSON Schema") || strings.Contains(schema, "described no response format") {
+		t.Errorf("card of a schema alone = %q, want the schema", schema)
+	}
+}
+
+// TestFormatCommandListMarkdown_EachCommand_NamesTheActionThatRunsIt holds
+// the command table to a row per command naming the action of this server
+// that runs it, "none" for a command no action runs, the llm text as the whole
+// body, and one sentence for an empty list.
+func TestFormatCommandListMarkdown_EachCommand_NamesTheActionThatRunsIt(t *testing.T) {
+	md := FormatCommandListMarkdown(CommandListOutput{Commands: []Command{
+		{Name: "query_graph", Description: "Read-only | GQL", PerformedBy: "orbit.query"},
+		{Name: "new_command", Description: "Something new"},
+	}})
+	if lacks := missingFrom(md, "| `query_graph` | `orbit.query` | Read-only &#124; GQL |", "| `new_command` | none | Something new |", "orbit.schema"); len(lacks) > 0 {
+		t.Errorf("table lacks %q:\n%s", lacks, md)
+	}
+	if llm := FormatCommandListMarkdown(CommandListOutput{FormattedText: "query_graph: GQL"}); !strings.Contains(llm, "```text\nquery_graph: GQL\n```") {
+		t.Errorf("llm card = %q, want the text in one fence", llm)
+	}
+	if empty := FormatCommandListMarkdown(CommandListOutput{}); !strings.Contains(empty, "No Orbit commands found") {
+		t.Errorf("empty list = %q, want one sentence", empty)
+	}
+}
+
+// TestFormatSkillMarkdown_ListSkillAndFile renders the three skill outputs:
+// the list as a table, one skill with its files and never their content, and
+// one file in a fence widened past the fences the file holds.
+func TestFormatSkillMarkdown_ListSkillAndFile(t *testing.T) {
+	list := FormatSkillListMarkdown(SkillListOutput{Skills: []Skill{{Name: "orbit", Version: "0.35.4+gql", Description: "Use Orbit."}}})
+	if !strings.Contains(list, "| `orbit` | 0.35.4+gql | Use Orbit. |") || !strings.Contains(list, "orbit.skill_get") {
+		t.Errorf("skill list = %q, want the skill's row and the step to its files", list)
+	}
+	if empty := FormatSkillListMarkdown(SkillListOutput{}); !strings.Contains(empty, "No Orbit skills found") {
+		t.Errorf("empty list = %q, want one sentence", empty)
+	}
+	if bare := FormatSkillGetMarkdown(SkillGetOutput{Name: "orbit"}); strings.Contains(bare, "### Files") {
+		t.Errorf("card of a skill with no file = %q, want no table of them", bare)
+	}
+	skill := FormatSkillGetMarkdown(SkillGetOutput{Name: "orbit", Version: "0.35.4+gql", Files: []SkillFileEntry{{Path: "SKILL.md", SHA256: "f3d8", Size: 40}}})
+	if lacks := missingFrom(skill, "## Orbit Skill", "`orbit`", "| `SKILL.md` | 40 | f3d8 |", "orbit.skill_file"); len(lacks) > 0 {
+		t.Errorf("skill card lacks %q:\n%s", lacks, skill)
+	}
+	file := FormatSkillFileMarkdown(SkillFileOutput{Name: "orbit", Path: "SKILL.md", ContentType: "text/markdown", Content: "# Orbit\n\n```bash\nglab orbit\n```"})
+	if !strings.Contains(file, "````markdown\n# Orbit\n\n```bash\nglab orbit\n```\n````") {
+		t.Errorf("file card = %q, want the file in a fence wider than its own", file)
+	}
+	if got := skillFileLanguage("scripts/run.py") + "," + skillFileLanguage("LICENSE"); got != "python,text" {
+		t.Errorf("skillFileLanguage() = %q, want python,text", got)
+	}
+}

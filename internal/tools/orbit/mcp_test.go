@@ -95,6 +95,8 @@ func orbitSourcesHandler(t *testing.T) http.HandlerFunc {
 				testutil.RespondGraphQL(w, http.StatusOK, serviceStatusAnswer)
 			case strings.Contains(req.Query, "OrbitSchema"):
 				testutil.RespondGraphQL(w, http.StatusOK, schemaPageAnswer(false))
+			case strings.Contains(req.Query, "queryTemplates"):
+				testutil.RespondGraphQL(w, http.StatusOK, readFixture(t, "query_templates.json"))
 			default:
 				testutil.RespondGraphQL(w, http.StatusOK, `{"group":{"orbit":`+graphStatusAnswer+`},"project":null}`)
 			}
@@ -104,10 +106,21 @@ func orbitSourcesHandler(t *testing.T) http.HandlerFunc {
 				testutil.RespondJSON(w, http.StatusOK, `{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"list_commands","description":"Lists commands","inputSchema":{"type":"object"}}]}}`)
 				return
 			}
+			if arguments, _ := call.Params["arguments"].(map[string]any); arguments["command_name"] == responseFormatCommand {
+				respondToolText(w, readFixture(t, "response_format_raw.json"), false)
+				return
+			}
 			respondToolText(w, agentCommandsRaw, false)
 		case "/api/v4/orbit/query":
 			testutil.AssertRequestMethod(t, r, http.MethodPost)
 			testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"traversal","row_count":0}`)
+		case "/api/v4/orbit/skills":
+			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "skills.json"))
+		case "/api/v4/orbit/skills/orbit":
+			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "skill_orbit.json"))
+		case "/api/v4/orbit/skills/orbit/SKILL.md":
+			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+			_, _ = w.Write([]byte(readFixture(t, "skill_file_skill_md.md")))
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 			http.Error(w, "unexpected path", http.StatusInternalServerError)

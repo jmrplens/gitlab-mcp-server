@@ -1,0 +1,16 @@
+{
+  "orbit": {
+    "queryTemplates": [
+      {
+        "name": "my_neighbors",
+        "description": "One project and its path",
+        "query": "MATCH (p:Project {id: 1})\nRETURN p.id, p.full_path"
+      },
+      {
+        "name": "mrs_fixing_vulnerabilities",
+        "description": "Labels of one title",
+        "query": "MATCH (l:Label {title: \"stock\"})\nRETURN l.id, l.color\nLIMIT 5"
+      }
+    ]
+  }
+}

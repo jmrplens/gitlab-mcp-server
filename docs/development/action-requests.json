@@ -20296,6 +20296,31 @@
       ]
     },
     {
+      "id": "orbit.command_list",
+      "handlers": [
+        "orbit.func literal",
+        "orbit.CommandList"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /orbit/mcp",
+          "class": "mandatory",
+          "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
+          "sites": [
+            "orbit.callMCP"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "orbit.dsl",
       "handlers": [
         "orbit.func literal",
@@ -20464,6 +20489,62 @@
       ]
     },
     {
+      "id": "orbit.query_templates",
+      "handlers": [
+        "orbit.func literal",
+        "orbit.QueryTemplates"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "graphql",
+          "operation": "query orbit (queryQueryTemplates)",
+          "root_fields": [
+            "orbit"
+          ],
+          "positions": [
+            "orbit",
+            "orbit.queryTemplates"
+          ],
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "orbit.QueryTemplates"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "orbit.response_format",
+      "handlers": [
+        "orbit.func literal",
+        "orbit.QueryResponseFormat"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "POST /orbit/mcp",
+          "class": "mandatory",
+          "classic": "read_api",
+          "classic_declaration": "read-api-every-method",
+          "sites": [
+            "orbit.callMCP"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "orbit.schema",
       "handlers": [
         "orbit.func literal",
@@ -20527,6 +20608,87 @@
         ],
         [
           1
+        ]
+      ]
+    },
+    {
+      "id": "orbit.skill_file",
+      "handlers": [
+        "orbit.skillFileNotFound",
+        "orbit.answerSkillsUnavailable",
+        "orbit.SkillFile"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /orbit/skills/:name/*path",
+          "placeholders": {
+            "name": "name",
+            "path": "path"
+          },
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "orbit.restResponse"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "orbit.skill_get",
+      "handlers": [
+        "orbit.skillNotFound",
+        "orbit.answerSkillsUnavailable",
+        "orbit.SkillGet"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /orbit/skills/:name",
+          "placeholders": {
+            "name": "name"
+          },
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "orbit.restResponse"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "id": "orbit.skill_list",
+      "handlers": [
+        "orbit.func literal",
+        "orbit.SkillList"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /orbit/skills",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "orbit.restResponse"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
         ]
       ]
     },
