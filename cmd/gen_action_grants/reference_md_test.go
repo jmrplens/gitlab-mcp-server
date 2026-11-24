@@ -135,8 +135,8 @@ func TestRenderReference_SaysWhatIsCheckedInsideARoute(t *testing.T) {
 		language *referenceLanguage
 		wants    []string
 	}{
-		{englishReference(), []string{"checks of the token inside a route is declared nowhere this table reads", "`orbit.context` runs with its line alone", "comes back as not found"}},
-		{spanishReference(), []string{"comprueba además del token dentro de una ruta no está declarado en nada de lo que lee esta tabla", "`orbit.context` se ejecuta solo con su línea", "vuelve como no encontrado"}},
+		{englishReference(), []string{"checks of the token inside a route is declared nowhere this table reads", "`orbit.context` runs with its line alone", "comes back as not found", "`orbit.grep` answers the `branches` scope of a project as unavailable"}},
+		{spanishReference(), []string{"comprueba además del token dentro de una ruta no está declarado en nada de lo que lee esta tabla", "`orbit.context` se ejecuta solo con su línea", "vuelve como no encontrado", "`orbit.grep` responde el ámbito `branches` de un proyecto como no disponible"}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.language.title, func(t *testing.T) {

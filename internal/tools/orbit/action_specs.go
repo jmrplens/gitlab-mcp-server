@@ -31,6 +31,7 @@ const (
 	orbitActionSkillFile      = "orbit.skill_file"
 	orbitActionNamedQuery     = "orbit.named_query"
 	orbitActionContext        = "orbit.context"
+	orbitActionGrep           = "orbit.grep"
 )
 
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
@@ -65,7 +66,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"A query is one MATCH ... RETURN statement sent as text, with at least one node bounded by its id or a literal property, "+
 				"and a refused query is corrected from the message GitLab answers with.",
 			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus, orbitActionQueryTemplates},
-			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}, queryInput()),
+			[]string{"kg.query", "knowledge_graph.query"}, queryInput()),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
 			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one group or project, by namespace_id, project_id or full_path: whether Orbit is on, the indexing state of each area, the project counts and the indexed items of each domain, "+
 				"and for a top-level group its Orbit access and trial, which decide whether GitLab.com serves the index at all.",
@@ -108,8 +109,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				"A reference it cannot resolve is found false with the reason, not_found also for an object the user or token may not read: "+
 				"a fine-grained token needs, beside read_orbit, permission to read on the object's own project or group. "+
 				"Summary parts it may not read are left out, and a failed expansion carries its reason.",
-			[]string{orbitActionNamedQuery, orbitActionQuery},
+			[]string{orbitActionGrep, orbitActionNamedQuery, orbitActionQuery},
 			[]string{"kg.context", "knowledge_graph.context", "orbit.resolve", "kg.resolve"}, contextInput()),
+		orbitReadSpec("grep", toolutil.RouteAction(client, Grep).WrapNotFound(grepNotFound), "gitlab_orbit_grep",
+			"Search what one group or project holds through GitLab Orbit (Knowledge Graph): work items, merge requests, code, commits, notes, milestones, users, projects, groups and branches, "+
+				"by namespace_id, project_id or full_path. Every hit but a file carries its token, which orbit.context reads for a work item, merge request, commit or branch, a note also the token of what it is on, and most carry the id orbit.query filters on.",
+			[]string{orbitActionContext, orbitActionQuery},
+			[]string{"orbit.search", "kg.search", "knowledge_graph.search", "kg.grep"}, grepInput()),
 	}
 }
 

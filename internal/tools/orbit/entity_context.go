@@ -34,7 +34,7 @@ const maxContextTokens = 1
 type EntityContextInput struct {
 	// Tokens is a list of exactly one reference to a GitLab object, as GitLab
 	// names the parameter.
-	Tokens []string `json:"tokens" jsonschema:"Exactly one reference to a GitLab object: Type[id] (WorkItem[1], Job[2]), a GID, an instance URL, path!iid (merge request), path#iid (work item), path&iid (epic) or path@ref (branch or commit),required"`
+	Tokens []string `json:"tokens" jsonschema:"Exactly one reference to a GitLab object: Type[id] (WorkItem[1], Job[2]), a GID, an instance URL, path!iid (merge request), path#iid (work item), path&iid (epic) or path@ref (branch or commit). orbit.grep returns the token of a work item, merge request, commit or branch it finds,required"`
 	// Expand asks for the object's graph neighborhood beside its summary.
 	Expand bool `json:"expand,omitempty" jsonschema:"Attach the graph neighborhood of a work item, merge request or job, which GitLab reads with one graph query billed like orbit.query; false reads the summary alone"`
 	// ResponseFormat is raw or llm.
@@ -364,7 +364,7 @@ func contextToken(tokens []string) (string, error) {
 }
 
 // contextRefusedHint follows a context request GitLab refused with 400.
-const contextRefusedHint = "orbit.context takes one token: Type[id], a GID, an instance URL, path!iid, path#iid, path&iid or path@ref"
+const contextRefusedHint = "orbit.context takes one token: Type[id], a GID, an instance URL, path!iid, path#iid, path&iid or path@ref; orbit.grep returns the token of a work item, merge request, commit or branch it finds"
 
 // wrapContextErr classifies a failed [EntityContext]: a 400 is GitLab's
 // refusal of the request, followed by [contextRefusedHint], and anything else
