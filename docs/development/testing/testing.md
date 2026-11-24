@@ -20,16 +20,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 24,275 |
-| Unit test functions                                   | 22,467 |
+| Total test functions                                  | 24,384 |
+| Unit test functions                                   | 22,576 |
 | E2E test functions                                    |  1,808 |
-| cmd test functions                                    |  6,129 |
+| cmd test functions                                    |  6,238 |
 | Test files (internal/)                                |    782 |
-| Test files (cmd/)                                     |    511 |
+| Test files (cmd/)                                     |    528 |
 | Test files (test/e2e/)                                |    457 |
 | Tool sub-packages tested                              |    182 |
 | Core packages tested                                  |     36 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) | 100.0% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.8% |
 | Overall coverage (`go test ./internal/...`)           | 100.0% |
 | Average package coverage                              | 100.0% |
 
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,849 | 57.1% |
+| `TestFunc_Scenario` (2-part)           | 13,854 | 56.8% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,527 | 39.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,631 | 39.5% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (182) |         11,482 |        491 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,808 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          6,129 |        511 | server entry point and developer command utilities                                              |
-| **Total**               |     **24,275** |  **1,750** |                                                                                                 |
+| cmd packages            |          6,238 |        528 | server entry point and developer command utilities                                              |
+| **Total**               |     **24,384** |  **1,767** |                                                                                                 |
 
 ### Core Packages
 
@@ -377,8 +377,9 @@
 | cmd/audit_tokens                          |   100.0% |
 | cmd/audit_vex                             |   100.0% |
 | cmd/bench_resources                       |   100.0% |
+| cmd/coverage_recipes                      |   100.0% |
 | cmd/crash_aware_tests                     |   100.0% |
-| cmd/format_md_tables                      |    98.2% |
+| cmd/format_md_tables                      |    99.1% |
 | cmd/fuzz_targets                          |   100.0% |
 | cmd/gen_action_catalog_manifest           |   100.0% |
 | cmd/gen_action_grants                     |   100.0% |
@@ -405,6 +406,7 @@
 | cmd/internal/apilive                      |   100.0% |
 | cmd/internal/auditshared                  |   100.0% |
 | cmd/internal/committext                   |      n/a |
+| cmd/internal/conditions                   |   100.0% |
 | cmd/internal/docgen                       |   100.0% |
 | cmd/internal/docwalk                      |   100.0% |
 | cmd/internal/fileheader                   |      n/a |
@@ -416,6 +418,7 @@
 | cmd/internal/mcpsurface                   |   100.0% |
 | cmd/internal/orbitrecord                  |   100.0% |
 | cmd/internal/provenance                   |   100.0% |
+| cmd/internal/recipe                       |   100.0% |
 | cmd/internal/releaseassets                |   100.0% |
 | cmd/internal/requestinventory             |   100.0% |
 | cmd/internal/sdkroutes                    |   100.0% |
@@ -425,9 +428,10 @@
 | cmd/merge_coverage                        |   100.0% |
 | cmd/orbit_fixtures                        |   100.0% |
 | cmd/release_checks                        |   100.0% |
-| cmd/release_packages                      |   100.0% |
+| cmd/release_packages                      |    95.2% |
 | cmd/reproduce_release                     |   100.0% |
 | cmd/server                                |   100.0% |
+| cmd/sonar_scan                            |   100.0% |
 
 ### Core Packages
 

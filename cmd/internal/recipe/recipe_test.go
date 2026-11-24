@@ -515,6 +515,8 @@ func TestMakefile_ASIGTERMToMake_ReachesTheProgramOfTheTarget(t *testing.T) {
 		{target: "coverage-conditions", args: []string{"PKG=./a", "TAGS=e2e"}, want: "[conditions ./a e2e]"},
 		{target: "coverage-mutants", args: []string{"PKG=./a", "MUTANT_BUDGET=1", "MUTANT_BUDGET_FLOOR=2", "MUTANT_DEADLINE_MAX=3"}, want: "[mutants ./a 1 2 3]"},
 		{target: "check-spec-conditions", args: []string{"BASE=main"}, want: "[spec-conditions main]"},
+		{target: "sonar", want: "[]"},
+		{target: "sonar-status", want: "[-no-scan]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.target, func(t *testing.T) {

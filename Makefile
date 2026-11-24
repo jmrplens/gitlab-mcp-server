@@ -1341,12 +1341,12 @@ check-dependency-vulns:
 ## gate and key measures. Reads SONARQUBE_TOKEN from .env; analyzes the current
 ## git branch (override with SONAR_BRANCH=<name>). Exits non-zero if the gate fails.
 sonar:
-	@./scripts/sonar-scan.sh
+	@$(call RUN_BUILT,sonar_scan)
 
 ## sonar-status: fetch and print the latest SonarCloud quality gate for the
 ## current branch without re-running tests or re-uploading (SONAR_BRANCH overrides).
 sonar-status:
-	@./scripts/sonar-scan.sh --no-scan
+	@$(call RUN_BUILT,sonar_scan) -no-scan
 
 ## mdlint: lint Markdown and MDX files for style, consistency, and correctness,
 ## with the globs CI's Markdown job passes. Excludes plan/ (working drafts) and

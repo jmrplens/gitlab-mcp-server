@@ -505,13 +505,17 @@ Make excludes `plan/` because it contains working drafts that are not versioned 
 
 ## SonarCloud (local)
 
-`make sonar` reproduces the CI SonarCloud pipeline locally: it runs the unit
-tests with coverage (`go test -coverpkg=./cmd/...,./internal/...`), uploads the
-analysis with `sonar-scanner` (configuration from `sonar-project.properties`),
-polls the SonarCloud Compute Engine task until the analysis is processed, and
-prints the quality gate result with its per-condition status and key measures.
+`make sonar` (`cmd/sonar_scan`) reproduces the CI SonarCloud pipeline
+locally: it runs the unit tests with coverage
+(`go test -coverpkg=./cmd/...,./internal/...`), uploads the analysis with
+`sonar-scanner` (configuration from `sonar-project.properties`), polls the
+SonarCloud Compute Engine task until the analysis is processed, and prints the
+quality gate result with its per-condition status and key measures.
 It reads `SONARQUBE_TOKEN` from `.env` and analyzes the current git branch
 (override with `SONAR_BRANCH=<name>`); it exits non-zero when the gate fails.
+The file is parsed, never sourced, and what it sets reaches `sonar-scanner` and
+not the tests. The settings are under
+[`sonar_scan`](cmd-utilities.md#sonar_scan).
 
 `make sonar-status` fetches and prints the latest gate for the current branch
 without re-running tests or re-uploading — useful for re-checking a result.

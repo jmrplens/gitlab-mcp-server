@@ -1,0 +1,2112 @@
+{
+ "note": "every run of scripts/sonar-scan.sh at 02a41e35d, with go and sonar-scanner answered by a stand-in and SonarCloud by a local server",
+ "runs": [
+  {
+   "name": "no .env",
+   "args": [],
+   "dotenv": null,
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "",
+   "stderr": "ERROR: .env not found in repo root (needs SONARQUBE_TOKEN)\n",
+   "requests": [],
+   "calls": []
+  },
+  {
+   "name": "no token",
+   "args": [],
+   "dotenv": "OTHER=1\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "",
+   "stderr": "ERROR: SONARQUBE_TOKEN is not set in .env\n",
+   "requests": [],
+   "calls": []
+  },
+  {
+   "name": "an empty token",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "",
+   "stderr": "ERROR: SONARQUBE_TOKEN is not set in .env\n",
+   "requests": [],
+   "calls": []
+  },
+  {
+   "name": "status only",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "status only, the gate fails",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "ERROR",
+     "conditions": [
+      {
+       "status": "ERROR",
+       "metricKey": "new_coverage",
+       "actualValue": "12.0",
+       "errorThreshold": "80"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: ERROR\n-- new-code conditions --\n  [ERROR] new_coverage: 12.0 (error threshold: 80)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "status only, a quoted token",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "# comment\nexport SONARQUBE_TOKEN=\"to ken\"\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "to ken:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "to ken:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "the token of the environment",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "OTHER=1\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "SONARQUBE_TOKEN": "fromenv"
+   },
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "fromenv:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "fromenv:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": ".env wins over the environment",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "SONARQUBE_TOKEN": "fromenv"
+   },
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "another branch",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "SONAR_BRANCH": "feature/x y"
+   },
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ feature/x y ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=feature/x y\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "feature/x y",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "feature/x y",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "a branch .env names",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\nSONAR_BRANCH=dot\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 0,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ dot ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=dot\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "dot",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "dot",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  },
+  {
+   "name": "the whole pipeline",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 0,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n    analysis processed\n==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the whole pipeline, a failing gate",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "ERROR",
+     "conditions": [
+      {
+       "status": "ERROR",
+       "metricKey": "new_coverage",
+       "actualValue": "12.0",
+       "errorThreshold": "80"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n    analysis processed\n==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: ERROR\n-- new-code conditions --\n  [ERROR] new_coverage: 12.0 (error threshold: 80)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "tests fail",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "go_status": 1,
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n",
+   "stderr": "",
+   "requests": [],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "coverage below",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "89.9",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 89.9% (minimum 90%)\n",
+   "stderr": "ERROR: coverage 89.9% is below minimum 90%\n",
+   "requests": [],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "coverage at the minimum",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "90.0",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 0,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 90.0% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n    analysis processed\n==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "coverage below another minimum",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "COVERAGE_MIN": "96"
+   },
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 96%)\n",
+   "stderr": "ERROR: coverage 95.3% is below minimum 96%\n",
+   "requests": [],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the scanner fails",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "scanner_status": 3,
+   "status": 3,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n",
+   "stderr": "",
+   "requests": [],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the task waits",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "PENDING"
+     }
+    },
+    {
+     "task": {
+      "status": "IN_PROGRESS"
+     }
+    },
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "SONAR_POLL_INTERVAL": "0"
+   },
+   "status": 0,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n    status: PENDING\r    status: IN_PROGRESS\r    analysis processed\n==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: OK\n-- new-code conditions --\n  [OK] new_coverage: 99.5 (error threshold: 80)\n  [OK] new_violations: null (error threshold: 0)\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the task fails",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "FAILED"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n",
+   "stderr": "ERROR: Compute Engine task FAILED\n",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the task is canceled",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "CANCELED"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n",
+   "stderr": "ERROR: Compute Engine task CANCELED\n",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "the task never ends",
+   "args": [],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "OK",
+     "conditions": [
+      {
+       "status": "OK",
+       "metricKey": "new_coverage",
+       "actualValue": "99.5",
+       "errorThreshold": "80"
+      },
+      {
+       "status": "OK",
+       "metricKey": "new_violations",
+       "errorThreshold": "0"
+      }
+     ]
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "PENDING"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "env": {
+    "SONAR_POLL_TIMEOUT": "0"
+   },
+   "status": 1,
+   "stdout": "==> [1/4] Running tests with coverage (branch: trunk)\nok  \tpkg\n    total coverage: 95.3% (minimum 90%)\n==> [2/4] Uploading analysis to SonarCloud\nscanned\n==> [3/4] Waiting for the Compute Engine task to finish\n    status: PENDING\r",
+   "stderr": "ERROR: timed out after 0s waiting for CE task\n",
+   "requests": [
+    {
+     "path": "/api/ce/task",
+     "query": {
+      "id": "AB=C"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": [
+    {
+     "tool": "go",
+     "args": [
+      "test",
+      "-count=1",
+      "-coverpkg=./cmd/...,./internal/...",
+      "-coverprofile=coverage.out",
+      "./cmd/...",
+      "./internal/..."
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "go",
+     "args": [
+      "tool",
+      "cover",
+      "-func=coverage.out"
+     ],
+     "dir": "$ROOT"
+    },
+    {
+     "tool": "sonar-scanner",
+     "args": [
+      "-Dsonar.token=tok",
+      "-Dsonar.host.url=$HOST",
+      "-Dsonar.branch.name=trunk"
+     ],
+     "dir": "$ROOT"
+    }
+   ]
+  },
+  {
+   "name": "no conditions",
+   "args": [
+    "--no-scan"
+   ],
+   "dotenv": "SONARQUBE_TOKEN=tok\n",
+   "gate": {
+    "projectStatus": {
+     "status": "NONE",
+     "conditions": []
+    }
+   },
+   "measures": {
+    "component": {
+     "measures": [
+      {
+       "metric": "coverage",
+       "value": "98.1"
+      },
+      {
+       "metric": "new_coverage",
+       "period": {
+        "value": "99.5"
+       }
+      },
+      {
+       "metric": "new_code_smells",
+       "periods": [
+        {
+         "value": "3"
+        }
+       ]
+      },
+      {
+       "metric": "none"
+      },
+      {
+       "metric": "empty_periods",
+       "periods": []
+      }
+     ]
+    }
+   },
+   "ce": [
+    {
+     "task": {
+      "status": "SUCCESS"
+     }
+    }
+   ],
+   "total": "95.3",
+   "properties": "# c\nsonar.projectKey=fixture_key\nsonar.organization=x\n",
+   "status": 1,
+   "stdout": "==> [4/4] Fetching quality gate result\n\n=============== SonarCloud: fixture_key @ trunk ===============\nQuality gate: NONE\n-- new-code conditions --\n-- measures --\n  coverage: 98.1\n  new_coverage: 99.5\n  new_code_smells: 3\n  none: null\n  empty_periods: null\nDashboard: $HOST/summary/new_code?id=fixture_key&branch=trunk\n==================================================================\n",
+   "stderr": "",
+   "requests": [
+    {
+     "path": "/api/qualitygates/project_status",
+     "query": {
+      "branch": "trunk",
+      "projectKey": "fixture_key"
+     },
+     "user": "tok:"
+    },
+    {
+     "path": "/api/measures/component",
+     "query": {
+      "branch": "trunk",
+      "component": "fixture_key",
+      "metricKeys": "new_coverage,new_duplicated_lines_density,new_code_smells,coverage,duplicated_lines_density"
+     },
+     "user": "tok:"
+    }
+   ],
+   "calls": []
+  }
+ ]
+}
