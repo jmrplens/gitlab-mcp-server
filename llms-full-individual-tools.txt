@@ -631,16 +631,17 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_list_create
 
-Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
+Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status. Returns: the created list with its scope, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_update, gitlab_board_list_lists.
 
 **Parameters:**
 
 - `assignee_id` (integer): User ID to create an assignee list
 - `board_id` (integer) (required): Board ID
-- `iteration_id` (integer): Iteration ID to create an iteration list
+- `iteration_id` (integer): Iteration ID to create an iteration list, only in a project that belongs to a group
 - `label_id` (integer): Label ID to create a label list
 - `milestone_id` (integer): Milestone ID to create a milestone list
 - `project_id` (string or integer) (required): Project ID or path
+- `status_id` (integer): Work item status ID to create a status list (GitLab 19.6 and later, only in a project that belongs to a group): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -659,7 +660,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_board_list_get
 
-Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, position, and issue limits. See also: gitlab_board_list_lists, gitlab_board_list_update, gitlab_board_list_delete.
+Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: gitlab_board_list_lists, gitlab_board_list_update, gitlab_board_list_delete.
 
 **Parameters:**
 
@@ -671,7 +672,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_board_list_lists
 
-List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_create, gitlab_board_get.
+List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: gitlab_board_list_get, gitlab_board_list_create, gitlab_board_get.
 
 **Parameters:**
 
@@ -2080,7 +2081,7 @@ Delete (disable) a project integration by slug. Supports the same slugs as get, 
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
+- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -3925,12 +3926,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_integration
 
-Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).
+Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).
 
 **Parameters:**
 
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
-- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
+- `slug` (string) (required): Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -4666,7 +4667,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_board_list_create
 
-Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope and position. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.
+Create a new list (column) on a group issue board scoped to a group label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status. Returns: the created list with its scope and position. See also: gitlab_group_board_list_get, gitlab_group_board_list_update, gitlab_group_board_list_delete.
 
 **Parameters:**
 
@@ -4676,6 +4677,7 @@ Create a new list (column) on a group issue board scoped to a group label, or on
 - `iteration_id` (integer): Iteration ID to create an iteration list
 - `label_id` (integer): Label ID to create a label list
 - `milestone_id` (integer): Milestone ID to create a milestone list
+- `status_id` (integer): Work item status ID to create a status list (GitLab 19.6 and later): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4694,7 +4696,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_board_list_get
 
-Get a single list (column) of a group issue board. Returns: the list with its assignee, label, iteration, and milestone scope. See also: gitlab_group_board_list_lists, gitlab_group_board_list_update, gitlab_group_board_list_delete.
+Get a single list (column) of a group issue board. Returns: the list with its label, assignee, milestone, iteration, or work item status scope. See also: gitlab_group_board_list_lists, gitlab_group_board_list_update, gitlab_group_board_list_delete.
 
 **Parameters:**
 
@@ -4706,7 +4708,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_board_list_lists
 
-List the lists (columns) of a group issue board with pagination. Returns: each list with its assignee, label, iteration, and milestone scope plus pagination metadata. See also: gitlab_group_board_list_get, gitlab_group_board_list_create, gitlab_group_board_get.
+List the lists (columns) of a group issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, or work item status scope plus pagination metadata. See also: gitlab_group_board_list_get, gitlab_group_board_list_create, gitlab_group_board_get.
 
 **Parameters:**
 

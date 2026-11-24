@@ -42,13 +42,14 @@ func TestEntries_Table_IsWrittenAsTheTableRequires(t *testing.T) {
 // Features.SetFeatureFlag, which features.Set calls again since client-go
 // v3.34.0, and the four the v3.40.3 pin answers: the two import status
 // reads, PipelineSchedules.GetPipelineSchedule and
-// GroupIssueBoards.UpdateIssueBoard. A change here is a method or a
+// GroupIssueBoards.UpdateIssueBoard, and with Services.SetPackagistService,
+// which client-go models since v3.56.0. A change here is a method or a
 // service that stopped or started being replaced, which the entry that changed
 // says why.
 func TestCoveredRaw_Table_ReplacesWhatRActionAndTheServiceRuleDeclaredBefore(t *testing.T) {
 	entries := Entries()
-	if got := len(CoveredRawMethods(entries)); got != 67 {
-		t.Errorf("the table replaces %d methods, want 67", got)
+	if got := len(CoveredRawMethods(entries)); got != 68 {
+		t.Errorf("the table replaces %d methods, want 68", got)
 	}
 	services := CoveredRawServices(entries)
 	for _, service := range []string{"ApplicationStatistics", "Epics", "GroupEpicBoards"} {

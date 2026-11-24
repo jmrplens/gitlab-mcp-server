@@ -21,8 +21,8 @@
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
 | Total test functions                                  | 24,384 |
-| Unit test functions                                   | 22,576 |
-| E2E test functions                                    |  1,808 |
+| Unit test functions                                   | 22,574 |
+| E2E test functions                                    |  1,810 |
 | cmd test functions                                    |  6,238 |
 | Test files (internal/)                                |    782 |
 | Test files (cmd/)                                     |    528 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 13,854 | 56.8% |
+| `TestFunc_Scenario` (2-part)           | 13,852 | 56.8% |
 | `TestFunc` (no underscore)             |    899 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,631 | 39.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,633 | 39.5% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          4,397 |        274 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          4,396 |        274 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            459 |         17 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (182) |         11,482 |        491 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,808 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| Tool sub-packages (182) |         11,481 |        491 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,810 |        457 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          6,238 |        528 | server entry point and developer command utilities                                              |
 | **Total**               |     **24,384** |  **1,767** |                                                                                                 |
 
@@ -93,8 +93,8 @@
 | testutil/netfixture      |        12 |   100.0% | Package netfixture gives a test an HTTP address that stops answering without giving its port away.                                                                                                                                                                                                                                  |
 | testutil/serialtypecheck |         6 |   100.0% | Package serialtypecheck makes golang.org/x/tools/go/packages type-check one package at a time in a race build, and does nothing in any other build.                                                                                                                                                                                 |
 | testutil/shardio         |        32 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil                 |     1,455 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**             | **4,397** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil                 |     1,454 |   100.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**             | **4,396** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -149,7 +149,7 @@
 | avatar                  |         11 |          1 |   100.0% |         1 |
 | awardemoji              |        130 |          3 |   100.0% |        24 |
 | badges                  |         64 |          3 |   100.0% |        12 |
-| boards                  |         87 |          2 |   100.0% |        10 |
+| boards                  |         86 |          2 |   100.0% |        10 |
 | branches                |        114 |          1 |   100.0% |        10 |
 | branchrules             |         35 |          1 |   100.0% |         1 |
 | broadcastmessages       |         39 |          1 |   100.0% |         5 |
@@ -315,7 +315,7 @@
 | wikis                   |         74 |          2 |   100.0% |         6 |
 | workitems               |        147 |          6 |   100.0% |         6 |
 | workitemsavedviews      |         63 |          4 |   100.0% |         7 |
-| **Total**               | **11,482** |    **491** |          | **1,198** |
+| **Total**               | **11,481** |    **491** |          | **1,198** |
 
 </details>
 

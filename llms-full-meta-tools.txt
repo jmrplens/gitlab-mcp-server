@@ -2768,10 +2768,10 @@ Action guidance:
 - create: Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested.
 - delete: Delete a group (marks it for deletion, or permanently removes it with permanently_remove=true). Destructive: this removes the group and all its projects. Confirm before calling.
 - get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
-- group_board_create_list: Add a new column to a group issue board's workflow, backed by a group label, or on Premium and Ultimate by an assignee, milestone, or iteration.
+- group_board_create_list: Add a new column to a group issue board's workflow, backed by a group label, or on Premium and Ultimate by an assignee, milestone, iteration, or work item status.
 - group_board_delete_list: Remove a column from a group issue board when that workflow stage is no longer used.
 - group_board_get: Inspect one group issue board's milestone, scope labels, and columns by its board ID.
-- group_board_get_list: Inspect one column of a group issue board, including its label, assignee, and iteration scope.
+- group_board_get_list: Inspect one column of a group issue board, including its label, assignee, milestone, iteration, or work item status scope.
 - group_board_list: Browse the issue boards configured for a group to see how the group plans and tracks work.
 - group_board_list_lists: Enumerate the columns of a group issue board to see how its workflow stages are arranged.
 - group_board_update: Rename a group issue board or toggle its Open and Closed columns, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.
@@ -7552,9 +7552,9 @@ Action guidance:
 - board_delete: Permanently remove an issue board from a project when the team no longer tracks work on that kanban view.
 - board_get: Fetch one issue board by its ID to inspect its scope filters and the ordered columns it contains.
 - board_list: List every issue board configured in a project to see how the team's kanban work is organized.
-- board_list_create: Add a new column to an issue board scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration, to capture a workflow stage.
+- board_list_create: Add a new column to an issue board scoped to a label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status, to capture a workflow stage.
 - board_list_delete: Permanently remove a column from an issue board when that kanban workflow stage is no longer needed.
-- board_list_get: Fetch one column of an issue board to inspect its label, assignee, milestone, or iteration scope and issue limits.
+- board_list_get: Fetch one column of an issue board to inspect its label, assignee, milestone, iteration, or work item status scope and issue limits.
 - board_list_list: Enumerate the columns of an issue board in order to see how the kanban workflow stages are arranged.
 - board_list_update: Move an issue board column to a new position to reorder the kanban workflow stages.
 - board_update: Rename an issue board or toggle its Open and Closed columns, and on Premium and Ultimate retune its assignee, milestone, label, and weight scope.

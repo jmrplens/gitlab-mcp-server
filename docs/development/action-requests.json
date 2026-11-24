@@ -24309,6 +24309,18 @@
             "integrations.integrationDeleters"
           ],
           "sdk_methods": [
+            "Services.DeletePackagistService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "DELETE /projects/:id/integrations/:slug",
+          "class": "alternative",
+          "classic": "api",
+          "sites": [
+            "integrations.integrationDeleters"
+          ],
+          "sdk_methods": [
             "Services.DeleteRedmineService"
           ]
         },
@@ -24424,6 +24436,9 @@
         ],
         [
           20
+        ],
+        [
+          21
         ]
       ]
     },
@@ -24691,6 +24706,18 @@
             "integrations.integrationGetters"
           ],
           "sdk_methods": [
+            "Services.GetPackagistService"
+          ]
+        },
+        {
+          "kind": "rest",
+          "route": "GET /projects/:id/integrations/:slug",
+          "class": "alternative",
+          "classic": "read_api",
+          "sites": [
+            "integrations.integrationGetters"
+          ],
+          "sdk_methods": [
             "Services.GetRedmineService"
           ]
         },
@@ -24791,6 +24818,9 @@
         ],
         [
           19
+        ],
+        [
+          20
         ]
       ]
     },

@@ -115,6 +115,10 @@ var integrationGetters = map[string]integrationGetter{
 		service, _, err := services.GetMatrixService(projectID, gl.WithContext(ctx))
 		return integrationFromService(service, err)
 	},
+	"packagist": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetPackagistService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
 	"redmine": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
 		service, _, err := services.GetRedmineService(projectID, gl.WithContext(ctx))
 		return integrationFromService(service, err)
@@ -198,6 +202,10 @@ var integrationDeleters = map[string]integrationDeleter{
 	},
 	"matrix": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
 		_, err := services.DeleteMatrixService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"packagist": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeletePackagistService(projectID, gl.WithContext(ctx))
 		return err
 	},
 	"redmine": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
@@ -310,7 +318,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // GetInput is the input for getting an integration by slug.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Slug      string               `json:"slug" jsonschema:"Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands),required"`
+	Slug      string               `json:"slug" jsonschema:"Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands),required"`
 }
 
 // GetOutput is the output for a single integration.
@@ -341,7 +349,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 // DeleteInput is the input for deleting/disabling an integration.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Slug      string               `json:"slug" jsonschema:"Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands),required"`
+	Slug      string               `json:"slug" jsonschema:"Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands),required"`
 }
 
 // Delete removes/disables a specific integration from a project.

@@ -519,7 +519,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `project.board_list_create`
 
-> Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, or iteration. Returns: the created list with its scope, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_list`](#projectboard_list_list).
+> Create a board list (column) scoped to a label, or on Premium and Ultimate to an assignee, milestone, iteration, or work item status. Returns: the created list with its scope, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_list`](#projectboard_list_list).
 
 - **Meta-tool**: `gitlab_project`, action `board_list_create`
 - **Individual tool**: `gitlab_board_list_create`
@@ -528,14 +528,15 @@ The description of each action, and of each of its parameters, is the text the s
 - **Fine-grained token**: Work Item: Create at project ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, not idempotent
 
-| Parameter                | Type             | Mandatory | Description                              |
-| ------------------------ | ---------------- | --------- | ---------------------------------------- |
-| `board_id`               | `integer`        | yes       | Board ID                                 |
-| `project_id`             | `string/integer` | yes       | Project ID or path                       |
-| `assignee_id` (Premium)  | `integer`        | no        | User ID to create an assignee list       |
-| `iteration_id` (Premium) | `integer`        | no        | Iteration ID to create an iteration list |
-| `label_id`               | `integer`        | no        | Label ID to create a label list          |
-| `milestone_id` (Premium) | `integer`        | no        | Milestone ID to create a milestone list  |
+| Parameter                | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `board_id`               | `integer`        | yes       | Board ID                                                                                                                                                                                                                                                                                        |
+| `project_id`             | `string/integer` | yes       | Project ID or path                                                                                                                                                                                                                                                                              |
+| `assignee_id` (Premium)  | `integer`        | no        | User ID to create an assignee list                                                                                                                                                                                                                                                              |
+| `iteration_id` (Premium) | `integer`        | no        | Iteration ID to create an iteration list, only in a project that belongs to a group                                                                                                                                                                                                             |
+| `label_id`               | `integer`        | no        | Label ID to create a label list                                                                                                                                                                                                                                                                 |
+| `milestone_id` (Premium) | `integer`        | no        | Milestone ID to create a milestone list                                                                                                                                                                                                                                                         |
+| `status_id` (Premium)    | `integer`        | no        | Work item status ID to create a status list (GitLab 19.6 and later, only in a project that belongs to a group): the number of one of the top-level group's custom statuses where it has them, and otherwise of a system-defined status: 1 To do, 2 In progress, 3 Done, 4 Won't do, 5 Duplicate |
 
 ### `project.board_list_delete`
 
@@ -556,7 +557,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `project.board_list_get`
 
-> Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, position, and issue limits. See also: [`project.board_list_list`](#projectboard_list_list), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_delete`](#projectboard_list_delete).
+> Get a single board list by list_id. Returns: the list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: [`project.board_list_list`](#projectboard_list_list), [`project.board_list_update`](#projectboard_list_update), [`project.board_list_delete`](#projectboard_list_delete).
 
 - **Meta-tool**: `gitlab_project`, action `board_list_get`
 - **Individual tool**: `gitlab_board_list_get`
@@ -573,7 +574,7 @@ The description of each action, and of each of its parameters, is the text the s
 
 ### `project.board_list_list`
 
-> List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_create`](#projectboard_list_create), [`project.board_get`](#projectboard_get).
+> List the lists (columns) in an issue board with pagination. Returns: each list with its label, assignee, milestone, iteration, work item status, position, and issue limits. See also: [`project.board_list_get`](#projectboard_list_get), [`project.board_list_create`](#projectboard_list_create), [`project.board_get`](#projectboard_get).
 
 - **Meta-tool**: `gitlab_project`, action `board_list_list`
 - **Individual tool**: `gitlab_board_list_lists`
@@ -1302,10 +1303,10 @@ Also needs at least one of: `name`; `path`.
 - **Fine-grained token**: Integration: Delete at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: writes, destructive (needs confirmation), idempotent
 
-| Parameter    | Type             | Mandatory | Description                                                                                                                                                                                                                                                                       |
-| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                    |
-| `slug`       | `string`         | yes       | Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands) |
+| Parameter    | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                  |
+| ------------ | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                               |
+| `slug`       | `string`         | yes       | Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands) |
 
 ### `project.integration_delete_group`
 
@@ -1348,7 +1349,7 @@ Also needs at least one of: `name`; `path`.
 
 ### `project.integration_get`
 
-> Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).
+> Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).
 >
 > Returns: JSON with integration details.
 >
@@ -1361,10 +1362,10 @@ Also needs at least one of: `name`; `path`.
 - **Fine-grained token**: Integration: Read at project or group ([permissions page](/gitlab-mcp-server/reference/fine-grained-permissions/#project))
 - **Behavior**: read-only, idempotent
 
-| Parameter    | Type             | Mandatory | Description                                                                                                                                                                                                                                                                       |
-| ------------ | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                    |
-| `slug`       | `string`         | yes       | Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands) |
+| Parameter    | Type             | Mandatory | Description                                                                                                                                                                                                                                                                                  |
+| ------------ | ---------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_id` | `string/integer` | yes       | Project ID or URL-encoded path                                                                                                                                                                                                                                                               |
+| `slug`       | `string`         | yes       | Integration slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, datadog, drone-ci, github, harbor, jenkins, matrix, packagist, redmine, youtrack, slack-slash-commands, mattermost-slash-commands) |
 
 ### `project.integration_get_group`
 
