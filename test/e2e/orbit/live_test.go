@@ -95,6 +95,7 @@
 package orbit_test
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -102,6 +103,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -247,6 +249,64 @@ func queryRun(client *gitlabclient.Client, query string) func(context.Context) (
 // rowSummary is the one-line summary a query subtest logs.
 func rowSummary(out orbit.QueryOutput) string {
 	return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount)
+}
+
+// errNoRow is what [provisionedRun] wraps an answer with no row in.
+var errNoRow = errors.New("GitLab answered no row for what cmd/orbit_fixtures provisions: the index has not caught up with it (make orbit-wait-indexer goes on with a warning once its timeout passes, and the suite can run without it) or the graph has lost it, as it lost the fixture merge request and the issues (issue 1588); ask GraphQL for the namespace's orbit indexing state to tell which")
+
+// provisionedRun is [queryRun] for a statement that reads what
+// cmd/orbit_fixtures provisions: the two fixture projects, the merge request
+// and the issues of kg-fixtures, and what joins them. An answer with no row
+// fails it naming the statement, where [queryRun] logs row_count=0 and
+// passes, which is right for a statement that reads what a namespace may or
+// may not hold and is how the graph losing the fixture merge request and the
+// issues went unnoticed (issue 1588).
+func provisionedRun(client *gitlabclient.Client, query string) func(context.Context) (any, error) {
+	return func(ctx context.Context) (any, error) {
+		out, err := liveQuery(ctx, client, query)
+		if err != nil {
+			return nil, err
+		}
+		if out.RowCount == 0 {
+			return nil, fmt.Errorf("%w: %s", errNoRow, query)
+		}
+		return rowSummary(out), nil
+	}
+}
+
+// skipLimitProblem says what is wrong with the answer to the SKIP 1 LIMIT 1
+// page of the fixture projects ordered by id, given the ids of the fixture
+// projects, or "" when it is that page: exactly one row and one node, the
+// second project by id, with a has_more GitLab sent as a boolean and set
+// exactly when a project follows it.
+func skipLimitProblem(out orbit.QueryOutput, ids []string) string {
+	if len(ids) < 2 {
+		return fmt.Sprintf("the page needs two fixture projects and the namespace holds %d", len(ids))
+	}
+	sorted := slices.Clone(ids)
+	slices.SortFunc(sorted, func(a, b string) int {
+		x, _ := strconv.ParseInt(a, 10, 64)
+		y, _ := strconv.ParseInt(b, 10, 64)
+		return cmp.Compare(x, y)
+	})
+	result, _ := out.Result.(map[string]any)
+	nodes, _ := result["nodes"].([]any)
+	if out.RowCount != 1 || len(nodes) != 1 {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered row_count=%d with nodes=%d, and the page is one row", out.RowCount, len(nodes))
+	}
+	node, _ := nodes[0].(map[string]any)
+	if got := fmt.Sprint(node["id"]); got != sorted[1] {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered project %s, and the second fixture project by id is %s", got, sorted[1])
+	}
+	pagination, _ := result["pagination"].(map[string]any)
+	hasMore, ok := pagination["has_more"].(bool)
+	if !ok {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered the pagination %v, with no boolean has_more", result["pagination"])
+	}
+	if want := len(sorted) > 2; hasMore != want {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered has_more=%t over %d fixture projects", hasMore, len(sorted))
+	}
+	return ""
 }
 
 // projectPath is the full path of a fixture project in namespace.
@@ -1096,10 +1156,14 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 // across namespaces: any developer who runs `make orbit-setup-fixtures`
 // with their own token gets a working test surface.
 //
-// The Orbit indexer is eventually consistent: if a fresh push has not
-// been indexed yet, the affected subtest logs row_count=0 without failing.
-// Re-run the live test a few minutes after the setup script completes to
-// allow the indexer to catch up.
+// The subtests that read what the setup provisions (the two projects, the
+// merge request, the issues and the project's neighbors) fail on an answer
+// with no row, through [provisionedRun]: such an answer means the index has
+// not caught up with what the setup made (make orbit-wait-indexer goes on
+// with a warning once its timeout passes) or the graph lost it, as it lost
+// the merge request and the issues after the move of 2026-10-26 (issue
+// 1588). The counts answer one row whatever they count, and stay
+// informational.
 func TestOrbitLiveGitLabCom_Fixtures(t *testing.T) {
 	testOrbitLiveFixtures(t)
 }
@@ -1462,27 +1526,118 @@ func askedAgainStandIn(t *testing.T, handlerStatus int, handlerAnswer string, ag
 	})
 }
 
+// queryAnswer is the raw answer a stand-in gives POST /orbit/query: the
+// envelope GitLab.com answered on 2026-10-29 (41l in the capture), with the
+// nodes, the has_more and the row count a test names.
+func queryAnswer(nodes string, hasMore bool, rows int) string {
+	return fmt.Sprintf(`{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[%s],"edges":[],"pagination":{"has_more":%t,"truncated":false}},"query_type":"traversal","row_count":%d}`, nodes, hasMore, rows)
+}
+
+// TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement holds the
+// subtests that read what cmd/orbit_fixtures provisions able to fail: a
+// statement GitLab answers with no row is an error that names it, since the
+// setup made what it reads and an empty answer means the index has not
+// caught up with it or the graph lost it (issue 1588), and one GitLab answers
+// with a row is the summary queryRun logs. It needs no network and no token.
+func TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement(t *testing.T) {
+	const statement = "MATCH (w:WorkItem)-[:IN_PROJECT]->(p:Project {full_path: 'ns/kg-fixtures'}) RETURN w.id"
+	tests := []struct {
+		name    string
+		answer  string
+		wantErr bool
+	}{
+		{name: "no row", answer: queryAnswer("", false, 0), wantErr: true},
+		{name: "one row", answer: queryAnswer(`{"type":"WorkItem","id":"1"}`, false, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/orbit/query") {
+					t.Errorf("request = %s %s, want POST /orbit/query", r.Method, r.URL.Path)
+				}
+				testutil.RespondJSON(w, http.StatusOK, tt.answer)
+			}))
+			out, err := provisionedRun(client, statement)(context.Background())
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("provisionedRun() error = %v, want the summary of one row", err)
+				}
+				if out != "query_type=traversal row_count=1" {
+					t.Errorf("provisionedRun() = %v, want the row summary queryRun logs", out)
+				}
+				return
+			}
+			if !errors.Is(err, errNoRow) {
+				t.Fatalf("provisionedRun() error = %v, want errNoRow", err)
+			}
+			if !strings.Contains(err.Error(), statement) {
+				t.Errorf("provisionedRun() error = %q, want it to name the statement", err)
+			}
+		})
+	}
+}
+
+// TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID holds the
+// SKIP and LIMIT subtest to what it asks: the second fixture project by id,
+// with has_more set exactly when the namespace holds a project after it. An
+// answer that only ran used to pass it.
+func TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID(t *testing.T) {
+	second := `{"type":"Project","id":"83234232"}`
+	tests := []struct {
+		name    string
+		answer  string
+		ids     []string
+		wantErr string
+	}{
+		{name: "the second of two", answer: queryAnswer(second, false, 1), ids: []string{"83234232", "83234203"}},
+		{name: "the second of three, with one after it", answer: queryAnswer(second, true, 1), ids: []string{"83234203", "83234232", "83234999"}},
+		{name: "the first project", answer: queryAnswer(`{"type":"Project","id":"83234203"}`, false, 1), ids: []string{"83234203", "83234232"}, wantErr: "answered project 83234203"},
+		{name: "has_more with nothing after it", answer: queryAnswer(second, true, 1), ids: []string{"83234203", "83234232"}, wantErr: "has_more=true"},
+		{name: "no has_more with one after it", answer: queryAnswer(second, false, 1), ids: []string{"83234203", "83234232", "83234999"}, wantErr: "has_more=false"},
+		{name: "no row", answer: queryAnswer("", false, 0), ids: []string{"83234203", "83234232"}, wantErr: "answered row_count=0 with nodes=0"},
+		{name: "two rows from the second on, as LIMIT 2 would answer", answer: queryAnswer(second+`,{"type":"Project","id":"83234300"}`, true, 2), ids: []string{"83234203", "83234232", "83234300", "83234400"}, wantErr: "answered row_count=2 with nodes=2"},
+		{name: "one node counted as two rows", answer: queryAnswer(second, false, 2), ids: []string{"83234203", "83234232"}, wantErr: "answered row_count=2 with nodes=1"},
+		{name: "no has_more", answer: `{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[` + second + `],"edges":[],"pagination":{"truncated":false}},"query_type":"traversal","row_count":1}`, ids: []string{"83234203", "83234232"}, wantErr: "no boolean has_more"},
+		{name: "has_more as a string", answer: `{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[` + second + `],"edges":[],"pagination":{"has_more":"false"}},"query_type":"traversal","row_count":1}`, ids: []string{"83234203", "83234232"}, wantErr: "no boolean has_more"},
+		{name: "one fixture project", answer: queryAnswer(second, false, 1), ids: []string{"83234232"}, wantErr: "needs two fixture projects"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out orbit.QueryOutput
+			if err := json.Unmarshal([]byte(tt.answer), &out); err != nil {
+				t.Fatalf("decode the stand-in answer: %v", err)
+			}
+			got := skipLimitProblem(out, tt.ids)
+			if tt.wantErr == "" {
+				if got != "" {
+					t.Errorf("skipLimitProblem() = %q, want none", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.wantErr) {
+				t.Errorf("skipLimitProblem() = %q, want it to say %q", got, tt.wantErr)
+			}
+		})
+	}
+}
+
 // testOrbitLiveFixtures exercises the query types GitLab infers from GQL
 // against the live fixture data the setup script provisions in any GitLab
 // namespace (defaults to jmrp-oss/orbit-fixtures, configurable via
 // ORBIT_FIXTURES_NAMESPACE). All subtests bound their nodes by path or by a
 // literal property instead of hardcoded project ids so the test is portable
-// across namespaces.
-//
-// The Orbit indexer is eventually consistent: if a fresh push has not
-// been indexed yet, the affected subtest will log row_count=0 without
-// failing. Re-run the live test a few minutes after the setup script
-// completes to allow the indexer to catch up.
+// across namespaces. What the setup provisions is read through
+// [provisionedRun], which fails on an answer with no row (issue 1588).
 func testOrbitLiveFixtures(t *testing.T) {
 	t.Helper()
 	client := newLiveClient(t)
 	namespace := orbitFixturesNamespace()
 	requireOrbitServed(t, client, namespace)
 
-	summarize(t, "Project_kg_fixtures_by_path", queryRun(client,
+	summarize(t, "Project_kg_fixtures_by_path", provisionedRun(client,
 		projectByPath(namespace, kgFixturesProjectPath, "p.id, p.full_path, p.name")))
 
-	summarize(t, "Project_security_fixtures_by_equality", queryRun(client,
+	summarize(t, "Project_security_fixtures_by_equality", provisionedRun(client,
 		"MATCH (p:Project) WHERE p.full_path = '"+projectPath(namespace, securityFixturesProjectPath)+"' RETURN p.id, p.full_path"))
 
 	// Count active milestones. The setup script provisions one active
@@ -1498,9 +1653,16 @@ func testOrbitLiveFixtures(t *testing.T) {
 
 	// Fetch the squash-merged MR the setup script creates. The MR id is
 	// dynamic per instance, so it is matched by its branches.
-	summarize(t, "MergeRequest_in_kg_fixtures", queryRun(client,
+	summarize(t, "MergeRequest_in_kg_fixtures", provisionedRun(client,
 		"MATCH (mr:MergeRequest {source_branch: '"+fixtureBranch+"', target_branch: 'main'}) "+
 			"RETURN mr.id, mr.iid, mr.title, mr.state, mr.source_branch"))
+
+	// The issues the setup script creates in kg-fixtures, which the graph
+	// holds as work items in the project: no subtest read one until the graph
+	// was found to hold none (issue 1588).
+	summarize(t, "WorkItem_in_kg_fixtures", provisionedRun(client,
+		"MATCH (w:WorkItem)-[:IN_PROJECT]->(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) "+
+			"RETURN w.id, w.iid, w.title, w.state LIMIT 10"))
 
 	// Count detected vulnerabilities. The setup script provisions 5 such
 	// findings (1 critical AWS key, 3 high SQLi/eval, 1 medium weak-hash) via
@@ -1512,7 +1674,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 	// What the kg-fixtures project is connected to, in both directions: its
 	// group, creator and labels are reached by incoming relationships, which
 	// the undirected pattern takes with the outgoing ones.
-	summarize(t, "Neighbors_kg_fixtures", queryRun(client,
+	summarize(t, "Neighbors_kg_fixtures", provisionedRun(client,
 		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})--(n) RETURN n"))
 }
 
@@ -1522,10 +1684,13 @@ func testOrbitLiveFixtures(t *testing.T) {
 // grouped by a property and by a node with their ORDER BY, sum, max and avg,
 // ORDER BY on a property, the virtual diff and content properties, SKIP and
 // LIMIT, an id range, the incoming neighbors of one relationship type, the
-// properties of every neighbor, and the ontology procedure. Each subtest is
-// informational: it PASSes as long as the API accepts the statement and
-// returns a valid envelope, even if row_count=0 (the data may not match the
-// predicate in this namespace). This is the comprehensive coverage test:
+// properties of every neighbor, and the ontology procedure. A subtest that
+// reads what a namespace may or may not hold is informational: it PASSes as
+// long as the API accepts the statement and returns a valid envelope, even
+// if row_count=0. One that reads what the setup provisions (the fixture
+// merge request and what joins it to its project, and the project's incoming
+// neighbors) fails on an answer with no row, and the SKIP and LIMIT page is
+// held to the project it asks for (issue 1588). This is the comprehensive coverage test:
 // every documented statement pattern the API supports is exercised at least
 // once against real data.
 func TestOrbitLiveGitLabCom_FeatureCoverage(t *testing.T) {
@@ -1564,7 +1729,7 @@ func testOrbitLiveFeatureCoveragePredicatesAndTraversal(t *testing.T, client *gi
 
 	// The classic "find MRs in a project" pattern: IN_PROJECT joins
 	// MergeRequest to Project, and both nodes' properties are returned.
-	summarize(t, "Traversal_project_to_merge_requests", queryRun(client,
+	summarize(t, "Traversal_project_to_merge_requests", provisionedRun(client,
 		"MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'}) "+
 			"RETURN p.id, p.full_path, mr.id, mr.iid, mr.title, mr.state LIMIT 5"))
 }
@@ -1578,7 +1743,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	summarize(t, "Aggregation_grouped_by_severity", queryRun(client,
 		"MATCH (v:Vulnerability {state: 'detected'}) RETURN v.severity, count(v) AS vuln_count ORDER BY vuln_count DESC"))
 
-	summarize(t, "Aggregation_grouped_by_node_with_relationship", queryRun(client,
+	summarize(t, "Aggregation_grouped_by_node_with_relationship", provisionedRun(client,
 		"MATCH (mr:MergeRequest)-[:IN_PROJECT]->(p:Project) WHERE "+underNamespace(namespace)+
 			" RETURN p, count(mr) AS mr_count ORDER BY mr_count DESC"))
 
@@ -1599,16 +1764,32 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	summarize(t, "Traversal_order_by_name_desc", queryRun(client,
 		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN p.id, p.full_path, p.name ORDER BY p.name DESC LIMIT 5"))
 
-	summarize(t, "Traversal_merge_request_with_diff_property", queryRun(client,
+	summarize(t, "Traversal_merge_request_with_diff_property", provisionedRun(client,
 		"MATCH (mr:MergeRequest {source_branch: '"+fixtureBranch+"'}) RETURN mr.id, mr.iid, mr.title, mr.diff LIMIT 1"))
 
 	summarize(t, "Traversal_file_with_content_property", queryRun(client,
 		"MATCH (f:File) WHERE f.path ENDS WITH 'models.py' RETURN f.id, f.path, f.language, f.content LIMIT 1"))
 
 	// A page is SKIP and LIMIT since GitLab.com retired PAGE and AFTER
-	// (issue 1527): the second project of the namespace by id.
-	summarize(t, "Traversal_skip_limit", queryRun(client,
-		"MATCH (p:Project) WHERE "+underNamespace(namespace)+" RETURN p.id, p.full_path ORDER BY p.id SKIP 1 LIMIT 1"))
+	// (issue 1527): the second project of the namespace by id, with has_more
+	// set exactly when a project follows it (issue 1588).
+	summarize(t, "Traversal_skip_limit", func(ctx context.Context) (any, error) {
+		ids, err := fixtureProjectIDs(ctx, client, namespace)
+		if err != nil {
+			return nil, err
+		}
+		out, err := liveQueryAs(ctx, client, orbit.QueryInput{
+			ResponseFormat: "raw",
+			Query:          "MATCH (p:Project) WHERE " + underNamespace(namespace) + " RETURN p.id, p.full_path ORDER BY p.id SKIP 1 LIMIT 1",
+		})
+		if err != nil {
+			return nil, err
+		}
+		if problem := skipLimitProblem(out, ids); problem != "" {
+			return nil, errors.New(problem)
+		}
+		return rowSummary(out), nil
+	})
 
 	summarize(t, "Traversal_id_range", func(ctx context.Context) (any, error) {
 		ids, err := fixtureProjectIDs(ctx, client, namespace)
@@ -1618,7 +1799,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 		return queryRun(client, "MATCH (p:Project) WHERE p.id >= "+ids[0]+" AND p.id <= "+ids[0]+" RETURN p.id, p.full_path LIMIT 5")(ctx)
 	})
 
-	summarize(t, "Neighbors_incoming_of_one_relationship_type", queryRun(client,
+	summarize(t, "Neighbors_incoming_of_one_relationship_type", provisionedRun(client,
 		"MATCH (p:Project {full_path: '"+projectPath(namespace, kgFixturesProjectPath)+"'})<-[:IN_PROJECT]-(n) RETURN n LIMIT 5"))
 
 	summarize(t, "Neighbors_with_their_properties", queryRun(client,
