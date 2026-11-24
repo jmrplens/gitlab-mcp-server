@@ -59,7 +59,7 @@ func defaultSession() *session {
 	return &session{
 		dir: ".", environ: os.Environ(), stdout: os.Stdout, stderr: os.Stderr,
 		goTool: golist.Executable(), run: recipe.Exec, lookPath: exec.LookPath,
-		client: &http.Client{Timeout: requestTimeout}, now: time.Now, sleep: time.Sleep,
+		client: &http.Client{Timeout: requestTimeout, CheckRedirect: answeredWhereAsked}, now: time.Now, sleep: time.Sleep,
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -86,7 +85,9 @@ func readDotenv(name string) ([]string, error) {
 	if unread, ok := errors.AsType[*fs.PathError](err); ok {
 		return nil, fmt.Errorf(".env could not be read: %w", unread)
 	}
-	if err != nil {
+	// The parser reads a name alone at the end of the file as a value that has
+	// no name.
+	if _, nameless := values[""]; err != nil || nameless {
 		return nil, errors.New(".env could not be parsed: a line is not NAME=value or a quoted value does not end (the file is not shown, since it holds secrets)")
 	}
 	set := make([]string, 0, len(values))
@@ -126,5 +127,5 @@ func (s *session) readEnvironment(read *settings) error {
 // gitOutput runs git in dir and returns what it wrote to its standard output.
 func (s *session) gitOutput(ctx context.Context, git, dir string, args ...string) (string, error) {
 	out, err := recipe.Output(ctx, s.run, recipe.Call{Program: git, Args: args, Dir: dir, Env: s.environ, Stderr: s.stderr})
-	return strings.TrimSpace(out), err
+	return recipe.Line(out), err
 }

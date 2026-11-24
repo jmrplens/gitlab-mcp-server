@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -78,8 +79,8 @@ func TestReadSettings_WhatCannotBeRead_IsRefusedBeforeAnythingRuns(t *testing.T)
 			if status := b.session.main(t.Context(), nil); status != 1 || !strings.HasPrefix(b.stderr.String(), tc.want) {
 				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, b.stderr.String(), tc.want)
 			}
-			if b.stdout.Len()+len(b.calls)+len(b.requests) != 0 {
-				t.Errorf("stdout = %q, ran %+v, sent %+v; want nothing", b.stdout.String(), b.calls, b.requests)
+			if sent := b.sent(); b.stdout.Len()+len(b.calls)+len(sent) != 0 {
+				t.Errorf("stdout = %q, ran %+v, sent %+v; want nothing", b.stdout.String(), b.calls, sent)
 			}
 		})
 	}
@@ -97,6 +98,7 @@ func TestReadSettings_ADotenvThatCannotBeParsed_ShowsNothingOfIt(t *testing.T) {
 		{"a command after the secrets", "SONARQUBE_TOKEN=secret-one\n. ./secret-two\n"},
 		{"a value that does not end", "GITLAB_TOKEN=secret-one\nSONARQUBE_TOKEN=\"secret-two\n"},
 		{"a name alone", "SONARQUBE_TOKEN=secret-one\nsecret-two"},
+		{"a name alone the parser reads", "SONARQUBE_TOKEN=secret-one\nsecrettwo"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,10 +110,31 @@ func TestReadSettings_ADotenvThatCannotBeParsed_ShowsNothingOfIt(t *testing.T) {
 			if status := b.session.main(t.Context(), nil); status != 1 || b.stderr.String() != want {
 				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, b.stderr.String(), want)
 			}
-			if b.stdout.Len()+len(b.calls)+len(b.requests) != 0 {
-				t.Errorf("stdout = %q, ran %+v, sent %+v; want nothing", b.stdout.String(), b.calls, b.requests)
+			if sent := b.sent(); b.stdout.Len()+len(b.calls)+len(sent) != 0 {
+				t.Errorf("stdout = %q, ran %+v, sent %+v; want nothing", b.stdout.String(), b.calls, sent)
 			}
 		})
+	}
+}
+
+// TestReadSettings_ARootThatEndsInABlank_IsReadWhole verifies that a checkout
+// whose name ends in a space is where the files are read.
+func TestReadSettings_ARootThatEndsInABlank_IsReadWhole(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("a file name does not end in a space there")
+	}
+	b := newBench(t, usual(t))
+	root := b.root + " "
+	if err := os.Rename(b.root, root); err != nil {
+		t.Fatal(err)
+	}
+	// The test's own directory is put back where it is removed.
+	t.Cleanup(func() { _ = os.Rename(root, b.root) })
+	b.session.dir = root
+	read, err := b.session.readSettings(t.Context())
+	if err != nil || read.root != root {
+		t.Errorf("readSettings() = %q, %v; want the repository at %q", read.root, err, root)
 	}
 }
 

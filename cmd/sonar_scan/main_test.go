@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,18 +102,34 @@ type bench struct {
 	stderr   bytes.Buffer
 	calls    []sonarCall
 	environs [][]string
-	requests []sonarRequest
 	waited   []time.Duration
 	clock    time.Time
 	// refuse, when it is set, answers a program in place of the bench, and
 	// says whether it did.
 	refuse func(call recipe.Call) (answered bool, status int, err error)
-	// answer, when it is set, answers a request in place of the bench.
-	answer func(w http.ResponseWriter, r *http.Request)
+
+	// mu guards what the server's own goroutine reads and writes.
+	mu       sync.Mutex
+	requests []sonarRequest
+	answer   func(w http.ResponseWriter, r *http.Request)
+}
+
+// sent is every request the server was sent.
+func (b *bench) sent() []sonarRequest {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.requests)
+}
+
+// answerWith has answer answer every request in place of the bench.
+func (b *bench) answerWith(answer func(w http.ResponseWriter, r *http.Request)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.answer = answer
 }
 
 // newBench makes the repository, which reads no git configuration of the
-// person running the tests.
+// person running the tests, and no token of theirs.
 func newBench(t *testing.T, run sonarRun) *bench {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -124,16 +141,18 @@ func newBench(t *testing.T, run sonarRun) *bench {
 	t.Cleanup(b.server.Close)
 	environ := []string{"GIT_CONFIG_GLOBAL=" + filepath.Join(root, "absent"), "GIT_CONFIG_NOSYSTEM=1", "SONAR_HOST_URL=" + b.server.URL}
 	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "GIT_") && !strings.HasPrefix(entry, "SONAR") && !strings.HasPrefix(entry, "COVERAGE_") {
+		if !strings.HasPrefix(entry, "GIT_") && !strings.HasPrefix(entry, "GITLAB_") && !strings.HasPrefix(entry, "SONAR") && !strings.HasPrefix(entry, "COVERAGE_") {
 			environ = append(environ, entry)
 		}
 	}
 	for name, value := range run.Env {
 		environ = append(environ, name+"="+value)
 	}
+	client := b.server.Client()
+	client.CheckRedirect = defaultSession().client.CheckRedirect
 	b.session = &session{
 		dir: root, environ: environ, stdout: &b.stdout, stderr: &b.stderr, goTool: golist.Executable(), run: b.program,
-		lookPath: b.lookPath, client: b.server.Client(), now: func() time.Time { return b.clock },
+		lookPath: b.lookPath, client: client, now: func() time.Time { return b.clock },
 		// A wait of nothing still moves the clock, so a run that polls without
 		// pausing ends.
 		sleep: func(wait time.Duration) {
@@ -217,6 +236,8 @@ func (b *bench) serve(w http.ResponseWriter, r *http.Request) {
 	for name, values := range r.URL.Query() {
 		query[name] = values[0]
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.requests = append(b.requests, sonarRequest{Path: r.URL.Path, Query: query, User: user + ":"})
 	if b.answer != nil {
 		b.answer(w, r)
@@ -274,8 +295,8 @@ func TestRecordedRuns_TheCommand_DoesWhatTheScriptDid(t *testing.T) {
 			if len(run.Calls)+len(b.calls) > 0 && !reflect.DeepEqual(b.calls, run.Calls) {
 				t.Errorf("ran\n%+v\nwant\n%+v", b.calls, run.Calls)
 			}
-			if len(run.Requests)+len(b.requests) > 0 && !reflect.DeepEqual(b.requests, run.Requests) {
-				t.Errorf("sent\n%+v\nwant\n%+v", b.requests, run.Requests)
+			if sent := b.sent(); len(run.Requests)+len(sent) > 0 && !reflect.DeepEqual(sent, run.Requests) {
+				t.Errorf("sent\n%+v\nwant\n%+v", sent, run.Requests)
 			}
 		})
 	}
@@ -290,7 +311,7 @@ func TestMain_ACommandLineItCannotRead_IsAUsageError(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
 			b := newBench(t, usual(t))
-			if status := b.session.main(t.Context(), args); status != 2 || b.stderr.Len() == 0 || b.stdout.Len()+len(b.calls)+len(b.requests) != 0 {
+			if status := b.session.main(t.Context(), args); status != 2 || b.stderr.Len() == 0 || b.stdout.Len()+len(b.calls)+len(b.sent()) != 0 {
 				t.Errorf("status = %d, stderr %q, ran %+v", status, b.stderr.String(), b.calls)
 			}
 		})
@@ -347,8 +368,8 @@ func TestPipeline_WhatDotenvSets_ReachesTheScannerAlone(t *testing.T) {
 	for i, want := range []string{"", "", "secret"} {
 		t.Run(b.calls[i].Tool, func(t *testing.T) {
 			t.Parallel()
-			if got, _ := recipe.Getenv(b.environs[i], "GITLAB_TOKEN"); got != want {
-				t.Errorf("%s ran with GITLAB_TOKEN=%q, want %q", b.calls[i].Tool, got, want)
+			if got, set := recipe.Getenv(b.environs[i], "GITLAB_TOKEN"); got != want {
+				t.Errorf("%s ran with a GITLAB_TOKEN that is not the fixture's (set %t), want it %q", b.calls[i].Tool, set, want)
 			}
 		})
 	}
@@ -388,7 +409,7 @@ func TestPipeline_AStepThatCannotBeDone_SaysWhy(t *testing.T) {
 			}
 		}, "ERROR: open "},
 		{"the task cannot be asked", func(b *bench) {
-			b.answer = func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) }
+			b.answerWith(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) })
 		}, "ERROR: /api/ce/task answered 401 Unauthorized\n"},
 	}
 	for _, tc := range cases {
@@ -428,8 +449,8 @@ func TestAwaitTask_ThePolling_IsBoundedAndSpaced(t *testing.T) {
 			if status := b.session.main(t.Context(), nil); status != 1 || b.stderr.String() != tc.says {
 				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, b.stderr.String(), tc.says)
 			}
-			if !slices.Equal(b.waited, tc.want) || len(b.requests) != len(tc.want)+1 {
-				t.Errorf("waited %v over %d look(s), want %v", b.waited, len(b.requests), tc.want)
+			if looks := len(b.sent()); !slices.Equal(b.waited, tc.want) || looks != len(tc.want)+1 {
+				t.Errorf("waited %v over %d look(s), want %v", b.waited, looks, tc.want)
 			}
 		})
 	}

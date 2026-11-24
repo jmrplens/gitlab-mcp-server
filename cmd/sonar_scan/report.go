@@ -31,13 +31,26 @@ func (s *session) get(ctx context.Context, read settings, address string, into a
 		return err
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode >= http.StatusBadRequest {
+	if response.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("%s answered %s", request.URL.Path, response.Status)
 	}
-	if err = json.NewDecoder(io.LimitReader(response.Body, maxAnswer)).Decode(into); err != nil {
+	answer, err := io.ReadAll(io.LimitReader(response.Body, maxAnswer+1))
+	if err != nil {
+		return fmt.Errorf("%s could not be read: %w", request.URL.Path, err)
+	}
+	if len(answer) > maxAnswer {
+		return fmt.Errorf("%s answered more than %d bytes", request.URL.Path, maxAnswer)
+	}
+	if err = json.Unmarshal(answer, into); err != nil {
 		return fmt.Errorf("%s answered no JSON this reads: %w", request.URL.Path, err)
 	}
 	return nil
+}
+
+// answeredWhereAsked keeps a client from following a redirect, which no script
+// request did: the token goes to the address it was meant for and no further.
+func answeredWhereAsked(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 // api is an address of SonarCloud's web API with its query.
