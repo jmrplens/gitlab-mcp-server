@@ -68,7 +68,7 @@ func importsOwnInternal(pkg golist.PackageFiles) bool {
 // run would use. One that appears after that look is the copy's error, and is
 // left as it is too.
 func (m *mutation) stage(ctx context.Context) (cleanup func(), err error) {
-	cleanup = func() {}
+	cleanup = recipe.NoCleanup
 	if !needsStaging(m.pkg) {
 		return cleanup, nil
 	}

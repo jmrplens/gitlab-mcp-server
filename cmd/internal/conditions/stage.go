@@ -34,16 +34,16 @@ const uninstrumented = "//go:build gc\n\n"
 // when nothing is staged, and what removes the copy, whatever happened.
 func (m *measurement) stage() (target string, cleanup func(), err error) {
 	if !m.staged.needed() {
-		return m.pkg.Dir, func() {}, nil
+		return m.pkg.Dir, recipe.NoCleanup, nil
 	}
 	m.announceStaging()
 	rel, err := m.packageBelowModule()
 	if err != nil {
-		return "", func() {}, err
+		return "", recipe.NoCleanup, err
 	}
 	workdir, err := os.MkdirTemp("", "coverage-conditions-")
 	if err != nil {
-		return "", func() {}, err
+		return "", recipe.NoCleanup, err
 	}
 	cleanup = func() { _ = os.RemoveAll(workdir) }
 	module := filepath.Join(workdir, path.Base(m.pkg.ModuleDir))

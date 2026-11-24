@@ -81,8 +81,10 @@ func TestInstall_AnInterrupt_EndsItWithTheSignalsStatus(t *testing.T) {
 	paused := 0
 	tools.Pause = func(ctx context.Context, _ time.Duration) {
 		paused++
-		interrupt(os.Interrupt)
-		<-ctx.Done()
+		// The production pause, which the signal finds waiting.
+		signal := time.AfterFunc(10*time.Millisecond, func() { interrupt(os.Interrupt) })
+		defer signal.Stop()
+		pause(ctx, time.Hour)
 	}
 	var out, errs bytes.Buffer
 	if status := Install(ctx, tools, b.environ, &out, &errs); status != 130 || b.installs != 1 || paused != 1 {

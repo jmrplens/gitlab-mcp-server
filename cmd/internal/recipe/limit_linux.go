@@ -28,7 +28,7 @@ func AddressSpace() (soft, hard uint64, err error) {
 // puts it back, and returns why either was refused: a sandbox may let a process
 // read its limits and not set them.
 func TryAddressSpace(maxBytes uint64) error {
-	return underLimit(maxBytes, func() error { return nil }, func() {})
+	return underLimit(maxBytes, func() error { return nil }, NoCleanup)
 }
 
 // startLimited starts cmd under a soft limit of maxBytes on its address

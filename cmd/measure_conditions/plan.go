@@ -122,8 +122,12 @@ func runPlan(ctx context.Context, args []string, stdout, stderr io.Writer, list 
 		fmt.Fprintf(stderr, "%s: -packages: %v\n", toolName, err)
 		return 2
 	}
+	if *tree && len(packages) > 0 {
+		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(packages, " "))
+		return 2
+	}
 	if *tree {
-		return planTree(ctx, stdout, stderr, list, *dir, packages, systems, measuredWith)
+		return planTree(ctx, stdout, stderr, list, *dir, systems, measuredWith)
 	}
 	if len(packages) == 0 {
 		packages, err = constrainedPackages(ctx, *dir, list)
@@ -220,13 +224,9 @@ func buildMatrix(packages, systems []string) (matrix, error) {
 
 // planTree prints the plan of a -tree dispatch: every package below cmd/ and
 // internal/, in shards, and says on stderr what it planned and the gate and
-// mode the runs measure with. A package list beside -tree is refused, since
-// the dispatch would be asking for two things at once.
-func planTree(ctx context.Context, stdout, stderr io.Writer, list lister, dir string, named, systems []string, measuredWith string) int {
-	if len(named) > 0 {
-		fmt.Fprintf(stderr, "%s: -tree measures every package below cmd/ and internal/, and -packages names %s besides; leave -packages empty\n", toolName, strings.Join(named, " "))
-		return 2
-	}
+// mode the runs measure with. A package list beside -tree is refused before it
+// is called, since the dispatch would be asking for two things at once.
+func planTree(ctx context.Context, stdout, stderr io.Writer, list lister, dir string, systems []string, measuredWith string) int {
 	packages, err := treePackages(ctx, dir, list)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: -tree: the packages below cmd/ and internal/ could not be listed: %v\n", toolName, err)

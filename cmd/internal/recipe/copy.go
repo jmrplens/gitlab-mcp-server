@@ -10,6 +10,11 @@ import (
 	"path/filepath"
 )
 
+// NoCleanup is what removes a copy that was not made.
+func NoCleanup() {
+	// Nothing was made, so there is nothing to remove.
+}
+
 // CopyTree copies the directory src into dst, which it creates, with the modes
 // and times of its files and its symbolic links as links, but for src itself,
 // which is read through one: the go command names a module by the directory it
