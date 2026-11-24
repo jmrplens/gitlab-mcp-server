@@ -29,10 +29,24 @@
 //	COVERAGE_MIN         the minimum total coverage, as CI has it (90)
 //
 // It was scripts/sonar-scan.sh until issue 1114, whose recorded runs the tests
-// replay (testdata/sonar_runs.json). Four departures are deliberate. The file
-// is parsed rather than sourced, so a .env runs nothing. What it sets reaches
-// sonar-scanner and no longer the tests, which CI runs without it: a token
-// written there for the e2e suite is no business of a unit test. A flag or an
-// argument it does not know is a usage error rather than a full scan. And the
-// title of the report carries no em dash.
+// replay (testdata/sonar_runs.json). These departures from it are deliberate:
+//
+//   - .env is parsed rather than sourced, so it runs nothing and a variable in
+//     a value is one the file itself set before it, and a line that is no
+//     assignment is refused, with a message that shows nothing of the file.
+//   - What .env sets reaches sonar-scanner and no longer the tests, which CI
+//     runs without it: a token written there for the e2e suite is no business
+//     of a unit test.
+//   - A flag or an argument the command does not know is a usage error rather
+//     than a full scan.
+//   - SONAR_POLL_TIMEOUT and SONAR_POLL_INTERVAL are whole numbers of seconds,
+//     where the interval was whatever sleep took, 0.5 or 1m among them.
+//   - COVERAGE_MIN is a number, where one awk could not read passed the check.
+//   - The three are read before anything runs, with -no-scan too, which the
+//     script ran without looking at them.
+//   - What fails without a status to pass on, which is git, a request to
+//     SonarCloud, a missing sonar-scanner or a properties file without its
+//     line, is 1 with a message of one line, where the script ended with the
+//     status of git, of curl or of the shell, and said what they said.
+//   - The title of the report carries no em dash.
 package main

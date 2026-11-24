@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,17 +49,9 @@ func (s *session) readSettings(ctx context.Context) (settings, error) {
 	if read.root, err = s.gitOutput(ctx, git, s.dir, "rev-parse", "--show-toplevel"); err != nil {
 		return settings{}, err
 	}
-	values, err := godotenv.Read(filepath.Join(read.root, ".env"))
-	if errors.Is(err, os.ErrNotExist) {
-		return settings{}, errors.New(".env not found in repo root (needs SONARQUBE_TOKEN)")
+	if read.dotenv, err = readDotenv(filepath.Join(read.root, ".env")); err != nil {
+		return settings{}, err
 	}
-	if err != nil {
-		return settings{}, fmt.Errorf(".env could not be read: %w", err)
-	}
-	for name, value := range values {
-		read.dotenv = append(read.dotenv, name+"="+value)
-	}
-	slices.Sort(read.dotenv)
 	set := append(slices.Clone(s.environ), read.dotenv...)
 	if read.token, _ = recipe.Getenv(set, "SONARQUBE_TOKEN"); read.token == "" {
 		return settings{}, errors.New("SONARQUBE_TOKEN is not set in .env")
@@ -77,6 +70,30 @@ func (s *session) readSettings(ctx context.Context) (settings, error) {
 		read.branch, err = s.gitOutput(ctx, git, read.root, "rev-parse", "--abbrev-ref", "HEAD")
 	}
 	return read, err
+}
+
+// readDotenv returns what the .env at name sets, sorted, as [os.Environ] writes
+// it. The parser's own error is never shown: it quotes the rest of the file
+// from where it stopped, or the value that does not end, and the file holds
+// tokens. Only an error of the file itself, which names no more than the file,
+// is.
+func readDotenv(name string) ([]string, error) {
+	values, err := godotenv.Read(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, errors.New(".env not found in repo root (needs SONARQUBE_TOKEN)")
+	}
+	if unread, ok := errors.AsType[*fs.PathError](err); ok {
+		return nil, fmt.Errorf(".env could not be read: %w", unread)
+	}
+	if err != nil {
+		return nil, errors.New(".env could not be parsed: a line is not NAME=value or a quoted value does not end (the file is not shown, since it holds secrets)")
+	}
+	set := make([]string, 0, len(values))
+	for variable, value := range values {
+		set = append(set, variable+"="+value)
+	}
+	slices.Sort(set)
+	return set, nil
 }
 
 // readEnvironment reads the settings that come from the environment alone.
