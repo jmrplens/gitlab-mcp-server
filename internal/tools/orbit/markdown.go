@@ -55,7 +55,7 @@ func init() {
 
 // FormatGrepMarkdown renders what a search found as the card of one object:
 // the target and how many hits came back, the hits as a table with the token
-// each carries, every file's matching passages in a fence sized to them, and
+// each carries and the state of a work item or merge request, every file's matching passages in a fence sized to them, and
 // the scopes GitLab did not search with the reason. The llm text is the whole
 // body.
 func FormatGrepMarkdown(out GrepOutput) string {
@@ -77,7 +77,7 @@ func FormatGrepMarkdown(out GrepOutput) string {
 		c.Note("GitLab ended the search at the limit, or a scope held more than per_scope.")
 	}
 	if len(out.Results) > 0 {
-		table := c.Table("Results", "Scope", "Type", "Token", "Where", "Text")
+		table := c.Table("Results", "Scope", "Type", "Token", "Where", "State", "Text")
 		for _, result := range out.Results {
 			token := ""
 			if result.Token != nil {
@@ -88,6 +88,7 @@ func FormatGrepMarkdown(out GrepOutput) string {
 				toolutil.EscapeMdTableCell(result.Type),
 				token,
 				toolutil.EscapeMdTableCell(grepWhere(result.Reference)),
+				toolutil.EscapeMdTableCell(result.State),
 				toolutil.EscapeMdTableCell(result.Text),
 			)
 		}

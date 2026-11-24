@@ -353,21 +353,24 @@ func TestGrep_GitLabsRefusals_CarryTheirMessage(t *testing.T) {
 }
 
 // TestFormatGrepMarkdown_ResultsAndMatches holds the grep card to a table of
-// the hits with the token each carries, GitLab's text escaped, a file's match
+// the hits with the token each carries, an open hit told from a closed one by
+// its state, GitLab's text escaped, a file's match
 // in a fence sized to it, the scopes GitLab could not search, and the steps to
 // orbit.context and orbit.query.
 func TestFormatGrepMarkdown_ResultsAndMatches(t *testing.T) {
 	token := "WorkItem[1]"
+	mergeRequest := "MergeRequest[5]"
 	md := FormatGrepMarkdown(GrepOutput{
-		Version: "1.2.0", ResultCount: 2,
+		Version: "1.2.0", ResultCount: 3,
 		Target: &GrepTarget{Type: "Group", Token: "Group[2]", FullPath: "acme-group"},
 		Scopes: []GrepScope{{Name: "projects", Status: "unavailable", Reason: &GrepScopeReason{Code: "not_available_for_search_type"}}},
 		Results: []GrepResult{
 			{Scope: "work_items", Type: "WorkItem", ID: 1.0, Token: &token, Text: "Add | helper", State: "opened", Reference: GrepReference{IID: 1, ProjectPath: "acme-group/p"}},
+			{Scope: "merge_requests", Type: "MergeRequest", ID: 5.0, Token: &mergeRequest, Text: "Seed helper", State: "closed", Reference: GrepReference{IID: 2, ProjectPath: "acme-group/p"}},
 			{Scope: "blobs", Type: "File", Text: "x", Reference: GrepReference{Path: "src/a.py", ProjectPath: "acme-group/p"}, Matches: []GrepMatch{{StartLine: 3, EndLine: 4, Text: "```\ncode"}}},
 		},
 	})
-	if lacks := missingFrom(md, "## Orbit Grep", "`WorkItem[1]`", "Add &#124; helper", "src/a.py", "````text\n```\ncode\n````", "not_available_for_search_type", "orbit.context", "orbit.query"); len(lacks) > 0 {
+	if lacks := missingFrom(md, "## Orbit Grep", "| Scope | Type | Token | Where | State | Text |", "| `WorkItem[1]` | acme-group/p 1 | opened | Add &#124; helper |", "| `MergeRequest[5]` | acme-group/p 2 | closed | Seed helper |", "src/a.py", "````text\n```\ncode\n````", "not_available_for_search_type", "orbit.context", "orbit.query"); len(lacks) > 0 {
 		t.Errorf("card lacks %q:\n%s", lacks, md)
 	}
 	if strings.Contains(md, "GitLab ended the search") {
