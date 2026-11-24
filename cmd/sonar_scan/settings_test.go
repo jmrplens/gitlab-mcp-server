@@ -56,7 +56,13 @@ func TestReadSettings_WhatCannotBeRead_IsRefusedBeforeAnythingRuns(t *testing.T)
 		}, "ERROR: sonar-project.properties: no sonar.projectKey= line\n"},
 		{"a minimum that is no number", func(_ *testing.T, b *bench) {
 			b.session.environ = append(b.session.environ, "COVERAGE_MIN=most")
-		}, "ERROR: COVERAGE_MIN=most is not a number\n"},
+		}, "ERROR: COVERAGE_MIN=most is not a finite number\n"},
+		{"a minimum no total is below", func(_ *testing.T, b *bench) {
+			b.session.environ = append(b.session.environ, "COVERAGE_MIN=NaN")
+		}, "ERROR: COVERAGE_MIN=NaN is not a finite number\n"},
+		{"an infinite minimum", func(_ *testing.T, b *bench) {
+			b.session.environ = append(b.session.environ, "COVERAGE_MIN=-Inf")
+		}, "ERROR: COVERAGE_MIN=-Inf is not a finite number\n"},
 		{"a timeout that is no number", func(_ *testing.T, b *bench) {
 			b.session.environ = append(b.session.environ, "SONAR_POLL_TIMEOUT=4m")
 		}, "ERROR: SONAR_POLL_TIMEOUT=4m is not a whole number of seconds\n"},
