@@ -6,6 +6,7 @@ package conditions
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -50,8 +51,29 @@ func (m *measurement) stage() (target string, cleanup func(), err error) {
 	if err != nil {
 		return "", cleanup, err
 	}
+	err = heldByCopy(module, rel)
+	if err != nil {
+		return "", cleanup, err
+	}
 	target = filepath.Join(module, filepath.FromSlash(rel))
 	return target, cleanup, m.rewrite(target)
+}
+
+// heldByCopy reports as an error a package the copy of its module in module
+// does not hold: one below a directory the copy leaves out, and one reached
+// through a symbolic link. The copy keeps a link as it is, so what the staging
+// removes and writes there would be removed from and written to the original.
+func heldByCopy(module, rel string) error {
+	for ; rel != "."; rel = path.Dir(rel) {
+		info, err := os.Lstat(filepath.Join(module, filepath.FromSlash(rel)))
+		if err != nil {
+			return err
+		}
+		if info.Mode().Type() == os.ModeSymlink {
+			return fmt.Errorf("%s is a symbolic link, which the copy would follow back to the original", rel)
+		}
+	}
+	return nil
 }
 
 // packageBelowModule is the package's directory relative to its module's, and
@@ -111,8 +133,8 @@ func (m *measurement) rewrite(target string) error {
 		name := m.pkg.Name
 		declares := uninstrumented + "package " + name + "\n\n// GobcoStagedImport is what " + stagedImportTest + " reads.\nvar GobcoStagedImport struct{}\n"
 		imports := "package " + name + "_test\n\nimport " + name + " \"" + m.pkg.ImportPath + "\"\n\nvar _ = " + name + ".GobcoStagedImport\n"
-		failed = append(failed, os.WriteFile(filepath.Join(target, stagedImportFile), []byte(declares), 0o600),
-			os.WriteFile(filepath.Join(target, stagedImportTest), []byte(imports), 0o600))
+		failed = append(failed, replaceFile(filepath.Join(target, stagedImportFile), declares),
+			replaceFile(filepath.Join(target, stagedImportTest), imports))
 	}
 	return errors.Join(failed...)
 }
@@ -123,7 +145,17 @@ func rewriteFile(from, to string, change func(string) string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(to, []byte(change(string(text))), 0o600)
+	return replaceFile(to, change(string(text)))
+}
+
+// replaceFile writes a file of the copy anew. What holds its name is removed
+// first: the copy keeps symbolic links, and a write through one would change
+// what it links to, which may be a file of the tree being measured.
+func replaceFile(name, text string) error {
+	if err := os.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return os.WriteFile(name, []byte(text), 0o600)
 }
 
 // blankConstraints blanks the build constraint lines of a file's header, line

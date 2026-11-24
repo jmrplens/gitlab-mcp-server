@@ -29,7 +29,10 @@ func AddressSpace() (soft, hard uint64, err error) {
 // for the moment the program is started, since that is what a child inherits,
 // and is put back before it is waited for, so nothing this process does while
 // it waits, and the removal of what it staged above all, runs under a ceiling
-// meant for a mutant.
+// meant for a mutant. A process may not raise its hard limit again without a
+// privilege, so the hard one stays what it was, where the `ulimit -v` of the
+// script this was lowered both: a program that raises its own soft limit is
+// held no longer.
 func startLimited(cmd *exec.Cmd, maxBytes uint64) error {
 	var held syscall.Rlimit
 	if err := getrlimit(syscall.RLIMIT_AS, &held); err != nil {

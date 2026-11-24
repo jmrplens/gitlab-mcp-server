@@ -159,6 +159,18 @@ func TestMeasure_APackageTheCopyCannotHold_IsRefused(t *testing.T) {
 	}
 }
 
+// TestReplaceFile_ANameItCannotFree_IsAnError verifies that a file of the copy
+// that cannot take the place of what holds its name is an error.
+func TestReplaceFile_ANameItCannotFree_IsAnError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, dir, "taken/held", "")
+	var refused *fs.PathError
+	if err := replaceFile(filepath.Join(dir, "taken"), "text"); !errors.As(err, &refused) || refused.Op != "remove" {
+		t.Errorf("replaceFile(a directory that is not empty) = %v, want the removal refused", err)
+	}
+}
+
 // TestBlankConstraints_OnlyTheHeader_IsBlanked verifies that a constraint
 // below the package clause is a line like any other, that no line moves, and
 // that a file that does not end in a newline is not given one.

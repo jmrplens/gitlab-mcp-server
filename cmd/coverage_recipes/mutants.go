@@ -91,8 +91,8 @@ func (m *mutation) sayf(format string, args ...any) {
 	fmt.Fprintf(m.stdout, "gremlins: "+format+"\n", args...)
 }
 
-// run takes the run from its settings to gremlins' own status. An error is the
-// reason nothing was measured.
+// run takes the run from its settings to the status gremlins' run ended with
+// ([mutation.unleash]). An error is the reason nothing was measured.
 func (m *mutation) run(ctx context.Context, args []string) (int, error) {
 	if err := m.readSettings(args); err != nil {
 		return 0, err
@@ -446,7 +446,9 @@ func (m *mutation) memoryCeiling() (ceiling uint64, said string) {
 }
 
 // unleash runs gremlins over the package, or over its staged copy, and returns
-// its status.
+// the status of the go run it is started through: 0, or 1 whatever gremlins
+// itself exited with, so no status of its own, such as the 10 of a threshold
+// it did not reach, gets past this.
 //
 // The recipe measures ONE package, which is what its usage says and what the
 // sweep's per-package figures claim. gremlins does not read it that way: it
