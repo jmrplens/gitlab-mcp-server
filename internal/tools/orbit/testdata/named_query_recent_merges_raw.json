@@ -1,0 +1,34 @@
+{
+  "result": {
+    "format_version": "6.0.0",
+    "query_type": "traversal",
+    "nodes": [
+      {
+        "type": "MergeRequest",
+        "id": "476666734",
+        "merged_at": "2026-04-23T23:18:41Z",
+        "title": "[FixPipeline] https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/pipelines/2470086836"
+      },
+      {
+        "type": "User",
+        "id": "1",
+        "username": "user-1"
+      }
+    ],
+    "edges": [
+      {
+        "from": "User",
+        "from_id": "1",
+        "to": "MergeRequest",
+        "to_id": "476666734",
+        "type": "MERGED"
+      }
+    ],
+    "pagination": {
+      "has_more": false,
+      "truncated": false
+    }
+  },
+  "query_type": "traversal",
+  "row_count": 2
+}

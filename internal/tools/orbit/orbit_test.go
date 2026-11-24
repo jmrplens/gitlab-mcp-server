@@ -82,6 +82,14 @@ func TestOrbitHandlers_CancelledOnArrival_ReturnCanceled(t *testing.T) {
 			_, err := SkillFile(ctx, client, SkillFileInput{Name: "orbit", Path: "SKILL.md"})
 			return err
 		}},
+		{name: "named query", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := NamedQuery(ctx, client, NamedQueryInput{Name: "recent_merges"})
+			return err
+		}},
+		{name: "named query in the llm format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := NamedQuery(ctx, client, NamedQueryInput{Name: "recent_merges", ResponseFormat: "llm"})
+			return err
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -740,6 +748,10 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 			return err
 		}},
 		{name: "graph status", call: func() error { return callGraphStatus(ctx, client) }},
+		{name: "named query", call: func() error {
+			_, err := NamedQuery(ctx, client, NamedQueryInput{Name: "recent_merges"})
+			return err
+		}},
 		{name: "query templates", call: func() error { _, err := QueryTemplates(ctx, client, QueryTemplatesInput{}); return err }},
 		{name: "response format", call: func() error { _, err := QueryResponseFormat(ctx, client, QueryResponseFormatInput{}); return err }},
 		{name: "command list", call: func() error { _, err := CommandList(ctx, client, CommandListInput{}); return err }},
