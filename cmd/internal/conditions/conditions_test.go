@@ -606,6 +606,27 @@ func answering(verb, out string, status int, err error) func(recipe.Call) (bool,
 	}
 }
 
+// TestRunGobco_ATargetThatIsNotThere_IsTheRunsToReport verifies that a
+// directory whose links cannot be resolved, as one that is gone, is handed to
+// gobco as it was named, and that its refusal is what the run says.
+func TestRunGobco_ATargetThatIsNotThere_IsTheRunsToReport(t *testing.T) {
+	b := newBench(t, readRecord(t).Files)
+	gone := filepath.Join(b.root, "gone")
+	var out, errs bytes.Buffer
+	m := &measurement{tools: b.tools(), Package: "./gone", Environ: b.environ, Stdout: &out, Stderr: &errs}
+	var ranIn string
+	b.plant = func(call recipe.Call) (bool, int, error) {
+		ranIn = call.Dir
+		return true, 0, fs.ErrNotExist
+	}
+	if report, passed := m.runGobco(t.Context(), gone); passed || report != "" {
+		t.Errorf("runGobco() = %q, %t; want nothing measured", report, passed)
+	}
+	if want := "gobco: gobco could not be started on ./gone: file does not exist; refusing to measure\n"; ranIn != gone || errs.String() != want {
+		t.Errorf("ran in %q and said %q, want %q and %q", ranIn, errs.String(), gone, want)
+	}
+}
+
 // TestMeasure_AProgramThatDoesNotAnswer_IsRefused verifies every way the
 // programs the run asks before gobco can fail to answer, and gobco itself
 // failing to start: each is a run that measured nothing, with the reason, and

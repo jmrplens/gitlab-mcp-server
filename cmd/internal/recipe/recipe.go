@@ -11,6 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -43,6 +46,27 @@ type Runner func(ctx context.Context, call Call) (int, error)
 // It is a variable so a test need not wait it out, and a tenth of a second.
 var grace = time.Duration(1e8)
 
+// runtimeGOOS is the platform, a variable so a test can ask for another's
+// answer.
+var runtimeGOOS = runtime.GOOS
+
+// environment is the environment the call's program is given: the call's own,
+// with PWD naming the directory the program runs in, as a shell that changed
+// to it would have it. os/exec does that only for a call that gives no
+// environment, and with the PWD of this process in its place the go command
+// names a directory reached through a symbolic link by the path behind it,
+// where one run in this process's own directory names it through the link: two
+// listings of one module then cannot be cut against each other. Windows reads
+// no PWD, as os/exec knows too. A directory that cannot be named leaves PWD
+// empty, which its readers take for none.
+func (c Call) environment() []string {
+	if c.Env == nil || c.Dir == "" || runtimeGOOS == "windows" {
+		return c.Env
+	}
+	dir, _ := filepath.Abs(c.Dir)
+	return append(slices.Clone(c.Env), "PWD="+dir)
+}
+
 // Exec is the [Runner] production uses. The program is not ended when ctx is
 // done: the recipe waits for it and then asks [Status] (see the package
 // comment). A program a signal ended has no exit status of its own and
@@ -50,7 +74,7 @@ var grace = time.Duration(1e8)
 func Exec(ctx context.Context, call Call) (int, error) {
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), call.Program, call.Args...) //#nosec G204 -- the callers resolve the program to an absolute path: the toolchain's own go command, or the tool a lookup named
 	cmd.Dir = call.Dir
-	cmd.Env = call.Env
+	cmd.Env = call.environment()
 	cmd.Stdout = call.Stdout
 	cmd.Stderr = call.Stderr
 	start := cmd.Start

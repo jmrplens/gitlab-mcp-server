@@ -106,7 +106,9 @@ func (m *mutation) stage(ctx context.Context) (cleanup func(), err error) {
 // and its tests would be timed into every mutant's deadline although none of
 // its files is mutated. They are listed from the package's own directory,
 // which names its subtree whether or not it is the module root, and before
-// the copy exists, which would otherwise be listed as one of them.
+// the copy exists, which would otherwise be listed as one of them. Their paths
+// are cut against the package's, so both listings have to name a module
+// reached through a link the same way, which [recipe.Exec] sees to.
 func (m *mutation) nestedPackages(ctx context.Context) ([]string, error) {
 	out, err := m.goOutput(ctx, filepath.FromSlash(m.pkg.Dir), slices.Concat([]string{"list", "-e"}, m.flags.tagArgs(), []string{"-f", "{{.Dir}}", "./..."})...)
 	if err != nil {

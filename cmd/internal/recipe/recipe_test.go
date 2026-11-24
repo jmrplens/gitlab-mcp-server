@@ -113,9 +113,11 @@ func TestExec_AProgram_RunsInItsDirectoryWithItsEnvironmentAndStatus(t *testing.
 
 // TestExec_ADirectory_IsThePWDOfTheProgram verifies that PWD names the
 // directory a program is run in and not the one its environment was taken
-// from, whether the call names it whole or from this process's own; and that
-// a call that names none, whose program runs where this process does, hands
-// its environment on as it is.
+// from, whether the call names it whole or from this process's own; that a
+// call that names none, whose program runs where this process does, and one on
+// Windows, where PWD is read by nothing, hand their environment on as it is;
+// and that a call without an environment is given this process's, as os/exec
+// gives it.
 func TestExec_ADirectory_IsThePWDOfTheProgram(t *testing.T) {
 	root := t.TempDir()
 	below := filepath.Join(root, "below")
@@ -123,16 +125,36 @@ func TestExec_ADirectory_IsThePWDOfTheProgram(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(root)
-	cases := []struct{ name, dir, want string }{
-		{name: "named whole", dir: below, want: below},
-		{name: "named from here", dir: "below", want: below},
-		{name: "none", want: "elsewhere"},
+	t.Setenv(helperEnv, "pwd")
+	t.Setenv("PWD", root)
+	// os/exec names the directory itself then, but on Windows.
+	withoutEnv := below
+	if runtime.GOOS == "windows" {
+		withoutEnv = root
+	}
+	cases := []struct {
+		name, goos, dir string
+		noEnv           bool
+		want            string
+	}{
+		{name: "named whole", goos: "linux", dir: below, want: below},
+		{name: "named from here", goos: "linux", dir: "below", want: below},
+		{name: "none", goos: "linux", want: "elsewhere"},
+		{name: "on Windows", goos: "windows", dir: below, want: "elsewhere"},
+		{name: "no environment", goos: "linux", dir: below, noEnv: true, want: withoutEnv},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			previous := runtimeGOOS
+			runtimeGOOS = tc.goos
+			t.Cleanup(func() { runtimeGOOS = previous })
 			var stdout bytes.Buffer
-			call := helper(t, "pwd")
+			// No test is run by a helper that lost the variable naming it.
+			call := helper(t, "pwd", "-test.run=^$")
 			call.Dir, call.Stdout, call.Env = tc.dir, &stdout, append(call.Env, "PWD=elsewhere")
+			if tc.noEnv {
+				call.Env = nil
+			}
 			if status, err := Exec(t.Context(), call); err != nil || status != 0 {
 				t.Fatalf("Exec() = %d, %v; want 0", status, err)
 			}

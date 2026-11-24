@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -211,7 +212,15 @@ func (m *measurement) tagsShown() string {
 // it, which needs the network as much as go run does. GOMODCACHE, which gobco
 // passes on, names the cache go uses here, so its go test reads the one go
 // mod download filled. That goes when a gobco release passes GOPATH on.
+//
+// gobco copies the module around the directory it runs in by walking it from
+// its root (copyDir in util.go, v1.3.4), which follows no link to that root,
+// so it runs in the directory the links of target lead to. One that cannot be
+// resolved is left for the run to report.
 func (m *measurement) runGobco(ctx context.Context, target string) (report string, passed bool) {
+	if behind, err := filepath.EvalSymlinks(target); err == nil {
+		target = behind
+	}
 	var printed bytes.Buffer
 	call := recipe.Call{
 		Dir: target, Env: append(slices.Clone(m.Environ), "GOMODCACHE="+m.platform.modCache),
