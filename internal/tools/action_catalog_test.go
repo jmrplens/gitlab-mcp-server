@@ -896,7 +896,8 @@ const (
 	// + 1 Dependency Firewall package evaluation (Premium).
 	expectedEnterpriseDynamicCatalogActions = 1100
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1113 = 1112 + orbit.named_query (GitLab.com Premium, issue 1209). The
+	// 1114 = 1113 + orbit.context (GitLab.com Premium, issue 1587). The
+	// 1113 was 1112 + orbit.named_query (GitLab.com Premium, issue 1209). The
 	// 1112 was 1106 + orbit.query_templates, orbit.response_format,
 	// orbit.command_list, orbit.skill_list, orbit.skill_get and
 	// orbit.skill_file (GitLab.com Premium, issue 1209). The 1106 was 1105 +
@@ -912,7 +913,7 @@ const (
 	// + 12 achievement actions (Free, client-go v2.64.0), and the 1083 was
 	// 1075 + 7 work item saved view actions (Free, client-go v2.62.0)
 	// + 1 Dependency Firewall package evaluation (Premium).
-	expectedGitLabComEnterpriseCatalogActions = 1113
+	expectedGitLabComEnterpriseCatalogActions = 1114
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

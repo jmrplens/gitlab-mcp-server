@@ -117,6 +117,9 @@ func orbitSourcesHandler(t *testing.T) http.HandlerFunc {
 		case "/api/v4/orbit/query/recent_merges":
 			testutil.AssertRequestMethod(t, r, http.MethodPost)
 			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "named_query_recent_merges_raw.json"))
+		case "/api/v4/orbit/context":
+			testutil.AssertRequestMethod(t, r, http.MethodPost)
+			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "context_job_expand.json"))
 		case "/api/v4/orbit/skills":
 			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "skills.json"))
 		case "/api/v4/orbit/skills/orbit":

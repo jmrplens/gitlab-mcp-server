@@ -6,6 +6,7 @@ package orbit
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -47,6 +48,216 @@ func init() {
 	toolutil.RegisterMarkdown[SkillListOutput](FormatSkillListMarkdown)
 	toolutil.RegisterMarkdown[SkillGetOutput](FormatSkillGetMarkdown)
 	toolutil.RegisterMarkdown[SkillFileOutput](FormatSkillFileMarkdown)
+	toolutil.RegisterMarkdown[EntityContextOutput](FormatEntityContextMarkdown)
+}
+
+// FormatEntityContextMarkdown renders what GitLab resolved a token to as the
+// card of one object per entity: what it is, its summary's fields, its
+// description quoted, its failed jobs with each log excerpt in a fence sized
+// to it, and the named query its expansion ran with the graph answer, or the
+// code GitLab answered for a token it resolved nothing for, with a next step
+// that says what a not_found may mean. The llm text is the whole body.
+func FormatEntityContextMarkdown(out EntityContextOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Context")
+	namedHint := toolutil.HintAction(orbitActionNamedQuery, "read more of an entity's graph with context_for_issue, context_for_review or context_for_job and its id")
+	var hints []string
+	if slices.ContainsFunc(out.Entities, contextNotFound) || llmContextNotFound(out.FormattedText) {
+		hints = append(hints, contextNotFoundHint)
+	}
+	hints = append(hints, namedHint)
+	if out.FormattedText != "" {
+		c.Fence("", "text", out.FormattedText)
+		c.End(hints...)
+		return b.String()
+	}
+	c.Field("Answer version", out.Version)
+	for _, entity := range out.Entities {
+		writeContextEntity(c, entity)
+	}
+	if len(out.Entities) == 0 {
+		c.Note("GitLab resolved no entity.")
+	}
+	c.End(append(hints, toolutil.HintAction(orbitActionQuery, "query the graph from an entity's id"))...)
+	return b.String()
+}
+
+// contextNotFoundHint is the next step of a token GitLab answered not_found.
+// ContextService (ee/app/services/analytics/orbit/context_service.rb at
+// v19.6.1-ee) says it of an object that does not exist, one the user cannot
+// read and one the access token may not, alike, and a model that reads the code
+// alone reports an object that exists as missing.
+const contextNotFoundHint = "not_found does not say that the object does not exist: GitLab answers it for an object the user cannot read too, for one a fine-grained access token lacks the permission to read on the object's own project or group (read_orbit is not that permission), and, when the token is a classic one, for one whose top-level group enforces fine-grained tokens"
+
+// contextNotFound reports whether GitLab answered an entity not_found.
+func contextNotFound(entity ContextEntity) bool {
+	return entity.Error != nil && entity.Error.Code == contextNotFoundCode
+}
+
+// llmContextNotFound reports whether GitLab's llm text answers its one entity
+// not_found. ContextLlmFormatter (v19.6.1-ee) writes a header and then, for an
+// entity it did not find, one line, `- "token" found=false error=code`. Only
+// that second line is judged: below the line of an entity it found come the
+// object's own texts, which may hold the same words.
+func llmContextNotFound(text string) bool {
+	_, rest, _ := strings.Cut(text, "\n")
+	line, _, _ := strings.Cut(rest, "\n")
+	return strings.HasPrefix(line, "- ") && strings.HasSuffix(line, " found=false error="+contextNotFoundCode)
+}
+
+// writeContextEntity writes one resolved entity as a section of the context
+// card, titled by its resolved token, or by the token it was sent as when
+// GitLab resolved nothing.
+func writeContextEntity(c *toolutil.Card, entity ContextEntity) {
+	title := entity.ResolvedToken
+	if title == "" {
+		title = entity.Token
+	}
+	section := c.Section(title)
+	section.Code("Token", entity.Token)
+	if !entity.Found {
+		code := ""
+		if entity.Error != nil {
+			code = entity.Error.Code
+		}
+		section.Bool("Found", false)
+		section.Code("Error", code)
+		return
+	}
+	section.Field("Type", entity.Type)
+	section.Code("ID", entity.ID)
+	expansion := entity.Expansion
+	if expansion != nil {
+		writeExpansionRows(section, expansion)
+	}
+	if s := entity.Summary; s != nil {
+		writeContextSummary(section, s)
+		writeChangedFiles(section, s.ChangedFiles)
+		writePipelineJobs(section, s.Jobs)
+		writeFailedTests(section, s.FailedTests)
+		writeFailedJobs(section, s.FailedJobs)
+	}
+	if expansion != nil && expansion.Result != nil {
+		section.Fence("Expansion", "json", prettyAny(expansion.Result))
+	}
+}
+
+// writeExpansionRows writes the named query an expansion ran or would have
+// run, and why it answered no neighborhood when it did not, with the group
+// GitLab asks the user to choose where that is the reason.
+func writeExpansionRows(c *toolutil.Card, expansion *ContextExpansion) {
+	if expansion.Query != nil {
+		c.Code("Expansion query", expansion.Query.Name)
+	}
+	failed := expansion.Error
+	if failed == nil {
+		return
+	}
+	c.Code("Expansion error", failed.Code)
+	c.Field("Expansion message", failed.Message)
+	c.Link("Choose the group at", "", failed.DeepLink)
+	groups := make([]string, 0, len(failed.Candidates))
+	for _, candidate := range failed.Candidates {
+		groups = append(groups, fmt.Sprintf("%s (%d)", candidate.Name, candidate.ID))
+	}
+	c.Field("Groups to choose from", strings.Join(groups, ", "))
+}
+
+// writeContextSummary writes the rows a summary fills, then its description
+// quoted and a job's log excerpt fenced. Its lists are sections and tables,
+// which [writeContextEntity] writes after every row.
+func writeContextSummary(c *toolutil.Card, s *ContextSummary) {
+	c.Field("Title", s.Title)
+	c.Field("Name", s.Name)
+	c.Field("State", s.State)
+	c.Field("Status", s.Status)
+	c.Field("Work item type", s.WorkItemType)
+	if s.Author != nil {
+		c.Field("Author", s.Author.Username)
+	}
+	c.Field("Commit author", s.AuthorName)
+	c.Time("Authored", s.AuthoredDate)
+	c.Field("Source branch", s.SourceBranch)
+	c.Field("Target branch", s.TargetBranch)
+	c.Field("Source", s.Source)
+	c.Code("Ref", s.Ref)
+	c.Code("SHA", s.SHA)
+	c.Field("Head pipeline", s.HeadPipelineStatus)
+	c.Field("Pipeline", s.PipelineStatus)
+	c.Field("Labels", strings.Join(s.Labels, ", "))
+	c.Field("Project", s.ProjectPath)
+	c.Field("Cut by GitLab", strings.Join(s.Truncated, ", "))
+	c.URL(s.WebURL)
+	c.Text("Description", s.Description)
+	c.Fence("Log", "text", s.Log)
+}
+
+// writeChangedFiles writes the files a merge request or a commit changes as a
+// table, then each file's diff excerpt in a fence sized to it.
+func writeChangedFiles(c *toolutil.Card, files []ContextChangedFile) {
+	if len(files) == 0 {
+		return
+	}
+	table := c.Table("Changed files", "Path", "Status", "Lines")
+	for _, file := range files {
+		path := toolutil.MdCodeSpanCell(file.Path)
+		if file.OldPath != "" {
+			path = toolutil.MdCodeSpanCell(file.OldPath) + " to " + path
+		}
+		table.Row(path, toolutil.EscapeMdTableCell(file.Status), toolutil.EscapeMdTableCell(strings.Join(file.Lines, ", ")))
+	}
+	for _, file := range files {
+		c.Fence(file.Path, "diff", file.Diff)
+	}
+}
+
+// writePipelineJobs writes a pipeline's jobs as a table.
+func writePipelineJobs(c *toolutil.Card, jobs []ContextPipelineJob) {
+	if len(jobs) == 0 {
+		return
+	}
+	table := c.Table("Jobs", "Job", "Stage", "Status")
+	for _, job := range jobs {
+		table.Row(
+			toolutil.MdTitleLink(job.Name, job.WebURL),
+			toolutil.EscapeMdTableCell(job.Stage),
+			toolutil.EscapeMdTableCell(job.Status),
+		)
+	}
+}
+
+// writeFailedTests writes a job's failed tests as a table, then the start of
+// each test's output in a fence sized to it.
+func writeFailedTests(c *toolutil.Card, tests []ContextFailedTest) {
+	if len(tests) == 0 {
+		return
+	}
+	table := c.Table("Failed tests", "Test", "Class", "File")
+	for _, test := range tests {
+		table.Row(
+			toolutil.EscapeMdTableCell(test.Name),
+			toolutil.EscapeMdTableCell(test.ClassName),
+			toolutil.EscapeMdTableCell(test.File),
+		)
+	}
+	for _, test := range tests {
+		c.Fence(test.Name, "text", test.Output)
+	}
+}
+
+// writeFailedJobs writes the failed jobs of a summary, one section each with
+// its log excerpt in a fence sized to it and its failed tests.
+func writeFailedJobs(c *toolutil.Card, jobs []ContextFailedJob) {
+	for _, job := range jobs {
+		section := c.Section("Failed job " + job.Name)
+		section.Field("Stage", job.Stage)
+		if job.FailureReason != nil {
+			section.Field("Failure reason", *job.FailureReason)
+		}
+		section.Field("Cut by GitLab", strings.Join(job.Truncated, ", "))
+		section.Fence("", "text", job.Log)
+		writeFailedTests(section, job.FailedTests)
+	}
 }
 
 // FormatQueryTemplatesMarkdown renders the query templates as the card of one

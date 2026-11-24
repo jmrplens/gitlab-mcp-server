@@ -126,6 +126,32 @@ func TestRenderReference_NamesWhatSomeCallsAlsoNeed(t *testing.T) {
 	}
 }
 
+// TestRenderReference_SaysWhatIsCheckedInsideARoute verifies each language's
+// introduction says that a line is what GitLab declares of the routes alone, and
+// names the actions whose answer GitLab decides by a permission it checks of the
+// token inside the route, so their line is never read as all they need.
+func TestRenderReference_SaysWhatIsCheckedInsideARoute(t *testing.T) {
+	cases := []struct {
+		language *referenceLanguage
+		wants    []string
+	}{
+		{englishReference(), []string{"checks of the token inside a route is declared nowhere this table reads", "`orbit.context` runs with its line alone", "comes back as not found"}},
+		{spanishReference(), []string{"comprueba además del token dentro de una ruta no está declarado en nada de lo que lee esta tabla", "`orbit.context` se ejecuta solo con su línea", "vuelve como no encontrado"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.language.title, func(t *testing.T) {
+			page := string(testCase.language.render(referenceTable()))
+			for _, want := range testCase.wants {
+				t.Run(want, func(t *testing.T) {
+					if !strings.Contains(page, want) {
+						t.Errorf("the introduction holds no %q:\n%s", want, page)
+					}
+				})
+			}
+		})
+	}
+}
+
 // TestRenderReference_PointsAClassicTokenAtTheToolReference verifies each
 // language's introduction says the table judges fine-grained tokens alone and
 // sends the reader who holds a classic or OAuth token to the tool reference,

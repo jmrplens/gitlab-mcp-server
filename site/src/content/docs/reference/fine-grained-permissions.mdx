@@ -9,6 +9,8 @@ What a fine-grained personal access token needs for each action this server offe
 
 An action GitLab declares nothing for cannot be run with a fine-grained token at this release, whatever the grant says: the reason is in the second column, and a classic personal access token is the way out. **Served empty** names a part of the answer GitLab leaves out for a fine-grained token while the rest is served: always, or unless the grant also holds what follows it. Each part is written as the GraphQL selection that reaches it from the field the action asks for.
 
+A line is what GitLab declares for the routes, types and mutations the action reaches. What GitLab also checks of the token inside a route is declared nowhere this table reads, and it is known of one action. `orbit.context` runs with its line alone, but an object the token may not read on the object's own project or group comes back as not found, and a part of its summary the token may not read is left out: GitLab's [Orbit API page](https://docs.gitlab.com/api/orbit/#retrieve-entity-context) lists the permissions.
+
 This table judges fine-grained tokens alone. The scope a classic personal access token or an OAuth token needs for each action, `read_api` or `api`, is printed on the action's entry in the [tool reference](/gitlab-mcp-server/reference/tools/), beside its tier and the line this table holds for it. The fine-grained requirement is also served for each action in the `fine_grained` block of its `gitlab://tools/{id}` detail. [Fine-grained tokens](/gitlab-mcp-server/operations/fine-grained-tokens/) covers creating a token, what the server needs from it at startup, and how a refusal reads.
 
 ## `access`
@@ -766,6 +768,7 @@ This table judges fine-grained tokens alone. The scope a classic personal access
 | Action                  | Needs                                                                                                                                                                             | Served empty |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `orbit.command_list`    | Orbit: Read at user                                                                                                                                                               |              |
+| `orbit.context`         | Orbit: Read at user                                                                                                                                                               |              |
 | `orbit.dsl`             | Orbit: Read at user                                                                                                                                                               |              |
 | `orbit.graph_status`    | one of: Group: Read at group; Orbit: Read at user **or** Project: Read at project; Orbit: Read at user **or** Group: Read at group; Orbit: Read at user; Project: Read at project |              |
 | `orbit.named_query`     | Orbit: Read at user                                                                                                                                                               |              |

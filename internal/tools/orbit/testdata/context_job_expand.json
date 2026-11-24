@@ -1,0 +1,89 @@
+{
+  "version": "1.3.0",
+  "entities": [
+    {
+      "token": "Job[14831871432]",
+      "resolved_token": "Job[14831871432]",
+      "type": "Job",
+      "id": "14831871432",
+      "found": true,
+      "summary": {
+        "namespace_path": "acme-group/orbit-fixtures",
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "id": 14831871432,
+        "name": "ruff",
+        "status": "success",
+        "stage": "lint",
+        "failure_reason": null,
+        "allow_failure": false,
+        "ref": "main",
+        "sha": "baf4d95015a68a1a6a823f138e72583e73029220",
+        "web_url": "https://gitlab.com/acme-group/orbit-fixtures/kg-fixtures/-/jobs/14831871432",
+        "pipeline_id": 2597435879,
+        "pipeline_status": "failed",
+        "merge_request": null,
+        "log": "$ python --version\nPython 3.12.13\n$ pip install --upgrade pip",
+        "truncated": []
+      },
+      "expansion": {
+        "result": {
+          "format_version": "6.0.0",
+          "query_type": "traversal",
+          "nodes": [
+            {
+              "type": "Job",
+              "id": "14831871432",
+              "status": "success",
+              "name": "ruff"
+            },
+            {
+              "type": "Job",
+              "id": "14831871438",
+              "failure_reason": "script_failure",
+              "allow_failure": false,
+              "status": "failed",
+              "name": "publish-dry-run"
+            },
+            {
+              "type": "Pipeline",
+              "id": "2597435879",
+              "source": "push",
+              "sha": "baf4d95015a68a1a6a823f138e72583e73029220",
+              "status": "failed",
+              "ref": "main"
+            }
+          ],
+          "edges": [
+            {
+              "from": "Job",
+              "from_id": "14831871432",
+              "to": "Pipeline",
+              "to_id": "2597435879",
+              "type": "IN_PIPELINE"
+            },
+            {
+              "from": "Pipeline",
+              "from_id": "2597435879",
+              "to": "Job",
+              "to_id": "14831871438",
+              "type": "HAS_JOB"
+            }
+          ],
+          "pagination": {
+            "has_more": false,
+            "truncated": false
+          }
+        },
+        "query": {
+          "name": "context_for_job",
+          "parameters": {
+            "node_ids": [
+              14831871432
+            ],
+            "limit": 100
+          }
+        }
+      }
+    }
+  ]
+}

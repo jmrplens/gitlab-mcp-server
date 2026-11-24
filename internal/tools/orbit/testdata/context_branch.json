@@ -1,0 +1,26 @@
+{
+  "version": "1.3.0",
+  "entities": [
+    {
+      "token": "acme-group/orbit-fixtures/kg-fixtures@main",
+      "resolved_token": "acme-group/orbit-fixtures/kg-fixtures@main",
+      "type": "Branch",
+      "id": "main",
+      "found": true,
+      "summary": {
+        "namespace_path": "acme-group/orbit-fixtures",
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "name": "main",
+        "sha": "2acc439e1741fc8d3262b6e0a2dfb8f21623787f",
+        "default_branch": true,
+        "web_url": "https://gitlab.com/acme-group/orbit-fixtures/kg-fixtures/-/tree/main",
+        "merge_request": null,
+        "pipeline_id": 2991550237,
+        "pipeline_status": "skipped",
+        "failed_jobs": [],
+        "truncated": []
+      },
+      "expansion": null
+    }
+  ]
+}

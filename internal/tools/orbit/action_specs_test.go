@@ -40,7 +40,7 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 	wantNames := []string{
 		"status", "schema", "tools", "dsl", "query", "graph_status",
 		"query_templates", "response_format", "command_list", "skill_list", "skill_get", "skill_file",
-		"named_query",
+		"named_query", "context",
 	}
 	if len(specs) != len(wantNames) {
 		t.Fatalf("ActionSpecs() len = %d, want %d", len(specs), len(wantNames))
@@ -91,8 +91,8 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	if len(specs) != 13 {
-		t.Fatalf("ActionSpecs() len = %d, want 13", len(specs))
+	if len(specs) != 14 {
+		t.Fatalf("ActionSpecs() len = %d, want 14", len(specs))
 	}
 	for i, spec := range specs {
 		hasKGAlias := false
@@ -578,7 +578,7 @@ func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 		"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status",
 		"gitlab_orbit_query_templates", "gitlab_orbit_response_format", "gitlab_orbit_command_list",
 		"gitlab_orbit_skill_list", "gitlab_orbit_skill_get", "gitlab_orbit_skill_file",
-		"gitlab_orbit_named_query",
+		"gitlab_orbit_named_query", "gitlab_orbit_context",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !containsTool(names, want) {
@@ -684,6 +684,7 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
+		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}},
 	}
 
 	for _, tt := range tests {
@@ -726,6 +727,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "no-such-skill"}},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "missing.md"}},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
+		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}},
 	}
 
 	for _, tt := range tests {
@@ -758,10 +760,10 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 
 // TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind holds the card of a
 // 404 to what GitLab means by it on the route. An unknown named query is a
-// 400, so a 404 there says Orbit is not served to the token's user and the
-// card names the service. Each card keeps the two checks on Orbit being
-// served, and none of it says that what the caller sent does not exist when
-// GitLab said nothing about it.
+// 400 and an unresolved context token a 200 with found false, so a 404 there
+// says Orbit is not served to the token's user and the card names the service.
+// Each card keeps the two checks on Orbit being served, and none of it says
+// that what the caller sent does not exist when GitLab said nothing about it.
 func TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind(t *testing.T) {
 	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -781,6 +783,10 @@ func TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind(t *testing.T) {
 		{
 			name: "a named query", tool: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"},
 			want: []string{"GitLab Orbit Named Queries Not Found", "**named query service**"}, not: "recent_merges",
+		},
+		{
+			name: "a context token", tool: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}},
+			want: []string{"GitLab Orbit Context Not Found", "**entity context service**"}, not: "14831871432",
 		},
 	}
 
@@ -839,6 +845,7 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_skill_get", args: map[string]any{"name": "orbit"}, wantHint: true},
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}, wantHint: true},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}, wantHint: true},
+		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}, wantHint: true},
 	}
 
 	for _, tt := range tests {
