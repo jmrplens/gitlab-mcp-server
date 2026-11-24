@@ -141,6 +141,36 @@ func TestDecisions_DispositionCounts(t *testing.T) {
 	}
 }
 
+// TestDecisions_OrbitReads_DeclareWhatTheyRefuseBeforeARequest pins the bounds
+// the Orbit reads of issues 1209, 1586 and 1587 refuse a call past before they
+// send anything, each a decision of this server even where it copies GitLab's
+// number (decided on issue 1209, 2026-11-21): the search, the results and the
+// results of one scope of orbit.grep and the scopes it names, the one token of
+// orbit.context and the command names of orbit.command_list. None of the new
+// reads follows a cursor, so RQB-014 keeps the two it bounds.
+func TestDecisions_OrbitReads_DeclareWhatTheyRefuseBeforeARequest(t *testing.T) {
+	for _, tc := range []struct {
+		row, name string
+	}{
+		{"RQB-010", "maxGrepSearchBytes"},
+		{"RQB-010", "maxGrepLimit"},
+		{"RQB-010", "maxGrepPerScope"},
+		{"RQB-010", "maxGrepScopes"},
+		{"RQB-010", "maxContextTokens"},
+		{"RQB-010", "maxCommandNames"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, ok := Lookup(tc.row)
+			if !ok {
+				t.Fatalf("%s has no row", tc.row)
+			}
+			if !slices.Contains(d.Sites, enforce("internal/tools/orbit", tc.name)) {
+				t.Errorf("%s does not declare internal/tools/orbit.%s as an Enforce site", tc.row, tc.name)
+			}
+		})
+	}
+}
+
 // TestDecisions_RequestBounds_DeclareTheBoundsCheckTenancyCouldNotSee pins
 // the row each bound issue 1717 found undeclared is an Enforce site of. None
 // of their packages held a site of a row that is not a request bound, so the
