@@ -462,7 +462,7 @@ func TestMakefile_TheTargets_RunTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"\nsonar:\n\t@go run ./cmd/sonar_scan\n", "\nsonar-status:\n\t@go run ./cmd/sonar_scan -no-scan\n"} {
+	for _, want := range []string{"\nsonar:\n\t@$(call RUN_BUILT,sonar_scan)\n", "\nsonar-status:\n\t@$(call RUN_BUILT,sonar_scan) -no-scan\n"} {
 		t.Run(strings.Fields(want)[0], func(t *testing.T) {
 			t.Parallel()
 			if !strings.Contains(string(makefile), want) {
