@@ -38,8 +38,8 @@
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 13,852 | 56.8% |
-| `TestFunc` (no underscore)             |    900 |  3.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  9,632 | 39.5% |
+| `TestFunc` (no underscore)             |    899 |  3.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  9,633 | 39.5% |
 
 ## Test Distribution
 
