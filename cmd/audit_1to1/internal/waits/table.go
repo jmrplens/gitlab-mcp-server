@@ -309,8 +309,9 @@ var upstreamWaits = []Entry{
 			NoMethodFor{Route: "GET /orbit/skills/:"},
 			NoMethodFor{Route: "POST /orbit/query/:"},
 			NoMethodFor{Route: "POST /orbit/context"},
+			NoMethodFor{Route: "GET /orbit/grep"},
 		},
-		Reason: "client-go has no method for the Orbit skill routes, GET /orbit/skills, /orbit/skills/:name and /orbit/skills/:name/*path, nor for POST /orbit/query/:name and POST /orbit/context, so orbit.skill_list, orbit.skill_get, orbit.skill_file, orbit.named_query and orbit.context send their request through restResponse",
+		Reason: "client-go has no method for the Orbit skill routes, GET /orbit/skills, /orbit/skills/:name and /orbit/skills/:name/*path, nor for POST /orbit/query/:name, POST /orbit/context and GET /orbit/grep, so orbit.skill_list, orbit.skill_get, orbit.skill_file, orbit.named_query, orbit.context and orbit.grep send their request through restResponse",
 	},
 	{
 		Category:   CategoryUpstream,

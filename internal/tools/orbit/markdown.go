@@ -4,6 +4,7 @@
 package orbit
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -49,6 +50,102 @@ func init() {
 	toolutil.RegisterMarkdown[SkillGetOutput](FormatSkillGetMarkdown)
 	toolutil.RegisterMarkdown[SkillFileOutput](FormatSkillFileMarkdown)
 	toolutil.RegisterMarkdown[EntityContextOutput](FormatEntityContextMarkdown)
+	toolutil.RegisterMarkdown[GrepOutput](FormatGrepMarkdown)
+}
+
+// FormatGrepMarkdown renders what a search found as the card of one object:
+// the target and how many hits came back, the hits as a table with the token
+// each carries and the state of a work item or merge request, every file's matching passages in a fence sized to them, and
+// the scopes GitLab did not search with the reason. The llm text is the whole
+// body.
+func FormatGrepMarkdown(out GrepOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Orbit Grep")
+	contextHint := toolutil.HintAction(orbitActionContext, "read a work item's, merge request's, commit's or branch's summary by the token a hit carries")
+	queryHint := toolutil.HintAction(orbitActionQuery, "query the graph from a hit's id")
+	if out.FormattedText != "" {
+		c.Fence("", "text", out.FormattedText)
+		c.End(contextHint, queryHint)
+		return b.String()
+	}
+	if out.Target != nil {
+		c.Code("Target", out.Target.Token)
+		c.Field("Path", out.Target.FullPath)
+	}
+	c.Int("Results", int64(out.ResultCount))
+	if out.Truncated {
+		c.Note("GitLab ended the search at the limit, or a scope held more than per_scope.")
+	}
+	if len(out.Results) > 0 {
+		table := c.Table("Results", "Scope", "Type", "Token", "Where", "State", "Text")
+		for _, result := range out.Results {
+			token := ""
+			if result.Token != nil {
+				token = toolutil.MdCodeSpanCell(*result.Token)
+			}
+			table.Row(
+				toolutil.EscapeMdTableCell(result.Scope),
+				toolutil.EscapeMdTableCell(result.Type),
+				token,
+				toolutil.EscapeMdTableCell(grepWhere(result.Reference)),
+				toolutil.EscapeMdTableCell(result.State),
+				toolutil.EscapeMdTableCell(result.Text),
+			)
+		}
+	}
+	writeSkippedScopes(c, out.Scopes)
+	for _, result := range out.Results {
+		for _, match := range result.Matches {
+			c.Fence(fmt.Sprintf("%s:%d-%d", result.Reference.Path, match.StartLine, match.EndLine), "text", match.Text)
+		}
+	}
+	c.End(contextHint, queryHint)
+	return b.String()
+}
+
+// writeSkippedScopes writes the scopes GitLab did not search, with why.
+func writeSkippedScopes(c *toolutil.Card, scopes []GrepScope) {
+	var skipped []GrepScope
+	for _, scope := range scopes {
+		if scope.Status != "ok" {
+			skipped = append(skipped, scope)
+		}
+	}
+	if len(skipped) == 0 {
+		return
+	}
+	table := c.Table("Scopes not searched", "Scope", "Status", "Reason")
+	for _, scope := range skipped {
+		reason := ""
+		if scope.Reason != nil {
+			reason = scope.Reason.Code
+		}
+		table.Row(
+			toolutil.EscapeMdTableCell(scope.Name),
+			toolutil.EscapeMdTableCell(scope.Status),
+			toolutil.EscapeMdTableCell(reason),
+		)
+	}
+}
+
+// grepWhere places a hit in one phrase: a file's path in its project, a
+// work item's or merge request's project or group and iid, a commit's project
+// and SHA, a branch's project, and what a note is on, as a reference and as
+// the token orbit.context takes.
+func grepWhere(ref GrepReference) string {
+	iid := ""
+	if ref.IID != 0 {
+		iid = strconv.FormatInt(ref.IID, 10)
+	}
+	parts := make([]string, 0, 3)
+	for _, part := range []string{
+		cmp.Or(ref.ProjectPath, ref.NamespacePath), cmp.Or(ref.Path, iid, ref.SHA), ref.NoteableReference, ref.Noteable,
+	} {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // FormatEntityContextMarkdown renders what GitLab resolved a token to as the

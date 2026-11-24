@@ -20485,6 +20485,30 @@
       ]
     },
     {
+      "id": "orbit.grep",
+      "handlers": [
+        "orbit.grepNotFound",
+        "orbit.Grep"
+      ],
+      "classic": "read_api",
+      "requests": [
+        {
+          "kind": "rest",
+          "route": "GET /orbit/grep",
+          "class": "mandatory",
+          "classic": "read_api",
+          "sites": [
+            "orbit.restResponse"
+          ]
+        }
+      ],
+      "paths": [
+        [
+          0
+        ]
+      ]
+    },
+    {
       "id": "orbit.named_query",
       "handlers": [
         "orbit.func literal",

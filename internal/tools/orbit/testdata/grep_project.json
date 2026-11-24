@@ -1,0 +1,118 @@
+{
+  "version": "1.2.0",
+  "request": {
+    "search": "compute_total",
+    "limit": 20,
+    "per_scope": 5
+  },
+  "target": {
+    "type": "Project",
+    "id": 83234203,
+    "token": "Project[83234203]",
+    "full_path": "acme-group/orbit-fixtures/kg-fixtures"
+  },
+  "scopes": [
+    {
+      "name": "work_items",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "merge_requests",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "blobs",
+      "status": "ok",
+      "backend": "zoekt",
+      "result_count": 5,
+      "pagination": {
+        "has_more": true
+      }
+    },
+    {
+      "name": "commits",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "notes",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "milestones",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "users",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "projects",
+      "status": "unavailable",
+      "reason": {
+        "code": "not_available_for_search_type"
+      }
+    },
+    {
+      "name": "groups",
+      "status": "unavailable",
+      "reason": {
+        "code": "not_available_for_search_type"
+      }
+    }
+  ],
+  "results": [
+    {
+      "scope": "blobs",
+      "type": "File",
+      "id": null,
+      "token": null,
+      "reference": {
+        "project_id": 83234203,
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "path": "src/acme/orders/pricing.py",
+        "branch": "main",
+        "commit_sha": null
+      },
+      "text": "src/acme/orders/pricing.py",
+      "matches": [
+        {
+          "start_line": 26,
+          "end_line": 28,
+          "text": "\ndef compute_total(items: Iterable[OrderItem], discount_percent: float = 0.0, tax_cents: int | None = None) -> int:\n    \"\"\"Compute the final order total in cents: subtotal - discount + tax."
+        }
+      ]
+    }
+  ],
+  "result_count": 1,
+  "truncated": true
+}

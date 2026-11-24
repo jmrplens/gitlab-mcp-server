@@ -98,6 +98,14 @@ func TestOrbitHandlers_CancelledOnArrival_ReturnCanceled(t *testing.T) {
 			_, err := EntityContext(ctx, client, EntityContextInput{Tokens: []string{"Job[1]"}, ResponseFormat: "llm"})
 			return err
 		}},
+		{name: "grep", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Grep(ctx, client, GrepInput{Search: "seed", ProjectID: 1})
+			return err
+		}},
+		{name: "grep in the llm format", call: func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Grep(ctx, client, GrepInput{Search: "seed", ProjectID: 1, ResponseFormat: "llm"})
+			return err
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -762,6 +770,10 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		}},
 		{name: "context", call: func() error {
 			_, err := EntityContext(ctx, client, EntityContextInput{Tokens: []string{"Job[1]"}})
+			return err
+		}},
+		{name: "grep", call: func() error {
+			_, err := Grep(ctx, client, GrepInput{Search: "stock", ProjectID: 1})
 			return err
 		}},
 		{name: "query templates", call: func() error { _, err := QueryTemplates(ctx, client, QueryTemplatesInput{}); return err }},
