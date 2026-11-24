@@ -12,7 +12,7 @@ behind the `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the
 environment. This document explains the data they expect and how to
 re-provision it.
 
-The file holds 16 tests and 110 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects to at least the tier of the plan GitLab.com reports for the fixture namespace's top-level group (issue 1224), which Orbit access has no part in since GitLab.com grants it by add-on or trial whatever the plan; the member who does not administer a paid group, the case issue 1224 was found in, is held by `TestDetectTier_GitLabDotComMember_ResolvesTheTopLevelGroupsPlan` in `internal/gitlab`. One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. Two hold against a stand-in, with no network, that a subtest reading what the fixture setup provisions fails on an answer with no row, and that the `SKIP` and `LIMIT` subtest passes only on the second project of the namespace by id (issue 1588). The last three hold against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token, that a null a handler reports makes it skip only when GitLab, asked again, answers null too, and that an index the graph status handler does not report skips a test that needs the fixture namespace only when GitLab, asked again, answers that index null too (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
+The file holds 16 tests and 114 subtests, and every query they send but one is written in GQL, the only query language GitLab.com has accepted since 2026-10-15 (issue 1414). One subtest checks that the query language GitLab.com describes is the GQL `orbit.query` teaches, and another sends the one exception, a query written in the JSON DSL GitLab.com removed on 2026-10-27, as text, and checks what the caller is told when GitLab.com refuses it. One test holds the licensing tier the server detects to at least the tier of the plan GitLab.com reports for the fixture namespace's top-level group (issue 1224), which Orbit access has no part in since GitLab.com grants it by add-on or trial whatever the plan; the member who does not administer a paid group, the case issue 1224 was found in, is held by `TestDetectTier_GitLabDotComMember_ResolvesTheTopLevelGroupsPlan` in `internal/gitlab`. One holds the release GitLab.com reports to the fine-grained action table's own release or the prerelease right after it (issue 1023), so GitLab.com moving past the table fails a run, and another holds that rule against a stand-in table with no network. One measures the query route against a token carrying `read_api` alone and runs only with `GITLAB_COM_READ_API_TOKEN`, and another holds that measurement's reading of GitLab's refusal against a stand-in, with no network. Two hold against a stand-in, with no network, that a subtest reading what the fixture setup provisions fails on an answer with no row, and that the `SKIP` and `LIMIT` subtest passes only on the second project of the namespace by id (issue 1588). The last three hold against a stand-in, with no network, which answers make a subtest skip because GitLab.com does not serve Orbit to the token, that a null a handler reports makes it skip only when GitLab, asked again, answers null too, and that an index the graph status handler does not report skips a test that needs the fixture namespace only when GitLab, asked again, answers that index null too (see [Access since Orbit's general availability](#access-since-orbits-general-availability)).
 
 ## The fixture namespace
 
@@ -106,10 +106,12 @@ against any namespace once the indexer has had time to scan the fixture
 content. The subtests that read what the setup provisions, the two
 projects, the merge request, the issues of `kg-fixtures` as `WorkItem`
 nodes in the project and the project's neighbors, fail on an answer with
-no row: `make orbit-wait-indexer` waits for `READY` with both projects
-indexed, so an empty answer after it means the graph lost them, as it lost
-the merge request and the issues after the move of 2026-10-26 (issue
-1588).
+no row. Such an answer means the index has not caught up with what the
+setup made or the graph lost it, as it lost the merge request and the
+issues after the move of 2026-10-26 (issue 1588): `make orbit-wait-indexer`
+waits for `READY` with both projects indexed, but goes on with a warning
+once its timeout passes, and the suite can be run without it, so the
+indexing state is what tells the two apart.
 
 `TestOrbitLiveGitLabCom_FeatureCoverage` exercises every documented
 GQL pattern at least once against the namespace: comparison, list and
@@ -239,12 +241,14 @@ The Orbit indexer is eventually consistent. After a fresh push:
    `last_completed_at` advances and row counts keep growing. This is
    a GitLab-side artifact, not a fixture issue.
 3. `make orbit-wait-indexer` waits for `READY` with both projects
-   indexed before the suite runs, so the subtests that read what the
-   setup provisions fail on an empty answer; the rest are
-   informational and pass with any `row_count`.
+   indexed, or for its timeout, before the suite runs. The subtests
+   that read what the setup provisions fail on an empty answer; the
+   rest are informational and pass with any `row_count`.
 
-If a provisioned read fails with no row after the wait, the graph does
-not hold the resource. Ask GraphQL what the indexer knows,
+If a provisioned read fails with no row, the graph does not hold the
+resource yet or no longer holds it: the wait goes on with a warning when
+its timeout passes, so read whether it printed one. Ask GraphQL what the
+indexer knows,
 `group(fullPath: "<ns>") { orbit { indexing { state projects { indexed notIndexed } } } }`
 (`GET /api/v4/orbit/graph_status`, which answered this until 2026-10-28,
 was removed by gitlab-org/gitlab!264745).

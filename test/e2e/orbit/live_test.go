@@ -252,7 +252,7 @@ func rowSummary(out orbit.QueryOutput) string {
 }
 
 // errNoRow is what [provisionedRun] wraps an answer with no row in.
-var errNoRow = errors.New("GitLab answered no row for what cmd/orbit_fixtures provisions, and make orbit-wait-indexer waits for the index to be READY before the suite runs, so the graph has lost it (issue 1588)")
+var errNoRow = errors.New("GitLab answered no row for what cmd/orbit_fixtures provisions: the index has not caught up with it (make orbit-wait-indexer goes on with a warning once its timeout passes, and the suite can run without it) or the graph has lost it, as it lost the fixture merge request and the issues (issue 1588); ask GraphQL for the namespace's orbit indexing state to tell which")
 
 // provisionedRun is [queryRun] for a statement that reads what
 // cmd/orbit_fixtures provisions: the two fixture projects, the merge request
@@ -276,8 +276,9 @@ func provisionedRun(client *gitlabclient.Client, query string) func(context.Cont
 
 // skipLimitProblem says what is wrong with the answer to the SKIP 1 LIMIT 1
 // page of the fixture projects ordered by id, given the ids of the fixture
-// projects, or "" when it is that page: one row, the second project by id,
-// with has_more set exactly when a project follows it.
+// projects, or "" when it is that page: exactly one row and one node, the
+// second project by id, with a has_more GitLab sent as a boolean and set
+// exactly when a project follows it.
 func skipLimitProblem(out orbit.QueryOutput, ids []string) string {
 	if len(ids) < 2 {
 		return fmt.Sprintf("the page needs two fixture projects and the namespace holds %d", len(ids))
@@ -290,15 +291,18 @@ func skipLimitProblem(out orbit.QueryOutput, ids []string) string {
 	})
 	result, _ := out.Result.(map[string]any)
 	nodes, _ := result["nodes"].([]any)
-	if out.RowCount == 0 || len(nodes) == 0 {
-		return "SKIP 1 LIMIT 1 answered 0 rows"
+	if out.RowCount != 1 || len(nodes) != 1 {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered row_count=%d with nodes=%d, and the page is one row", out.RowCount, len(nodes))
 	}
 	node, _ := nodes[0].(map[string]any)
 	if got := fmt.Sprint(node["id"]); got != sorted[1] {
 		return fmt.Sprintf("SKIP 1 LIMIT 1 answered project %s, and the second fixture project by id is %s", got, sorted[1])
 	}
 	pagination, _ := result["pagination"].(map[string]any)
-	hasMore, _ := pagination["has_more"].(bool)
+	hasMore, ok := pagination["has_more"].(bool)
+	if !ok {
+		return fmt.Sprintf("SKIP 1 LIMIT 1 answered the pagination %v, with no boolean has_more", result["pagination"])
+	}
 	if want := len(sorted) > 2; hasMore != want {
 		return fmt.Sprintf("SKIP 1 LIMIT 1 answered has_more=%t over %d fixture projects", hasMore, len(sorted))
 	}
@@ -1154,11 +1158,11 @@ func TestGitLabComReleaseProblem_AgainstARecordedTable_PassesItsReleaseAndTheNex
 //
 // The subtests that read what the setup provisions (the two projects, the
 // merge request, the issues and the project's neighbors) fail on an answer
-// with no row, through [provisionedRun]: make orbit-wait-indexer waits for
-// the index to be READY with both projects indexed before the suite runs,
-// so an empty answer after it means the graph lost what the setup made, as
-// it lost the merge request and the issues after the move of 2026-10-26
-// (issue 1588). The counts answer one row whatever they count, and stay
+// with no row, through [provisionedRun]: such an answer means the index has
+// not caught up with what the setup made (make orbit-wait-indexer goes on
+// with a warning once its timeout passes) or the graph lost it, as it lost
+// the merge request and the issues after the move of 2026-10-26 (issue
+// 1588). The counts answer one row whatever they count, and stay
 // informational.
 func TestOrbitLiveGitLabCom_Fixtures(t *testing.T) {
 	testOrbitLiveFixtures(t)
@@ -1531,11 +1535,10 @@ func queryAnswer(nodes string, hasMore bool, rows int) string {
 
 // TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement holds the
 // subtests that read what cmd/orbit_fixtures provisions able to fail: a
-// statement GitLab answers with no row is an error that names it, since make
-// orbit-wait-indexer waits for the index to be READY before the suite runs,
-// so an empty answer after it means the graph lost what the setup made (issue
-// 1588), and one GitLab answers with a row is the summary queryRun logs. It
-// needs no network and no token.
+// statement GitLab answers with no row is an error that names it, since the
+// setup made what it reads and an empty answer means the index has not
+// caught up with it or the graph lost it (issue 1588), and one GitLab answers
+// with a row is the summary queryRun logs. It needs no network and no token.
 func TestProvisionedRun_AnAnswerWithNoRow_FailsNamingTheStatement(t *testing.T) {
 	const statement = "MATCH (w:WorkItem)-[:IN_PROJECT]->(p:Project {full_path: 'ns/kg-fixtures'}) RETURN w.id"
 	tests := []struct {
@@ -1591,7 +1594,11 @@ func TestSkipLimitProblem_ThePageGitLabAnswers_IsTheSecondProjectByID(t *testing
 		{name: "the first project", answer: queryAnswer(`{"type":"Project","id":"83234203"}`, false, 1), ids: []string{"83234203", "83234232"}, wantErr: "answered project 83234203"},
 		{name: "has_more with nothing after it", answer: queryAnswer(second, true, 1), ids: []string{"83234203", "83234232"}, wantErr: "has_more=true"},
 		{name: "no has_more with one after it", answer: queryAnswer(second, false, 1), ids: []string{"83234203", "83234232", "83234999"}, wantErr: "has_more=false"},
-		{name: "no row", answer: queryAnswer("", false, 0), ids: []string{"83234203", "83234232"}, wantErr: "answered 0 rows"},
+		{name: "no row", answer: queryAnswer("", false, 0), ids: []string{"83234203", "83234232"}, wantErr: "answered row_count=0 with nodes=0"},
+		{name: "two rows from the second on, as LIMIT 2 would answer", answer: queryAnswer(second+`,{"type":"Project","id":"83234300"}`, true, 2), ids: []string{"83234203", "83234232", "83234300", "83234400"}, wantErr: "answered row_count=2 with nodes=2"},
+		{name: "one node counted as two rows", answer: queryAnswer(second, false, 2), ids: []string{"83234203", "83234232"}, wantErr: "answered row_count=2 with nodes=1"},
+		{name: "no has_more", answer: `{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[` + second + `],"edges":[],"pagination":{"truncated":false}},"query_type":"traversal","row_count":1}`, ids: []string{"83234203", "83234232"}, wantErr: "no boolean has_more"},
+		{name: "has_more as a string", answer: `{"result":{"format_version":"6.0.0","query_type":"traversal","nodes":[` + second + `],"edges":[],"pagination":{"has_more":"false"}},"query_type":"traversal","row_count":1}`, ids: []string{"83234203", "83234232"}, wantErr: "no boolean has_more"},
 		{name: "one fixture project", answer: queryAnswer(second, false, 1), ids: []string{"83234232"}, wantErr: "needs two fixture projects"},
 	}
 	for _, tt := range tests {
