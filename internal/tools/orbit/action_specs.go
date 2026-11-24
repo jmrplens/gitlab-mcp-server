@@ -30,6 +30,7 @@ const (
 	orbitActionSkillGet       = "orbit.skill_get"
 	orbitActionSkillFile      = "orbit.skill_file"
 	orbitActionNamedQuery     = "orbit.named_query"
+	orbitActionContext        = "orbit.context"
 )
 
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
@@ -99,8 +100,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		orbitReadSpec("named_query", orbitReadRoute(client, NamedQuery, "GitLab Orbit Named Queries", "named query service"), "gitlab_orbit_named_query",
 			"Run one of GitLab Orbit's (Knowledge Graph) named queries by name: a template orbit.query_templates lists, which takes no parameters, "+
 				"or one of the queries that take node ids, an entity, a file path or search text, which the description of parameters lists with what each takes. The answer is the envelope orbit.query returns.",
-			[]string{orbitActionQueryTemplates, orbitActionQuery},
+			[]string{orbitActionQueryTemplates, orbitActionQuery, orbitActionContext},
 			[]string{"kg.named_query", "knowledge_graph.named_query", "orbit.run_template", "kg.run_template"}, namedQueryInput()),
+		orbitReadSpec("context", orbitReadRoute(client, EntityContext, "GitLab Orbit Context", "entity context service"), "gitlab_orbit_context",
+			"Resolve one reference to a work item, merge request, job, pipeline, branch or commit through GitLab Orbit (Knowledge Graph) and read its summary, discussions, changed files and failed jobs' logs, "+
+				"and with expand the graph neighborhood of one of the first three, one billable query. "+
+				"A reference it cannot resolve is found false with the reason, not_found also for an object the user or token may not read: "+
+				"a fine-grained token needs, beside read_orbit, permission to read on the object's own project or group. "+
+				"Summary parts it may not read are left out, and a failed expansion carries its reason.",
+			[]string{orbitActionNamedQuery, orbitActionQuery},
+			[]string{"kg.context", "knowledge_graph.context", "orbit.resolve", "kg.resolve"}, contextInput()),
 	}
 }
 

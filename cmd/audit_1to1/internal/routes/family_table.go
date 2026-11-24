@@ -766,8 +766,6 @@ var routeFamilies = []routeFamily{
 		"the SSE listener of Orbit's MCP endpoint; orbit.tools, orbit.dsl and orbit.schema send its JSON-RPC POST through orbit.callMCP and read the one answer it gives"),
 	tracked(issueOrbitRoutes, 1, on(http.MethodGet), "/orbit/grep",
 		"searches the graph for entities by name, from 19.6; no action searches it yet"),
-	tracked(issueOrbitRoutes, 1, on(http.MethodPost), "/orbit/context",
-		"reads the context of a graph entity, from 19.6; no action reads it yet"),
 	// The GitLab Duo domain (issueDuoRoutes).
 	tracked(issueDuoRoutes, 27, on(), "/ai/duo_workflows/**",
 		"the GitLab Duo Agent Platform's flows: creates, reads, updates, restarts, resumes and executes a workflow, writes and reads its checkpoints and events, uploads its session files and reads them and their raw content, reads its catalog items and its trace, the tools and agent privileges it may use and the connection details of its service and WebSocket, reads the Duo Code Review custom instructions, ingests audit events and revokes the workflow's token. Fifteen skip the fine-grained check for ai_workflows_oauth_auth or ai_workflows_token_auth, which a user's token with the api scope calls"),
