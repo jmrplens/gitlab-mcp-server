@@ -79,6 +79,36 @@ func TestReadSettings_WhatCannotBeRead_IsRefusedBeforeAnythingRuns(t *testing.T)
 	}
 }
 
+// TestReadSettings_ADotenvThatCannotBeParsed_ShowsNothingOfIt verifies that a
+// .env the parser stops at is refused with a message that carries nothing the
+// file holds, on either stream: the parser's own error quotes the rest of the
+// file from where it stopped, or the value that does not end, and both hold
+// the secrets.
+func TestReadSettings_ADotenvThatCannotBeParsed_ShowsNothingOfIt(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, dotenv string }{
+		{"a command before the secrets", "[ -f other ] && . ./other\nSONARQUBE_TOKEN=secret-one\nGITLAB_TOKEN=secret-two\n"},
+		{"a command after the secrets", "SONARQUBE_TOKEN=secret-one\n. ./secret-two\n"},
+		{"a value that does not end", "GITLAB_TOKEN=secret-one\nSONARQUBE_TOKEN=\"secret-two\n"},
+		{"a name alone", "SONARQUBE_TOKEN=secret-one\nsecret-two"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			run := usual(t)
+			run.Dotenv = &tc.dotenv
+			b := newBench(t, run)
+			const want = "ERROR: .env could not be parsed: a line is not NAME=value or a quoted value does not end (the file is not shown, since it holds secrets)\n"
+			if status := b.session.main(t.Context(), nil); status != 1 || b.stderr.String() != want {
+				t.Errorf("status = %d, stderr = %q; want 1 and %q", status, b.stderr.String(), want)
+			}
+			if b.stdout.Len()+len(b.calls)+len(b.requests) != 0 {
+				t.Errorf("stdout = %q, ran %+v, sent %+v; want nothing", b.stdout.String(), b.calls, b.requests)
+			}
+		})
+	}
+}
+
 // TestReadSettings_AnotherDirectory_ReadsTheSameRepository verifies that the
 // command finds the repository's root from a directory below it, and the
 // defaults of what the environment does not set.
