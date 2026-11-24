@@ -1,5 +1,5 @@
 {
- "note": "every run of scripts/coverage-conditions.sh at 02a41e35d over the module in files, with go run, go install and gobco answered by a stand-in and everything else by the go command",
+ "note": "every run of scripts/coverage-conditions.sh at 02a41e35d over the module in files, with go run, go install and gobco answered by a stand-in and everything else by the go command; two messages about build tags are respelled, honors where the script printed honours",
  "files": {
   "internal/plain/doc.go": "// Package plain is a fixture.\npackage plain\n",
   "internal/plain/plain.go": "package plain\n\nfunc f(c int) bool {\n\treturn c == 1\n}\n",
