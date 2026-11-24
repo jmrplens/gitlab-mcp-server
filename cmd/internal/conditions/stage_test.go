@@ -113,6 +113,35 @@ func TestMeasure_ALinkedFile_IsRewrittenInTheCopyAlone(t *testing.T) {
 	}
 }
 
+// TestMeasure_AModuleReachedThroughALink_IsLeftAsItIs verifies, where a tree
+// holds symbolic links, that a run started in a directory that links to the
+// module, which is how the go command then names the module's directory,
+// stages a copy of the module and edits nothing of it.
+func TestMeasure_AModuleReachedThroughALink_IsLeftAsItIs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	rec := readRecord(t)
+	b := newBench(t, rec.Files)
+	const rel = "internal/release/release.go"
+	link := filepath.Join(b.scratch, "link")
+	if err := os.Symlink(b.root, link); err != nil {
+		t.Fatal(err)
+	}
+	original := b.root
+	b.root, b.environ = link, append(b.environ, "PWD="+link)
+	status, _, stderr := b.measure(t.Context(), "./internal/release")
+	if status != 0 || len(b.calls) != 1 {
+		t.Fatalf("status = %d, stderr = %q, ran %+v; want one measurement", status, stderr, b.calls)
+	}
+	if got, want := b.calls[0].Files["release.go"], blankConstraints(rec.Files[rel]); got != want {
+		t.Errorf("gobco finds %q, want %q", got, want)
+	}
+	if got, err := os.ReadFile(filepath.Join(original, filepath.FromSlash(rel))); err != nil || string(got) != rec.Files[rel] {
+		t.Errorf("the module's own file reads %q (%v), want %q", got, err, rec.Files[rel])
+	}
+}
+
 // TestMeasure_APackageTheCopyCannotHold_IsRefused verifies that a package
 // whose directory is reached through a symbolic link, which in the copy would
 // still lead to the original, and one in a directory the copy leaves out are

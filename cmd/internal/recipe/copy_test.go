@@ -128,6 +128,35 @@ func TestCopyTree_WhatOnlyAUnixTreeHolds_IsCopiedOrLeftOut(t *testing.T) {
 	}
 }
 
+// TestCopyTree_ATreeReachedThroughALink_IsCopiedItself verifies, where a tree
+// holds symbolic links, that a root that is one is copied as the directory it
+// links to: a link in its place would be the tree itself under another name,
+// and what is then written to the copy would be written to the tree.
+func TestCopyTree_ATreeReachedThroughALink_IsCopiedItself(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	src := t.TempDir()
+	plant(t, src, "a.txt", "a", 0o600)
+	plant(t, src, "left/b.txt", "b", 0o600)
+	link, dst := filepath.Join(t.TempDir(), "link"), filepath.Join(t.TempDir(), "copy")
+	if err := os.Symlink(src, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := CopyTree(link, dst, func(rel string) bool { return rel == "left" }); err != nil {
+		t.Fatalf("CopyTree() = %v", err)
+	}
+	holdCopied(t, dst, map[string]string{"a.txt": "a"}, "left")
+	info, err := os.Lstat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Errorf("the copy is %v, want a directory", info.Mode())
+	}
+}
+
 // TestCopyTree_WhatCannotBeCopied_IsAnError verifies that a tree that is not
 // there, a copy that is already there, and a file that cannot be written are
 // each the copy's error rather than a copy with something missing.
