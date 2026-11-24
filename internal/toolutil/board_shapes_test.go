@@ -45,10 +45,10 @@ func TestNewBoardListAssigneeOutput(t *testing.T) {
 	}
 }
 
-// TestNewBoardListStatusOutput pins the status list conversion: nil-on-nil,
-// which every list but a status list is, plus a full mirror of the 7 keys
-// GitLab renders.
-func TestNewBoardListStatusOutput(t *testing.T) {
+// TestNewBoardListStatusOutput_NilAndPopulated_MirrorsEveryKey pins the
+// status list conversion: nil-on-nil, which every list but a status list is,
+// plus a full mirror of the 7 keys GitLab renders.
+func TestNewBoardListStatusOutput_NilAndPopulated_MirrorsEveryKey(t *testing.T) {
 	if got := NewBoardListStatusOutput(nil); got != nil {
 		t.Fatalf("NewBoardListStatusOutput(nil) = %+v, want nil", got)
 	}
