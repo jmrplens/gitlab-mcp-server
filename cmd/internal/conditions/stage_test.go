@@ -142,6 +142,31 @@ func TestMeasure_AModuleReachedThroughALink_IsLeftAsItIs(t *testing.T) {
 	}
 }
 
+// TestMeasure_AModuleReachedThroughALink_IsMeasuredWhereItLeads verifies,
+// where a tree holds symbolic links, that gobco is run on a package measured
+// where it is in the directory behind the link: it copies the module around
+// the directory it is run in without following a link to it, and panicked on
+// the empty copy.
+func TestMeasure_AModuleReachedThroughALink_IsMeasuredWhereItLeads(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a symbolic link takes a privilege there")
+	}
+	b := newBench(t, readRecord(t).Files)
+	link := filepath.Join(b.scratch, "link")
+	if err := os.Symlink(b.root, link); err != nil {
+		t.Fatal(err)
+	}
+	original := b.root
+	b.root, b.environ = link, append(b.environ, "PWD="+link)
+	status, _, stderr := b.measure(t.Context(), "./internal/plain")
+	if status != 0 || len(b.calls) != 1 {
+		t.Fatalf("status = %d, stderr = %q, ran %+v; want one measurement", status, stderr, b.calls)
+	}
+	if got, want := b.calls[0].Dir, filepath.Join(original, "internal", "plain"); got != want {
+		t.Errorf("gobco was run in %s, want %s", got, want)
+	}
+}
+
 // TestMeasure_APackageTheCopyCannotHold_IsRefused verifies that a package
 // whose directory is reached through a symbolic link, which in the copy would
 // still lead to the original, and one in a directory the copy leaves out are
