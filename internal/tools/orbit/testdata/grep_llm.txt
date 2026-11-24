@@ -1,0 +1,3 @@
+orbit_grep version=1.2.0 target=Group[134059988] search="seed" scopes="work_items,merge_requests,blobs,commits,notes,milestones,users,projects,groups" results=6 truncated=false
+- WorkItem[207153944] type=WorkItem iid="1" project_path="acme-group/orbit-fixtures/kg-fixtures" state="opened" text="Add reserve_stock seed helper"
+- MergeRequest[495389486] type=MergeRequest iid="1" project_path="acme-group/orbit-fixtures/kg-fixtures" state="closed" text="Add seed_stock helper for fixture test runs"

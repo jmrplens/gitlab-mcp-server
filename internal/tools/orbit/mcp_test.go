@@ -120,6 +120,9 @@ func orbitSourcesHandler(t *testing.T) http.HandlerFunc {
 		case "/api/v4/orbit/context":
 			testutil.AssertRequestMethod(t, r, http.MethodPost)
 			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "context_job_expand.json"))
+		case "/api/v4/orbit/grep":
+			testutil.AssertRequestMethod(t, r, http.MethodGet)
+			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "grep_subgroup.json"))
 		case "/api/v4/orbit/skills":
 			testutil.RespondJSON(w, http.StatusOK, readFixture(t, "skills.json"))
 		case "/api/v4/orbit/skills/orbit":

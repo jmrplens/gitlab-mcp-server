@@ -40,7 +40,7 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 	wantNames := []string{
 		"status", "schema", "tools", "dsl", "query", "graph_status",
 		"query_templates", "response_format", "command_list", "skill_list", "skill_get", "skill_file",
-		"named_query", "context",
+		"named_query", "context", "grep",
 	}
 	if len(specs) != len(wantNames) {
 		t.Fatalf("ActionSpecs() len = %d, want %d", len(specs), len(wantNames))
@@ -91,8 +91,8 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	if len(specs) != 14 {
-		t.Fatalf("ActionSpecs() len = %d, want 14", len(specs))
+	if len(specs) != 15 {
+		t.Fatalf("ActionSpecs() len = %d, want 15", len(specs))
 	}
 	for i, spec := range specs {
 		hasKGAlias := false
@@ -129,6 +129,30 @@ func TestActionSpecs_AliasesAndRelatedActions(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SearchAliases_ReachTheSearch holds the three search aliases
+// to orbit.grep, the search GitLab.com serves over a group or project (issue
+// 1586, Q-F5-16): they named orbit.query, which runs a graph query and
+// searches nothing.
+func TestActionSpecs_SearchAliases_ReachTheSearch(t *testing.T) {
+	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "tok", false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	owner := map[string]string{}
+	for _, spec := range ActionSpecs(client) {
+		for _, alias := range spec.Aliases {
+			owner[alias] = spec.Name
+		}
+	}
+	for _, alias := range []string{"orbit.search", "kg.search", "knowledge_graph.search"} {
+		t.Run(alias, func(t *testing.T) {
+			if owner[alias] != "grep" {
+				t.Errorf("alias %s belongs to %q, want grep", alias, owner[alias])
+			}
+		})
+	}
+}
+
 // TestOrbit_QuerySpec_TeachesGQL verifies that what orbit.query serves a model
 // about its one parameter is GQL, the language GitLab.com compiles every query
 // in since 2026-10-15 (issue 1414): the usage line, the schema description of
@@ -143,7 +167,7 @@ func TestOrbit_QuerySpec_TeachesGQL(t *testing.T) {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	specs := ActionSpecs(client)
-	guided := map[string]bool{"query": true, "skill_file": true, "named_query": true}
+	guided := map[string]bool{"query": true, "skill_file": true, "named_query": true, "grep": true}
 	for i, spec := range specs {
 		if !guided[spec.Name] && spec.ParameterGuidance != nil {
 			t.Errorf("ActionSpecs()[%d] (%s).ParameterGuidance = %v, want none", i, spec.Name, spec.ParameterGuidance)
@@ -578,7 +602,7 @@ func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 		"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status",
 		"gitlab_orbit_query_templates", "gitlab_orbit_response_format", "gitlab_orbit_command_list",
 		"gitlab_orbit_skill_list", "gitlab_orbit_skill_get", "gitlab_orbit_skill_file",
-		"gitlab_orbit_named_query", "gitlab_orbit_context",
+		"gitlab_orbit_named_query", "gitlab_orbit_context", "gitlab_orbit_grep",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !containsTool(names, want) {
@@ -685,6 +709,7 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
 		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}},
+		{name: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "namespace_id": 145841973}},
 	}
 
 	for _, tt := range tests {
@@ -728,6 +753,7 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "missing.md"}},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}},
 		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}},
+		{name: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "full_path": "acme-group"}},
 	}
 
 	for _, tt := range tests {
@@ -762,8 +788,12 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 // 404 to what GitLab means by it on the route. An unknown named query is a
 // 400 and an unresolved context token a 200 with found false, so a 404 there
 // says Orbit is not served to the token's user and the card names the service.
-// Each card keeps the two checks on Orbit being served, and none of it says
-// that what the caller sent does not exist when GitLab said nothing about it.
+// A search's is about the group or project it names (none GitLab finds, one
+// the user cannot read or one whose top-level group Orbit is off for) or about
+// Orbit being off for the user, whatever the target, so the card names the
+// target, by the parameter that gave it, for both. Each card keeps the
+// two checks on Orbit being served, and none of it says that what the caller
+// sent does not exist when GitLab said nothing about it.
 func TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind(t *testing.T) {
 	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -787,6 +817,18 @@ func TestOrbit_ActionSpecs_NotFound_NamesWhatGitLabDidNotFind(t *testing.T) {
 		{
 			name: "a context token", tool: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}},
 			want: []string{"GitLab Orbit Context Not Found", "**entity context service**"}, not: "14831871432",
+		},
+		{
+			name: "a search of a full path, trimmed as it is sent", tool: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "namespace_id": 0, "full_path": " acme-group/missing "},
+			want: []string{"GitLab Orbit Search Target Not Found", "**full_path acme-group/missing**"}, not: "seed",
+		},
+		{
+			name: "a search of a group, its id decoded as a float", tool: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "namespace_id": float64(145841973)},
+			want: []string{"GitLab Orbit Search Target Not Found", "**namespace_id 145841973**"}, not: "seed",
+		},
+		{
+			name: "a search of a project, its id sent as text", tool: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "project_id": "83234203", "full_path": ""},
+			want: []string{"GitLab Orbit Search Target Not Found", "**project_id 83234203**"}, not: "seed",
 		},
 	}
 
@@ -846,6 +888,7 @@ func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
 		{name: "gitlab_orbit_skill_file", args: map[string]any{"name": "orbit", "path": "SKILL.md"}, wantHint: true},
 		{name: "gitlab_orbit_named_query", args: map[string]any{"name": "recent_merges"}, wantHint: true},
 		{name: "gitlab_orbit_context", args: map[string]any{"tokens": []any{"Job[14831871432]"}}, wantHint: true},
+		{name: "gitlab_orbit_grep", args: map[string]any{"search": "seed", "full_path": "acme-group"}, wantHint: true},
 	}
 
 	for _, tt := range tests {

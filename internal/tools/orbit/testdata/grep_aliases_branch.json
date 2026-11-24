@@ -1,0 +1,68 @@
+{
+  "version": "1.2.0",
+  "request": {
+    "search": "stock",
+    "limit": 10,
+    "per_scope": 3
+  },
+  "target": {
+    "type": "Project",
+    "id": 83234203,
+    "token": "Project[83234203]",
+    "full_path": "acme-group/orbit-fixtures/kg-fixtures"
+  },
+  "scopes": [
+    {
+      "name": "work_items",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 1,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "merge_requests",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 1,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "blobs",
+      "status": "ok",
+      "backend": "zoekt",
+      "result_count": 3,
+      "pagination": {
+        "has_more": true
+      }
+    },
+    {
+      "name": "branches",
+      "status": "ok",
+      "backend": "basic",
+      "result_count": 1,
+      "pagination": {
+        "has_more": false
+      }
+    }
+  ],
+  "results": [
+    {
+      "scope": "branches",
+      "type": "Branch",
+      "id": null,
+      "token": "acme-group/orbit-fixtures/kg-fixtures@feature/restock-helper",
+      "reference": {
+        "project_id": 83234203,
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "name": "feature/restock-helper"
+      },
+      "text": "feature/restock-helper"
+    }
+  ],
+  "result_count": 1,
+  "truncated": true
+}

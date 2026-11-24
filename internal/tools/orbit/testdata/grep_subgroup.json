@@ -1,0 +1,148 @@
+{
+  "version": "1.2.0",
+  "request": {
+    "search": "seed",
+    "limit": 20,
+    "per_scope": 5
+  },
+  "target": {
+    "type": "Group",
+    "id": 145841973,
+    "token": "Group[145841973]",
+    "full_path": "acme-group/orbit-fixtures"
+  },
+  "scopes": [
+    {
+      "name": "work_items",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 1,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "merge_requests",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 1,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "blobs",
+      "status": "ok",
+      "backend": "zoekt",
+      "result_count": 4,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "commits",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "notes",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "milestones",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "users",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "projects",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    },
+    {
+      "name": "groups",
+      "status": "ok",
+      "backend": "advanced",
+      "result_count": 0,
+      "pagination": {
+        "has_more": false
+      }
+    }
+  ],
+  "results": [
+    {
+      "scope": "work_items",
+      "type": "WorkItem",
+      "id": 207153944,
+      "token": "WorkItem[207153944]",
+      "reference": {
+        "id": 207153944,
+        "iid": 1,
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures"
+      },
+      "text": "Add reserve_stock seed helper",
+      "state": "opened"
+    },
+    {
+      "scope": "merge_requests",
+      "type": "MergeRequest",
+      "id": 495389486,
+      "token": "MergeRequest[495389486]",
+      "reference": {
+        "id": 495389486,
+        "iid": 1,
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures"
+      },
+      "text": "Add seed_stock helper for fixture test runs",
+      "state": "closed"
+    },
+    {
+      "scope": "blobs",
+      "type": "File",
+      "id": null,
+      "token": null,
+      "reference": {
+        "project_id": 83234203,
+        "project_path": "acme-group/orbit-fixtures/kg-fixtures",
+        "path": "src/acme/orders/fulfillment.py",
+        "branch": "main",
+        "commit_sha": null
+      },
+      "text": "src/acme/orders/fulfillment.py",
+      "matches": [
+        {
+          "start_line": 10,
+          "end_line": 12,
+          "text": "\ndef seed_stock(sku: str, quantity: int) -> None:\n    \"\"\"Add `quantity` units of `sku` to the in-memory stock register.\"\"\""
+        }
+      ]
+    }
+  ],
+  "result_count": 3,
+  "truncated": false
+}

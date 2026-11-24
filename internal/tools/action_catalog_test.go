@@ -896,7 +896,8 @@ const (
 	// + 1 Dependency Firewall package evaluation (Premium).
 	expectedEnterpriseDynamicCatalogActions = 1100
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	// 1114 = 1113 + orbit.context (GitLab.com Premium, issue 1587). The
+	// 1115 = 1114 + orbit.grep (GitLab.com Premium, issue 1586). The
+	// 1114 was 1113 + orbit.context (GitLab.com Premium, issue 1587). The
 	// 1113 was 1112 + orbit.named_query (GitLab.com Premium, issue 1209). The
 	// 1112 was 1106 + orbit.query_templates, orbit.response_format,
 	// orbit.command_list, orbit.skill_list, orbit.skill_get and
@@ -913,7 +914,7 @@ const (
 	// + 12 achievement actions (Free, client-go v2.64.0), and the 1083 was
 	// 1075 + 7 work item saved view actions (Free, client-go v2.62.0)
 	// + 1 Dependency Firewall package evaluation (Premium).
-	expectedGitLabComEnterpriseCatalogActions = 1114
+	expectedGitLabComEnterpriseCatalogActions = 1115
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.
@@ -2330,6 +2331,9 @@ func placeholderParam(name string, prop map[string]any) any {
 		return "https://example.com/x"
 	case strings.Contains(name, "path"):
 		return "group/project"
+	case name == "search":
+		// A search of one byte is refused by orbit.grep, which takes two.
+		return "stock"
 	}
 	return "7"
 }
@@ -2437,6 +2441,19 @@ func assertDateInputRefused(t *testing.T, input dateNamedInput, requests *atomic
 	}
 }
 
+// refusingTransport counts the requests a client hands it and sends none, so
+// a client built for GitLab.com can be driven without reaching it.
+type refusingTransport struct {
+	// requests is what the test asserts stayed at zero.
+	requests *atomic.Int64
+}
+
+// RoundTrip counts the request and refuses it.
+func (r refusingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.requests.Add(1)
+	return nil, fmt.Errorf("%s %s was sent by a client that sends nothing", req.Method, req.URL.Path)
+}
+
 // TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest drives every
 // action of the Ultimate catalog whose input schema states alternatives at
 // its root, as toolutil.SchemaAnyOfRequired and SchemaOneOfRequired write
@@ -2444,6 +2461,8 @@ func assertDateInputRefused(t *testing.T, input dateNamedInput, requests *atomic
 // required input and no name of any group, and requires a refusal that names
 // a name of every group before any request reaches GitLab. An action whose
 // groups are exclusive is also sent two of them, and refused the same way.
+// The actions are the self-managed catalog's and, through a client that sends
+// nothing, those only GitLab.com's catalog holds, orbit.grep among them.
 //
 // No served input schema carries such a rule at its root, since the
 // Anthropic Messages API refuses a tool list holding one, and the meta
@@ -2461,14 +2480,19 @@ func TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest(t *testing.T
 		requests.Add(1)
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
-	catalog := mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate})
-	driven := 0
-	for _, action := range catalog.Actions() {
+	dotCom := newGitLabDotComClient(t)
+	dotCom.GL().HTTPClient().Transport = refusingTransport{requests: &requests}
+	actions := slices.Concat(
+		mustBuildActionCatalog(t, client, ActionCatalogOptions{Tier: edition.Ultimate}).Actions(),
+		mustBuildActionCatalog(t, dotCom, ActionCatalogOptions{Tier: edition.Ultimate}).Actions(),
+	)
+	driven := map[actioncatalog.ActionID]bool{}
+	for _, action := range actions {
 		groups := actioncatalog.RequiredParamAlternatives(action.Route.InputSchema)
-		if len(groups) == 0 {
+		if len(groups) == 0 || driven[action.ID] {
 			continue
 		}
-		driven++
+		driven[action.ID] = true
 		t.Run(string(action.ID), func(t *testing.T) {
 			props, _ := action.Route.InputSchema["properties"].(map[string]any)
 			withNames := func(params map[string]any, names ...string) map[string]any {
@@ -2487,8 +2511,10 @@ func TestEveryRootAlternative_IsRefusedByTheHandlerBeforeAnyRequest(t *testing.T
 			}
 		})
 	}
-	if driven == 0 {
-		t.Fatal("no action of the Ultimate catalog states alternatives at its root, so the rule judged nothing")
+	// One action of each catalog, so a catalog that was not read is a failure
+	// rather than a rule that judged nothing.
+	if !driven["package.registry_rule_create"] || !driven["orbit.grep"] {
+		t.Errorf("drove %v, want package.registry_rule_create and orbit.grep among them", slices.Sorted(maps.Keys(driven)))
 	}
 }
 
