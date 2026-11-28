@@ -361,7 +361,7 @@ This project ships with **7 AI agents** and **18 skills** for GitHub Copilot and
 - **Documenting a change**: Use the `update-project-documentation` skill, and `update-starlight-docs` for the site pages it leads to.
 - **Code quality reviews**: Use the `review-and-refactor` skill for code quality + OWASP security + MCP pattern checks.
 
-See [AGENTS.md](AGENTS.md) for the complete catalog of agents, skills, and instruction files.
+See the [AI Assistance Infrastructure](CLAUDE.md#ai-assistance-infrastructure) section of CLAUDE.md for the complete catalog of agents, skills, and instruction files.
 
 ### Snapshot Testing (Golden Files)
 
